@@ -1,7 +1,16 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-4">Gestión de Lentillas</h2>
+<h2 class="mb-4">👁️ Lentillas</h2>
+<?php if (isset($ultimoCambio)): ?>
+    <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
+        <i class="bi bi-calendar-check me-2"></i>
+        <div>
+            Último cambio de lentillas: <strong><?= (new \CodeIgniter\I18n\Time($ultimoCambio['fecha']))->toLocalizedString('d MMMM y') ?></strong>
+            (hace <?= $ultimoCambio['dias'] ?> días)
+        </div>
+    </div>
+<?php endif; ?>
 <?php if (isset($mostrarAlerta) && $mostrarAlerta): ?>
     <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
         <i class="bi bi-exclamation-triangle me-2"></i>
@@ -10,30 +19,36 @@
         </div>
     </div>
 <?php endif; ?>
-<div class="row row-cols-1 row-cols-md-3 g-4">
 
+<div class="row row-cols-1 row-cols-md-3 g-4">
     <?php
     $items = [
-        ['ruta' => 'compras', 'titulo' => 'Compras', 'desc' => 'Registro de lentillas, gafas y líquidos.'],
         ['ruta' => 'sustituciones', 'titulo' => 'Cambios y revisiones', 'desc' => 'Control de cambios de lentillas, estuche, líquidos y presión del ojo.'],
-        ['ruta' => 'avisos', 'titulo' => 'Avisos', 'desc' => 'Notificaciones para reemplazos.'],
         ['ruta' => 'stock', 'titulo' => 'Stock', 'desc' => 'Pares de lentillas, líquidos y materiales.'],
+        ['ruta' => 'compras', 'titulo' => 'Compras', 'desc' => 'Registro de lentillas, gafas y líquidos.'],
+        ['ruta' => 'avisos', 'titulo' => 'Avisos', 'desc' => 'Notificaciones para reemplazos.'],
     ];
     ?>
 
     <?php foreach ($items as $item): ?>
         <div class="col d-flex">
             <a href="<?= site_url('lentillas/' . $item['ruta']) ?>" class="text-decoration-none text-dark w-100 h-100">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><?= esc($item['titulo']) ?></h5>
-                        <p class="card-text flex-grow-1"><?= esc($item['desc']) ?></p>
+                <div class="card h-100 shadow-sm w-100">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <h5 class="card-title"><?= esc($item['titulo']) ?></h5>
+                            <p class="card-text"><?= esc($item['desc']) ?></p>
+                        </div>
+                        <div class="text-end mt-3">
+                            <span class="btn btn-sm btn-outline-primary disabled">
+                                Ver <?= esc(mb_strtolower($item['titulo'])) ?>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </a>
         </div>
     <?php endforeach; ?>
-
 </div>
 
 <hr class="my-5">

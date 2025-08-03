@@ -93,7 +93,7 @@ class App extends BaseConfig
      * strings (like currency markers, numbers, etc), that your program
      * should run under for this request.
      */
-    public string $defaultLocale = 'en';
+    public string $defaultLocale = 'es';
 
     /**
      * --------------------------------------------------------------------------
@@ -117,7 +117,7 @@ class App extends BaseConfig
      * found, the first locale will be used.
      *
      * IncomingRequest::setLocale() also uses this list.
-     *
+     *  
      * @var list<string>
      */
     public array $supportedLocales = ['en'];

@@ -19,29 +19,51 @@ use CodeIgniter\I18n\Time; ?>
 <?php endif; ?>
 
 
-<!-- Botones rápidos -->
-<div class="mb-4">
-    <form method="post" action="<?= site_url('lentillas/sustituciones') ?>" class="d-inline">
-        <?= csrf_field() ?>
-        <input type="hidden" name="elemento" value="lentillas">
-        <input type="hidden" name="fecha" value="<?= date('Y-m-d') ?>">
-        <button type="submit" class="btn btn-outline-primary me-2 mb-2">Hoy cambié las Lentillas 👁️👁️</button>
-    </form>
+<!-- Tarjetas de acción rápida -->
+<div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+    <?php
+    $acciones = [
+        [
+            'elemento' => 'lentillas',
+            'texto'    => 'Hoy cambié las Lentillas 👁️👁️',
+            'color'    => 'primary',
+            'icono'    => 'eye'
+        ],
+        [
+            'elemento' => 'líquido',
+            'texto'    => 'Hoy cambié el Líquido 💧',
+            'color'    => 'info',
+            'icono'    => 'droplet'
+        ],
+        [
+            'elemento' => 'estuche',
+            'texto'    => 'Hoy cambié el Estuche 🧳',
+            'color'    => 'warning',
+            'icono'    => 'box'
+        ]
+    ];
+    ?>
 
-    <form method="post" action="<?= site_url('lentillas/sustituciones') ?>" class="d-inline">
-        <?= csrf_field() ?>
-        <input type="hidden" name="elemento" value="líquido">
-        <input type="hidden" name="fecha" value="<?= date('Y-m-d') ?>">
-        <button type="submit" class="btn btn-outline-info me-2 mb-2">Hoy cambié el Líquido 💧</button>
-    </form>
+    <?php foreach ($acciones as $accion): ?>
+        <div class="col d-flex">
+            <form method="post" action="<?= site_url('lentillas/sustituciones') ?>" class="w-100">
+                <?= csrf_field() ?>
+                <input type="hidden" name="elemento" value="<?= esc($accion['elemento']) ?>">
+                <input type="hidden" name="fecha" value="<?= date('Y-m-d') ?>">
 
-    <form method="post" action="<?= site_url('lentillas/sustituciones') ?>" class="d-inline">
-        <?= csrf_field() ?>
-        <input type="hidden" name="elemento" value="estuche">
-        <input type="hidden" name="fecha" value="<?= date('Y-m-d') ?>">
-        <button type="submit" class="btn btn-outline-warning mb-2">Hoy cambié el Estuche 🧳</button>
-    </form>
+                <button type="submit" class="card text-start shadow-sm border-0 w-100 h-100 btn btn-<?= $accion['color'] ?>-subtle p-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-<?= $accion['icono'] ?> fs-2 me-3 text-<?= $accion['color'] ?>"></i>
+                        <div>
+                            <strong><?= esc($accion['texto']) ?></strong>
+                        </div>
+                    </div>
+                </button>
+            </form>
+        </div>
+    <?php endforeach; ?>
 </div>
+
 
 <!-- Formulario personalizado -->
 <div class="card shadow-sm mb-4">

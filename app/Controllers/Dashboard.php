@@ -3,13 +3,13 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
-use App\Models\SustitucionLentillaModel;
+use App\Models\LentillasSustitucionesModel;
 
 class Dashboard extends BaseController
 {
     public function index()
     {
-        $model = new SustitucionLentillaModel();
+        $model = new LentillasSustitucionesModel();
         $ultima = $model->whereIn('elemento', ['lentilla izquierda', 'lentilla derecha', 'lentillas'])
                         ->orderBy('fecha', 'DESC')
                         ->first();

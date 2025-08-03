@@ -2,11 +2,10 @@
 
 namespace App\Controllers;
 
-use App\Models\CompraLentillaModel;
-use App\Models\SustitucionLentillaModel;
-use App\Models\StockLentillaModel;
-use App\Models\AvisoLentillaModel;
-use App\Models\DatosMedicosModel;
+use App\Models\LentillasComprasModel;
+use App\Models\LentillasSustitucionesModel;
+use App\Models\LentillasStockModel;
+use App\Models\LentillasAvisosModel;
 
 use DateTime;
 
@@ -14,42 +13,50 @@ class Lentillas extends BaseController
 {
     public function index()
     {
-        $datosModel = new \App\Models\DatosMedicosModel();
-        $datos = $datosModel->first();
+        $avisoModel = new \App\Models\LentillasAvisosModel();
+        $sustModel = new \App\Models\LentillasSustitucionesModel();
 
-        $avisoModel = new \App\Models\AvisoLentillaModel();
-        $sustModel = new \App\Models\SustitucionLentillaModel();
-
-        // Buscar el aviso configurado para "lentillas" (ambas)
+        // Buscar el aviso configurado para "lentillas"
         $aviso = $avisoModel->where('item', 'lentillas')->first();
 
         $dias = null;
         $mostrarAlerta = false;
+        $ultimoCambio = null;
 
         if ($aviso) {
+            // Buscar la última sustitución relacionada con lentillas
             $ultima = $sustModel
                 ->whereIn('elemento', ['lentillas', 'lentilla izquierda', 'lentilla derecha'])
                 ->orderBy('fecha', 'DESC')
                 ->first();
 
             if ($ultima) {
-                $dias = (new \DateTime($ultima['fecha']))->diff(new \DateTime())->days;
+                $fechaUltima = new \DateTime($ultima['fecha']);
+                $hoy = new \DateTime();
+                $dias = $fechaUltima->diff($hoy)->days;
+
                 $mostrarAlerta = $dias > $aviso['periodo_dias'];
+
+                $ultimoCambio = [
+                    'fecha' => $ultima['fecha'],
+                    'dias' => $dias,
+                ];
             }
         }
 
         return view('lentillas/index', [
-            'datos_medicos' => $datos,
             'dias' => $dias,
             'mostrarAlerta' => $mostrarAlerta,
+            'ultimoCambio' => $ultimoCambio,
         ]);
     }
 
 
+
     public function avisos()
     {
-        $avisoModel = new \App\Models\AvisoLentillaModel();
-        $sustModel  = new \App\Models\SustitucionLentillaModel();
+        $avisoModel = new \App\Models\LentillasAvisosModel();
+        $sustModel  = new \App\Models\LentillasSustitucionesModel();
 
         $avisos = $avisoModel->findAll();
         $avisosProcesados = [];
@@ -86,7 +93,7 @@ class Lentillas extends BaseController
 
     public function editarAviso($id)
     {
-        $model = new AvisoLentillaModel();
+        $model = new LentillasAvisosModel();
         $aviso = $model->find($id);
 
         if (!$aviso) {
@@ -98,7 +105,7 @@ class Lentillas extends BaseController
 
     public function actualizarAviso($id)
     {
-        $model = new AvisoLentillaModel();
+        $model = new LentillasAvisosModel();
 
         $data = [
             'item'           => $this->request->getPost('item'),
@@ -112,7 +119,7 @@ class Lentillas extends BaseController
 
     public function crearAviso()
     {
-        $model = new AvisoLentillaModel();
+        $model = new LentillasAvisosModel();
 
         if ($this->request->getMethod(true) === 'POST') {
             $item          = $this->request->getPost('item');
@@ -135,7 +142,7 @@ class Lentillas extends BaseController
 
     public function eliminarAviso($id)
     {
-        $model = new AvisoLentillaModel();
+        $model = new LentillasAvisosModel();
         $model->delete($id);
         return redirect()->to(site_url('lentillas/avisos'))->with('message', 'Aviso eliminado');
     }
@@ -145,7 +152,7 @@ class Lentillas extends BaseController
 
     public function compras()
     {
-        $model = new CompraLentillaModel();
+        $model = new LentillasComprasModel();
 
         if ($this->request->getMethod(true) === 'POST') {
             $data = [
@@ -172,7 +179,7 @@ class Lentillas extends BaseController
 
     public function editarCompra($id)
     {
-        $model = new CompraLentillaModel();
+        $model = new LentillasComprasModel();
         $compra = $model->find($id);
 
         if (!$compra) {
@@ -184,7 +191,7 @@ class Lentillas extends BaseController
 
     public function eliminarCompra($id)
     {
-        $model = new CompraLentillaModel();
+        $model = new LentillasComprasModel();
         $model->delete($id);
 
         return redirect()->to(site_url('lentillas/compras'));
@@ -193,7 +200,7 @@ class Lentillas extends BaseController
 
     public function actualizarCompra($id)
     {
-        $model = new CompraLentillaModel();
+        $model = new LentillasComprasModel();
 
         $model->update($id, [
             'tipo'   => $this->request->getPost('tipo'),
@@ -205,27 +212,9 @@ class Lentillas extends BaseController
         return redirect()->to(site_url('lentillas/compras'));
     }
 
-    public function datosMedicos()
-    {
-        $model = new \App\Models\DatosMedicosModel();
-        $registro = $model->first();
-
-        if ($this->request->getMethod() === 'post') {
-            $data = $this->request->getPost();
-            if ($registro) {
-                $model->update($registro['id'], $data);
-            } else {
-                $model->insert($data);
-            }
-            return redirect()->to('lentillas/datos-medicos')->with('message', 'Datos actualizados correctamente.');
-        }
-
-        return view('lentillas/datos_medicos', ['datos' => $registro]);
-    }
-
     public function stock()
     {
-        $model = new StockLentillaModel();
+        $model = new LentillasStockModel();
         $items = $model->findAll();
 
         return view('lentillas/stock', ['items' => $items]);
@@ -233,7 +222,7 @@ class Lentillas extends BaseController
 
     public function actualizarStock()
     {
-        $model = new StockLentillaModel();
+        $model = new LentillasStockModel();
 
         foreach ($this->request->getPost('items') as $id => $cantidad) {
             $model->update($id, [
@@ -248,8 +237,8 @@ class Lentillas extends BaseController
     {
         helper('text'); // Por si hace falta en algún punto
 
-        $model = new \App\Models\SustitucionLentillaModel();
-        $stockModel = new \App\Models\StockLentillaModel();
+        $model = new \App\Models\LentillasSustitucionesModel();
+        $stockModel = new \App\Models\LentillasStockModel();
 
         // Cargar historial siempre
         $sustituciones = $model->orderBy('fecha', 'DESC')->findAll();
@@ -306,7 +295,7 @@ class Lentillas extends BaseController
 
     public function editarSustitucion($id)
     {
-        $model = new \App\Models\SustitucionLentillaModel();
+        $model = new \App\Models\LentillasSustitucionesModel();
         $sustitucion = $model->find($id);
 
         if (!$sustitucion) {
@@ -318,7 +307,7 @@ class Lentillas extends BaseController
 
     public function actualizarSustitucion($id)
     {
-        $model = new \App\Models\SustitucionLentillaModel();
+        $model = new \App\Models\LentillasSustitucionesModel();
 
         $data = [
             'elemento' => $this->request->getPost('elemento'),
@@ -335,7 +324,7 @@ class Lentillas extends BaseController
 
     public function eliminarSustitucion($id)
     {
-        $model = new \App\Models\SustitucionLentillaModel();
+        $model = new \App\Models\LentillasSustitucionesModel();
 
         if (! $model->find($id)) {
             return redirect()->to(site_url('lentillas/sustituciones'))->with('error', 'Sustitución no encontrada.');
