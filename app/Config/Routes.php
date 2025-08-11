@@ -76,14 +76,14 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
     $routes->get('supermercados', 'Compras::supermercados');
     $routes->get('supermercados/nuevo', 'Compras::nuevoSupermercado');
     $routes->post('supermercados/guardar', 'Compras::crearSupermercado');
-    $routes->get('supermercados/editar', 'Compras::editarSupermercado');
-    $routes->post('supermercados/actualizar', 'Compras::guardarSupermercado');
+    $routes->get('supermercados/editar/(:num)', 'Compras::editarSupermercado/$1');
+    $routes->post('supermercados/actualizar/(:num)', 'Compras::guardarSupermercado/$1');
     $routes->post('supermercados/(:num)/borrar', 'Compras::eliminarSupermercado');
 
     // Productos
     $routes->get('productos/(:num)', 'Compras::productos/$1');
     $routes->post('productos/nuevo', 'Compras::crearProducto');
-    $routes->post('productos/(:num)/borrar', 'Compras::eliminarProducto');
+    $routes->post('productos/(:num)/borrar', 'Compras::eliminarProducto/$1');
 
     $routes->get('(:num)/faltantes', 'Compras::faltantes/$1');
     $routes->get('(:num)/comprados', 'Compras::comprados/$1');
@@ -107,4 +107,35 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
     // Limpiar listas
     $routes->post('limpiar/faltantes/(:num)', 'Compras::limpiarFaltantes/$1');
     $routes->post('limpiar/comprados/(:num)', 'Compras::limpiarComprados/$1');
+});
+
+
+// GIMNASIO
+$routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
+    $routes->get('', 'Gimnasio::index');
+    $routes->get('ejercicios', 'GimnasioEjercicios::index');
+    $routes->get('ejercicios/create', 'GimnasioEjercicios::create');
+    $routes->post('ejercicios/store', 'GimnasioEjercicios::store');
+    $routes->get('ejercicios/edit/(:num)', 'GimnasioEjercicios::edit/$1');
+    $routes->post('ejercicios/update/(:num)', 'GimnasioEjercicios::update/$1');
+    $routes->post('ejercicios/delete/(:num)', 'GimnasioEjercicios::delete/$1');
+    $routes->get('ejercicios/por-grupo/(:segment)', 'GimnasioEjercicios::porGrupo/$1');
+
+    $routes->get('ejercicios/estadisticas/(:num)', 'GimnasioEjercicios::estadisticas/$1');
+    $routes->get('ejercicios/estadisticas/(:num)', 'GimnasioEjercicios::estadisticas/$1');
+    $routes->get('ejercicios/principales', 'GimnasioEjercicios::principales');
+
+
+    $routes->get('entrenamientos', 'GimnasioEntrenamientos::index');
+    $routes->post('entrenamientos/crear', 'GimnasioEntrenamientos::crear');
+    $routes->get('entrenamientos/eliminar/(:num)', 'GimnasioEntrenamientos::eliminar/$1');
+    $routes->post('entrenamientos/actualizar-datos/(:num)', 'GimnasioEntrenamientos::actualizarDatos/$1');
+    $routes->get('entrenamientos/registro/(:segment)', 'GimnasioEntrenamientos::registro/$1');
+    $routes->post('entrenamientos/guardar-serie', 'GimnasioEntrenamientos::guardarSerie');
+    $routes->get('entrenamientos/eliminar-serie/(:num)', 'GimnasioEntrenamientos::eliminarSerie/$1');
+    $routes->post('entrenamientos/actualizar-serie/(:num)', 'GimnasioEntrenamientos::actualizarSerie/$1');
+
+
+    $routes->get('entrenamientos/resumen/(:num)', 'GimnasioEntrenamientos::resumen/$1');
+
 });

@@ -10,6 +10,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Style css -->
     <link href="<?= base_url('assets/css/style.css') ?>" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
 </head>
 <body class="bg-light">
 

@@ -1,17 +1,31 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-4">📝 Faltantes en <strong><?= esc($supermercado_nombre) ?></strong></h2>
+<h2 class="mb-4">📝 Compras / <strong><?= esc($supermercado_nombre) ?></strong> / FALTA</h2>
 
 <div class="mb-4">
     <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>" class="btn btn-outline-secondary">← Volver a productos</a>
     <button id="toggle-imagenes" class="btn btn-sm btn-outline-secondary ms-3">Ocultar imágenes</button>
 </div>
 
+<!-- Accesos rápidos a listas -->
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 mb-4">
+    <div class="col">
+        <a href="<?= site_url('compras/' . $supermercado_id . '/comprados') ?>" class="text-decoration-none text-dark">
+            <div class="card shadow-sm h-100 border-success border-2">
+                <div class="card-body text-center">
+                    <h5 class="card-title">🛍️ Ir a comprar</h5>
+                    <p class="card-text text-muted">Lista de productos que has comprado.</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
 <form class="text-end mb-2" action="<?= site_url('compras/limpiar/faltantes/' . $supermercado_id) ?>" method="post" class="mb-3" onsubmit="return confirm('¿Seguro que deseas reiniciar todos los faltantes?')">
-        <?= csrf_field() ?>
-        <button class="btn btn-outline-danger">🧹 Reiniciar faltantes</button>
-    </form>
+    <?= csrf_field() ?>
+    <button class="btn btn-outline-danger">🧹 Reiniciar faltantes</button>
+</form>
 
 <!-- Lista de productos -->
 <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3">

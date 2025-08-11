@@ -99,8 +99,6 @@ class Compras extends BaseController
         ]);
     }
 
-
-
     public function crearProducto()
     {
         $productoModel = new CompraProductoModel();
@@ -131,13 +129,20 @@ class Compras extends BaseController
     public function editarProducto($id)
     {
         $productoModel = new CompraProductoModel();
+        $superModel = new CompraSupermercadoModel();
+
         $producto = $productoModel->find($id);
 
         if (!$producto) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Producto no encontrado');
         }
 
-        return view('compras/productos/form', ['producto' => $producto]);
+        $supermercado = $superModel->find($producto['supermercado_id']);
+
+        return view('compras/productos/form', [
+            'producto' => $producto,
+            'supermercado' => $supermercado
+        ]);
     }
 
     public function actualizarProducto($id)
@@ -287,10 +292,6 @@ class Compras extends BaseController
             'supermercado_nombre' => $supermercado['nombre']
         ]);
     }
-
-
-
-
 
     private function marcarEstado($modelo, $productoId)
     {

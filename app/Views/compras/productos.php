@@ -2,9 +2,9 @@
 <?= $this->section('content') ?>
 
 <h2 class="mb-4">
-    🛒 Productos en 
+    🛒 Compras /
     <strong><?= esc($supermercado_nombre) ?></strong>
-    <a href="<?= site_url('compras/supermercados/editar/' . $supermercado_id) ?>" class="text-decoration-none ms-2" title="Editar supermercado">    <i class="bi bi-pencil-square fs-6"></i>
+    <a href="<?= site_url('compras/supermercados/editar/' . $supermercado_id) ?>" class="text-decoration-none ms-2" title="Editar supermercado"> <i class="bi bi-pencil-square fs-6"></i>
     </a>
 </h2>
 
@@ -81,9 +81,10 @@
                         <?php endif; ?>
                     </div>
 
-                    <div class="d-grid">
-                        <a href="<?= site_url('compras/productos/editar/' . $producto['id']) ?>" class="btn btn-sm btn-outline-primary w-100">✏️ Editar producto</a>
+                    <div class="text-end">
+                        <a href="<?= site_url('compras/productos/editar/' . $producto['id']) ?>" class="btn btn-sm btn-link text-decoration-none text-muted">✏️ Editar producto</a>
                     </div>
+
                 </div>
             </div>
         </div>
