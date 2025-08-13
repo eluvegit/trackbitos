@@ -1,11 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-4">📈 Estadísticas — Principales (Press banca, Peso muerto, Sentadillas)</h2>
-<div class="mb-3">
-    <a href="<?= site_url('gimnasio') ?>" class="btn btn-outline-secondary">← Volver a gimnasio</a>
-</div>
-
 <?php
 function tituloBonito($clave) {
     return [
@@ -15,6 +10,11 @@ function tituloBonito($clave) {
     ][$clave] ?? ucfirst($clave);
 }
 ?>
+
+<h2 class="mb-4">📈 Estadísticas — Principales (Press banca, Peso muerto, Sentadillas)</h2>
+<div class="mb-3">
+    <a href="<?= site_url('gimnasio') ?>" class="btn btn-outline-secondary">← Volver a gimnasio</a>
+</div>
 
 <?php foreach (['press banca','peso muerto','sentadillas'] as $clave): ?>
     <div class="card mb-4">
@@ -50,15 +50,11 @@ function tituloBonito($clave) {
                         </thead>
                         <tbody>
                             <?php foreach ($resumen as $r): ?>
-                                <?php
-                                    $vol = isset($r['total_volumen']) ? (float)$r['total_volumen'] : 0;
-                                    $fmtVol = $vol > 0 ? rtrim(rtrim((string)$vol, '0'), '.') : '—';
-                                ?>
                                 <tr>
                                     <td><?= date('d/m/Y', strtotime($r['fecha'])) ?></td>
                                     <td><?= (int)$r['total_series'] ?></td>
                                     <td><?= (int)$r['total_reps'] ?></td>
-                                    <td><?= $fmtVol ?></td>
+                                    <td><?= $r['total_volumen'] ?? 0 ?></td>
                                     <td><?= (int)$r['registros'] ?></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -83,17 +79,15 @@ function tituloBonito($clave) {
                                 <?php
                                     $series = (int)$d['series'];
                                     $reps   = (int)$d['repeticiones'];
-                                    $peso   = (float)($d['peso'] ?? 0);
+                                    $peso   = $d['peso'] ?? 0;
                                     $vol    = $peso > 0 ? $series * $reps * $peso : null;
-                                    $fmtPeso = $peso > 0 ? rtrim(rtrim((string)$peso, '0'), '.') . ' kg' : '—';
-                                    $fmtVol  = $vol !== null ? rtrim(rtrim((string)$vol, '0'), '.') : '—';
                                 ?>
                                 <tr>
                                     <td><?= date('d/m/Y', strtotime($d['fecha'])) ?></td>
                                     <td><?= $series ?></td>
                                     <td><?= $reps ?></td>
-                                    <td><?= $fmtPeso ?></td>
-                                    <td><?= $fmtVol ?></td>
+                                    <td><?= $peso > 0 ? $peso . ' kg' : '—' ?></td>
+                                    <td><?= $vol !== null ? $vol : '—' ?></td>
                                     <td><?= ($d['rpe'] !== null && $d['rpe'] !== '') ? esc($d['rpe']) : '—' ?></td>
                                     <td><?= !empty($d['nota']) ? esc($d['nota']) : '—' ?></td>
                                 </tr>

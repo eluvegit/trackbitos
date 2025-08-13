@@ -20,21 +20,16 @@
         </thead>
         <tbody>
             <?php foreach ($seriesAgrupadas as $fila): ?>
-                <?php
-                $vol = isset($fila['total_volumen']) ? (float)$fila['total_volumen'] : 0;
-                $fmtVol = $vol > 0 ? rtrim(rtrim((string)$vol, '0'), '.') : '—';
-                ?>
                 <tr>
                     <td><?= date('d/m/Y', strtotime($fila['fecha'])) ?></td>
                     <td><?= (int)$fila['total_series'] ?></td>
                     <td><?= (int)$fila['total_reps'] ?></td>
-                    <td><?= $fmtVol ?></td>
+                    <td><?= isset($fila['total_volumen']) ? $fila['total_volumen'] : '—' ?></td>
                     <td><?= (int)$fila['registros'] ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
-
 
     <h4 class="mt-4">Detalle de series</h4>
     <table class="table table-sm table-striped">
@@ -54,18 +49,16 @@
                 <?php
                 $series = (int)$fila['series'];
                 $reps   = (int)$fila['repeticiones'];
-                $peso   = (float)($fila['peso'] ?? 0);
-                $vol    = $peso > 0 ? $series * $reps * $peso : null;
-                $fmtPeso = $peso > 0 ? rtrim(rtrim((string)$peso, '0'), '.') . ' kg' : '—';
-                $fmtVol  = $vol !== null ? rtrim(rtrim((string)$vol, '0'), '.') : '—';
+                $peso   = $fila['peso'] ?? 0; // tal cual
+                $vol    = ($peso > 0) ? ($series * $reps * $peso) : null; // cálculo simple
                 ?>
                 <tr>
                     <td><?= date('d/m/Y', strtotime($fila['fecha'])) ?></td>
                     <td><?= $series ?></td>
                     <td><?= $reps ?></td>
-                    <td><?= $fmtPeso ?></td>
-                    <td><?= $fmtVol ?></td>
-                    <td><?= $fila['rpe'] !== null && $fila['rpe'] !== '' ? esc($fila['rpe']) : '—' ?></td>
+                    <td><?= ($peso > 0) ? ($peso . ' kg') : '—' ?></td>
+                    <td><?= ($vol !== null) ? $vol : '—' ?></td>
+                    <td><?= ($fila['rpe'] !== null && $fila['rpe'] !== '') ? esc($fila['rpe']) : '—' ?></td>
                     <td><?= !empty($fila['nota']) ? esc($fila['nota']) : '—' ?></td>
                 </tr>
             <?php endforeach; ?>
