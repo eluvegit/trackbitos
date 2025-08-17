@@ -139,3 +139,88 @@ $routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
     $routes->get('entrenamientos/resumen/(:num)', 'GimnasioEntrenamientos::resumen/$1');
 
 });
+
+
+// MESOCICLOS
+$routes->group('gimnasio', ['filter' => 'auth'], static function($r){
+    $r->get('mesociclos',                                       'GimnasioMesociclos::index');
+    $r->match(['get','post'],   'mesociclos/nuevo',             'GimnasioMesociclos::nuevo');
+    $r->get('mesociclos/(:num)',                                'GimnasioMesociclos::ver/$1');
+    $r->match(['get','post'],'mesociclos/(:num)/bloque/nuevo',  'GimnasioMesociclos::bloqueNuevo/$1');
+    $r->get('mesociclos/(:num)/simplificado',                   'GimnasioMesociclos::simplificado/$1');
+    $r->match(['get','post'],'mesociclos/(:num)/asignar/(:num)','GimnasioMesociclos::asignar/$1/$2');
+    
+
+    $r->match(['get','post'],'mesociclos/(:num)/generar', 'GimnasioMesociclos::generar/$1');   // genera lote
+    $r->post('mesociclos/bloque/(:num)/hecho', 'GimnasioMesociclos::marcarHecho/$1');  
+
+     // Paso previo: formulario de ajuste (solo se permite si no quedan pendientes)
+    $r->get('mesociclos/(:num)/ajustar', 'GimnasioMesociclos::ajustar/$1');
+    $r->post('mesociclos/(:num)/ajustar', 'GimnasioMesociclos::ajustarPost/$1');
+
+    // BILBO
+    $r->match(['get','post'], 'mesociclos/(:num)/generar/bilbo', 'GimnasioMesociclos::generarBilbo/$1');
+
+});
+
+
+// === Rutas módulo Comidas (app/Config/Routes.php) ===
+$routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comidas'], static function($routes) {
+
+    // --- Diario ---
+    $routes->group('diario', static function ($r) {
+        $r->get('hoy', 'Diario::hoy');
+        $r->get('porciones/(:num)', 'Diario::porciones/$1'); // AJAX porciones
+
+        // rutas CRUD antiguas
+        $r->post('add', 'Diario::add');
+        $r->post('edit/(:num)', 'Diario::edit/$1');
+        $r->post('delete/(:num)', 'Diario::delete/$1');
+
+        // Diario con fecha dinámica (YYYY-MM-DD)
+        $r->get('(:segment)', 'Diario::ver/$1');
+        $r->get('(:segment)/(:segment)', 'Diario::ver/$1/$2');
+
+        // Aquí la ruta POST correcta:
+        $r->post('(:segment)/(:segment)', 'Diario::add/$1/$2');
+    });
+
+
+    // --- Alimentos ---
+    $routes->group('alimentos', static function($r) {
+        $r->get('/', 'Alimentos::index');
+        $r->get('create', 'Alimentos::create');
+        $r->post('store', 'Alimentos::store');
+        $r->get('edit/(:num)', 'Alimentos::edit/$1');
+        $r->post('update/(:num)', 'Alimentos::update/$1');
+    });
+
+    // --- Recetas ---
+    $routes->group('recetas', static function($r) {
+        $r->get('/', 'Recetas::index');
+        $r->get('create', 'Recetas::create');
+        $r->post('store', 'Recetas::store');
+        $r->get('edit/(:num)', 'Recetas::edit/$1');
+        $r->post('update/(:num)', 'Recetas::update/$1');
+        $r->get('removeIngrediente/(:num)', 'Recetas::removeIngrediente/$1');
+    });
+
+    // --- Objetivos ---
+    $routes->group('objetivos', static function($r) {
+        $r->get('/', 'Objetivos::index');
+        $r->get('create', 'Objetivos::create');
+        $r->post('store', 'Objetivos::store');
+        $r->get('edit/(:num)', 'Objetivos::edit/$1');
+        $r->post('update/(:num)', 'Objetivos::update/$1');
+    });
+
+    // --- Porciones ---
+    $routes->group('porciones', static function($r) {
+        $r->get('alimento/(:num)', 'Porciones::index/$1');   // listar porciones de un alimento
+        $r->get('create/(:num)',  'Porciones::create/$1');   // form nueva porción
+        $r->post('store',         'Porciones::store');       // guardar nueva
+        $r->get('edit/(:num)',    'Porciones::edit/$1');     // form editar
+        $r->post('update/(:num)', 'Porciones::update/$1');   // actualizar
+        $r->get('delete/(:num)',  'Porciones::delete/$1');   // eliminar
+    });
+});

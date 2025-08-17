@@ -9,5 +9,50 @@
 
 .ejercicio-card:hover {
     background-color: #f8f9fa;
-    box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
 }
+
+
+/* CALENDARIO */
+
+.calendar-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.calendar-table th,
+.calendar-table td {
+    width: calc(100% / 7);
+}
+
+.calendar-table td {
+    vertical-align: top;
+}
+
+.cal-cell {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.cal-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .25rem;
+}
+
+.cal-note {
+    font-size: .75rem;
+    color: #6c757d;
+    line-height: 1.15;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cal-spacer {
+    visibility: hidden;
+}
+
+/* ocupa el espacio pero no se ve */

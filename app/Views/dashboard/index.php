@@ -14,12 +14,15 @@
 
     <?php
     $secciones = [
-        ['ruta' => 'comida', 'icono' => '🍽️', 'titulo' => 'Comida (PROXIMAMENTE)', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
+        ['ruta' => 'comidas/diario/hoy', 'icono' => '🍽️', 'titulo' => 'Comida (BETA)', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
         ['ruta' => 'gimnasio', 'icono' => '🏋️', 'titulo' => 'Gimnasio', 'texto' => 'Registra tus entrenamientos, progresos y objetivos físicos.'],
         ['ruta' => 'compras', 'icono' => '🛒', 'titulo' => 'Compras', 'texto' => 'Lleva control de tus compras, listas y gastos.'],
         ['ruta' => 'lentillas', 'icono' => '👁️', 'titulo' => 'Lentillas', 'texto' => 'Lleva un registro de cambios, limpieza y reemplazos.'],
         ['ruta' => 'coche', 'icono' => '🚗', 'titulo' => 'Coche', 'texto' => 'Controla cambios de aceite, revisiones, neumáticos y más.'],
         ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Workflow (PROXIMAMENTE)', 'texto' => 'Gestión de flujo de trabajo en la edición de fotos.'],
+        ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
+        ['ruta' => 'notion', 'icono' => '📒', 'titulo' => 'Notion (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Notion.'],
+        ['ruta' => 'telegram', 'icono' => '📨', 'titulo' => 'Telegram (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Telegram.'],
     ];
     ?>
 

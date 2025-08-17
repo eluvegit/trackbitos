@@ -47,6 +47,7 @@
                             'pecho' => 'Pecho',
                             'abdominales' => 'Abdominales',
                             'piernas' => 'Piernas',
+                            'maquinas' => 'Máquinas',
                             'calentamientos' => 'Calentamientos',
                             'movilidad' => 'Movilidad',
                             'cardio' => 'Cardio',
@@ -185,6 +186,20 @@
             <form method="post" action="<?= site_url('gimnasio/entrenamientos/actualizar-datos/' . $entrenamiento_id) ?>">
                 <div class="card-body">
                     <?= csrf_field() ?>
+                    <div class="mb-3">
+                        <label for="tipo_sesion" class="form-label">Tipo de sesión</label>
+                        <select name="tipo_sesion" id="tipo_sesion" class="form-control">
+                            <option value="">-- Seleccionar --</option>
+                            <option value="Cardio" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Cardio' ? 'selected' : '' ?>>Cardio</option>
+                            <option value="HIIT" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'HIIT' ? 'selected' : '' ?>>HIIT</option>
+                            <option value="Hipertrofia" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Hipertrofia' ? 'selected' : '' ?>>Hipertrofia</option>
+                            <option value="Fuerza" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Fuerza' ? 'selected' : '' ?>>Fuerza</option>
+                            <option value="Movilidad" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Movilidad' ? 'selected' : '' ?>>Movilidad</option>
+                            <option value="Recuperación" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Recuperación' ? 'selected' : '' ?>>Recuperación</option>
+                        </select>
+
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Notas generales</label>
                         <textarea name="notas_generales" class="form-control" rows="2"><?= esc($entrenamiento['notas_generales'] ?? '') ?></textarea>

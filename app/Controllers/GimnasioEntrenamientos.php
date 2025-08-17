@@ -86,6 +86,7 @@ class GimnasioEntrenamientos extends BaseController
         }
 
         $data = [
+            'tipo_sesion'    => $this->request->getPost('tipo_sesion'),
             'notas_generales' => $this->request->getPost('notas_generales') ?: null,
             'lesiones'        => $this->request->getPost('lesiones') ?: null,
             'sin_molestias'   => $this->request->getPost('sin_molestias') ? 1 : 0,
@@ -138,6 +139,7 @@ class GimnasioEntrenamientos extends BaseController
             'pecho' => 'Pecho',
             'abdominales' => 'Abdominales',
             'piernas' => 'Piernas',
+            'maquinas' => 'Máquinas',
             'calentamientos' => 'Calentamientos',
             'movilidad' => 'Movilidad',
             'cardio' => 'Cardio',
@@ -363,6 +365,11 @@ class GimnasioEntrenamientos extends BaseController
         <div class="p-2">
             <div class="mb-2">
                 <span class="badge bg-primary"><?= date('d/m/Y', strtotime($ent['fecha'])) ?></span>
+                <?php if (!empty($ent['tipo_sesion'])): ?>
+                    <span class="badge bg-warning text-dark">
+                        <?= esc($ent['tipo_sesion']) ?>
+                    </span>
+                <?php endif; ?>
             </div>
 
             <!-- Totales -->
@@ -408,88 +415,51 @@ class GimnasioEntrenamientos extends BaseController
                 </p>
             </div>
 
-            <?php if (!empty($porEjercicio)): ?>
-                <h6 class="mt-3">Por ejercicio</h6>
-                <table class="table table-sm align-middle mb-3">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Ejercicio</th>
-                            <th class="text-end">Sets</th>
-                            <th class="text-end">Reps</th>
-                            <th class="text-end">Volumen</th> <!-- 👈 -->
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($porEjercicio as $r): ?>
-                            <tr>
-                                <td><?= esc($r['ejercicio']) ?></td>
-                                <td class="text-end"><?= (int)$r['sets'] ?></td>
-                                <td class="text-end"><?= (int)$r['reps'] ?></td>
-                                <td class="text-end">
-                                    <?= number_format((float)$r['volumen_total'], 0, ',', '.') ?> kg
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-
-
-                <!-- Desglose de series por ejercicio -->
-                <div class="accordion" id="accSeriesEj">
-                    <?php foreach ($porEjercicio as $idx => $r):
-                        $ejId = $r['ejercicio_id'];
-                        $detalle = $detallePorEj[$ejId] ?? [];
-                        $accId = 'ej_' . $ejId;
+            <!-- Desglose de series por ejercicio (simple) -->
+            <div class="mt-3">
+                <?php foreach ($porEjercicio as $r): ?>
+                    <?php
+                    $ejId    = $r['ejercicio_id'];
+                    $detalle = $detallePorEj[$ejId] ?? [];
                     ?>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header" id="h-<?= $accId ?>">
-                                <button class="accordion-button"
-                                    type="button"
-                                    data-bs-toggle="collapse"
-                                    data-bs-target="#c-<?= $accId ?>"
-                                    aria-expanded="true" ¡
-                                    aria-controls="c-<?= $accId ?>">
-                                    <?= esc($r['ejercicio']) ?> —
-                                    <span class="ms-1 text-muted small"><?= (int)$r['sets'] ?> sets</span>
-                                </button>
-                            </h2>
-                            <div id="c-<?= $accId ?>" class="accordion-collapse collapse show">
-                                <div class="accordion-body p-2">
-                                    <?php if ($detalle): ?>
-                                        <ul class="list-group list-group-flush">
-                                            <?php foreach ($detalle as $d): ?>
-                                                <li class="list-group-item px-0">
-                                                    <?php
-                                                    // 3x10x80 kg + adornos
-                                                    $peso = (float)$d['peso'];
-                                                    $pesoMostrar = '';
-                                                    if ($peso > 0) {
-                                                        $pesoMostrar = (floor($peso) == $peso)
-                                                            ? (string)(int)$peso
-                                                            : rtrim(rtrim(number_format($peso, 3, '.', ''), '0'), '.');
-                                                        $pesoMostrar .= ' kg';
-                                                    }
-                                                    $linea = (int)$d['series'] . 'x' . (int)$d['repeticiones'] . ($pesoMostrar ? 'x' . $pesoMostrar : '');
-                                                    ?>
-                                                    <span class="badge bg-light text-dark me-1"><?= $linea ?></span>
-                                                    <?php if ($d['rpe'] !== null && $d['rpe'] !== ''): ?>
-                                                        <span class="badge bg-secondary me-1">RPE <?= esc($d['rpe']) ?></span>
-                                                    <?php endif; ?>
-                                                    <?php if (!empty($d['nota'])): ?>
-                                                        <span class="text-muted">“<?= esc($d['nota']) ?>”</span>
-                                                    <?php endif; ?>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    <?php else: ?>
-                                        <div class="text-muted">Sin series registradas.</div>
+                    <!-- Título del ejercicio -->
+                    <h6 class="mb-2">
+                        <?= esc($r['ejercicio']) ?>
+                        <span class="text-muted small">— <?= (int)$r['sets'] ?> sets</span>
+                    </h6>
+
+                    <?php if ($detalle): ?>
+                        <ul class="list-unstyled ms-2 mb-3">
+                            <?php foreach ($detalle as $d): ?>
+                                <?php
+                                // Construcción de "3x10x80 kg"
+                                $peso = (float)$d['peso'];
+                                $pesoMostrar = '';
+                                if ($peso > 0) {
+                                    $pesoMostrar = (floor($peso) == $peso)
+                                        ? (string)(int)$peso
+                                        : rtrim(rtrim(number_format($peso, 3, '.', ''), '0'), '.');
+                                    $pesoMostrar .= 'kg';
+                                }
+                                $linea = (int)$d['series'] . 'x' . (int)$d['repeticiones'] . ($pesoMostrar ? 'x' . $pesoMostrar : '');
+                                ?>
+                                <li class="mb-1">
+                                    <span class="badge bg-light text-dark me-1"><?= $linea ?></span>
+                                    <?php if ($d['rpe'] !== null && $d['rpe'] !== ''): ?>
+                                        <span class="badge bg-secondary me-1">RPE <?= esc($d['rpe']) ?></span>
                                     <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
+                                    <?php if (!empty($d['nota'])): ?>
+                                        <span class="text-muted">“<?= esc($d['nota']) ?>”</span>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <div class="text-muted ms-2 mb-3">Sin series registradas.</div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+
         </div>
 <?php
         $html = ob_get_clean();

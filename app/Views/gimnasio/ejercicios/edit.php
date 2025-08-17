@@ -28,10 +28,11 @@
                         'pecho' => 'Pecho',
                         'abdominales' => 'Abdominales',
                         'piernas' => 'Piernas',
+                        'maquinas' => 'Máquinas',
                         'calentamientos' => 'Calentamientos',
                         'movilidad' => 'Movilidad',
                         'cardio' => 'Cardio',
-                        'especificos' => 'Ejercicios específicos',
+                        'especificos' => 'Específicos',
                         'recuperacion' => 'Recuperación'
                     ];
                     foreach ($grupos as $valor => $etiqueta): ?>

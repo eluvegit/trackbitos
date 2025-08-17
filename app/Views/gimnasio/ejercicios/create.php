@@ -31,10 +31,11 @@
                         'pecho' => 'Pecho',
                         'abdominales' => 'Abdominales',
                         'piernas' => 'Piernas',
+                        'maquinas' => 'Máquinas',
                         'calentamientos' => 'Calentamientos',
                         'movilidad' => 'Movilidad',
                         'cardio' => 'Cardio',
-                        'especificos' => 'Ejercicios específicos',
+                        'especificos' => 'Específicos',
                         'recuperacion' => 'Recuperación'
                     ];
                     foreach ($grupos as $valor => $etiqueta): ?>
@@ -60,45 +61,45 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const selectGrupo = document.getElementById('grupo_muscular');
-    const listaEjercicios = document.getElementById('listaEjercicios');
-    const contenedor = document.getElementById('ejerciciosExistentes');
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectGrupo = document.getElementById('grupo_muscular');
+        const listaEjercicios = document.getElementById('listaEjercicios');
+        const contenedor = document.getElementById('ejerciciosExistentes');
 
-    function cargarEjercicios(grupo) {
-        if (!grupo) {
-            contenedor.style.display = 'none';
-            listaEjercicios.innerHTML = '';
-            return;
+        function cargarEjercicios(grupo) {
+            if (!grupo) {
+                contenedor.style.display = 'none';
+                listaEjercicios.innerHTML = '';
+                return;
+            }
+
+            fetch("<?= site_url('gimnasio/ejercicios/por-grupo') ?>/" + grupo)
+                .then(res => res.json())
+                .then(data => {
+                    listaEjercicios.innerHTML = '';
+                    if (data.length === 0) {
+                        listaEjercicios.innerHTML = '<li class="list-group-item text-muted">No hay ejercicios registrados</li>';
+                    } else {
+                        data.forEach(e => {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item';
+                            li.textContent = e.nombre;
+                            listaEjercicios.appendChild(li);
+                        });
+                    }
+                    contenedor.style.display = 'block';
+                });
         }
 
-        fetch("<?= site_url('gimnasio/ejercicios/por-grupo') ?>/" + grupo)
-            .then(res => res.json())
-            .then(data => {
-                listaEjercicios.innerHTML = '';
-                if (data.length === 0) {
-                    listaEjercicios.innerHTML = '<li class="list-group-item text-muted">No hay ejercicios registrados</li>';
-                } else {
-                    data.forEach(e => {
-                        const li = document.createElement('li');
-                        li.className = 'list-group-item';
-                        li.textContent = e.nombre;
-                        listaEjercicios.appendChild(li);
-                    });
-                }
-                contenedor.style.display = 'block';
-            });
-    }
+        // Carga automática si ya hay grupo en URL (al venir desde el botón "+")
+        if (selectGrupo.value) {
+            cargarEjercicios(selectGrupo.value);
+        }
 
-    // Carga automática si ya hay grupo en URL (al venir desde el botón "+")
-    if (selectGrupo.value) {
-        cargarEjercicios(selectGrupo.value);
-    }
-
-    selectGrupo.addEventListener('change', function () {
-        cargarEjercicios(this.value);
+        selectGrupo.addEventListener('change', function() {
+            cargarEjercicios(this.value);
+        });
     });
-});
 </script>
 
 <?= $this->endSection() ?>
