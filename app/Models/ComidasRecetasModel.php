@@ -9,11 +9,10 @@ class ComidasRecetasModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = true;
     protected $allowedFields = [
-        'user_id','nombre','descripcion',
+        'nombre','descripcion',
     ];
 
     protected $validationRules = [
-        'user_id' => 'required|is_natural_no_zero',
         'nombre'  => 'required|min_length[2]|max_length[180]',
     ];
 }

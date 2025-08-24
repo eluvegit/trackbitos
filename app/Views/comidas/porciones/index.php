@@ -23,8 +23,8 @@
       <table class="table table-striped align-middle mb-0">
         <thead>
           <tr>
-            <th>Descripción</th>
-            <th class="text-end">Equivalencia (g)</th>
+            <th class="">Descripción</th>
+            <th class="">Equivalencia (g)</th>
             <th class="text-end" style="width:160px">Acciones</th>
           </tr>
         </thead>
@@ -33,9 +33,8 @@
             <tr><td colspan="3" class="text-muted text-center p-4">No hay porciones registradas.</td></tr>
           <?php else: foreach ($rows as $r): ?>
             <tr>
-                <td><?= esc($r['descripcion']) ?></td>
               <td><?= esc($r['descripcion']) ?></td>
-              <td class="text-end"><?= esc(number_format($r['gramos_equivalentes'], 0)) ?></td>
+              <td class=""><?= esc(number_format($r['gramos_equivalentes'], 0)) ?></td>
               <td class="text-end">
                 
                 <a href="<?= site_url('comidas/porciones/delete/'.$r['id']) ?>" class="btn btn-sm"

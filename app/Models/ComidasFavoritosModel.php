@@ -8,6 +8,6 @@ class ComidasFavoritosModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $allowedFields = [
-        'user_id','item_tipo','item_id','tipo_comida_preferido'
+        'item_tipo','item_id','tipo_comida_preferido'
     ];
 }

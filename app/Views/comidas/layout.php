@@ -42,22 +42,22 @@
                 <ul class="nav nav-pills gap-2">
                     <li class="nav-item">
                         <a class="nav-link <?= (service('uri')->getSegment(2) === 'diario') ? 'active' : '' ?>" href="<?= site_url('comidas/diario/hoy') ?>">
-                            <i class="bi bi-calendar2-check"></i> Diario
+                            <i class="bi bi-calendar2-check"></i> <!--Diario-->
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= (service('uri')->getSegment(2) === 'alimentos') ? 'active' : '' ?>" href="<?= site_url('comidas/alimentos') ?>">
-                            <i class="bi bi-basket"></i> Alimentos
+                            <i class="bi bi-basket"></i> <!--Alimentos-->
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= (service('uri')->getSegment(2) === 'recetas') ? 'active' : '' ?>" href="<?= site_url('comidas/recetas') ?>">
-                            <i class="bi bi-egg-fried"></i> Recetas
+                            <i class="bi bi-egg-fried"></i> <!--Recetas-->
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= (service('uri')->getSegment(2) === 'objetivos') ? 'active' : '' ?>" href="<?= site_url('comidas/objetivos') ?>">
-                            <i class="bi bi-bullseye"></i> Objetivos
+                            <i class="bi bi-bullseye"></i> <!--Objetivos-->
                         </a>
                     </li>
                 </ul>

@@ -13,7 +13,7 @@ class ComidasAlimentoUnidadesModel extends Model
     protected $useSoftDeletes  = false;
 
     protected $allowedFields = [
-  'user_id','alimento_id','unidad_id','descripcion',
+  'alimento_id','unidad_id','descripcion',
   'gramos_equivalentes','es_predeterminada'
 ];
 
@@ -23,7 +23,6 @@ class ComidasAlimentoUnidadesModel extends Model
     protected $updatedField  = 'updated_at';
 
     protected $validationRules = [
-        'user_id'            => 'required|integer',
         'alimento_id'        => 'required|integer',
         'descripcion'        => 'max_length[120]',
         'gramos_equivalentes'=> 'required|decimal',
