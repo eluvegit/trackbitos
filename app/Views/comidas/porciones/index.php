@@ -1,7 +1,7 @@
 <?= $this->extend('comidas/layout') ?>
 <?= $this->section('content') ?>
 
-<h1 class="h4 mb-3">Porciones habituales · <?= esc($alimento['nombre']) ?></h1>
+<h1 class="h4 mb-3">Porciones de <?= esc($alimento['nombre']) ?></h1>
 
 <div class="mb-3">
   <a href="<?= site_url('comidas/alimentos') ?>" class="btn btn-light"><i class="bi bi-arrow-left"></i> Volver</a>

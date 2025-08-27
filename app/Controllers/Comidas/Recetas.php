@@ -152,6 +152,60 @@ class Recetas extends BaseController
                              ->with('msg','Ingrediente eliminado.');
         }
 
-        return redirect()->back()->with('errors',['Ingrediente no encontrado.']);
+        return redirect()->back()->with('errors', ['Ingrediente no encontrado.']);
+    }
+
+    public function delete($id)
+    {
+        $id = (int) $id;
+
+        $recM  = new \App\Models\ComidasRecetasModel();
+        $ingM  = new \App\Models\ComidasRecetaIngredientesModel();
+        $aliM  = new \App\Models\ComidasAlimentosModel();
+        $porM  = new \App\Models\ComidasAlimentoUnidadesModel();
+        $ingI  = new \App\Models\ComidasIngestasModel();
+
+        $rec = $recM->find($id);
+        if (!$rec) {
+            return redirect()->to(site_url('comidas/recetas'))
+                ->with('errors', ['Receta no encontrada.']);
+        }
+
+        // Localiza el alimento “virtual” de la receta (si existe)
+        $aliVirt = $aliM->where('es_receta', 1)->where('receta_id', $id)->first();
+        $aliVirtId = $aliVirt['id'] ?? null;
+
+        $db = \Config\Database::connect();
+        $db->transBegin();
+
+        try {
+            // 1) Ingredientes de la receta
+            $ingM->where('receta_id', $id)->delete();
+
+            // 2) Si existe alimento virtual:
+            if ($aliVirtId) {
+                // 2.a) Ingestas que lo usen
+                $ingI->where('item_tipo', 'alimento')->where('item_id', $aliVirtId)->delete();
+                // 2.b) Porciones del alimento virtual
+                $porM->where('alimento_id', $aliVirtId)->delete();
+                // 2.c) El propio alimento virtual
+                $aliM->delete($aliVirtId);
+            }
+
+            // 3) La receta
+            $recM->delete($id);
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Fallo al borrar receta.');
+            }
+            $db->transCommit();
+
+            return redirect()->to(site_url('comidas/recetas'))
+                ->with('ok', 'Receta eliminada.');
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->to(site_url('comidas/recetas'))
+                ->with('errors', ['No se pudo eliminar la receta. ' . $e->getMessage()]);
+        }
     }
 }

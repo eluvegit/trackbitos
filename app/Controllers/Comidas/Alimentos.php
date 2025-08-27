@@ -98,7 +98,7 @@ class Alimentos extends BaseController
         $data['es_liquido'] = isset($in['es_liquido']) ? 1 : 0;
         $data['es_receta']  = isset($in['es_receta'])  ? 1 : 0;
 
-        // receta_id: NULL si no es receta o si viene vacío/0 (evita UNIQUE (es_receta, receta_id) con 0)
+        // receta_id: NULL si no es receta o si viene vacío/0
         $recetaId = isset($in['receta_id']) ? (int)$in['receta_id'] : null;
         $data['receta_id'] = ($data['es_receta'] === 1 && $recetaId > 0) ? $recetaId : null;
 
@@ -157,7 +157,6 @@ class Alimentos extends BaseController
         $data = $this->normalizePayload($data);
         $data = $this->filterByApplyFields($data);
 
-
         if (empty(trim($data['nombre'] ?? ''))) {
             return redirect()->back()->withInput()
                 ->with('errors', ['El nombre es obligatorio.']);
@@ -167,8 +166,18 @@ class Alimentos extends BaseController
             return redirect()->back()->withInput()->with('errors', $m->errors());
         }
 
+        // 👉 ir al formulario de edición del registro recién creado
+        $id = (int) $m->getInsertID();
+        if ($id > 0) {
+            return redirect()
+                ->to(site_url('comidas/alimentos/edit/' . $id))
+                ->with('ok', 'Alimento creado. Puedes seguir editando.');
+        }
+
+        // Fallback improbable
         return redirect()->to(site_url('comidas/alimentos'))->with('ok', 'Alimento creado');
     }
+
 
     // =================== Editar ===================
 
@@ -198,6 +207,7 @@ class Alimentos extends BaseController
 
         $data = $this->mergeBulk($this->request->getPost());
         $data = $this->normalizePayload($data);
+        $data = $this->filterByApplyFields($data);
 
         if (empty(trim($data['nombre'] ?? ''))) {
             return redirect()->back()->withInput()
@@ -208,19 +218,62 @@ class Alimentos extends BaseController
             return redirect()->back()->withInput()->with('errors', $m->errors());
         }
 
-        return redirect()->to(site_url('comidas/alimentos'))->with('ok', 'Alimento actualizado');
+        return redirect()->to(site_url('comidas/alimentos/edit/' . $id))
+                 ->with('ok', 'Alimento actualizado');
+
     }
 
     // =================== Eliminar ===================
 
     public function delete($id)
     {
-        $m = new ComidasAlimentosModel();
-        $m->delete($id);
-        return redirect()->to(site_url('comidas/alimentos'))->with('ok', 'Alimento eliminado');
+        $id = (int) $id;
+
+        $aliM = new \App\Models\ComidasAlimentosModel();
+        $ingM = new \App\Models\ComidasIngestasModel();
+        $porM = new \App\Models\ComidasAlimentoUnidadesModel();
+
+        $row = $aliM->find($id);
+        if (!$row) {
+            return redirect()->to(site_url('comidas/alimentos'))
+                ->with('errors', ['Alimento no encontrado.']);
+        }
+
+        // Si es un "alimento virtual" generado por receta, fuerza borrarlo desde Recetas
+        if (!empty($row['es_receta'])) {
+            return redirect()->to(site_url('comidas/alimentos'))
+                ->with('errors', ['Este alimento proviene de una receta. Elimínalo desde Recetas.']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transBegin();
+
+        try {
+            // Borra ingestas que apunten a este alimento
+            $ingM->where('item_tipo', 'alimento')->where('item_id', $id)->delete();
+
+            // Borra porciones ligadas a este alimento
+            $porM->where('alimento_id', $id)->delete();
+
+            // Borra el alimento
+            $aliM->delete($id);
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Fallo al borrar alimento.');
+            }
+            $db->transCommit();
+
+            return redirect()->to(site_url('comidas/alimentos'))
+                ->with('ok', 'Alimento eliminado.');
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->to(site_url('comidas/alimentos'))
+                ->with('errors', ['No se pudo eliminar el alimento. ' . $e->getMessage()]);
+        }
     }
 
-    // Añade en la clase (propiedades privadas nuevas)
+
+    // ====== Labels para diffs de preview ======
     private array $fieldLabels = [
         'kcal' => 'Calorías',
         'proteina_g' => 'Proteína (g)',
@@ -255,57 +308,140 @@ class Alimentos extends BaseController
         return array_keys($this->fieldLabels);
     }
 
+    // =================== Preview (simular cambios) ===================
+
     public function preview()
     {
         helper('comidas_parse');
 
-        $m  = new ComidasAlimentosModel();
-        $id = (int)($this->request->getPost('id') ?? 0);
+        $id   = (int) $this->request->getPost('id');
+        $bulk = (string) ($this->request->getPost('bulk') ?? '');
+        $url  = trim((string) ($this->request->getPost('url') ?? ''));
 
-        $current = $id ? ($m->find($id) ?? []) : [];
-        $current = array_merge($this->defaults(), $current);
+        // Si viene URL y no hay bulk, intentamos descargar y convertir a "bulk"
+        if ($bulk === '' && $url !== '') {
+            $host = parse_url($url, PHP_URL_HOST) ?: '';
+            if (!preg_match('/(^|\.)nutrionio\.com$/i', $host)) {
+                return $this->response->setJSON(['ok' => false, 'error' => 'Solo se permite nutrionio.com']);
+            }
 
-        $bulk   = (string)($this->request->getPost('bulk') ?? '');
-        $parsed = comidas_parse_bulk($bulk);
-        $parsed = $this->normalizePayload($parsed);
+            $html = $this->fetchUrl($url);
+            if ($html === '') {
+                return $this->response->setJSON([
+                    'ok' => false,
+                    'error' => 'No se pudo obtener el HTML. Puede que el sitio bloquee la petición. Usa el pegado manual.'
+                ]);
+            }
 
-        $fields  = $this->bulkEditableFields();
+            $text = $this->htmlToText($html);
+            $bulk = $this->extractNutrientLines($text);
+            if ($bulk === '') {
+                return $this->response->setJSON([
+                    'ok' => false,
+                    'error' => 'No se detectaron líneas de nutrientes en la página. Copia/pega el bloque manualmente.'
+                ]);
+            }
+        }
+
+        // Nada que parsear
+        if ($bulk === '') {
+            return $this->response->setJSON([
+                'ok' => false,
+                'error' => 'Debes indicar una URL de nutrionio.com o pegar el bloque de nutrientes.'
+            ]);
+        }
+
+        $parsed  = comidas_parse_bulk($bulk);
+        $current = $id ? (new \App\Models\ComidasAlimentosModel())->find($id) : [];
+
+        $labels   = $this->fieldLabels;
+        $editable = $this->bulkEditableFields();
+
         $changes = [];
-        $parsedOut = [];
+        foreach ($editable as $field) {
+            if (!array_key_exists($field, $parsed)) continue;
+            $new = $parsed[$field];
+            $old = $current[$field] ?? null;
 
-        foreach ($fields as $f) {
-            if (!array_key_exists($f, $parsed)) continue;
-            $old = isset($current[$f]) ? (float)$current[$f] : 0.0;
-            $new = (float)$parsed[$f];
-            $parsedOut[$f] = $new;
-            if (abs($old - $new) > 1e-9) {
+            $isDiff = ($old === null) || ((float)$old !== (float)$new);
+            if ($isDiff) {
                 $changes[] = [
-                    'field' => $f,
-                    'label' => $this->fieldLabels[$f] ?? $f,
-                    'old'   => $old,
+                    'field' => $field,
+                    'label' => $labels[$field] ?? $field,
+                    'old'   => $old ?? '—',
                     'new'   => $new,
                 ];
             }
         }
 
-        return $this->response->setJSON([
-            'ok'      => true,
-            'changes' => $changes,   // para pintar el diff
-            'parsed'  => $parsedOut, // para rellenar valores al aplicar selección
-        ]);
+        return $this->response->setJSON(['ok' => true, 'parsed' => $parsed, 'changes' => $changes]);
     }
 
+    /** Descarga robusta del HTML (UA, idioma, gzip) */
+    private function fetchUrl(string $url): string
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT        => 12,
+            CURLOPT_ENCODING       => '', // acepta gzip/deflate/br si está disponible
+            CURLOPT_HTTPHEADER     => [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
+                'Cache-Control: no-cache',
+            ],
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        ]);
+        $html = curl_exec($ch);
+        curl_close($ch);
+        return is_string($html) ? $html : '';
+    }
+
+    /** Limpia HTML a texto legible */
+    private function htmlToText(string $html): string
+    {
+        // quita scripts y estilos primero
+        $html = preg_replace('#<(script|style)[^>]*>.*?</\1>#is', ' ', $html);
+        // convierte entidades y elimina tags
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // normaliza espacios
+        $text = preg_replace('/\x{00A0}/u', ' ', $text); // &nbsp;
+        $text = preg_replace('/[ \t]+/u', ' ', $text);
+        $text = preg_replace('/\R+/u', "\n", $text);
+        return trim($text);
+    }
+
+    /** Extrae solo líneas que parecen “nutriente + número + unidad” */
+    private function extractNutrientLines(string $text): string
+    {
+        $out = [];
+        foreach (preg_split('/\R/u', $text) as $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+
+            // acepta kcal, g, mg, mcg, µg (y luego quitamos “NN%”)
+            if (preg_match('/\b(\d+(?:[.,]\d+)?)\s?(kcal|g|mg|mcg|µg)\b/i', $line)) {
+                $line = preg_replace('/\s+\d{1,3}\s?%(\b|$)/', '', $line);
+                $out[] = $line;
+            }
+        }
+        return trim(implode("\n", $out));
+    }
+
+    /** Filtra payload según apply_fields[] del preview */
     private function filterByApplyFields(array $data): array
     {
-        // Campos marcados por el usuario en el preview
         $apply = (array)($this->request->getPost('apply_fields') ?? []);
 
         if (empty($apply)) {
-            // compat: si no llega nada, se aplican todos como antes
+            // compat: si no llega nada, se aplica todo
             return $data;
         }
 
-        // Permitir siempre estos “no nutricionales” del formulario
+        // Campos no nutricionales que siempre permitimos
         $always = ['nombre', 'marca', 'descripcion', 'es_receta', 'receta_id', 'es_liquido', 'densidad_g_ml'];
 
         $out = [];
@@ -313,7 +449,6 @@ class Alimentos extends BaseController
             if (array_key_exists($k, $data)) $out[$k] = $data[$k];
         }
 
-        // Solo los campos marcados
         foreach ($apply as $f) {
             if (array_key_exists($f, $data)) {
                 $out[$f] = $data[$f];

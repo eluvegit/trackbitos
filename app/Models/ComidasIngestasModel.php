@@ -16,7 +16,7 @@ class ComidasIngestasModel extends Model
 
     protected $validationRules = [
         'dia_id'   => 'required|is_natural_no_zero',
-        'tipo'     => 'required|in_list[desayuno,almuerzo,merienda,cena,comida_nocturna]',
+        'tipo'     => 'required|in_list[desayuno,almuerzo,merienda,cena,nocturna]',
         'item_tipo'=> 'required|in_list[alimento,receta]',
         'item_id'  => 'required|is_natural_no_zero',
     ];

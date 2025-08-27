@@ -9,6 +9,7 @@ use App\Models\ComidasAlimentosModel;
 use App\Models\ComidasRecetasModel;
 use App\Models\ComidasAlimentoUnidadesModel;
 use App\Models\ComidasNutrientesModel;
+use App\Models\GimnasioEntrenamientosModel;
 
 class Diario extends BaseController
 {
@@ -180,14 +181,13 @@ class Diario extends BaseController
 
     public function hoy()
     {
-        return redirect()->to(site_url('comidas/diario/' . date('Y-m-d')));
+        return redirect()->to(site_url('comidas/diario/' . $this->currentFechaShifted()));
     }
 
     public function ver($fecha = null)
     {
-        $fecha = $fecha ?: date('Y-m-d');
+        $fecha = $fecha ?: $this->currentFechaShifted();
 
-        // validar formato
         $d = \DateTime::createFromFormat('Y-m-d', $fecha);
         if (!$d || $d->format('Y-m-d') !== $fecha) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
@@ -312,6 +312,22 @@ class Diario extends BaseController
         $recetasM   = new ComidasRecetasModel();
         $porcionesM = new ComidasAlimentoUnidadesModel();
         $ingestasM  = new ComidasIngestasModel();
+        $entrenaday = new GimnasioEntrenamientosModel();
+
+        // === Entrenamientos del día ===
+        $entrenosDia = $entrenaday
+            ->select('id, fecha, tipo_sesion, notas_generales, lesiones, sin_molestias')
+            ->where('fecha', $fecha)              // si tu columna 'fecha' es DATETIME, usa ->where('DATE(fecha)', $fecha)
+            ->orderBy('id', 'ASC')
+            ->findAll();
+
+        $tiposEntreno = array_values(array_filter(array_unique(array_map(
+            static fn($e) => trim((string)($e['tipo_sesion'] ?? '')),
+            $entrenosDia
+        ))));
+
+        $huboEntreno = !empty($entrenosDia);
+        // FIN Entrenamiento dia
 
         $builder = $itemTipo === 'receta'
             ? $recetasM->select('id,nombre')
@@ -466,6 +482,9 @@ class Diario extends BaseController
             'tiposLista'   => $tipos,
             'objetivos'    => $objetivos,
             'nutrientes'   => $nutrs, // útil si en la vista quieres iterar dinámico
+            'huboEntreno'  => $huboEntreno,
+            'tiposEntreno' => $tiposEntreno,  // p.ej. ['Fuerza', 'Escalada']
+            'entrenosDia'  => $entrenosDia,   // por si quieres listar detalles/notas
         ];
     }
 
@@ -518,5 +537,20 @@ class Diario extends BaseController
             ->findAll();
 
         return $this->response->setJSON($rows);
+    }
+
+    // app/Controllers/Comidas/Diario.php
+
+    private function currentFechaShifted(int $cutHour = 7): string
+    {
+        // Usa la TZ de la app si está definida
+        $tzName = config('App')->appTimezone ?? date_default_timezone_get();
+        $now    = new \DateTime('now', new \DateTimeZone($tzName));
+
+        // Si es antes de las 07:00, el “día comida” es el día anterior
+        if ((int)$now->format('H') < $cutHour) {
+            $now->modify('-1 day');
+        }
+        return $now->format('Y-m-d');
     }
 }

@@ -204,6 +204,8 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->get('edit/(:num)', 'Alimentos::edit/$1');
         $r->post('update/(:num)', 'Alimentos::update/$1');
         $r->post('preview', 'Alimentos::preview');
+        $r->post('delete/(:num)', 'Alimentos::delete/$1');
+
 
     });
 
@@ -215,6 +217,8 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->get('edit/(:num)', 'Recetas::edit/$1');
         $r->post('update/(:num)', 'Recetas::update/$1');
         $r->get('removeIngrediente/(:num)', 'Recetas::removeIngrediente/$1');
+        $r->post('delete/(:num)',   'Recetas::delete/$1');
+
     });
 
     // --- Objetivos ---

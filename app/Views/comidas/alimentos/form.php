@@ -1,30 +1,38 @@
 <?= $this->extend('comidas/layout'); ?>
 <?= $this->section('content'); ?>
-<?php helper(['form','security']); ?>
+<?php helper(['form', 'security']); ?>
 
 <h1 class="h4 mb-3"><?= isset($row) ? 'Editar' : 'Nuevo' ?> alimento</h1>
-<!-- app/Views/comidas/alimentos/form.php -->
+<h2><?= esc(old('nombre', $row['nombre'] ?? '')) ?> <span class="text-muted h5"><?= esc(old('marca', $row['marca'] ?? '')) ?></span></h2>
 <?= form_open($action ?? current_url(), ['id' => 'alimentoForm']) ?>
 <?= csrf_field() ?>
 
 <div class="row g-3">
 
+  <?php if (!empty($row['id'])): // ⬅️ Solo mostrar importador en EDITAR ?>
+  <!--<div class="input-group mb-2">
+    <input type="url" name="url_nutrionio" class="form-control"
+      placeholder="https://www.nutrionio.com/es/food/...">
+    <button type="button" id="btnPreviewUrl" class="btn btn-outline-secondary">
+      Simular cambios (URL)
+    </button>
+  </div>-->
+
   <div class="mb-3">
     <label class="form-label">Pegado rápido (por 100 g)</label>
     <textarea name="bulk" rows="10" class="form-control"
-      placeholder="Pega aquí el bloque con nutrientes (g, mg, mcg, kcal). Ignora los %; se detectan automáticamente."></textarea>
+      placeholder="Pega aquí el bloque con nutrientes (g, mg, µg, kcal). Ignora los %; se detectan automáticamente."></textarea>
     <div class="form-text">
-      Ej.: “Proteína 11.29 g”, “Sodio 544.50 mg”, “Ácido octadecatrienoico 8.49 g”…
-      Calcularemos Omega-3/6 y saturadas automáticamente.
+      Ej.: “Proteína 11.29 g”, “Sodio 544.50 mg”, “Ácido octadecatrienoico 8.49 g”… Calcularemos Omega-3/6 y saturadas automáticamente.
     </div>
   </div>
 
   <div class="d-flex gap-2 mt-2">
-    <button type="button" id="btnPreview" class="btn btn-outline-secondary">
-      Simular cambios
+    <button type="button" id="btnPreviewBulk" class="btn btn-outline-secondary">
+      Simular
     </button>
     <button type="button" id="btnApplySelected" class="btn btn-primary" disabled>
-      Aplicar selección
+      Aplicar
     </button>
   </div>
 
@@ -44,7 +52,7 @@
       </table>
     </div>
   </div>
-
+  <?php endif; ?>
 
   <!-- Identidad -->
   <div class="col-12">
@@ -54,16 +62,20 @@
         <div class="col-md-6">
           <label class="form-label">Nombre</label>
           <input name="nombre" class="form-control" required
-            value="<?= esc(old('nombre', $row['nombre'] ?? '')) ?>">
+                 value="<?= esc(old('nombre', $row['nombre'] ?? '')) ?>">
         </div>
         <div class="col-md-6">
           <label class="form-label">Marca</label>
           <input name="marca" class="form-control"
-            value="<?= esc(old('marca', $row['marca'] ?? '')) ?>">
+                 value="<?= esc(old('marca', $row['marca'] ?? '')) ?>">
         </div>
         <div class="col-12">
           <label class="form-label">Descripción</label>
           <textarea name="descripcion" class="form-control" rows="2"><?= esc(old('descripcion', $row['descripcion'] ?? '')) ?></textarea>
+        </div>
+        <div class="col-12 d-flex gap-2">
+          <button class="btn btn-primary">Guardar</button>
+          <a href="<?= site_url('comidas/alimentos') ?>" class="btn btn-outline-secondary">Cancelar</a>
         </div>
       </div>
     </div>
@@ -76,23 +88,23 @@
       <div class="card-body row g-3">
         <div class="col-md-3 form-check form-switch">
           <input class="form-check-input" type="checkbox" id="es_liquido" name="es_liquido"
-            <?= old('es_liquido', $row['es_liquido'] ?? 0) ? 'checked' : '' ?>>
+                 <?= old('es_liquido', $row['es_liquido'] ?? 0) ? 'checked' : '' ?>>
           <label class="form-check-label" for="es_liquido">Es líquido</label>
         </div>
         <div class="col-md-3">
           <label class="form-label">Densidad (g/ml)</label>
           <input type="number" step="0.0001" name="densidad_g_ml" class="form-control"
-            value="<?= esc(old('densidad_g_ml', $row['densidad_g_ml'] ?? '')) ?>">
+                 value="<?= esc(old('densidad_g_ml', $row['densidad_g_ml'] ?? '')) ?>">
         </div>
         <div class="col-md-3 form-check form-switch">
           <input class="form-check-input" type="checkbox" id="es_receta" name="es_receta"
-            <?= old('es_receta', $row['es_receta'] ?? 0) ? 'checked' : '' ?>>
+                 <?= old('es_receta', $row['es_receta'] ?? 0) ? 'checked' : '' ?>>
           <label class="form-check-label" for="es_receta">Es receta</label>
         </div>
         <div class="col-md-3">
           <label class="form-label">Receta ID</label>
           <input type="number" name="receta_id" class="form-control"
-            value="<?= esc(old('receta_id', $row['receta_id'] ?? '')) ?>">
+                 value="<?= esc(old('receta_id', $row['receta_id'] ?? '')) ?>">
         </div>
       </div>
     </div>
@@ -105,22 +117,22 @@
       <div class="card-body row g-3">
         <?php
         $macros = [
-          ['kcal', 'kcal', 0.01],
-          ['proteina_g', 'Proteína (g)', 0.01],
-          ['carbohidratos_g', 'Carbohidratos (g)', 0.01],
-          ['azucares_g', 'Azúcares (g)', 0.01],
-          ['fibra_g', 'Fibra (g)', 0.01],
-          ['grasas_g', 'Grasas (g)', 0.01],
-          ['grasas_saturadas_g', 'Saturadas (g)', 0.01],
-          ['omega3_mg', 'Omega-3 (mg)', 0.01],
-          ['omega6_mg', 'Omega-6 (mg)', 0.01],
-          ['sodio_mg', 'Sodio (mg)', 0.01],
+          ['kcal','kcal',0.01],
+          ['proteina_g','Proteína (g)',0.01],
+          ['carbohidratos_g','Carbohidratos (g)',0.01],
+          ['azucares_g','Azúcares (g)',0.01],
+          ['fibra_g','Fibra (g)',0.01],
+          ['grasas_g','Grasas (g)',0.01],
+          ['grasas_saturadas_g','Saturadas (g)',0.01],
+          ['omega3_mg','Omega-3 (mg)',0.01],
+          ['omega6_mg','Omega-6 (mg)',0.01],
+          ['sodio_mg','Sodio (mg)',0.01],
         ];
-        foreach ($macros as [$name, $label, $step]): ?>
+        foreach ($macros as [$name,$label,$step]): ?>
           <div class="col-md-3">
             <label class="form-label"><?= esc($label) ?></label>
             <input type="number" step="<?= $step ?>" name="<?= $name ?>" class="form-control"
-              value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
+                   value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
           </div>
         <?php endforeach; ?>
       </div>
@@ -134,22 +146,22 @@
       <div class="card-body row g-3">
         <?php
         $mins = [
-          ['calcio_mg', 'Calcio (mg)'],
-          ['hierro_mg', 'Hierro (mg)'],
-          ['magnesio_mg', 'Magnesio (mg)'],
-          ['fosforo_mg', 'Fósforo (mg)'],
-          ['potasio_mg', 'Potasio (mg)'],
-          ['zinc_mg', 'Zinc (mg)'],
-          ['selenio_ug', 'Selenio (µg)'],
-          ['cobre_mg', 'Cobre (mg)'],
-          ['manganeso_mg', 'Manganeso (mg)'],
-          ['yodo_ug', 'Yodo (µg)'],
+          ['calcio_mg','Calcio (mg)'],
+          ['hierro_mg','Hierro (mg)'],
+          ['magnesio_mg','Magnesio (mg)'],
+          ['fosforo_mg','Fósforo (mg)'],
+          ['potasio_mg','Potasio (mg)'],
+          ['zinc_mg','Zinc (mg)'],
+          ['selenio_ug','Selenio (µg)'],
+          ['cobre_mg','Cobre (mg)'],
+          ['manganeso_mg','Manganeso (mg)'],
+          ['yodo_ug','Yodo (µg)'],
         ];
-        foreach ($mins as [$name, $label]): ?>
+        foreach ($mins as [$name,$label]): ?>
           <div class="col-md-3">
             <label class="form-label"><?= esc($label) ?></label>
             <input type="number" step="0.01" name="<?= $name ?>" class="form-control"
-              value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
+                   value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
           </div>
         <?php endforeach; ?>
       </div>
@@ -163,17 +175,17 @@
       <div class="card-body row g-3">
         <?php
         $vits = [
-          ['vitamina_a_rae_ug', 'Vit. A (µg RAE)'],
-          ['vitamina_c_mg', 'Vit. C (mg)'],
-          ['vitamina_d_ug', 'Vit. D (µg)'],
-          ['vitamina_e_mg', 'Vit. E (mg)'],
-          ['vitamina_k_ug', 'Vit. K (µg)'],
+          ['vitamina_a_rae_ug','Vit. A (µg RAE)'],
+          ['vitamina_c_mg','Vit. C (mg)'],
+          ['vitamina_d_ug','Vit. D (µg)'],
+          ['vitamina_e_mg','Vit. E (mg)'],
+          ['vitamina_k_ug','Vit. K (µg)'],
         ];
-        foreach ($vits as [$name, $label]): ?>
+        foreach ($vits as [$name,$label]): ?>
           <div class="col-md-3">
             <label class="form-label"><?= esc($label) ?></label>
             <input type="number" step="0.01" name="<?= $name ?>" class="form-control"
-              value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
+                   value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
           </div>
         <?php endforeach; ?>
       </div>
@@ -190,26 +202,33 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const form     = document.getElementById('alimentoForm');
-  const bulkTa   = form.querySelector('[name="bulk"]');
-  const btnPrev  = document.getElementById('btnPreview');
+  const form = document.getElementById('alimentoForm');
+  if (!form) return;
+
+  // Si NO existe el importador (estamos en CREATE), no hacemos nada de la parte de preview.
+  const btnUrl  = document.getElementById('btnPreviewUrl');
+  const btnBulk = document.getElementById('btnPreviewBulk');
+  const importerPresent = !!(btnUrl || btnBulk);
+  if (!importerPresent) return;
+
+  const bulkTa  = form.querySelector('[name="bulk"]');
+  const urlInput = form.querySelector('[name="url_nutrionio"]');
   const btnApply = document.getElementById('btnApplySelected');
-  const box      = document.getElementById('previewBox');
-  const tbody    = document.getElementById('previewTbody');
-  const chkAll   = document.getElementById('chkAll');
-
-  let parsedMap = {}; // field -> new value (desde preview)
-
+  const box   = document.getElementById('previewBox');
+  const tbody = document.getElementById('previewTbody');
+  const chkAll= document.getElementById('chkAll');
   const csrfInput = form.querySelector('input[name="<?= csrf_token() ?>"]');
 
-  const renderChanges = (changes) => {
+  let parsedMap = {};
+
+  function renderChanges(changes) {
     if (!changes || changes.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" class="text-muted">No hay cambios.</td></tr>';
-      btnApply.disabled = true;
+      if (btnApply) btnApply.disabled = true;
       box.classList.remove('d-none');
       return;
     }
-    const rows = changes.map(ch => `
+    tbody.innerHTML = changes.map(ch => `
       <tr>
         <td><input type="checkbox" class="chg-check" value="${ch.field}" checked></td>
         <td>${ch.label}</td>
@@ -217,69 +236,83 @@ document.addEventListener('DOMContentLoaded', () => {
         <td class="text-end fw-semibold">${ch.new}</td>
       </tr>
     `).join('');
-    tbody.innerHTML = rows;
+    if (btnApply) btnApply.disabled = false;
     box.classList.remove('d-none');
-    btnApply.disabled = false;
-    chkAll.checked = true;
-  };
+    if (chkAll) chkAll.checked = true;
+  }
 
-  btnPrev.addEventListener('click', async () => {
-    const url = '<?= site_url('comidas/alimentos/preview') ?>';
-    const fd  = new URLSearchParams();
-    fd.set('bulk', (bulkTa?.value || '').toString());
+  async function runPreview(payload, btn) {
+    const endpoint = '<?= site_url('comidas/alimentos/preview') ?>';
+    const fd = new URLSearchParams();
     fd.set('id', '<?= isset($row['id']) ? (int)$row['id'] : 0 ?>');
+    if (payload.bulk !== undefined) fd.set('bulk', payload.bulk);
+    if (payload.url  !== undefined) fd.set('url',  payload.url);
     if (csrfInput) fd.set(csrfInput.name, csrfInput.value);
 
-    btnPrev.disabled = true;
-    btnPrev.textContent = 'Simulando...';
+    const prevTxt = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Simulando...';
     try {
-      const res = await fetch(url, {
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        headers: { 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+        credentials: 'same-origin',
         body: fd.toString()
       });
       const json = await res.json();
       parsedMap = json.parsed || {};
       renderChanges(json.changes || []);
-    } catch(e) {
+    } catch (e) {
       console.error(e);
       tbody.innerHTML = '<tr><td colspan="4" class="text-danger">Error en la simulación.</td></tr>';
       box.classList.remove('d-none');
-      btnApply.disabled = true;
+      if (btnApply) btnApply.disabled = true;
     } finally {
-      btnPrev.disabled = false;
-      btnPrev.textContent = 'Simular cambios';
+      btn.disabled = false;
+      btn.textContent = prevTxt;
     }
-  });
+  }
 
-  chkAll.addEventListener('change', (e) => {
-    document.querySelectorAll('.chg-check').forEach(c => c.checked = e.target.checked);
-  });
-
-  btnApply.addEventListener('click', () => {
-    // Limpia antiguos apply_fields[]
-    form.querySelectorAll('input[name="apply_fields[]"]').forEach(el => el.remove());
-    // Por cada campo marcado, setea el input del form y añade apply_fields[]
-    document.querySelectorAll('.chg-check:checked').forEach(ch => {
-      const f = ch.value;
-      const val = parsedMap[f];
-      // Rellena el input si existe
-      const input = form.querySelector(`[name="${f}"]`);
-      if (input) input.value = val;
-      // Marca que este campo se debe aplicar en backend
-      const hid = document.createElement('input');
-      hid.type = 'hidden';
-      hid.name = 'apply_fields[]';
-      hid.value = f;
-      form.appendChild(hid);
+  if (btnUrl) {
+    btnUrl.addEventListener('click', () => {
+      const urlVal = (urlInput?.value || '').trim();
+      if (!urlVal) { alert('Introduce una URL de nutrionio.com'); return; }
+      runPreview({ url: urlVal, bulk: '' }, btnUrl);
     });
-    // Enviar el formulario normal a store/update
-    form.submit();
-  });
+  }
+
+  if (btnBulk) {
+    btnBulk.addEventListener('click', () => {
+      runPreview({ bulk: (bulkTa?.value || '').toString(), url: '' }, btnBulk);
+    });
+  }
+
+  if (chkAll) {
+    chkAll.addEventListener('change', (e) => {
+      tbody.querySelectorAll('.chg-check').forEach(c => c.checked = e.target.checked);
+    });
+  }
+
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      // limpiar antiguos apply_fields[]
+      form.querySelectorAll('input[name="apply_fields[]"]').forEach(el => el.remove());
+      // aplicar seleccionados
+      tbody.querySelectorAll('.chg-check:checked').forEach(ch => {
+        const f = ch.value;
+        const val = parsedMap[f];
+        const input = form.querySelector(`[name="${f}"]`);
+        if (input) input.value = val;
+        const hid = document.createElement('input');
+        hid.type = 'hidden';
+        hid.name = 'apply_fields[]';
+        hid.value = f;
+        form.appendChild(hid);
+      });
+      form.submit();
+    });
+  }
 });
 </script>
 
 <?= $this->endSection(); ?>
-
-
-

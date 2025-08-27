@@ -75,21 +75,42 @@ $rangotxt = fn($r, $u) => sprintf(
         </div>
     </div>
 
-    <!-- Botón Añadir alimento -->
-    <div class="d-grid mb-3">
-        <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/seleccionar-tipo') ?>"
-            class="btn btn-lg btn-primary">
-            ➕ Añadir alimento
-        </a>
-    </div>
 
     <!-- Resumen del día (con límites) -->
     <div class="card mb-3">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="card-title mb-0">Resumen del día</h5>
-                <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/nutrientes') ?>"
-                    class="btn btn-sm btn-outline-secondary">Ver más</a>
+                <div class="text-end">
+                    <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/nutrientes') ?>"
+                        class="btn btn-sm btn-outline-secondary">Ver más</a>
+                    <?php
+                    // (Opcional) ajusta la zona horaria si hace falta
+                    // $tz  = new \DateTimeZone('Europe/Madrid');
+                    // $now = new \DateTime('now', $tz);
+                    $now   = new \DateTime('now');                 // usa la TZ del servidor
+                    $mins  = (int)$now->format('H') * 60 + (int)$now->format('i'); // minutos desde 00:00
+
+                    // Franjas:
+                    // 00:00–04:30  nocturna
+                    // 04:30–12:00  desayuno
+                    // 12:00–16:00  almuerzo
+                    // 16:00–20:00  merienda
+                    // 20:00–24:00  cena
+                    if ($mins >=  270 && $mins <  720) $tipoSugerido = 'desayuno';
+                    elseif ($mins >=  720 && $mins <  960) $tipoSugerido = 'almuerzo';
+                    elseif ($mins >=  960 && $mins < 1200) $tipoSugerido = 'merienda';
+                    elseif ($mins >= 1200 && $mins < 1440) $tipoSugerido = 'cena';
+                    else                                    $tipoSugerido = 'nocturna';
+                    ?>
+
+                    <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/' . $tipoSugerido) ?>"
+                        class="btn btn-sm btn-outline-primary"
+                        title="Añadir a <?= esc(ucfirst($tipoSugerido)) ?>">
+                        +
+                    </a>
+
+                </div>
             </div>
 
             <!-- Kcal -->
@@ -151,59 +172,70 @@ $rangotxt = fn($r, $u) => sprintf(
     ?>
 
 
-    <!-- Ingestas del día agrupadas -->
-<?php foreach ($tiposLista as $tipo): ?>
-  <?php
-    $totK = $fmt($resumenTipos[$tipo]['kcal']            ?? 0, 0);
-    $totP = $fmt($resumenTipos[$tipo]['proteina_g']      ?? 0, 0);
-    $totC = $fmt($resumenTipos[$tipo]['carbohidratos_g'] ?? 0, 0);
-    $totG = $fmt($resumenTipos[$tipo]['grasas_g']        ?? 0, 0);
-  ?>
-  <div class="card mb-2">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-        <span><?= ucfirst(str_replace('_', ' ', $tipo)) ?></span>
-        <span class="bg-light text-dark"><?= $totK ?> kcal</span>
-        <span class="">P <?= $totP ?> g</span>
-        <span class="">C <?= $totC ?> g</span>
-        <span class="">G <?= $totG ?> g</span>
-      </div>
-
-      <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/' . $tipo) ?>"
-         class="btn btn-sm btn-outline-primary"
-         title="Añadir a <?= esc(ucfirst(str_replace('_', ' ', $tipo))) ?>">
-        <i class="bi bi-plus"></i>
-        <span class="visually-hidden">Añadir</span>
-      </a>
+      <!-- Hubo entrenamiento -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-center">
+            <?php if (!empty($huboEntreno) && !empty($tiposEntreno)): ?>
+                <span class="badge bg-secondary rounded-pill">
+                    Entrenamiento: <?= esc(implode(' · ', $tiposEntreno)) ?>
+                </span>
+            <?php endif; ?>
+        </div>
     </div>
 
-    <ul class="list-group list-group-flush">
-      <?php if (!empty($ingPorTipo[$tipo])): ?>
-        <?php foreach ($ingPorTipo[$tipo] as $i): ?>
-          <?php
-            $k = $fmt($i['macros']['kcal']            ?? 0, 0);
-            $p = $fmt($i['macros']['proteina_g']      ?? 0, 1);
-            $c = $fmt($i['macros']['carbohidratos_g'] ?? 0, 1);
-            $g = $fmt($i['macros']['grasas_g']        ?? 0, 1);
-          ?>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-              <strong><?= esc($i['nombre']) ?></strong>
-              <br><small class="text-muted"><?= esc($i['cantidad_label']) ?></small>
+    <!-- Ingestas del día agrupadas -->
+    <?php foreach ($tiposLista as $tipo): ?>
+        <?php
+        $totK = $fmt($resumenTipos[$tipo]['kcal']            ?? 0, 0);
+        $totP = $fmt($resumenTipos[$tipo]['proteina_g']      ?? 0, 0);
+        $totC = $fmt($resumenTipos[$tipo]['carbohidratos_g'] ?? 0, 0);
+        $totG = $fmt($resumenTipos[$tipo]['grasas_g']        ?? 0, 0);
+        ?>
+        <div class="card mb-2">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span><?= ucfirst(str_replace('_', ' ', $tipo)) ?></span>
+                    <span class="bg-light text-dark"><?= $totK ?> kcal</span>
+                    <span class="">P <?= $totP ?> g</span>
+                    <span class="">C <?= $totC ?> g</span>
+                    <span class="">G <?= $totG ?> g</span>
+                </div>
+
+                <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/' . $tipo) ?>"
+                    class="btn btn-sm btn-outline-primary"
+                    title="Añadir a <?= esc(ucfirst(str_replace('_', ' ', $tipo))) ?>">
+                    <i class="bi bi-plus"></i>
+                    <span class="visually-hidden">Añadir</span>
+                </a>
             </div>
 
-            <div class="text-end">
-              <div class="fw-semibold"><?= $k ?> kcal</div>
-              <small class="text-muted">P <?= $p ?> g · C <?= $c ?> g · G <?= $g ?> g</small>
-            </div>
-          </li>
-        <?php endforeach; ?>
-      <?php else: ?>
-        <li class="list-group-item text-muted">Sin registros</li>
-      <?php endif; ?>
-    </ul>
-  </div>
-<?php endforeach; ?>
+            <ul class="list-group list-group-flush">
+                <?php if (!empty($ingPorTipo[$tipo])): ?>
+                    <?php foreach ($ingPorTipo[$tipo] as $i): ?>
+                        <?php
+                        $k = $fmt($i['macros']['kcal']            ?? 0, 0);
+                        $p = $fmt($i['macros']['proteina_g']      ?? 0, 1);
+                        $c = $fmt($i['macros']['carbohidratos_g'] ?? 0, 1);
+                        $g = $fmt($i['macros']['grasas_g']        ?? 0, 1);
+                        ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong><?= esc($i['nombre']) ?></strong>
+                                <br><small class="text-muted"><?= esc($i['cantidad_label']) ?></small>
+                            </div>
+
+                            <div class="text-end">
+                                <div class="fw-semibold"><?= $k ?> kcal</div>
+                                <small class="text-muted">P <?= $p ?> g · C <?= $c ?> g · G <?= $g ?> g</small>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <li class="list-group-item text-muted">Sin registros</li>
+                <?php endif; ?>
+            </ul>
+        </div>
+    <?php endforeach; ?>
 
 
 </div>

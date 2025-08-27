@@ -1,7 +1,7 @@
 <?= $this->extend('comidas/layout') ?>
 <?= $this->section('content') ?>
 
-<h1 class="h4 mb-3"><?= esc($title ?? 'Porción') ?> · <?= esc($alimento['nombre'] ?? '') ?></h1>
+<h1 class="h4 mb-3">Nueva porción · <span class="text-muted"><?= esc($alimento['nombre']) ?></span></h1>
 
 <div class="mb-3">
   <a href="<?= site_url('comidas/porciones/alimento/'.($alimento['id'] ?? $row['alimento_id'])) ?>" class="btn btn-light">
