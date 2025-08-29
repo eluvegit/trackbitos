@@ -124,10 +124,17 @@ class Alimentos extends BaseController
         $q = trim((string) $this->request->getGet('q'));
         $m = new ComidasAlimentosModel();
 
-        if ($q !== '') $m->like('nombre', $q);
+        if ($q !== '') {
+            $m->like('nombre', $q);
+        }
 
-        $rows  = $m->orderBy('nombre', 'ASC')->paginate(100);
+        $rows  = $m->orderBy('nombre', 'ASC')->paginate(1000);
         $pager = $m->pager;
+
+        // ⇨ Si es petición parcial (AJAX o ?partial=1), devolvemos solo las filas
+        if ($this->request->isAJAX() || $this->request->getGet('partial') === '1') {
+            return view('comidas/alimentos/_rows', ['rows' => $rows]);
+        }
 
         return view('comidas/alimentos/index', [
             'rows'  => $rows,
@@ -136,6 +143,7 @@ class Alimentos extends BaseController
             'pager' => $pager,
         ]);
     }
+
 
     // =================== Crear ===================
 

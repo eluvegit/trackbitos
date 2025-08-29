@@ -33,7 +33,7 @@
                     <?php foreach ($planes as $p): ?>
                         <tr>
                             <td>#<?= (int)$p['id'] ?></td>
-                            <td><?= esc($p['nombre']) ?></td>
+                            <td><a class="btn btn-sm btn-outline-primary" href="<?= site_url('gimnasio/mesociclos/' . $p['id']) ?>"><?= esc($p['nombre']) ?></a></td>
                             <td><span class="badge bg-warning text-dark"><?= esc($p['ejercicio']) ?></span></td>
                             <td><?= number_format((float)$p['e1rm_base'], 1) ?> kg</td>
                             <td><?= (int)$p['_pendientes'] ?></td>

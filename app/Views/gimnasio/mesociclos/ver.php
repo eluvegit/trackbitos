@@ -30,7 +30,7 @@
                 <input type="hidden" name="plantilla" value="estandar">
                 <button class="btn btn-success">Generar con e1RM actual</button>
             </form>
-            <a href="<?= site_url('gimnasio/mesociclos/'.$plan['id'].'/generar/bilbo') ?>" class="btn btn-success">
+            <a href="<?= site_url('gimnasio/mesociclos/' . $plan['id'] . '/generar/bilbo') ?>" class="btn btn-success">
                 Generar BILBO con e1RM actual
             </a>
         <?php else: ?>
@@ -54,13 +54,16 @@
                 if ($lastPicoOrden === null || $o > $lastPicoOrden) $lastPicoOrden = $o;
             }
         }
-        $startOrden = $lastPicoOrden !== null 
-    ? $lastPicoOrden + 1 
-    : (!empty($todos) && isset($todos[0]['orden']) ? (int)$todos[0]['orden'] : 0);
+        $startOrden = $lastPicoOrden !== null
+            ? $lastPicoOrden + 1
+            : (!empty($todos) && isset($todos[0]['orden']) ? (int)$todos[0]['orden'] : 0);
 
         $endOrden = null;
         foreach ($todos as $b) {
-            if ((int)$b['orden'] >= $startOrden && ($b['bloque_tipo'] ?? '') === 'pico') { $endOrden = (int)$b['orden']; break; }
+            if ((int)$b['orden'] >= $startOrden && ($b['bloque_tipo'] ?? '') === 'pico') {
+                $endOrden = (int)$b['orden'];
+                break;
+            }
         }
         if ($endOrden === null) $endOrden = (int)max(array_column($todos, 'orden'));
         $totalMeso = max(0, $endOrden - $startOrden + 1);
@@ -78,8 +81,8 @@
     ?>
     <div class="progress mb-4" style="max-width:420px;">
         <div class="progress-bar" role="progressbar"
-             style="width: <?= $pct ?>%;"
-             aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100">
+            style="width: <?= $pct ?>%;"
+            aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100">
             <?= $pct ?>%
         </div>
     </div>
@@ -99,12 +102,13 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Tipo</th>
+                            
                             <th>Top %</th>
                             <th>Top reps</th>
                             <th>Top kg</th>
                             <th>Back-off</th>
                             <th>Back-off kg</th>
+                            <th>Tipo</th>
                             <th>Notas</th>
                             <th class="text-center">Acciones</th>
                         </tr>
@@ -114,18 +118,13 @@
                             <?php $esSiguiente = ($siguienteOrden !== null && $b['orden'] === $siguienteOrden); ?>
                             <tr class="<?= $esSiguiente ? 'table-warning' : '' ?>">
                                 <td>
-                                    <?= (int)$b['orden'] ?>
                                     <?php if ($esSiguiente): ?>
-                                        <span class="badge bg-warning text-dark ms-2">Toca este</span>
+                                        <span class="badge bg-warning text-dark"><?= (int)$b['orden'] ?></span>
+                                    <?php else: ?>
+                                       <span class="badge bg-light text-dark"> <?= (int)$b['orden'] ?></span>
                                     <?php endif; ?>
                                 </td>
-                                <td>
-                                    <?php
-                                      $tipo = esc($b['bloque_tipo']);
-                                      $badge = $tipo==='pico' ? 'bg-danger' : ($tipo==='deload' ? 'bg-secondary' : 'bg-info text-dark');
-                                    ?>
-                                    <span class="badge <?= $badge ?>"><?= $tipo ?></span>
-                                </td>
+                                
                                 <td>
                                     <?= (float)$b['top_pct_min'] * 100 ?>%
                                     <?php if ($b['top_pct_max']): ?>– <?= (float)$b['top_pct_max'] * 100 ?>%<?php endif; ?>
@@ -142,6 +141,13 @@
                                 <td>
                                     <?= number_format($b['_bo_min'], 1) ?> kg
                                     <?php if ($b['_bo_max']): ?> – <?= number_format($b['_bo_max'], 1) ?> kg<?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php
+                                    $tipo = esc($b['bloque_tipo']);
+                                    $badge = $tipo === 'pico' ? 'bg-danger' : ($tipo === 'deload' ? 'bg-success' : 'bg-secondary');
+                                    ?>
+                                    <span class="badge <?= $badge ?>"><?= $tipo ?></span>
                                 </td>
                                 <td><?= esc($b['notas']) ?></td>
                                 <td class="text-nowrap text-center">
@@ -189,11 +195,11 @@
             <?php foreach ($grupos as $bloquesM): ?>
                 <?php
                 $ordenMin = $bloquesM[0]['orden'];
-                $ordenMax = $bloquesM[count($bloquesM)-1]['orden'];
+                $ordenMax = $bloquesM[count($bloquesM) - 1]['orden'];
 
                 // Tomamos snapshot/lote del último bloque del grupo (normalmente el pico)
-                $snap   = $bloquesM[count($bloquesM)-1]['e1rm_snapshot'] ?? null;
-                $loteId = $bloquesM[count($bloquesM)-1]['lote_id'] ?? null;
+                $snap   = $bloquesM[count($bloquesM) - 1]['e1rm_snapshot'] ?? null;
+                $loteId = $bloquesM[count($bloquesM) - 1]['lote_id'] ?? null;
                 ?>
                 <h5 class="mt-4">
                     Mesociclo <?= $mesoNum ?>
@@ -202,7 +208,7 @@
                         <span class="badge bg-dark ms-2">Lote #<?= (int)$loteId ?></span>
                     <?php endif; ?>
                     <?php if ($snap): ?>
-                        <span class="badge bg-secondary ms-1">e1RM lote: <?= number_format((float)$snap,1) ?> kg</span>
+                        <span class="badge bg-secondary ms-1">e1RM lote: <?= number_format((float)$snap, 1) ?> kg</span>
                     <?php endif; ?>
                 </h5>
 
@@ -227,8 +233,8 @@
                                     <td><?= (int)$b['orden'] ?></td>
                                     <td>
                                         <?php
-                                          $tipo = esc($b['bloque_tipo']);
-                                          $badge = $tipo==='pico' ? 'bg-danger' : ($tipo==='deload' ? 'bg-secondary' : 'bg-success');
+                                        $tipo = esc($b['bloque_tipo']);
+                                        $badge = $tipo === 'pico' ? 'bg-danger' : ($tipo === 'deload' ? 'bg-secondary' : 'bg-success');
                                         ?>
                                         <span class="badge <?= $badge ?>"><?= $tipo ?></span>
                                     </td>
@@ -243,9 +249,9 @@
                                     <td>
                                         <?= number_format($b['_top_min'], 1) ?> kg
                                         <?php if ($b['_top_max']): ?> – <?= number_format($b['_top_max'], 1) ?> kg<?php endif; ?>
-                                        <?php if (!empty($b['e1rm_snapshot'])): ?>
-                                            <div class="text-muted small">e1RM lote: <?= number_format((float)$b['e1rm_snapshot'],1) ?> kg</div>
-                                        <?php endif; ?>
+                                            <?php if (!empty($b['e1rm_snapshot'])): ?>
+                                                <div class="text-muted small">e1RM lote: <?= number_format((float)$b['e1rm_snapshot'], 1) ?> kg</div>
+                                            <?php endif; ?>
                                     </td>
                                     <td><?= (int)$b['bo_sets'] ?> × <?= (int)$b['bo_reps'] ?></td>
                                     <td>

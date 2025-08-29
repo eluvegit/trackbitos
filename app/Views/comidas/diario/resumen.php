@@ -115,7 +115,7 @@ $rangotxt = fn($r, $u) => sprintf(
 
             <!-- Kcal -->
             <div class="d-flex justify-content-between align-items-center mb-1">
-                <div><strong>Calorías</strong></div>
+                <div><strong>Calorías</strong> <span style="font-size:0.7em;"><?=$fmt((($rK['max'] + $rK['min']) / 2 )- $kcal, 0)?> kcal restantes</span></div>
                 <small class="text-muted"><?= $rangotxt($rK, 'kcal') ?></small>
             </div>
             <div class="progress mb-2" style="height: 12px;">
@@ -124,7 +124,7 @@ $rangotxt = fn($r, $u) => sprintf(
                 </div>
             </div>
             <small class="text-muted d-block mb-3">
-                Ingeridas: <strong><?= $fmt($kcal, 0) ?> calorias</strong>
+                Ingeridas: <strong><?= $fmt($kcal, 0) ?> calorias</strong> 
             </small>
 
             <?php
@@ -136,7 +136,7 @@ $rangotxt = fn($r, $u) => sprintf(
             ?>
             <?php foreach ($rows as [$label, $clave, $valNow, $range, $pct, $cls, $unit]): ?>
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div><?= esc($label) ?></div>
+                    <div><?= esc($label) ?> <span style="font-size:0.7em;"><?=$fmt((($range['max'] + $range['min'])/2) - $pct, 0)?> g restantes</span></div>
                     <small class="text-muted">
                         <?= $range['min'] !== null ? $fmt($range['min'], 0) : '—' ?> – <?= $range['max'] !== null ? $fmt($range['max'], 0) : '—' ?> <?= $unit ?>
                     </small>
@@ -176,7 +176,7 @@ $rangotxt = fn($r, $u) => sprintf(
     <div class="mb-3">
         <div class="d-flex justify-content-center">
             <?php if (!empty($huboEntreno) && !empty($tiposEntreno)): ?>
-                <span class="badge bg-secondary rounded-pill">
+                <span class="badge bg-warning text-dark rounded-pill">
                     Entrenamiento: <?= esc(implode(' · ', $tiposEntreno)) ?>
                 </span>
             <?php endif; ?>

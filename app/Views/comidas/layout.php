@@ -60,6 +60,11 @@
                             <i class="bi bi-bullseye"></i> <!--Objetivos-->
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= (service('uri')->getSegment(2) === 'peso') ? 'active' : '' ?>" href="<?= site_url('comidas/peso') ?>">
+                            <i class="bi bi-graph-down"></i> <!--Peso-->
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -77,5 +82,6 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <?= $this->renderSection('scripts') ?>
 </body>
 </html>

@@ -1,6 +1,12 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<style>
+.cal-note{
+    font-size:0.6em;
+}
+
+</style>
 <?php
 // --- MAPEO fecha => id para marcar en calendarios ---
 $mapFechaId = [];
@@ -72,20 +78,21 @@ function renderCalendario($dt, $mapFechaId, $mapFechaNota, $etiqueta = '')
             $notaBreve = $mapFechaNota[$fecha] ?? '';
 
             echo '<div class="cal-actions">';
-            echo    '<a href="' . $url . '" class="btn btn-sm btn-success">' . $dia . '</a>';
-            echo    '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-entrenamiento" data-id="' . $id . '" title="Ver resumen">👁️</button>';
+            echo    '<a href="' . $url . '" class="btn btn-sm text-dark btn-warning">' . $dia . '</a>';
+            //echo    '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-entrenamiento" data-id="' . $id . '" title="Ver resumen">👁️</button>';
             echo '</div>';
 
             if ($notaBreve !== '') {
-                echo '<div class="cal-note">' . esc($notaBreve) . '</div>';
+                echo '<div class="cal-note">' . esc(mb_substr((string)$notaBreve, 0, 6, 'UTF-8')) . '</div>';
+
             }
         } else {
+            echo '<span class="text-muted btn btn-sm">' . $dia . '</span>';
             // MISMA ESTRUCTURA con espaciadores invisibles para mantener alturas
             echo '<div class="cal-actions">';
-            echo   '<button class="btn btn-sm cal-spacer">' . $dia . '</button>';
-            echo   '<button class="btn btn-sm cal-spacer">.</button>';
+            //echo   '<button class="btn btn-sm cal-spacer">' . $dia . '</button>';
+            //echo   '<button class="btn btn-sm cal-spacer">.</button>';
             echo '</div>';
-            echo '<span class="text-muted">' . $dia . '</span>';
         }
 
         echo '</div>'; // cal-cell
@@ -113,44 +120,52 @@ $anterior = (clone $actual)->modify('-1 month');
 ?>
 
 <h2 class="">📅 Entrenamientos</h2>
-<div class="">
-    <a href="<?= site_url('gimnasio/') ?>" class="btn btn-outline-secondary">← Volver al gimnasio</a>
-</div>
 
-<div class="row justify-content-center mb-4">
-    <div class="col-md-3">
-        <form action="<?= site_url('gimnasio/entrenamientos/crear') ?>" method="post" class="mb-3">
-            <label for="fecha">Fecha:</label>
-            <?php
 
-            use CodeIgniter\I18n\Time;
-
-            $hoyMadrid = Time::now('Europe/Madrid')->toDateString(); // YYYY-MM-DD
-            ?>
-            <input type="date" name="fecha" value="<?= $hoyMadrid ?>" class="form-control mb-2">
-
-            <button class="btn btn-primary w-100">➕ Crear entrenamiento</button>
-        </form>
-    </div>
-</div>
 
 <!-- Calendarios: mes anterior y actual -->
-<div class="row justify-content-center g-4">
+<div class="row justify-content-center mt-2 g-4">
     <div class="col-md-6">
         <?php renderCalendario($actual, $mapFechaId, $mapFechaNota, 'Mes actual'); ?>
     </div>
 </div>
 
+<div class="mt-3 text-end">
+    <a href="<?= site_url('gimnasio/') ?>" class="btn btn-sm btn-outline-secondary">← Volver al gimnasio</a>
+</div>
+
+<div class="row justify-content-center mb-2 mt-4">
+  <div class="col-md-5">
+    <form action="<?= site_url('gimnasio/entrenamientos/crear') ?>" method="post" class="mb-3">
+      <?php
+      use CodeIgniter\I18n\Time;
+      $hoyMadrid = Time::now('Europe/Madrid')->toDateString(); // YYYY-MM-DD
+      ?>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text" id="fecha-label">Fecha</span>
+        <input
+          type="date"
+          id="fecha"
+          name="fecha"
+          value="<?= $hoyMadrid ?>"
+          class="form-control"
+          aria-describedby="fecha-label">
+        <button class="btn btn-warning btn-sm" type="submit">➕ Nuevo</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Toggle mes anterior -->
-<div class="row justify-content-center g-2 mt-3">
+<div class="row justify-content-center g-2">
     <div class="col-md-6 d-flex">
         <button id="toggleMesAnteriorBtn"
-                class="btn btn-outline-secondary btn-sm ms-auto"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#calMesAnterior"
-                aria-expanded="false"
-                aria-controls="calMesAnterior">
+            class="btn btn-sm ms-auto"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#calMesAnterior"
+            aria-expanded="false"
+            aria-controls="calMesAnterior">
             ▶ Mostrar mes anterior
         </button>
     </div>
@@ -168,7 +183,7 @@ $anterior = (clone $actual)->modify('-1 month');
 
 
 <!-- Lista de entrenamientos en tarjetas -->
-<div class="row justify-content-center mt-4">
+<div class="row justify-content-center">
     <div class="col-md-10">
         <div class="row g-4">
             <?php
@@ -304,32 +319,32 @@ $anterior = (clone $actual)->modify('-1 month');
     })();
 </script>
 <script>
-(function () {
-    // Recordar preferencia en localStorage
-    const KEY = 'mostrarMesAnterior';
-    const btn = document.getElementById('toggleMesAnteriorBtn');
-    const collapseEl = document.getElementById('calMesAnterior');
+    (function() {
+        // Recordar preferencia en localStorage
+        const KEY = 'mostrarMesAnterior';
+        const btn = document.getElementById('toggleMesAnteriorBtn');
+        const collapseEl = document.getElementById('calMesAnterior');
 
-    if (btn && collapseEl) {
-        // Si el usuario lo dejó abierto la última vez, ábrelo
-        const shouldShow = localStorage.getItem(KEY) === '1';
-        if (shouldShow) {
-            collapseEl.classList.add('show');
-            btn.setAttribute('aria-expanded', 'true');
-            btn.textContent = '▼ Ocultar mes anterior';
+        if (btn && collapseEl) {
+            // Si el usuario lo dejó abierto la última vez, ábrelo
+            const shouldShow = localStorage.getItem(KEY) === '1';
+            if (shouldShow) {
+                collapseEl.classList.add('show');
+                btn.setAttribute('aria-expanded', 'true');
+                btn.textContent = '▼ Ocultar mes anterior';
+            }
+
+            collapseEl.addEventListener('shown.bs.collapse', () => {
+                btn.textContent = '▼ Ocultar mes anterior';
+                localStorage.setItem(KEY, '1');
+            });
+
+            collapseEl.addEventListener('hidden.bs.collapse', () => {
+                btn.textContent = '▶ Mostrar mes anterior';
+                localStorage.setItem(KEY, '0');
+            });
         }
-
-        collapseEl.addEventListener('shown.bs.collapse', () => {
-            btn.textContent = '▼ Ocultar mes anterior';
-            localStorage.setItem(KEY, '1');
-        });
-
-        collapseEl.addEventListener('hidden.bs.collapse', () => {
-            btn.textContent = '▶ Mostrar mes anterior';
-            localStorage.setItem(KEY, '0');
-        });
-    }
-})();
+    })();
 </script>
 
 

@@ -3,7 +3,8 @@
 
 <h2 class="mb-4">📅 Entrenamiento del <?= date('d/m/Y', strtotime($fecha)) ?></h2>
 <div class="mb-2">
-    <a href="<?= site_url('gimnasio/entrenamientos') ?>" class="btn btn-outline-secondary">← Volver a entrenamientos</a>
+    <a href="<?= site_url('gimnasio/entrenamientos') ?>" class="btn btn-sm btn-outline-secondary mb-3">← Volver a entrenamientos</a>
+    <a href="<?= site_url('gimnasio/mesociclos') ?>" class="btn btn-sm mb-3">← Mesociclos</a>
 </div>
 
 
@@ -12,7 +13,7 @@
     Completa los pasos para construir tu registro...
 </div>
 
-<div class="mb-2 text-center">
+<div class="mb-2 text-end">
     <button id="btn-toggle-add" class="btn btn-primary">+ Añadir serie</button>
 </div>
 

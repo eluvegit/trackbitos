@@ -240,4 +240,16 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->post('update/(:num)', 'Porciones::update/$1');   // actualizar
         $r->get('delete/(:num)',  'Porciones::delete/$1');   // eliminar
     });
+    // PESO
+    $routes->group('peso', ['namespace' => 'App\Controllers\Comidas'], static function($routes) {
+    $routes->get('/',              'Peso::index');
+    $routes->post('guardar',       'Peso::store');
+    $routes->get('eliminar/(:num)','Peso::delete/$1');
+    $routes->get('ultimo-mes',     'Peso::ultimoMesJson'); // opcional
 });
+
+});
+
+
+
+
