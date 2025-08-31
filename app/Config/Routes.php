@@ -251,5 +251,13 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
 });
 
 
-
-
+// app/Config/Routes.php
+$routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
+    $routes->get('/',                                                    'Youtube::index');
+    $routes->match(['get', 'post'],         'crear',                     'Youtube::crearLista');
+    $routes->get('(:segment)',                                           'Youtube::ver/$1');
+    $routes->match(['get', 'post'],         '(:segment)/importar-texto', 'Youtube::importarTexto/$1');
+    $routes->match(['get', 'post'],         '(:segment)/importar-html',  'Youtube::importarHTML/$1');
+    $routes->post('toggle-visto/(:num)',                                 'Youtube::toggleVisto/$1');
+    $routes->post('toggle-relevante/(:num)',                             'Youtube::toggleRelevante/$1');
+});

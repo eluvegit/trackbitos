@@ -67,11 +67,19 @@
         </div>
     </div>
 </div>
+<?php
+// Asegura variables disponibles (si no las pasaste desde el controlador)
+$altura_cm = $altura_cm ?? 160.5;
+$edad      = $edad ?? 40;
+$sexo      = $sexo ?? 'm'; // 'm' / 'f'
+$altura_m  = $altura_cm ? ($altura_cm / 100) : null;
 
+function fmt($n, $dec = 1) { return number_format((float)$n, $dec, '.', ''); }
+?>
 <!-- Últimos registros -->
 <div class="card shadow-sm mt-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>🗂️ Últimos registros (30)</span>
+        <span>🗂️ Últimos registros</span>
         <small class="text-muted">Ordenados por fecha desc.</small>
     </div>
     <div class="card-body p-0">
@@ -80,21 +88,41 @@
             <tr>
                 <th style="width: 140px;">Fecha</th>
                 <th style="width: 140px;">Peso (kg)</th>
-                <th>IMC (opcional)</th>
-                <th class="text-end" style="width: 120px;">Acciones</th>
+                <th style="width: 140px;">IMC</th>
+                <th style="width: 140px;">% grasa</th>
+                <th class="text-end" style=""></th>
             </tr>
             </thead>
             <tbody>
             <?php if (!empty($ultimos)): ?>
                 <?php foreach ($ultimos as $r): ?>
+                    <?php
+          $peso = (float)($r['peso'] ?? 0);
+          $bmi  = ($altura_m && $altura_m > 0) ? ($peso / ($altura_m * $altura_m)) : null;
+
+          // Deurenberg: %grasa = 1.20*IMC + 0.23*edad − 10.8*sexo − 5.4
+          // sexoFlag: 1 = hombre, 0 = mujer
+          $bf  = null;
+          if ($bmi !== null && $edad !== null && $sexo !== null) {
+              $sexoFlag = (strtolower($sexo) === 'm') ? 1 : 0;
+              $bf = 1.20 * $bmi + 0.23 * (float)$edad - 10.8 * $sexoFlag - 5.4;
+              // Limita a un rango razonable para evitar salidas raras
+              $bf = max(3, min(60, $bf));
+          }
+          ?>
                     <tr>
                         <td><?= date('d/m/Y', strtotime($r['fecha'])) ?></td>
                         <td><?= esc(number_format((float)$r['peso'], 2, '.', '')) ?></td>
-                        <td class="text-muted">—</td>
+                        <td>
+              <?= $bmi !== null ? fmt($bmi, 1) : '<span class="text-muted">—</span>' ?>
+            </td>
+            <td>
+              <?= $bf !== null ? fmt($bf, 1) . ' %' : '<span class="text-muted">—</span>' ?>
+            </td>
                         <td class="text-end">
                             <a href="<?= site_url('comidas/peso/eliminar/' . $r['id']) ?>"
                                class="btn btn-sm btn-outline-danger"
-                               onclick="return confirm('¿Eliminar registro?')">Eliminar</a>
+                               onclick="return confirm('¿Eliminar registro?')">X</a>
                         </td>
                     </tr>
                 <?php endforeach; ?>

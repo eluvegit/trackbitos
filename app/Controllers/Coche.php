@@ -10,43 +10,43 @@ use App\Models\CarReminderModel;
 class Coche extends BaseController
 {
     public function index()
-{
-    $reminderModel = new CarReminderModel();
-    $actionModel = new CarActionModel();
+    {
+        $reminderModel = new CarReminderModel();
+        $actionModel = new CarActionModel();
 
-    $recordatorios = $reminderModel->findAll();
-    $avisos = [];
+        $recordatorios = $reminderModel->findAll();
+        $avisos = [];
 
-    foreach ($recordatorios as $r) {
-        $ultima = $actionModel
-            ->where('reminder_id', $r['id'])
-            ->orderBy('date', 'DESC')
-            ->first();
+        foreach ($recordatorios as $r) {
+            $ultima = $actionModel
+                ->where('reminder_id', $r['id'])
+                ->orderBy('date', 'DESC')
+                ->first();
 
-        if ($ultima && $r['interval_days']) {
-            $fechaUltima = \CodeIgniter\I18n\Time::parse($ultima['date']);
-            $diasPasados = $fechaUltima->difference(\CodeIgniter\I18n\Time::now())->getDays();
+            if ($ultima && $r['interval_days']) {
+                $fechaUltima = \CodeIgniter\I18n\Time::parse($ultima['date']);
+                $diasPasados = $fechaUltima->difference(\CodeIgniter\I18n\Time::now())->getDays();
 
-            if ($diasPasados >= $r['interval_days']) {
-                $avisos[] = [
-                    'title' => $r['title'],
-                    'dias' => $diasPasados,
-                    'intervalo' => $r['interval_days']
-                ];
+                if ($diasPasados >= $r['interval_days']) {
+                    $avisos[] = [
+                        'title' => $r['title'],
+                        'dias' => $diasPasados,
+                        'intervalo' => $r['interval_days']
+                    ];
+                }
             }
         }
+
+        // También puedes cargar últimas acciones si lo usas
+        $ultimasAcciones = $actionModel
+            ->orderBy('date', 'DESC')
+            ->findAll(3); // Por ejemplo, 3 últimas
+
+        return view('coche/index', [
+            'ultimasAcciones' => $ultimasAcciones,
+            'avisosVencidos' => $avisos
+        ]);
     }
-
-    // También puedes cargar últimas acciones si lo usas
-    $ultimasAcciones = $actionModel
-        ->orderBy('date', 'DESC')
-        ->findAll(3); // Por ejemplo, 3 últimas
-
-    return view('coche/index', [
-        'ultimasAcciones' => $ultimasAcciones,
-        'avisosVencidos' => $avisos
-    ]);
-}
 
 
 

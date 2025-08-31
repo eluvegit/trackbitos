@@ -68,71 +68,72 @@ $this->section('content'); ?>
   <hr class="my-3">
 
   <h2 class="h5">Ingredientes</h2>
-<?php $suma = 0; ?>
-<div class="row g-2 align-items-end">
-  <div class="col-md-6">
-    <div class="form-floating">
-  <input class="form-control" list="alimentos-list" name="alimento_nombre" id="alimento_nombre" placeholder="Alimento" required>
-  <label for="alimento_nombre">Alimento</label>
-  <datalist id="alimentos-list">
-    <?php foreach (($alimentos ?? []) as $a): ?>
-      <option value="<?= esc($a['nombre']) ?>" data-id="<?= $a['id'] ?>"></option>
-    <?php endforeach; ?>
-  </datalist>
-</div>
-<input type="hidden" name="alimento_id" id="alimento_id">
+  <?php $suma = 0; ?>
+  <div class="row g-2 align-items-end">
+    <div class="col-md-6">
+      <div class="form-floating">
+        <input class="form-control" list="alimentos-list" name="alimento_nombre" id="alimento_nombre" placeholder="Alimento">
+        <label for="alimento_nombre">Alimento</label>
+        <datalist id="alimentos-list">
+          <?php foreach (($alimentos ?? []) as $a): ?>
+            <option value="<?= esc($a['nombre']) ?>" data-id="<?= $a['id'] ?>"></option>
+          <?php endforeach; ?>
+        </datalist>
+      </div>
+      <input type="hidden" name="alimento_id" id="alimento_id">
+    </div>
 
-  </div>
-
-  <!-- Gramos y botón en la misma fila -->
-  <div class="col-md-6">
-    <div class="row g-2">
-      <div class="col-6">
-        <div class="form-floating">
-          <input type="number" step="0.1" class="form-control" name="gramos" id="gramos" placeholder="Gramos">
-          <label for="gramos">Gramos</label>
+    <!-- Gramos y botones en la misma fila -->
+    <div class="col-md-6">
+      <div class="row g-2">
+        <div class="col-4">
+          <div class="form-floating">
+            <input type="number" step="0.1" class="form-control" name="gramos" id="gramos" placeholder="Gramos">
+            <label for="gramos">Gramos</label>
+          </div>
+        </div>
+        <div class="col-4 d-grid">
+          <!-- Botón Clear -->
+          <button type="button" id="btn-clear-alimento" class="btn btn-outline-secondary">Clear</button>
+        </div>
+        <div class="col-4 d-grid">
+          <button name="action" value="add_ingrediente" class="btn btn-outline-primary">Añadir</button>
         </div>
       </div>
-      <div class="col-6 d-grid">
-        <button name="action" value="add_ingrediente" class="btn btn-outline-primary">Añadir</button>
-      </div>
     </div>
-  </div>
-</div>
 
-
-  <?php if (!empty($ingredientes)): ?>
-    <div class="table-responsive mt-3">
-      <table class="table table-sm table-bordered">
-        <thead>
-          <tr>
-            <th>Alimento</th>
-            <th class="text-end">Gramos</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($ingredientes as $ing): ?>
+    <?php if (!empty($ingredientes)): ?>
+      <div class="table-responsive mt-3">
+        <table class="table table-sm table-bordered">
+          <thead>
             <tr>
-              <td><?= esc($ing['alimento_nombre']) ?></td>
-              <td class="text-end"><?= esc($ing['gramos']) ?></td>
-              <td class="text-end">
-                <a class="btn btn-sm btn-outline-danger" href="<?= site_url('comidas/recetas/removeIngrediente/' . $ing['id']) ?>">Eliminar</a>
-              </td>
+              <th>Alimento</th>
+              <th class="text-end">Gramos</th>
+              <th></th>
             </tr>
-            <?php $suma += $ing['gramos']; ?>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <?php foreach ($ingredientes as $ing): ?>
+              <tr>
+                <td><?= esc($ing['alimento_nombre']) ?></td>
+                <td class="text-end"><?= esc($ing['gramos']) ?></td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-danger" href="<?= site_url('comidas/recetas/removeIngrediente/' . $ing['id']) ?>">Eliminar</a>
+                </td>
+              </tr>
+              <?php $suma += $ing['gramos']; ?>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+
+    <div>Gramos de la receta completa: <?= esc($suma) ?> g</div>
+
+    <div class="mt-3 d-flex gap-2">
+      <button class="btn btn-primary">Guardar</button>
+      <a class="btn btn-outline-secondary" href="<?= site_url('comidas/recetas') ?>">Volver</a>
     </div>
-  <?php endif; ?>
-
-  <div>Gramos de la receta completa: <?= esc($suma) ?> g</div>
-
-  <div class="mt-3 d-flex gap-2">
-    <button class="btn btn-primary">Guardar</button>
-    <a class="btn btn-outline-secondary" href="<?= site_url('comidas/recetas') ?>">Volver</a>
-  </div>
 </form>
 <?php $this->endSection(); ?>
 
@@ -149,14 +150,28 @@ $this->section('content'); ?>
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('alimento_nombre');
-  const hidden = document.getElementById('alimento_id');
-  const datalist = document.getElementById('alimentos-list');
+    const input = document.getElementById('alimento_nombre');
+    const hidden = document.getElementById('alimento_id');
+    const datalist = document.getElementById('alimentos-list');
 
-  input.addEventListener('change', () => {
-    const option = [...datalist.options].find(o => o.value === input.value);
-    hidden.value = option ? option.dataset.id : '';
+    input.addEventListener('change', () => {
+      const option = [...datalist.options].find(o => o.value === input.value);
+      hidden.value = option ? option.dataset.id : '';
+    });
   });
-});
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btnClear = document.getElementById('btn-clear-alimento');
+    const input = document.getElementById('alimento_nombre');
+    const hidden = document.getElementById('alimento_id');
+
+    if (btnClear && input && hidden) {
+      btnClear.addEventListener('click', () => {
+        input.value = '';
+        hidden.value = '';
+        input.focus();
+      });
+    }
+  });
 </script>
 <?php $this->endSection(); ?>

@@ -10,9 +10,19 @@ class Recetas extends BaseController
 {
     public function index()
     {
-        $m = new ComidasRecetasModel();
-        $rows = $m->orderBy('nombre','ASC')->findAll(50);
-        return view('comidas/recetas/index', ['rows'=>$rows, 'title'=>'Recetas']);
+        // Ejemplo dentro de Recetas::index()
+        $m = new \App\Models\ComidasRecetasModel();
+
+        $rows = $m->select('comidas_recetas.*, a.kcal, a.proteina_g, a.carbohidratos_g, a.grasas_g')
+            ->join('comidas_alimentos a', 'a.receta_id = comidas_recetas.id', 'left')
+            ->orderBy('comidas_recetas.nombre', 'ASC')
+            ->findAll();
+
+        return view('comidas/recetas/index', [
+            'rows' => $rows,
+            'title' => 'Recetas',
+]);
+
     }
 
     public function create()
