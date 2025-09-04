@@ -177,6 +177,33 @@ class Diario extends BaseController
         return $this->response->setJSON(['ok' => true]);
     }
 
+    // app/Controllers/Comidas/Diario.php
+
+    public function alimento($id)
+    {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return $this->response->setStatusCode(400)->setJSON(['ok' => false, 'error' => 'ID inválido']);
+        }
+
+        // Sólo lo que necesita la vista (por 100 g)
+        $row = $this->alimentosM
+            ->select('id, nombre, kcal, proteina_g, carbohidratos_g, grasas_g')
+            ->find($id);
+
+        if (!$row) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'error' => 'No encontrado']);
+        }
+
+        // Normaliza a número (evita nulls)
+        foreach (['kcal', 'proteina_g', 'carbohidratos_g', 'grasas_g'] as $k) {
+            $row[$k] = (float) ($row[$k] ?? 0);
+        }
+
+        return $this->response->setJSON($row);
+    }
+
+
     // =================== Vistas ======================
 
     public function hoy()

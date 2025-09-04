@@ -164,10 +164,14 @@ $routes->group('gimnasio', ['filter' => 'auth'], static function ($r) {
 
 // --- API para AJAX del diario ---
 $routes->group('api', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comidas'], static function ($r) {
-    $r->get('alimentos', 'Diario::buscarAlimentos'); // /api/alimentos?q=...
+    // Buscador y detalle de alimentos
+    $r->get('alimentos', 'Diario::buscarAlimentos');       // /api/alimentos?q=...
+    $r->get('alimentos/(:num)', 'Diario::alimento/$1');    // /api/alimentos/{id}
+
+    // Ingestas
     $r->get('ingestas/(:segment)/(:segment)', 'Diario::ingestasAjax/$1/$2'); // /api/ingestas/{fecha}/{tipo}
-    $r->post('add', 'Diario::addAjax');             // /api/add
-    $r->post('delete/(:num)', 'Diario::deleteAjax/$1'); // /api/delete/{id}
+    $r->post('add', 'Diario::addAjax');                     // /api/add
+    $r->post('delete/(:num)', 'Diario::deleteAjax/$1');     // /api/delete/{id}
 });
 
 
@@ -207,7 +211,10 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->post('delete/(:num)', 'Alimentos::delete/$1');
 
 
+
     });
+
+    
 
     // --- Recetas ---
     $routes->group('recetas', static function ($r) {
@@ -218,7 +225,6 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->post('update/(:num)', 'Recetas::update/$1');
         $r->get('removeIngrediente/(:num)', 'Recetas::removeIngrediente/$1');
         $r->post('delete/(:num)',   'Recetas::delete/$1');
-
     });
 
     // --- Objetivos ---
@@ -241,23 +247,31 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->get('delete/(:num)',  'Porciones::delete/$1');   // eliminar
     });
     // PESO
-    $routes->group('peso', ['namespace' => 'App\Controllers\Comidas'], static function($routes) {
-    $routes->get('/',              'Peso::index');
-    $routes->post('guardar',       'Peso::store');
-    $routes->get('eliminar/(:num)','Peso::delete/$1');
-    $routes->get('ultimo-mes',     'Peso::ultimoMesJson'); // opcional
+    $routes->group('peso', ['namespace' => 'App\Controllers\Comidas'], static function ($routes) {
+        $routes->get('/',              'Peso::index');
+        $routes->post('guardar',       'Peso::store');
+        $routes->get('eliminar/(:num)', 'Peso::delete/$1');
+        $routes->get('ultimo-mes',     'Peso::ultimoMesJson'); // opcional
+    });
 });
 
-});
 
-
-// app/Config/Routes.php
 $routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
-    $routes->get('/',                                                    'Youtube::index');
-    $routes->match(['get', 'post'],         'crear',                     'Youtube::crearLista');
-    $routes->get('(:segment)',                                           'Youtube::ver/$1');
-    $routes->match(['get', 'post'],         '(:segment)/importar-texto', 'Youtube::importarTexto/$1');
-    $routes->match(['get', 'post'],         '(:segment)/importar-html',  'Youtube::importarHTML/$1');
-    $routes->post('toggle-visto/(:num)',                                 'Youtube::toggleVisto/$1');
-    $routes->post('toggle-relevante/(:num)',                             'Youtube::toggleRelevante/$1');
+    $routes->get('/',                                'Youtube::index');
+    $routes->match(['get', 'post'], 'crear',          'Youtube::crearLista');
+
+    // Editar lista por slug
+    $routes->get('(:segment)/editar',  'Youtube::editarLista/$1');
+    $routes->post('(:segment)/editar', 'Youtube::actualizarLista/$1');
+
+
+    // IMPORTAR (requiere slug)  /youtube/{slug}/importar
+    $routes->get('(:segment)/importar',              'Youtube::importarForm/$1');
+    $routes->post('(:segment)/importar',             'Youtube::importarProcesar/$1');
+
+    // Catch-all de una sola pieza (ver lista)
+    $routes->get('(:segment)',                       'Youtube::ver/$1');
+
+    $routes->post('toggle-visto/(:num)',             'Youtube::toggleVisto/$1');
+    $routes->post('toggle-relevante/(:num)',         'Youtube::toggleRelevante/$1');
 });

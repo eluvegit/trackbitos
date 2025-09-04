@@ -1,4 +1,4 @@
-<?
+<?php
 // app/Controllers/Youtube.php
 namespace App\Controllers;
 
@@ -7,7 +7,6 @@ use App\Models\YoutubeVideosModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Controller;
 use Config\Database;
-
 
 class Youtube extends Controller
 {
@@ -37,10 +36,9 @@ class Youtube extends Controller
         ]);
     }
 
-
     public function lista(string $slug)
     {
-        /** @var BaseConnection $db */
+        /** @var \CodeIgniter\Database\BaseConnection $db */
         $db = \Config\Database::connect();
 
         // 1) Obtener la lista
@@ -77,7 +75,6 @@ class Youtube extends Controller
         }
 
         // Orden compuesto
-        // (aplicamos en este orden de prioridad y rematamos con posicion ASC)
         if ($sr === 'primero') {
             $b->orderBy('relevante', 'DESC'); // relevantes primero
         }
@@ -129,7 +126,7 @@ class Youtube extends Controller
         ];
 
         // Listado: usa un CLONE del modelo para no compartir estado del builder
-        $videosModel   = clone $this->videos;
+        $videosModel    = clone $this->videos;
         $data['videos'] = $videosModel->baseQuery($lista['id'], $filters, $sort)->findAll();
 
         // Estadísticas: conexión limpia con db_connect() (no $this->db)
@@ -160,34 +157,267 @@ class Youtube extends Controller
         return view('youtube/ver', $data);
     }
 
-    public function importarTexto(string $slug)
+    /*** ====== IMPORTADOR POR LISTA (slug en URL) ====== ***/
+
+    /** Muestra el formulario con el textarea, ligado a una lista por slug */
+    public function importarForm(string $slug)
     {
         $lista = $this->listas->findBySlug($slug);
-        if (!$lista) return redirect()->to(site_url('youtube'));
-
-        if ($this->request->getMethod() === 'POST') {
-            $texto = $this->request->getPost('texto');
-            $urls  = $this->parseLinesToUrls($texto);
-            $this->bulkInsert($lista['id'], $urls);
-            return redirect()->to(site_url('youtube/' . $slug));
+        if (!$lista) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Lista no encontrada');
         }
-        return view('youtube/importar_texto', ['lista' => $lista]);
+
+        return view('youtube/importar', [
+            'lista'   => $lista,
+            'results' => null,
+            'errors'  => [],
+            'oldJson' => '',
+        ]);
     }
 
-    public function importarHTML(string $slug)
+    /** Procesa el JSON pegado en el textarea para la lista indicada por slug */
+    public function importarProcesar(string $slug): ResponseInterface
     {
         $lista = $this->listas->findBySlug($slug);
-        if (!$lista) return redirect()->to(site_url('youtube'));
+        $raw   = (string) $this->request->getPost('json');
 
-        if ($this->request->getMethod() === 'POST') {
-            $html = $this->request->getPost('html');
-            $urls = $this->extractYoutubeUrlsFromHtml($html);
-            $this->bulkInsert($lista['id'], $urls);
-            return redirect()->to(site_url('youtube/' . $slug));
+        if (!$lista) {
+            return $this->response->setStatusCode(404)->setBody(
+                view('youtube/importar', [
+                    'lista'   => null,
+                    'results' => null,
+                    'errors'  => ['No existe la lista con slug: ' . esc($slug)],
+                    'oldJson' => $raw,
+                ])
+            );
         }
-        return view('youtube/importar_html', ['lista' => $lista]);
+
+        // Normalizamos entrada: permitir array o objetos sueltos separados por comas
+        $jsonText = trim($raw);
+        if ($jsonText === '') {
+            return $this->response->setStatusCode(422)->setBody(
+                view('youtube/importar', [
+                    'lista'   => $lista,
+                    'results' => null,
+                    'errors'  => ['El campo JSON está vacío. Pega objetos con "titulo" y "url".'],
+                    'oldJson' => $raw,
+                ])
+            );
+        }
+        if ($jsonText[0] !== '[') {
+            $jsonText = preg_replace('~,\s*$~u', '', $jsonText); // quitar coma final si la hay
+            $jsonText = '[' . $jsonText . ']';
+        }
+
+        $items = json_decode($jsonText, true);
+        if (!is_array($items)) {
+            return $this->response->setStatusCode(422)->setBody(
+                view('youtube/importar', [
+                    'lista'   => $lista,
+                    'results' => null,
+                    'errors'  => ['No se pudo interpretar el JSON. Revisa comas y llaves.'],
+                    'oldJson' => $raw,
+                ])
+            );
+        }
+
+        // Próxima posición
+        $db = db_connect();
+        $maxPos = (int) ($db->table('youtube_videos')
+            ->select('COALESCE(MAX(posicion),0) AS maxpos', false)
+            ->where('lista_id', $lista['id'])
+            ->get()->getRow('maxpos') ?? 0);
+        $nextPos = $maxPos + 1;
+
+        $results = [];
+        foreach ($items as $idx => $obj) {
+            $row = [
+                'index'     => $idx,
+                'titulo'    => null,
+                'url'       => null,
+                'youtubeId' => null,   // solo para mostrar en el resultado
+                'ok'        => false,
+                'error'     => null,
+                'duplicado' => false,
+                'insert_id' => null,
+            ];
+
+            if (!is_array($obj)) {
+                $row['error'] = 'Entrada no es un objeto.';
+                $results[] = $row;
+                continue;
+            }
+
+            $titulo = trim((string)($obj['titulo'] ?? ''));
+            $url    = trim((string)($obj['url'] ?? ''));
+
+            $row['titulo'] = $titulo;
+            // Omitir vídeos borrados/privados por título
+            if ($this->shouldSkipTitle($titulo)) {
+                $row['error'] = 'Omitido: vídeo eliminado/privado';
+                // No marcamos ok ni duplicado; simplemente se informa como omitido
+                $results[] = $row;
+                continue;
+            }
+
+            $row['url']    = $url;
+
+            if ($titulo === '') {
+                $row['error'] = 'Falta "titulo".';
+                $results[] = $row;
+                continue;
+            }
+            if ($url === '') {
+                $row['error'] = 'Falta "url".';
+                $results[] = $row;
+                continue;
+            }
+
+            // Extraer ID
+            $videoId = $this->extractYouTubeId($url);
+            if (!$videoId) {
+                $row['error'] = 'URL de YouTube no reconocida.';
+                $results[] = $row;
+                continue;
+            }
+            $row['youtubeId'] = $videoId;
+
+            // URL canónica
+            $canonicalUrl = 'https://www.youtube.com/watch?v=' . $videoId;
+
+            // Duplicados por (lista_id, url canónica)
+            $exists = (clone $this->videos)
+                ->where('lista_id', $lista['id'])
+                ->where('url', $canonicalUrl)
+                ->first();
+
+            if ($exists) {
+                $row['ok']        = true;
+                $row['duplicado'] = true;
+                $row['insert_id'] = $exists['id'] ?? null;
+                $results[] = $row;
+                continue;
+            }
+
+            // Inserción
+            $payload = [
+                'lista_id'  => $lista['id'],
+                'posicion'  => $nextPos++,
+                'url'       => $canonicalUrl,
+                'titulo'    => $titulo,
+                'visto'     => 0,
+                'relevante' => 0,
+            ];
+
+            try {
+                $insertId = $this->videos->insert($payload, true);
+                $row['ok'] = true;
+                $row['insert_id'] = $insertId;
+            } catch (\Throwable $e) {
+                $row['error'] = 'Error al guardar: ' . $e->getMessage();
+            }
+
+            $results[] = $row;
+        }
+
+        return $this->response->setBody(
+            view('youtube/importar', [
+                'lista'   => $lista,
+                'results' => $results,
+                'errors'  => [],
+                'oldJson' => $raw,
+            ])
+        );
     }
 
+    public function editarLista(string $slug)
+    {
+        $lista = $this->listas->findBySlug($slug);
+        if (!$lista) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Lista no encontrada');
+        }
+
+        return view('youtube/editar_lista', [
+            'lista'  => $lista,
+            'errors' => session()->getFlashdata('errors') ?? [],
+        ]);
+    }
+
+    public function actualizarLista(string $slug)
+    {
+        $lista = $this->listas->findBySlug($slug);
+        if (!$lista) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Lista no encontrada');
+        }
+
+        $nombre = trim($this->request->getPost('nombre'));
+        if ($nombre === '') {
+            return redirect()->back()->withInput()->with('errors', ['El nombre no puede estar vacío.']);
+        }
+
+        $newSlug = url_title($nombre, '-', true);
+
+        $this->listas->update($lista['id'], [
+            'nombre' => $nombre,
+            'slug'   => $newSlug,
+        ]);
+
+        return redirect()->to(site_url('youtube/' . $newSlug));
+    }
+
+
+    /**
+     * Extrae el ID de YouTube desde múltiples formatos (watch, youtu.be, shorts, embed).
+     */
+    private function extractYouTubeId(string $url): ?string
+    {
+        $url = trim($url);
+
+        // Permitir ID directo
+        if (preg_match('~^[a-zA-Z0-9_-]{11}$~', $url)) {
+            return $url;
+        }
+
+        $parts = @parse_url($url);
+        if (!$parts || !isset($parts['host'])) {
+            return null;
+        }
+        $host  = strtolower($parts['host']);
+        $path  = $parts['path'] ?? '';
+        $query = [];
+        if (!empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+        }
+
+        // youtu.be/<id>
+        if ($host === 'youtu.be') {
+            $segments = array_values(array_filter(explode('/', $path)));
+            if (!empty($segments[0]) && preg_match('~^[a-zA-Z0-9_-]{11}$~', $segments[0])) {
+                return $segments[0];
+            }
+            return null;
+        }
+
+        // *.youtube.com
+        if (strpos($host, 'youtube.com') !== false) {
+            // watch?v=<id>
+            if (!empty($query['v']) && preg_match('~^[a-zA-Z0-9_-]{11}$~', $query['v'])) {
+                return $query['v'];
+            }
+            // shorts/<id>
+            if (preg_match('~^/shorts/([a-zA-Z0-9_-]{11})~', $path, $m)) {
+                return $m[1];
+            }
+            // embed/<id>
+            if (preg_match('~^/embed/([a-zA-Z0-9_-]{11})~', $path, $m)) {
+                return $m[1];
+            }
+        }
+
+        return null;
+    }
+
+    // HELPERS
     public function toggleVisto(int $id): ResponseInterface
     {
         $video = $this->videos->find($id);
@@ -205,125 +435,41 @@ class Youtube extends Controller
     }
 
 
-    /**
-     * Extrae el playlistId desde un ID directo o una URL con ?list=...
-     * Devuelve "" si no consigue uno válido.
-     */
-    private function extractPlaylistId(string $raw): string
+    /** Devuelve true si el título indica vídeo borrado/privado (ES/EN, con o sin corchetes). */
+    private function shouldSkipTitle(string $title): bool
     {
-        $raw = trim($raw);
-        if ($raw === '') return '';
+        $t = trim(mb_strtolower($title));
 
-        // Si parece URL, intentamos capturar ?list=XXXX
-        if (stripos($raw, 'http://') === 0 || stripos($raw, 'https://') === 0) {
-            // Primero intenta querystring
-            $parts = parse_url($raw);
-            if (!empty($parts['query'])) {
-                parse_str($parts['query'], $q);
-                if (!empty($q['list'])) return $q['list'];
-            }
-            // Algunas URL estilo /playlist/PLxxxx (poco común)
-            if (!empty($parts['path'])) {
-                if (preg_match('~(?:/playlist|/watch)\?list=([A-Za-z0-9_-]+)~i', $raw, $m)) {
-                    return $m[1];
-                }
-            }
-            // No encontrado en URL
-            return '';
+        // Quitar posibles corchetes y espacios
+        $t = trim($t, "[]() \t\n\r\0\x0B");
+
+        // Coincidencias exactas más comunes
+        $exact = [
+            'deleted video',
+            'private video',
+            'vídeo eliminado',
+            'video eliminado',
+            'vídeo borrado',
+            'video borrado',
+            'vídeo privado',
+            'video privado',
+        ];
+        if (in_array($t, $exact, true)) {
+            return true;
         }
 
-        // Si no es URL, asumimos que ya es un ID
-        return $raw;
-    }
-
-    /**
-     * Formatea mensaje de error a partir del JSON devuelto por YouTube en 4xx/5xx.
-     */
-    private function formatYouTubeError(int $http, ?string $body, string $curlErr, string $url): string
-    {
-        $msg = "Error API YouTube (HTTP {$http}). ";
-        if ($curlErr) $msg .= "cURL: {$curlErr}. ";
-
-        if ($body) {
-            $j = json_decode($body, true);
-            if (is_array($j) && isset($j['error'])) {
-                $em = $j['error']['message'] ?? null;
-                $reasons = [];
-                foreach ($j['error']['errors'] ?? [] as $e) {
-                    $reasons[] = $e['reason'] ?? '';
-                }
-                $msg .= 'Mensaje: ' . ($em ?: 'sin detalle') . '.';
-                if ($reasons) $msg .= ' Razón: ' . implode(', ', array_filter($reasons)) . '.';
-            } else {
-                // No era JSON o estructura distinta
-                $msg .= 'Respuesta: ' . mb_substr($body, 0, 400) . '…';
-            }
+        // Por si vienen adornados: "[Deleted video - something]" (más raro)
+        if (str_contains($t, 'deleted video') || str_contains($t, 'private video')) {
+            return true;
+        }
+        if (
+            str_contains($t, 'video eliminado') || str_contains($t, 'vídeo eliminado')
+            || str_contains($t, 'video borrado') || str_contains($t, 'vídeo borrado')
+            || str_contains($t, 'video privado') || str_contains($t, 'vídeo privado')
+        ) {
+            return true;
         }
 
-        // Útil para depurar: muestra qué URL construimos
-        $msg .= ' [debug URL: ' . $url . ']';
-
-        return $msg;
-    }
-
-
-    // --- Helpers ---
-
-    private function parseLinesToUrls(string $texto): array
-    {
-        $urls = [];
-        foreach (preg_split('/\r\n|\r|\n/', $texto) as $line) {
-            $u = trim($line);
-            if ($u !== '' && $this->isYoutubeUrl($u)) $urls[] = $u;
-        }
-        return array_values(array_unique($urls));
-    }
-
-    private function extractYoutubeUrlsFromHtml(string $html): array
-    {
-        $urls = [];
-        // 1) buscar href="...youtube..." o "youtu.be..."
-        if (preg_match_all('#href=["\']([^"\']+)(youtube\.com/watch\?v=[^"\']+|youtu\.be/[^"\']+)#i', $html, $m)) {
-            foreach ($m[1] as $raw) if ($this->isYoutubeUrl($raw)) $urls[] = $raw;
-        }
-        // 2) buscar data-* con URLs embebidas (backup)
-        if (preg_match_all('#(https?://(?:www\.)?(?:youtube\.com/watch\?v=[\w\-]+|youtu\.be/[\w\-]+)[^"\'\s<]*)#i', $html, $m2)) {
-            foreach ($m2[1] as $raw) if ($this->isYoutubeUrl($raw)) $urls[] = $raw;
-        }
-        return array_values(array_unique($urls));
-    }
-
-    private function isYoutubeUrl(string $url): bool
-    {
-        return (bool) preg_match('#^https?://(www\.)?(youtube\.com/watch\?v=|youtu\.be/)#i', $url);
-    }
-
-    private function extractVideoId(string $url): ?string
-    {
-        // watch?v=ID
-        if (preg_match('#watch\?v=([\w\-]{6,})#', $url, $m)) return $m[1];
-        // youtu.be/ID
-        if (preg_match('#youtu\.be/([\w\-]{6,})#', $url, $m)) return $m[1];
-        return null;
-    }
-
-    private function bulkInsert(int $listaId, array $urls): void
-    {
-        // averiguar última posición
-        $ultimo = $this->videos->where('lista_id', $listaId)->selectMax('posicion')->first();
-        $pos = (int) ($ultimo['posicion'] ?? 0);
-
-        $rows = [];
-        foreach ($urls as $u) {
-            $rows[] = [
-                'lista_id'  => $listaId,
-                'posicion'  => ++$pos,
-                'url'       => $u,
-                'video_id'  => $this->extractVideoId($u),
-                'visto'     => 0,
-                'relevante' => 0,
-            ];
-        }
-        if (!empty($rows)) $this->videos->insertBatch($rows);
+        return false;
     }
 }

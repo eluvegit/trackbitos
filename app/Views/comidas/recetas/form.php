@@ -102,31 +102,80 @@ $this->section('content'); ?>
       </div>
     </div>
 
-    <?php if (!empty($ingredientes)): ?>
-      <div class="table-responsive mt-3">
-        <table class="table table-sm table-bordered">
-          <thead>
-            <tr>
-              <th>Alimento</th>
-              <th class="text-end">Gramos</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($ingredientes as $ing): ?>
-              <tr>
-                <td><?= esc($ing['alimento_nombre']) ?></td>
-                <td class="text-end"><?= esc($ing['gramos']) ?></td>
-                <td class="text-end">
-                  <a class="btn btn-sm btn-outline-danger" href="<?= site_url('comidas/recetas/removeIngrediente/' . $ing['id']) ?>">Eliminar</a>
-                </td>
-              </tr>
-              <?php $suma += $ing['gramos']; ?>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+    <?php
+  // Indexamos alimentos por id
+  $alimentosIndex = [];
+  foreach (($alimentos ?? []) as $a) {
+      $alimentosIndex[$a['id']] = $a;
+  }
+
+  // Totales
+  $totalGr = 0;
+  $totKcal = 0; $totProt = 0; $totCarb = 0; $totFat = 0;
+?>
+
+<?php if (!empty($ingredientes)): ?>
+  <div class="list-group mt-3">
+    <?php foreach ($ingredientes as $ing): ?>
+      <?php
+        $gr = (float)($ing['gramos'] ?? 0);
+        $totalGr += $gr;
+
+        $a = $alimentosIndex[$ing['alimento_id']] ?? [];
+
+        // Macros por 100 g
+        $kcal100 = (float)($a['kcal'] ?? 0);
+        $p100    = (float)($a['proteina_g'] ?? 0);
+        $c100    = (float)($a['carbohidratos_g'] ?? 0);
+        $g100    = (float)($a['grasas_g'] ?? 0);
+
+        // Escalar a gramos
+        $kcal = $kcal100 * $gr / 100.0;
+        $prot = $p100    * $gr / 100.0;
+        $carb = $c100    * $gr / 100.0;
+        $fat  = $g100    * $gr / 100.0;
+
+        $totKcal += $kcal;
+        $totProt += $prot;
+        $totCarb += $carb;
+        $totFat  += $fat;
+      ?>
+      <div class="list-group-item d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold"><?= esc($ing['alimento_nombre']) ?> — <?= number_format($gr, 1, ',', '.') ?> g</div>
+          <div class="text-muted small">
+            <?= number_format($kcal, 0, ',', '.') ?> kcal ·
+            <?= number_format($prot, 1, ',', '.') ?> g proteína ·
+            <?= number_format($carb, 1, ',', '.') ?> g carbohidratos ·
+            <?= number_format($fat, 1, ',', '.') ?> g grasas
+          </div>
+        </div>
+        <div>
+          <a class="btn btn-sm btn-outline-danger"
+             href="<?= site_url('comidas/recetas/removeIngrediente/' . $ing['id']) ?>">Eliminar</a>
+        </div>
       </div>
-    <?php endif; ?>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Totales -->
+  <div class="card mt-3">
+    <div class="card-body">
+      <strong>Totales receta:</strong><br>
+      <?= number_format($totalGr, 1, ',', '.') ?> g ·
+      <?= number_format($totKcal, 0, ',', '.') ?> kcal ·
+      <?= number_format($totProt, 1, ',', '.') ?> g proteína ·
+      <?= number_format($totCarb, 1, ',', '.') ?> g carbohidratos ·
+      <?= number_format($totFat, 1, ',', '.') ?> g grasas
+    </div>
+  </div>
+<?php endif; ?>
+
+
+<div class="mt-2 small text-muted">
+  *Los valores se calculan a partir de la información por 100&nbsp;g del alimento. Si el alimento no
+  tiene macros cargados, se consideran 0.
+</div>
 
     <div>Gramos de la receta completa: <?= esc($suma) ?> g</div>
 

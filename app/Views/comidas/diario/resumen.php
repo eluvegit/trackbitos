@@ -84,6 +84,7 @@ $rangotxt = fn($r, $u) => sprintf(
                 <div class="text-end">
                     <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/nutrientes') ?>"
                         class="btn btn-sm btn-outline-secondary">Ver más</a>
+
                     <?php
                     // (Opcional) ajusta la zona horaria si hace falta
                     // $tz  = new \DateTimeZone('Europe/Madrid');
@@ -115,7 +116,7 @@ $rangotxt = fn($r, $u) => sprintf(
 
             <!-- Kcal -->
             <div class="d-flex justify-content-between align-items-center mb-1">
-                <div><strong>Calorías</strong> <span style="font-size:0.7em;"><?=$fmt((($rK['max'] + $rK['min']) / 2 )- $kcal, 0)?> kcal restantes</span></div>
+                <div><strong>Calorías</strong> <span style="font-size:0.7em;"><?= $fmt((($rK['max'] + $rK['min']) / 2) - $kcal, 0) ?> kcal restantes</span></div>
                 <small class="text-muted"><?= $rangotxt($rK, 'kcal') ?></small>
             </div>
             <div class="progress mb-2" style="height: 12px;">
@@ -124,7 +125,7 @@ $rangotxt = fn($r, $u) => sprintf(
                 </div>
             </div>
             <small class="text-muted d-block mb-3">
-                Ingeridas: <strong><?= $fmt($kcal, 0) ?> calorias</strong> 
+                Ingeridas: <strong><?= $fmt($kcal, 0) ?> calorias</strong>
             </small>
 
             <?php
@@ -136,7 +137,7 @@ $rangotxt = fn($r, $u) => sprintf(
             ?>
             <?php foreach ($rows as [$label, $clave, $valNow, $range, $pct, $cls, $unit]): ?>
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div><?= esc($label) ?> <span style="font-size:0.7em;"><?=$fmt((($range['max'] + $range['min'])/2) - $pct, 0)?> g restantes</span></div>
+                    <div><?= esc($label) ?> <span style="font-size:0.7em;"><?= $fmt((($range['max'] + $range['min']) / 2) - $valNow, 0) ?> g restantes</span></div>
                     <small class="text-muted">
                         <?= $range['min'] !== null ? $fmt($range['min'], 0) : '—' ?> – <?= $range['max'] !== null ? $fmt($range['max'], 0) : '—' ?> <?= $unit ?>
                     </small>
@@ -171,8 +172,12 @@ $rangotxt = fn($r, $u) => sprintf(
     };
     ?>
 
+    <!-- Botón nuevo: copiar resumen del día -->
+    <button type="button" id="btnCopiarDia" class="btn btn-sm btn-outline-success">
+        Copiar día
+    </button>
 
-      <!-- Hubo entrenamiento -->
+    <!-- Hubo entrenamiento -->
     <div class="mb-3">
         <div class="d-flex justify-content-center">
             <?php if (!empty($huboEntreno) && !empty($tiposEntreno)): ?>
@@ -239,5 +244,114 @@ $rangotxt = fn($r, $u) => sprintf(
 
 
 </div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('btnCopiarDia');
+        if (!btn) return;
+
+        // Datos PHP -> JS
+        const fecha = "<?= $fechaSel->format('Y-m-d') ?>";
+        const tiposOrden = <?= json_encode(array_values($tiposLista), JSON_UNESCAPED_UNICODE) ?>;
+        const ingPorTipo = <?= json_encode($ingPorTipo ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const resumenTipos = <?= json_encode($resumenTipos ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const resumenDia = <?= json_encode($resumen ?? [], JSON_UNESCAPED_UNICODE) ?>;
+
+        const fmt = (n, d = 0) => {
+            const num = Number(n || 0);
+            let s = num.toFixed(d);
+            if (s.indexOf('.') !== -1) s = s.replace(/\.?0+$/, ''); // quita ceros solo si hay decimales
+            return s;
+        };
+
+        const tituloTipo = t => t.charAt(0).toUpperCase() + t.slice(1);
+
+        const lineasTipo = (tipo) => {
+            const rows = Array.isArray(ingPorTipo[tipo]) ? ingPorTipo[tipo] : [];
+            const out = [];
+
+            out.push(`== ${tituloTipo(tipo)} ==`);
+            if (rows.length === 0) {
+                out.push('  (sin registros)');
+            } else {
+                rows.forEach(r => {
+                    const nombre = r?.nombre || '—';
+                    const cant = r?.cantidad_label || '—';
+                    const k = fmt(r?.macros?.kcal, 0);
+                    const p = fmt(r?.macros?.proteina_g, 1);
+                    const c = fmt(r?.macros?.carbohidratos_g, 1);
+                    const g = fmt(r?.macros?.grasas_g, 1);
+                    out.push(`- ${nombre} · ${cant} · ${k} kcal | P ${p} g · C ${c} g · G ${g} g`);
+                });
+            }
+
+            const tot = resumenTipos?.[tipo] || {};
+            const tk = fmt(tot?.kcal, 0);
+            const tp = fmt(tot?.proteina_g, 0);
+            const tc = fmt(tot?.carbohidratos_g, 0);
+            const tg = fmt(tot?.grasas_g, 0);
+            out.push(`> Totales ${tituloTipo(tipo)}: ${tk} kcal | P ${tp} g · C ${tc} g · G ${tg} g`);
+            out.push(''); // línea en blanco
+            return out;
+        };
+
+        const buildTexto = () => {
+            const out = [];
+            out.push(`Día: ${fecha}`);
+            out.push('');
+
+            tiposOrden.forEach(t => out.push(...lineasTipo(t)));
+
+            const dk = fmt(resumenDia?.kcal, 0);
+            const dp = fmt(resumenDia?.proteina_g, 0);
+            const dc = fmt(resumenDia?.carbohidratos_g, 0);
+            const dg = fmt(resumenDia?.grasas_g, 0);
+
+            out.push(`== Totales del día ==`);
+            out.push(`${dk} kcal | P ${dp} g · C ${dc} g · G ${dg} g`);
+            return out.join('\n');
+        };
+
+        const copiar = async (texto) => {
+            try {
+                await navigator.clipboard.writeText(texto);
+                btn.classList.remove('btn-outline-success');
+                btn.classList.add('btn-success');
+                btn.textContent = '¡Copiado!';
+                setTimeout(() => {
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-success');
+                    btn.textContent = 'Copiar día';
+                }, 1500);
+            } catch (e) {
+                // fallback
+                const ta = document.createElement('textarea');
+                ta.value = texto;
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    btn.classList.remove('btn-outline-success');
+                    btn.classList.add('btn-success');
+                    btn.textContent = '¡Copiado!';
+                    setTimeout(() => {
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-outline-success');
+                        btn.textContent = 'Copiar día';
+                    }, 1500);
+                } catch (err) {
+                    alert('No se pudo copiar automáticamente. Selecciona y copia manualmente.');
+                    console.error(err);
+                } finally {
+                    document.body.removeChild(ta);
+                }
+            }
+        };
+
+        btn.addEventListener('click', () => {
+            const texto = buildTexto();
+            copiar(texto);
+        });
+    });
+</script>
 
 <?= $this->endSection() ?>

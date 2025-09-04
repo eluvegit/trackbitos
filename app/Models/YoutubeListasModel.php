@@ -1,4 +1,6 @@
-<?// app/Models/YoutubeListasModel.php
+<?php
+// app/Models/YoutubeListasModel.php
+
 namespace App\Models;
 
 use CodeIgniter\Model;

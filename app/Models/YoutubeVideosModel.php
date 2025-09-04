@@ -1,4 +1,5 @@
-<?// app/Models/YoutubeVideosModel.php
+<?php
+// app/Models/YoutubeVideosModel.php
 namespace App\Models;
 
 use CodeIgniter\Model;
@@ -8,7 +9,7 @@ class YoutubeVideosModel extends Model
     protected $table         = 'youtube_videos';
     protected $primaryKey    = 'id';
     protected $allowedFields = ['lista_id','posicion','url','video_id','titulo','visto','relevante'];
-    protected $useTimestamps = true;
+    protected $useTimestamps = false;
 
     public function baseQuery(int $listaId, array $filters = [], array $sort = [])
     {

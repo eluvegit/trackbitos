@@ -11,6 +11,9 @@
     <!-- Style css (opcional si usas el mismo) -->
     <link href="<?= base_url('assets/css/style.css') ?>" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
+    <!-- Font Awesome desde CDN -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
 </head>
 <body class="bg-light">
 

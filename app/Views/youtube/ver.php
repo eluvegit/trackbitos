@@ -1,12 +1,19 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2><?= esc($lista['nombre']) ?></h2>
+<h2>LISTA: <?= esc($lista['nombre']) ?></h2>
+
+<?php if (session('warn')): ?>
+  <div class="alert alert-warning"><?= esc(session('warn')) ?></div>
+<?php endif ?>
+
 
 <div class="mb-2">
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-playlist') ?>">Importar Playlist</a>
+    <!--<a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-playlist') ?>">Importar Playlist</a>
     <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-texto') ?>">Importar texto</a>
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-html') ?>">Importar HTML</a>
+    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-html') ?>">Importar HTML</a>-->
+    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar') ?>">Importar JSON</a>
+    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/editar') ?>">Editar</a>
     <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube') ?>">← Volver</a>
 </div>
 
@@ -108,10 +115,9 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
     <thead>
         <tr>
             <th>#</th>
-            <th>Video</th>
-            <th>Visto</th>
-            <th>Relevante</th>
-            <th>Acciones</th>
+            <th>Titulo</th>
+            <th>✓</th>
+            <th>★</th>
         </tr>
     </thead>
     <tbody>
@@ -149,16 +155,13 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
                 </td>
                 <td class="cell-visto">
                     <button class="btn btn-sm <?= $isVisto ? 'btn-success' : 'btn-outline-secondary' ?> js-toggle-visto" data-id="<?= (int)$v['id'] ?>">
-                        <?= $isVisto ? '✓ Visto' : 'Marcar visto' ?>
+                        <?= $isVisto ? '✓' : '✓' ?>
                     </button>
                 </td>
                 <td class="cell-relevante">
                     <button class="btn btn-sm <?= $isRel ? 'btn-warning' : 'btn-outline-secondary' ?> js-toggle-relevante" data-id="<?= (int)$v['id'] ?>">
-                        <?= $isRel ? '★ Relevante' : 'Marcar relevante' ?>
+                        <?= $isRel ? '★' : '★' ?>
                     </button>
-                </td>
-                <td>
-                    <!-- futuro: borrar/editar -->
                 </td>
             </tr>
         <?php endforeach; ?>
