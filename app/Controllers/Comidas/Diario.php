@@ -10,6 +10,8 @@ use App\Models\ComidasRecetasModel;
 use App\Models\ComidasAlimentoUnidadesModel;
 use App\Models\ComidasNutrientesModel;
 use App\Models\GimnasioEntrenamientosModel;
+use App\Models\ComidasPesoModel;
+
 
 class Diario extends BaseController
 {
@@ -211,8 +213,10 @@ class Diario extends BaseController
         return redirect()->to(site_url('comidas/diario/' . $this->currentFechaShifted()));
     }
 
+
     public function ver($fecha = null)
     {
+        // 1) Normaliza/valida la fecha solicitada
         $fecha = $fecha ?: $this->currentFechaShifted();
 
         $d = \DateTime::createFromFormat('Y-m-d', $fecha);
@@ -220,9 +224,26 @@ class Diario extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
+        // 2) Calcula "mañana" respecto a esa fecha (no respecto a hoy)
+        $tz        = new \DateTimeZone('Europe/Madrid');
+        $fechaSel  = new \DateTimeImmutable($fecha, $tz);
+        $maniana   = $fechaSel->modify('+1 day')->format('Y-m-d');
+
+        // 3) Lee el peso de "mañana"
+        $pesoModel = new ComidasPesoModel();
+        $pesoManiana = $pesoModel->where('fecha', $maniana)->first() ?: null; // array|NULL
+        // 4) Prepara el resto de datos del día
         $data = $this->buildDia($fecha, null);
+
+        // 5) Pasa a la vista el peso del día siguiente
+        $data['pesoManiana'] = $pesoManiana;
+
+        // (Opcional) si tu vista usa $fechaSel como DateTime, pásalo también:
+        $data['fechaSel'] = $fechaSel;
+
         return view('comidas/diario/resumen', $data);
     }
+
 
     public function verTipo($fecha, $tipo)
     {

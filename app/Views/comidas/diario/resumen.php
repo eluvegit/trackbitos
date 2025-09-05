@@ -75,6 +75,25 @@ $rangotxt = fn($r, $u) => sprintf(
         </div>
     </div>
 
+    <!-- PESO DEL DIA SIGUIENTE -->
+
+    <?php
+    $tz        = new \DateTimeZone('Europe/Madrid');
+    $manianaDt = (new \DateTimeImmutable($fechaSel->format('Y-m-d'), $tz))->modify('+1 day');
+    $pesoValor = $pesoManiana['peso'] ?? null;
+    $pesoNotas = $pesoManiana['notas'] ?? null;
+    ?>
+    <?php if ($pesoValor): ?>
+        <div class="d-flex justify-content-between align-items-center my-2">
+            <div>
+                <strong>Peso dia siguiente</strong>
+            </div>
+            <small class="text-muted">
+                <?= $pesoValor !== null ? number_format((float)$pesoValor, 2, '.', '') . ' kg' : '—' ?>
+            </small>
+
+        </div>
+    <?php endif; ?>
 
     <!-- Resumen del día (con límites) -->
     <div class="card mb-3">
@@ -172,6 +191,8 @@ $rangotxt = fn($r, $u) => sprintf(
     };
     ?>
 
+
+
     <!-- Botón nuevo: copiar resumen del día -->
     <button type="button" id="btnCopiarDia" class="btn btn-sm btn-outline-success">
         Copiar día
@@ -189,6 +210,7 @@ $rangotxt = fn($r, $u) => sprintf(
     </div>
 
     <!-- Ingestas del día agrupadas -->
+    <?php $suma_total = 0 ?>
     <?php foreach ($tiposLista as $tipo): ?>
         <?php
         $totK = $fmt($resumenTipos[$tipo]['kcal']            ?? 0, 0);
@@ -216,6 +238,7 @@ $rangotxt = fn($r, $u) => sprintf(
 
             <ul class="list-group list-group-flush">
                 <?php if (!empty($ingPorTipo[$tipo])): ?>
+                    <?php $suma = 0 ?>
                     <?php foreach ($ingPorTipo[$tipo] as $i): ?>
                         <?php
                         $k = $fmt($i['macros']['kcal']            ?? 0, 0);
@@ -227,6 +250,8 @@ $rangotxt = fn($r, $u) => sprintf(
                             <div>
                                 <strong><?= esc($i['nombre']) ?></strong>
                                 <br><small class="text-muted"><?= esc($i['cantidad_label']) ?></small>
+                                <?php $suma += $i["cantidad_gramos"]; ?>
+
                             </div>
 
                             <div class="text-end">
@@ -235,14 +260,31 @@ $rangotxt = fn($r, $u) => sprintf(
                             </div>
                         </li>
                     <?php endforeach; ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <small class="text-muted">Total: <?= $suma ?> g</small>
+                        <?php $suma_total += $suma ?>
+                    </li>
                 <?php else: ?>
                     <li class="list-group-item text-muted">Sin registros</li>
                 <?php endif; ?>
             </ul>
         </div>
     <?php endforeach; ?>
+    <div class="text-center">
+        <small class="text-muted">
+            Suma total: <?= $suma_total ?> g /
+            Densidad = <?= $suma_total > 0 ? round($kcal / $suma_total, 2) : 0 ?>
+        </small>
+    </div>
 
-
+    <!-- Calendario -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('-1 day')->format('Y-m-d')) ?>" class="btn btn-outline-secondary">&lt;</a>
+            <h4 class="m-0"><?= $fechaSel->format('d/m/Y') ?></h4>
+            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('+1 day')->format('Y-m-d')) ?>" class="btn btn-outline-secondary">&gt;</a>
+        </div>
+    </div>
 </div>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
