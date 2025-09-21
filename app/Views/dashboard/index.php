@@ -23,7 +23,8 @@
         ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
         ['ruta' => 'notion', 'icono' => '📒', 'titulo' => 'Notion (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Notion.'],
         ['ruta' => 'telegram', 'icono' => '📨', 'titulo' => 'Telegram (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Telegram.'],
-        ['ruta' => 'Recordatorios', 'icono' => '📨', 'titulo' => 'Recordatorios (PRÓXIMAMENTE)', 'texto' => 'Permite recordar lo que hay que hacer periodicamente.'],
+        ['ruta' => 'recordatorios', 'icono' => '📨', 'titulo' => 'Recordatorios (PRÓXIMAMENTE)', 'texto' => 'Permite recordar lo que hay que hacer periodicamente.'],
+        ['ruta' => 'rodajes', 'icono' => '📨', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
     ];
     ?>
 

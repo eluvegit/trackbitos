@@ -275,3 +275,33 @@ $routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
     $routes->post('toggle-visto/(:num)',             'Youtube::toggleVisto/$1');
     $routes->post('toggle-relevante/(:num)',         'Youtube::toggleRelevante/$1');
 });
+
+
+
+// app/Config/Routes.php
+
+$routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
+
+    // ---- Proyectos de rodaje ----
+    $routes->get('/',                 'Rodajes::index');
+    $routes->get('create',            'Rodajes::create');
+    $routes->post('store',            'Rodajes::store');
+    $routes->get('edit/(:num)',       'Rodajes::edit/$1');
+    $routes->post('update/(:num)',    'Rodajes::update/$1');
+    $routes->get('delete/(:num)',     'Rodajes::delete/$1');
+
+    // ---- Escenas (anidadas bajo proyecto) ----
+    $routes->get('(:num)/escenas',                        'RodajesEscenas::index/$1');
+    $routes->get('(:num)/escenas/create',                 'RodajesEscenas::create/$1');
+    $routes->post('(:num)/escenas/store',                 'RodajesEscenas::store/$1');
+    $routes->get('(:num)/escenas/edit/(:num)',            'RodajesEscenas::edit/$1/$2');
+    $routes->post('(:num)/escenas/update/(:num)',         'RodajesEscenas::update/$1/$2');
+    $routes->get('(:num)/escenas/delete/(:num)',          'RodajesEscenas::delete/$1/$2');
+
+    // Imágenes de referencia (borrado)
+    $routes->get('(:num)/escenas/(:num)/imagen/delete/(:num)', 'RodajesEscenas::deleteImage/$1/$2/$3');
+
+    // (Opcional) Reordenar escenas por AJAX (enviar JSON: [{id, orden}, ...])
+    // Implementa RodajesEscenas::reordenar($proyectoId) si lo quieres usar.
+    $routes->post('(:num)/escenas/reordenar',             'RodajesEscenas::reordenar/$1');
+});
