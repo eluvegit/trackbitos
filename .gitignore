@@ -1,0 +1,33 @@
+# Composer
+/vendor/
+/composer.lock
+
+# CodeIgniter writable files
+/writable/*
+!/writable/index.html
+
+# Environment files
+.env
+.env.*
+
+# IDE & system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# PHPUnit & coverage
+/phpunit.xml
+/phpunit.xml.dist
+/build/
+tests/_output/
+coverage/
+
+# Logs
+*.log
+
+# Cache
+.cache/
