@@ -127,7 +127,7 @@ $action = $escena
                 <select name="camara_tipo_plano" class="form-select">
                     <?php
                     $opt = old('camara_tipo_plano', $e['camara_tipo_plano'] ?? '');
-                    $planes = ['General','Medio','Detalle','Primer plano','Americano','Master'];
+                    $planes = ['General', 'Medio', 'Detalle', 'Primer plano', 'Americano', 'Master'];
                     foreach ($planes as $p) {
                         $sel = ($opt === $p) ? 'selected' : '';
                         echo "<option $sel>$p</option>";
@@ -141,7 +141,7 @@ $action = $escena
                 <select name="camara_angulo" class="form-select">
                     <?php
                     $opt = old('camara_angulo', $e['camara_angulo'] ?? '');
-                    $ang = ['Frontal','Picado','Cenital','Lateral','Contrapicado','Nadir'];
+                    $ang = ['Frontal', 'Picado', 'Cenital', 'Lateral', 'Contrapicado', 'Nadir'];
                     foreach ($ang as $p) {
                         $sel = ($opt === $p) ? 'selected' : '';
                         echo "<option $sel>$p</option>";
@@ -155,7 +155,7 @@ $action = $escena
                 <select name="camara_movimiento" class="form-select">
                     <?php
                     $opt = old('camara_movimiento', $e['camara_movimiento'] ?? '');
-                    $mov = ['Fijo','Travelling','Paneo','Giro','Seguimiento','Dolly','Grúa'];
+                    $mov = ['Fijo', 'Travelling', 'Paneo', 'Giro', 'Seguimiento', 'Dolly', 'Grúa'];
                     foreach ($mov as $p) {
                         $sel = ($opt === $p) ? 'selected' : '';
                         echo "<option $sel>$p</option>";
@@ -169,7 +169,7 @@ $action = $escena
                 <select name="camara_soporte" class="form-select">
                     <?php
                     $opt = old('camara_soporte', $e['camara_soporte'] ?? '');
-                    $sup = ['Trípode','Mano','Gimbal','Otro'];
+                    $sup = ['Trípode', 'Mano', 'Gimbal', 'Otro'];
                     foreach ($sup as $p) {
                         $sel = ($opt === $p) ? 'selected' : '';
                         echo "<option $sel>$p</option>";
@@ -194,7 +194,7 @@ $action = $escena
                 <select name="plano_hora_dia" class="form-select">
                     <?php
                     $opt = old('plano_hora_dia', $e['plano_hora_dia'] ?? '');
-                    $horas = ['Noche','Tarde','Día','Amanecer','Atardecer','Interior'];
+                    $horas = ['Noche', 'Tarde', 'Día', 'Amanecer', 'Atardecer', 'Interior'];
                     foreach ($horas as $p) {
                         $sel = ($opt === $p) ? 'selected' : '';
                         echo "<option $sel>$p</option>";
@@ -253,19 +253,35 @@ $action = $escena
                 <hr>
             </div>
 
+            <!-- Texto: enlaces y notas de referencia -->
             <div class="col-md-6">
-                <label class="form-label">Lugar y objetos (múltiples imágenes)</label>
+                <label class="form-label">Referencia (texto) — Lugar y objetos</label>
+                <textarea name="plano_ref_lugar_texto" class="form-control" rows="4"
+                    placeholder="Enlaces y notas (uno por línea). Ej: https://youtu.be/..., https://mi-moodboard.com/..."><?= old('plano_ref_lugar_texto', $e['plano_ref_lugar_texto'] ?? '') ?></textarea>
+                <small class="text-muted">Pon aquí links a vídeos/imágenes o notas rápidas. Se mostrarán en la vista de rodaje.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Referencia (texto) — Inspiración</label>
+                <textarea name="plano_ref_inspiracion_texto" class="form-control" rows="4"
+                    placeholder="Enlaces y notas (uno por línea). Ej: paletas de color, planos, referencias de estilo"><?= old('plano_ref_inspiracion_texto', $e['plano_ref_inspiracion_texto'] ?? '') ?></textarea>
+                <small class="text-muted">Útil para paletas, planos de inspiración, BTS, etc.</small>
+            </div>
+
+            <!-- Archivos: galerías por categoría -->
+            <div class="col-md-6">
+                <label class="form-label mt-2">Lugar y objetos (múltiples imágenes)</label>
                 <input type="file" class="form-control" name="lugar_objetos[]" accept="image/*" multiple>
                 <?php if (!empty($imagenes_lugar ?? [])): ?>
                     <div class="row g-2 mt-2">
                         <?php foreach ($imagenes_lugar as $img): ?>
                             <div class="col-6 col-md-3">
                                 <div class="card">
-                                    <img class="card-img-top" src="<?= base_url('writable/' . $img['ruta']) ?>" alt="">
+                                    <img class="card-img-top" src="<?= base_url('/' . $img['ruta']) ?>" alt="">
                                     <div class="card-body p-2 text-center">
                                         <a class="btn btn-sm btn-outline-danger"
-                                           href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . ($e['id'] ?? $escena['id']) . '/imagen/delete/' . $img['id']) ?>"
-                                           onclick="return confirm('¿Eliminar imagen?')">Eliminar</a>
+                                            href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . ($e['id'] ?? $escena['id']) . '/imagen/delete/' . $img['id']) ?>"
+                                            onclick="return confirm('¿Eliminar imagen?')">Eliminar</a>
                                     </div>
                                 </div>
                             </div>
@@ -275,18 +291,18 @@ $action = $escena
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">Inspiración (múltiples imágenes)</label>
+                <label class="form-label mt-2">Inspiración (múltiples imágenes)</label>
                 <input type="file" class="form-control" name="inspiracion[]" accept="image/*" multiple>
                 <?php if (!empty($imagenes_insp ?? [])): ?>
                     <div class="row g-2 mt-2">
                         <?php foreach ($imagenes_insp as $img): ?>
                             <div class="col-6 col-md-3">
                                 <div class="card">
-                                    <img class="card-img-top" src="<?= base_url('writable/' . $img['ruta']) ?>" alt="">
+                                    <img class="card-img-top" src="<?= base_url('/' . $img['ruta']) ?>" alt="">
                                     <div class="card-body p-2 text-center">
                                         <a class="btn btn-sm btn-outline-danger"
-                                           href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . ($e['id'] ?? $escena['id']) . '/imagen/delete/' . $img['id']) ?>"
-                                           onclick="return confirm('¿Eliminar imagen?')">Eliminar</a>
+                                            href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . ($e['id'] ?? $escena['id']) . '/imagen/delete/' . $img['id']) ?>"
+                                            onclick="return confirm('¿Eliminar imagen?')">Eliminar</a>
                                     </div>
                                 </div>
                             </div>
@@ -294,6 +310,7 @@ $action = $escena
                     </div>
                 <?php endif; ?>
             </div>
+
 
         </div><!-- row -->
 

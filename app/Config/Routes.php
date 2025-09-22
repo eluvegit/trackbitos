@@ -304,4 +304,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
     // (Opcional) Reordenar escenas por AJAX (enviar JSON: [{id, orden}, ...])
     // Implementa RodajesEscenas::reordenar($proyectoId) si lo quieres usar.
     $routes->post('(:num)/escenas/reordenar',             'RodajesEscenas::reordenar/$1');
+    
+    // Ver escena (detalle)
+    $routes->get('(:num)/escenas/show/(:num)', 'RodajesEscenas::show/$1/$2');
 });

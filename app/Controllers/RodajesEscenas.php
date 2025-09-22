@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Controllers;
 
 use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenModel};
@@ -20,9 +21,9 @@ class RodajesEscenas extends BaseController
 
         $data['proyecto'] = $proyecto;
         $data['escenas']  = $escenas->where('proyecto_id', $proyectoId)
-                                    ->orderBy('orden', 'ASC')
-                                    ->orderBy('id', 'ASC')
-                                    ->findAll();
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
 
         return view('rodajes/escenas/index', $data);
     }
@@ -47,7 +48,7 @@ class RodajesEscenas extends BaseController
                 'proyecto_id'      => $proyectoId,
                 'plano_actores'    => $this->request->getPost('plano_actores') ? 'S' : 'N',
                 'sonido_ambiente'  => $this->request->getPost('sonido_ambiente') ? 'S' : 'N',
-                'sonido_antiviento'=> $this->request->getPost('sonido_antiviento') ? 'S' : 'N',
+                'sonido_antiviento' => $this->request->getPost('sonido_antiviento') ? 'S' : 'N',
             ]
         ));
 
@@ -77,8 +78,8 @@ class RodajesEscenas extends BaseController
             return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
         }
 
-        $data['imagenes_lugar'] = $imgs->where(['escena_id'=>$id,'categoria'=>'lugar_objetos'])->findAll();
-        $data['imagenes_insp']  = $imgs->where(['escena_id'=>$id,'categoria'=>'inspiracion'])->findAll();
+        $data['imagenes_lugar'] = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
+        $data['imagenes_insp']  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
 
         return view('rodajes/escenas/form', $data);
     }
@@ -92,7 +93,7 @@ class RodajesEscenas extends BaseController
         $post['proyecto_id']      = $proyectoId;
         $post['plano_actores']    = $this->request->getPost('plano_actores') ? 'S' : 'N';
         $post['sonido_ambiente']  = $this->request->getPost('sonido_ambiente') ? 'S' : 'N';
-        $post['sonido_antiviento']= $this->request->getPost('sonido_antiviento') ? 'S' : 'N';
+        $post['sonido_antiviento'] = $this->request->getPost('sonido_antiviento') ? 'S' : 'N';
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
@@ -102,7 +103,7 @@ class RodajesEscenas extends BaseController
         $this->handleUploads($proyectoId, $id, 'lugar_objetos');
         $this->handleUploads($proyectoId, $id, 'inspiracion');
 
-        return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
+        return redirect()->to(site_url("rodajes/$proyectoId/escenas/edit/$id"));
     }
 
     public function delete($proyectoId, $id)
@@ -139,8 +140,8 @@ class RodajesEscenas extends BaseController
         }
 
         // Carpeta pública: /public/images/rodajes/{escenaId}/
-        $targetDir = rtrim($this->publicDir, '/').'/'.$escenaId;
-        $absDir    = rtrim(FCPATH, '/').'/'.$targetDir;
+        $targetDir = rtrim($this->publicDir, '/') . '/' . $escenaId;
+        $absDir    = rtrim(FCPATH, '/') . '/' . $targetDir;
 
         if (!is_dir($absDir)) {
             @mkdir($absDir, 0775, true);
@@ -173,5 +174,29 @@ class RodajesEscenas extends BaseController
                 'ruta'      => $relative, // almacenamos ruta pública
             ]);
         }
+    }
+
+    public function show($proyectoId, $id)
+    {
+        $proyectos = new \App\Models\RodajesProyectoModel();
+        $escenas   = new \App\Models\RodajesEscenaModel();
+        $imgs      = new \App\Models\RodajesEscenaImagenModel();
+
+        $proyecto = $proyectos->find($proyectoId);
+        $escena   = $escenas->find($id);
+
+        if (!$proyecto || !$escena || (int)$escena['proyecto_id'] !== (int)$proyectoId) {
+            return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
+        }
+
+        $imagenes_lugar = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
+        $imagenes_insp  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
+
+        return view('rodajes/escenas/show', [
+            'proyecto'        => $proyecto,
+            'escena'          => $escena,
+            'imagenes_lugar'  => $imagenes_lugar,
+            'imagenes_insp'   => $imagenes_insp,
+        ]);
     }
 }
