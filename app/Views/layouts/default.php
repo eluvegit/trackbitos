@@ -15,28 +15,29 @@
 </head>
 
 <body class="bg-light">
-
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 mb-4">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>">
-            <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="logo-navbar">
-            <span>Trackbitos</span>
-        </a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav ms-auto">
-                <?php if (logged_in()): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?= site_url('logout') ?>">Cerrar sesión</a>
-                    </li>
-                <?php else: ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?= site_url('login') ?>">Login</a>
-                    </li>
-                <?php endif; ?>
-            </ul>
-        </div>
-    </nav>
-
+    <?php $isPrint = (service('request')->getGet('print') === '1'); ?>
+    <?php if (!$isPrint): ?>
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 mb-4">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>">
+                <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="logo-navbar">
+                <span>Trackbitos</span>
+            </a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <?php if (logged_in()): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?= site_url('logout') ?>">Cerrar sesión</a>
+                        </li>
+                    <?php else: ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?= site_url('login') ?>">Login</a>
+                        </li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </nav>
+    <?php endif; ?>
 
     <!-- Contenido principal -->
     <div class="container">
@@ -44,9 +45,11 @@
     </div>
 
     <!-- Footer opcional -->
-    <footer class="text-center mt-5 mb-3 text-muted">
-        <small>&copy; <?= date('Y') ?> Trackbitos</small>
-    </footer>
+    <?php if (!$isPrint): ?>
+        <footer class="text-center mt-5 mb-3 text-muted">
+            <small>&copy; <?= date('Y') ?> Trackbitos</small>
+        </footer>
+    <?php endif; ?>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

@@ -6,17 +6,28 @@ $action = $escena
 ?>
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+
 <div class="container py-4">
-    <h1><?= $escena ? 'Editar escena' : 'Nueva escena' ?> — <?= esc($proyecto['titulo']) ?></h1>
-
-    <?php if (session('errors')): ?>
-        <div class="alert alert-danger">
-            <pre class="mb-0"><?= print_r(session('errors'), true) ?></pre>
-        </div>
-    <?php endif; ?>
-
     <form method="post" action="<?= $action ?>" enctype="multipart/form-data">
         <?= csrf_field() ?>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1><?= $escena ? 'Editar escena' : 'Nueva escena' ?> — <?= esc($proyecto['titulo']) ?></h1>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Guardar escena</button>
+                <?php if ($escena): ?>
+                    <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $escena['id']) ?>">Ver</a>
+                <?php endif; ?>
+                <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">Volver</a>
+            </div>
+        </div>
+
+        <?php if (session('errors')): ?>
+            <div class="alert alert-danger">
+                <pre class="mb-0"><?= print_r(session('errors'), true) ?></pre>
+            </div>
+        <?php endif; ?>
+
+
 
         <div class="row g-3">
             <!-- ORDEN -->
@@ -316,6 +327,9 @@ $action = $escena
 
         <div class="d-flex gap-2 mt-4">
             <button class="btn btn-primary" type="submit">Guardar escena</button>
+            <?php if ($escena): ?>
+                <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $escena['id']) ?>">Ver</a>
+            <?php endif; ?>
             <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">Volver</a>
         </div>
     </form>

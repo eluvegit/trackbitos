@@ -2,9 +2,13 @@
 <?= $this->section('content') ?>
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1>Escenas — <?= esc($proyecto['titulo']) ?></h1>
-        <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/create') ?>">➕ Nueva escena</a>
+        <h1 class="mb-0">Escenas — <?= esc($proyecto['titulo']) ?></h1>
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/create') ?>">➕ Nueva escena</a>
+            <a class="btn btn-secondary" href="<?= site_url('rodajes') ?>">← Volver a proyectos</a>
+        </div>
     </div>
+
 
     <?php if (empty($escenas)): ?>
         <div class="alert alert-info">Todavía no hay escenas registradas.</div>

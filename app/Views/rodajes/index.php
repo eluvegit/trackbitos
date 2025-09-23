@@ -11,7 +11,7 @@
                 <tr>
                     <th>#</th>
                     <th>Título</th>
-                    <th>Código</th>
+                    <th>Descripción</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -20,7 +20,7 @@
                     <tr>
                         <td><?= esc($p->id ?? $p['id']) ?></td>
                         <td><?= esc($p->titulo ?? $p['titulo']) ?></td>
-                        <td><?= esc($p->codigo ?? $p['codigo']) ?></td>
+                        <td><?= esc($p->descripcion ?? $p['descripcion']) ?></td>
                         <td>
                             <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('rodajes/edit/' . ($p->id ?? $p['id'])) ?>">Editar</a>
                             <a class="btn btn-sm btn-outline-danger" href="<?= site_url('rodajes/delete/' . ($p->id ?? $p['id'])) ?>" onclick="return confirm('¿Eliminar proyecto?')">Eliminar</a>

@@ -3,9 +3,7 @@
 <?php helper('text'); ?>
 
 <?php
-$e = $escena;
-
-// Helpers
+$e = $escena ?? [];
 $orden     = (int)($e['orden'] ?? 0);
 $bloque    = trim($e['escena_bloque'] ?? '');
 $tomas     = trim($e['escena_tomas'] ?? '');
@@ -25,263 +23,438 @@ $nd        = trim($e['camara_nd'] ?? '');
 $fx        = trim($e['escena_efecto_especial'] ?? '');
 $actores   = ($e['plano_actores'] ?? 'N') === 'S';
 
-// Chips compactos
-$chips = array_filter([$plano, $angulo, $mov, $soporte]);
-
-// Función para auto-link seguro con saltos de línea
-$renderRefs = function(string $txt) {
+$renderRefs = function (string $txt) {
     return nl2br(auto_link(esc($txt), 'both', true));
 };
 ?>
 
 <style>
-/* ---------- Estilos de impresión A4 ---------- */
-@page {
-  size: A4 portrait;
-  margin: 12mm;
-}
-@media print {
-  html, body {
-    background: #fff !important;
-  }
-  .no-print {
-    display: none !important;
-  }
-  .print-card,
-  .print-section,
-  .print-row-break {
-    page-break-inside: avoid;
-  }
-  .print-break-before {
-    page-break-before: always;
-  }
-  .print-small { font-size: 12px; }
-  .print-h1 { font-size: 20px; margin-bottom: 6px; }
-  .print-muted { color: #666 !important; }
-  .badge { border: 1px solid #ccc !important; color: #333 !important; background: #f7f7f7 !important; }
-  .img-thumb { max-height: 60mm; object-fit: cover; }
-  .card { border: 1px solid #dcdcdc !important; box-shadow: none !important; }
-}
+    /* ====== IMPRESIÓN A4, TEXTO CONDENSADO SIN CAJAS ====== */
+    @media print {
 
-/* ---------- Estilos de pantalla (mejoras ligeras) ---------- */
-.toolbar-sticky.no-print {
-  position: sticky; top: 0; z-index: 10; background: #fff; padding: .75rem 0; border-bottom: 1px solid rgba(0,0,0,.05);
-}
-.print-card .card-header { background: #f8f9fa; }
-.img-thumb { width: 100%; height: 180px; object-fit: cover; border-radius: .375rem; border: 1px solid rgba(0,0,0,.1); }
-.ref-list a { word-break: break-all; }
+        /* Oculta cualquier cabecera/pie propio de la página */
+        .no-print,
+        .print-hide-header,
+        .print-hide-footer,
+        header,
+        footer,
+        .toolbar,
+        .page-header,
+        .page-footer {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+        }
+
+        /* Márgenes de página (ajusta si quieres más área útil) */
+        @page {
+            margin: 10mm;
+        }
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 12mm;
+    }
+
+    :root {
+        --print-font: 10px;
+        --line: 1.25;
+        --gap: 10px;
+    }
+
+    @media print {
+
+        html,
+        body {
+            background: #fff !important;
+        }
+
+        body {
+            font-size: var(--print-font);
+            line-height: var(--line);
+            color: #000;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .h1 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+        }
+
+        .muted {
+            color: #333;
+        }
+
+        .sep {
+            border: 0;
+            border-top: 1px solid #000;
+            margin: 6px 0;
+        }
+
+        .tiny {
+            font-size: 9px;
+        }
+
+        /* Bloque textual: 2 columnas para comprimir a una sola página */
+        .print-onepage {
+            column-count: 2;
+            column-gap: var(--gap);
+            page-break-after: always;
+        }
+
+        .section {
+            break-inside: avoid;
+            margin-bottom: 6px;
+        }
+
+        .section h2 {
+            font-size: 11px;
+            margin: 0 0 4px 0;
+        }
+
+        .section h3 {
+            font-size: 10px;
+            margin: 0 0 3px 0;
+        }
+
+        .kv {
+            margin: 0 0 2px 0;
+        }
+
+        .kv dt {
+            float: left;
+            width: 40%;
+            clear: left;
+            font-weight: 600;
+        }
+
+        .kv dd {
+            margin-left: 42%;
+        }
+
+        .kv:after {
+            content: "";
+            display: block;
+            clear: both;
+        }
+
+        /* Chips inline (sin cajas) */
+        .chips {
+            margin: 2px 0 4px 0;
+        }
+
+        .chip {
+            margin-right: 6px;
+        }
+
+        /* Galerías: nueva página, miniaturas básicas */
+        .print-break {
+            page-break-before: always;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+
+        .gallery img {
+            width: 100%;
+            height: 45mm;
+            object-fit: cover;
+            border: 1px solid #000;
+        }
+
+        /* Si aún se pasa, descomenta para reducir un poco todo el bloque de texto */
+        /* .print-onepage { zoom: 0.94; } */
+    }
+
+    @media screen {
+        .toolbar {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            padding: .75rem 0;
+            border-bottom: 1px solid rgba(0, 0, 0, .08);
+            margin-bottom: .75rem;
+        }
+
+        .h1 {
+            font-size: 20px;
+            margin-bottom: .25rem;
+        }
+
+        .sep {
+            border: 0;
+            border-top: 1px solid rgba(0, 0, 0, .2);
+            margin: .5rem 0;
+        }
+    }
+
+    @media print {
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40mm, 1fr));
+            /* columnas adaptables */
+            gap: 4mm;
+        }
+
+        .gallery img {
+            width: 100%;
+            height: auto;
+            /* mantiene proporción */
+            max-height: 40mm;
+            /* límite para no ocupar toda la página */
+            object-fit: cover;
+            border: 1px solid #000;
+        }
+    }
+
+    @media screen {
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            /* responsive en pantalla */
+            gap: 8px;
+        }
+
+        .gallery img {
+            width: 100%;
+            height: auto;
+            max-height: 180px;
+            /* más pequeña en pantalla */
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, .15);
+        }
+    }
+
+    .kv-2col {
+        display: grid;
+        grid-template-columns: auto 1fr auto 1fr;
+        /* 2 columnas de pares dt/dd */
+        column-gap: 12px;
+        row-gap: 4px;
+    }
+
+    .kv-2col dt {
+        font-weight: bold;
+        margin: 0;
+    }
+
+    .kv-2col dd {
+        margin: 0;
+    }
 </style>
 
 <div class="container py-3">
 
-  <!-- Toolbar pantalla -->
-  <div class="toolbar-sticky no-print d-flex justify-content-between align-items-start mb-3">
-    <div>
-      <div class="d-flex align-items-center gap-2">
-        <h1 class="mb-0"><?= esc($proyecto['titulo']) ?> — Escena</h1>
-        <span class="badge bg-secondary">Orden <?= esc($orden) ?></span>
-        <?php if ($hora): ?><span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"><?= esc($hora) ?></span><?php endif; ?>
-        <?php if ($actores): ?><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Actores</span><?php endif; ?>
-        <?php if ($fx): ?><span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">FX</span><?php endif; ?>
-      </div>
-      <div class="text-muted small mt-1">Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?></div>
-    </div>
-    <div class="d-flex gap-2">
-      <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-      <a class="btn btn-outline-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $e['id']) ?>?print=1">Vista impresión</a>
-      <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
-      <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
-    </div>
-  </div>
-
-  <!-- Cabecera (apta para impresión) -->
-  <div class="print-card card shadow-sm border-0 mb-3">
-    <div class="card-body">
-      <h2 class="card-title mb-1 print-h1"><?= esc($bloque ?: 'Bloque sin título') ?><?php if ($tomas): ?> <small class="text-muted">• Toma/s: <?= esc($tomas) ?></small><?php endif; ?></h2>
-      <div class="print-muted mb-2"><?= $ubic ? '📍 ' . esc($ubic) : '📍 Ubicación no indicada' ?></div>
-
-      <?php if (!empty($chips)): ?>
-        <div class="d-flex flex-wrap gap-2 mb-2">
-          <?php foreach ($chips as $c): ?>
-            <span class="badge text-bg-light border"><?= esc($c) ?></span>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-
-      <!-- Resumen cámara compacto -->
-      <div class="small text-muted">
-        <?php if ($optica): ?><span><strong>Óptica:</strong> <?= esc($optica) ?></span><?php endif; ?>
-        <?php if ($optica && ($apertura || $fps || $vel)): ?> · <?php endif; ?>
-        <?php if ($apertura): ?><span><strong>ƒ/</strong><?= esc($apertura) ?></span><?php endif; ?>
-        <?php if ($apertura && ($fps || $vel)): ?> · <?php endif; ?>
-        <?php if ($fps): ?><span><strong>FPS:</strong> <?= esc($fps) ?></span><?php endif; ?>
-        <?php if ($fps && $vel): ?> · <?php endif; ?>
-        <?php if ($vel): ?><span><strong>Vel:</strong> <?= esc($vel) ?></span><?php endif; ?>
-        <?php if ($iso || $wb || $nd): ?> · <?php endif; ?>
-        <?php if ($iso): ?><span><strong>ISO:</strong> <?= esc($iso) ?></span><?php endif; ?>
-        <?php if ($iso && $wb): ?> · <?php endif; ?>
-        <?php if ($wb): ?><span><strong>WB:</strong> <?= esc($wb) ?></span><?php endif; ?>
-        <?php if (($iso || $wb) && $nd): ?> · <?php endif; ?>
-        <?php if ($nd): ?><span><strong>ND:</strong> <?= esc($nd) ?></span><?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-3 print-row-break">
-    <!-- COLUMNA 1 -->
-    <div class="col-lg-6">
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Objetivo narrativo</strong></div>
-        <div class="card-body"><p class="mb-0"><?= nl2br(esc($e['escena_objetivo'] ?? '')) ?></p></div>
-      </div>
-
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Acción</strong></div>
-        <div class="card-body"><p class="mb-0"><?= nl2br(esc($e['escena_accion'] ?? '')) ?></p></div>
-      </div>
-
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Continuidad</strong></div>
-        <div class="card-body">
-          <div class="mb-2"><em>Con escena previa:</em><br><?= nl2br(esc($e['escena_cont_previa'] ?? '')) ?></div>
-          <div><em>Con escena posterior:</em><br><?= nl2br(esc($e['escena_cont_posterior'] ?? '')) ?></div>
-        </div>
-      </div>
-
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Construcción del plano</strong></div>
-        <div class="card-body">
-          <div class="mb-2"><em>Esquema de iluminación:</em><br><?= nl2br(esc($e['plano_esquema_iluminacion'] ?? '')) ?></div>
-          <div class="mb-2"><em>Objetos en escena:</em><br><?= nl2br(esc($e['plano_objetos'] ?? '')) ?></div>
-          <div class="mb-2"><em>Toma alternativa:</em><br><?= nl2br(esc($e['plano_toma_alternativa'] ?? '')) ?></div>
-          <div><em>Notas:</em><br><?= nl2br(esc($e['plano_notas'] ?? '')) ?></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- COLUMNA 2 -->
-    <div class="col-lg-6">
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Detalles de cámara</strong></div>
-        <div class="card-body">
-          <div class="row row-cols-2 g-2 small">
-            <div><strong>Cámara:</strong><br><?= esc($e['camara_modelo'] ?? '') ?></div>
-            <div><strong>Óptica:</strong><br><?= esc($e['camara_optica'] ?? '') ?></div>
-            <div><strong>Apertura:</strong><br><?= esc($apertura) ?></div>
-            <div><strong>FPS:</strong><br><?= esc($fps) ?></div>
-            <div><strong>Velocidad:</strong><br><?= esc($vel) ?></div>
-            <div><strong>ISO:</strong><br><?= esc($iso) ?></div>
-            <div><strong>WB:</strong><br><?= esc($wb) ?></div>
-            <div><strong>Filtro ND:</strong><br><?= esc($nd) ?></div>
-            <div><strong>Tipo de plano:</strong><br><?= esc($plano) ?></div>
-            <div><strong>Ángulo:</strong><br><?= esc($angulo) ?></div>
-            <div><strong>Movimiento:</strong><br><?= esc($mov) ?></div>
-            <div><strong>Soporte:</strong><br><?= esc($soporte) ?></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Sonido</strong></div>
-        <div class="card-body">
-          <div class="row row-cols-2 g-2 small">
-            <div><strong>Ambiente:</strong><br><?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></div>
-            <div><strong>Antiviento:</strong><br><?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></div>
-          </div>
-          <div class="mt-2"><em>Diálogo escrito:</em><br><?= nl2br(esc($e['sonido_dialogo_escrito'] ?? '')) ?></div>
-        </div>
-      </div>
-
-      <div class="print-card card shadow-sm border-0 mb-3">
-        <div class="card-header bg-light"><strong>Referencias (texto)</strong></div>
-        <div class="card-body ref-list">
-          <div class="mb-2"><em>Lugar / objetos:</em><br><?= $renderRefs((string)($e['plano_ref_lugar_texto'] ?? '')) ?></div>
-          <div><em>Inspiración:</em><br><?= $renderRefs((string)($e['plano_ref_inspiracion_texto'] ?? '')) ?></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- GALERÍAS (con page-break-inside avoid) -->
-  <div class="row g-3 mt-1 print-row-break">
-    <div class="col-lg-6">
-      <div class="print-card card shadow-sm border-0">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <strong>Referencias: Lugar y objetos</strong>
-          <?php if (!empty($imagenes_lugar)): ?>
-            <button class="btn btn-sm btn-outline-secondary no-print" onclick="copiarURLs('gal_lugar')">Copiar URLs</button>
-          <?php endif; ?>
-        </div>
-        <div class="card-body">
-          <?php if (empty($imagenes_lugar)): ?>
-            <div class="text-muted">Sin imágenes.</div>
-          <?php else: ?>
-            <div id="gal_lugar" class="row g-2">
-              <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
-                <div class="col-6 col-md-4">
-                  <a href="<?= $src ?>" target="_blank" rel="noopener">
-                    <img src="<?= $src ?>" alt="" class="img-thumb">
-                  </a>
-                </div>
-              <?php endforeach; ?>
+    <!-- Toolbar pantalla (no se imprime) -->
+    <div class="toolbar no-print d-flex justify-content-between">
+        <div>
+            <div class="h1"><?= esc($proyecto['titulo']) ?> — Escena</div>
+            <div class="tiny muted">
+                Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?>
             </div>
-          <?php endif; ?>
         </div>
-      </div>
+        <div class="d-flex gap-2 mb-3">
+            <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
+            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $e['id']) ?>?print=1">🖨️ PDF</a>
+            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
+        </div>
     </div>
 
-    <div class="col-lg-6">
-      <div class="print-card card shadow-sm border-0">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <strong>Referencias: Inspiración</strong>
-          <?php if (!empty($imagenes_insp)): ?>
-            <button class="btn btn-sm btn-outline-secondary no-print" onclick="copiarURLs('gal_insp')">Copiar URLs</button>
-          <?php endif; ?>
+    <!-- ENCABEZADO IMPRESIÓN -->
+    <div class="section">
+        <div class="h1"><?= esc($bloque ?: 'Bloque sin título') ?><?php if ($tomas): ?> · Toma/s: <?= esc($tomas) ?><?php endif; ?></div>
+        <div class="muted tiny">
+            Orden: <?= esc($orden) ?><?php if ($hora): ?> · Hora del día: <?= esc($hora) ?><?php endif; ?><?php if ($ubic): ?> · 📍 <?= esc($ubic) ?><?php endif; ?><?php if ($actores): ?> · Actores: Sí<?php endif; ?><?php if ($fx): ?> · FX: <?= esc($fx) ?><?php endif; ?>
         </div>
-        <div class="card-body">
-          <?php if (empty($imagenes_insp)): ?>
-            <div class="text-muted">Sin imágenes.</div>
-          <?php else: ?>
-            <div id="gal_insp" class="row g-2">
-              <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
-                <div class="col-6 col-md-4">
-                  <a href="<?= $src ?>" target="_blank" rel="noopener">
-                    <img src="<?= $src ?>" alt="" class="img-thumb">
-                  </a>
-                </div>
-              <?php endforeach; ?>
+        <?php if ($plano || $angulo || $mov || $soporte): ?>
+            <div class="chips tiny">
+                <?php if ($plano): ?><span class="chip"><strong>Plano:</strong> <?= esc($plano) ?></span><?php endif; ?>
+                <?php if ($angulo): ?><span class="chip"><strong>Ángulo:</strong> <?= esc($angulo) ?></span><?php endif; ?>
+                <?php if ($mov): ?><span class="chip"><strong>Movimiento:</strong> <?= esc($mov) ?></span><?php endif; ?>
+                <?php if ($soporte): ?><span class="chip"><strong>Soporte:</strong> <?= esc($soporte) ?></span><?php endif; ?>
             </div>
-          <?php endif; ?>
-        </div>
-      </div>
+        <?php endif; ?>
+        <hr class="sep">
     </div>
-  </div>
 
-  <!-- Footer pantalla -->
-  <div class="mt-4 d-flex gap-2 no-print">
-    <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver a escenas</a>
-    <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
-    <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar escena</a>
-  </div>
+    <!-- BLOQUE TEXTUAL EN 2 COLUMNAS (UNA PÁGINA) -->
+    <div class="print-onepage">
+
+        <!-- ESCENA -->
+        <div class="section">
+            <h2>Escena</h2>
+            <dl class="kv">
+                <?php if (!empty($e['escena_descripcion'])): ?>
+                    <dt>Descripción</dt>
+                    <dd><?= nl2br(esc($e['escena_descripcion'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['escena_objetivo'])): ?>
+                    <dt>Objetivo narrativo</dt>
+                    <dd><?= nl2br(esc($e['escena_objetivo'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['escena_accion'])): ?>
+                    <dt>Acción</dt>
+                    <dd><?= nl2br(esc($e['escena_accion'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['escena_cont_previa'])): ?>
+                    <dt>Continuidad (previa)</dt>
+                    <dd><?= nl2br(esc($e['escena_cont_previa'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['escena_cont_posterior'])): ?>
+                    <dt>Continuidad (posterior)</dt>
+                    <dd><?= nl2br(esc($e['escena_cont_posterior'])) ?></dd>
+                <?php endif; ?>
+            </dl>
+            <hr class="sep">
+        </div>
+
+        <!-- CÁMARA -->
+        <div class="section">
+            <h2>Cámara</h2>
+            <dl class="kv kv-2col">
+                <?php if ($optica): ?><dt>Óptica</dt>
+                    <dd><?= esc($optica) ?></dd><?php endif; ?>
+                <?php if ($apertura): ?><dt>Apertura</dt>
+                    <dd><?= esc($apertura) ?></dd><?php endif; ?>
+                <?php if ($fps): ?><dt>FPS</dt>
+                    <dd><?= esc($fps) ?></dd><?php endif; ?>
+                <?php if ($vel): ?><dt>Velocidad</dt>
+                    <dd><?= esc($vel) ?></dd><?php endif; ?>
+                <?php if ($iso): ?><dt>ISO</dt>
+                    <dd><?= esc($iso) ?></dd><?php endif; ?>
+                <?php if ($wb): ?><dt>Balance blancos</dt>
+                    <dd><?= esc($wb) ?></dd><?php endif; ?>
+                <?php if ($nd): ?><dt>Filtro ND</dt>
+                    <dd><?= esc($nd) ?></dd><?php endif; ?>
+                <?php if ($plano): ?><dt>Tipo de plano</dt>
+                    <dd><?= esc($plano) ?></dd><?php endif; ?>
+                <?php if ($angulo): ?><dt>Ángulo</dt>
+                    <dd><?= esc($angulo) ?></dd><?php endif; ?>
+                <?php if ($mov): ?><dt>Movimiento</dt>
+                    <dd><?= esc($mov) ?></dd><?php endif; ?>
+                <?php if ($soporte): ?><dt>Soporte</dt>
+                    <dd><?= esc($soporte) ?></dd><?php endif; ?>
+                <?php if (!empty($e['camara_modelo'])): ?><dt>Cámara</dt>
+                    <dd><?= esc($e['camara_modelo']) ?></dd><?php endif; ?>
+            </dl>
+            <hr class="sep">
+        </div>
+
+
+        <!-- CONSTRUCCIÓN DEL PLANO -->
+        <div class="section">
+            <h2>Construcción del plano</h2>
+            <dl class="kv">
+                <?php if (!empty($e['plano_esquema_iluminacion'])): ?>
+                    <dt>Esquema de iluminación</dt>
+                    <dd><?= nl2br(esc($e['plano_esquema_iluminacion'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['plano_objetos'])): ?>
+                    <dt>Objetos en escena</dt>
+                    <dd><?= nl2br(esc($e['plano_objetos'])) ?></dd>
+                <?php endif; ?>
+                <dt>Actores</dt>
+                <dd><?= $actores ? 'Sí' : 'No' ?></dd>
+                <?php if (!empty($e['plano_toma_alternativa'])): ?>
+                    <dt>Toma alternativa</dt>
+                    <dd><?= nl2br(esc($e['plano_toma_alternativa'])) ?></dd>
+                <?php endif; ?>
+                <?php if (!empty($e['plano_notas'])): ?>
+                    <dt>Notas</dt>
+                    <dd><?= nl2br(esc($e['plano_notas'])) ?></dd>
+                <?php endif; ?>
+            </dl>
+            <hr class="sep">
+        </div>
+
+        <!-- SONIDO -->
+        <div class="section">
+            <h2>Sonido</h2>
+            <dl class="kv">
+                <dt>Ambiente</dt>
+                <dd><?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
+                <dt>Antiviento</dt>
+                <dd><?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
+                <?php if (!empty($e['sonido_dialogo_escrito'])): ?>
+                    <dt>Diálogo escrito</dt>
+                    <dd><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></dd>
+                <?php endif; ?>
+            </dl>
+            <hr class="sep">
+        </div>
+
+        <!-- REFERENCIAS (TEXTO) -->
+        <div class="section">
+            <h2>Referencias (texto)</h2>
+            <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
+                <h3>Lugar / objetos</h3>
+                <div class="tiny"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
+                <h3>Inspiración</h3>
+                <div class="tiny"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
+            <?php endif; ?>
+        </div>
+
+    </div><!-- /print-onepage -->
+
+    <!-- GALERÍAS (en páginas aparte) -->
+    <div class="print-break">
+        <h2 class="mt-5">Referencias: Lugar y objetos</h2>
+        <?php if (empty($imagenes_lugar)): ?>
+            <div class="tiny muted">Sin imágenes.</div>
+        <?php else: ?>
+            <div class="gallery">
+                <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
+                    <a href="<?= $src ?>" target="_blank" rel="noopener">
+                        <img src="<?= $src ?>" alt="">
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="print-break">
+        <h2 class="mt-5">Referencias: Inspiración</h2>
+        <?php if (empty($imagenes_insp)): ?>
+            <div class="tiny muted">Sin imágenes.</div>
+        <?php else: ?>
+            <div class="gallery">
+                <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
+                    <a href="<?= $src ?>" target="_blank" rel="noopener">
+                        <img src="<?= $src ?>" alt="">
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Controles pantalla -->
+    <div class="no-print mt-3 d-flex gap-2">
+        <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
+        <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
+        <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
+    </div>
 </div>
 
 <script>
-function copiarURLs(galeriaId) {
-  const root = document.getElementById(galeriaId);
-  if (!root) return;
-  const urls = [...root.querySelectorAll('a[href]')].map(a => a.href).join('\n');
-  navigator.clipboard.writeText(urls)
-    .then(() => alert('URLs copiadas al portapapeles'))
-    .catch(() => alert('No se pudieron copiar las URLs'));
-}
-
-// Modo impresión directo con ?print=1 (oculta toolbar y lanza print)
-(function(){
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('print') === '1') {
-    setTimeout(() => window.print(), 300);
-  }
-})();
+    // Auto-print si llega ?print=1
+    (function() {
+        const p = new URLSearchParams(location.search);
+        if (p.get('print') === '1') setTimeout(() => window.print(), 300);
+    })();
 </script>
 
 <?= $this->endSection() ?>
