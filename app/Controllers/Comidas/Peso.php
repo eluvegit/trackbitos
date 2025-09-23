@@ -1,7 +1,10 @@
-<?php namespace App\Controllers\Comidas;
+<?php
+
+namespace App\Controllers\Comidas;
 
 use App\Controllers\BaseController;
 use App\Models\ComidasPesoModel;
+use App\Models\GimnasioEntrenamientosModel;
 use CodeIgniter\I18n\Time;
 
 class Peso extends BaseController
@@ -21,29 +24,108 @@ class Peso extends BaseController
         $desde   = date('Y-m-d', $desdeTs);
 
         $ultimoMes = $model->where('fecha >=', $desde)
-                           ->where('fecha <=', $hoy)
-                           ->orderBy('fecha', 'ASC')
-                           ->find();
+            ->where('fecha <=', $hoy)
+            ->orderBy('fecha', 'ASC')
+            ->find();
 
-        // Preparar arrays para el gráfico
-        $labels = [];
-        $values = [];
-        foreach ($ultimoMes as $row) {
-            $labels[] = date('d/m', strtotime($row['fecha']));
-            $values[] = (float)$row['peso'];
+        // ===== Entrenamientos =====
+        $entrenaday = new GimnasioEntrenamientosModel();
+
+        // Fecha seleccionada para "entrenos del día" (query param ?fecha=YYYY-MM-DD) o hoy
+        $fecha = $this->request->getGet('fecha') ?? $hoy;
+
+        // Entrenamientos del día
+        $entrenosDia = $entrenaday
+            ->select('id, fecha, tipo_sesion, notas_generales, lesiones, sin_molestias')
+            // Si tu columna es DATETIME, usa DATE(fecha)
+            // ->where('DATE(fecha)', $fecha)
+            ->where('fecha', $fecha)  // si 'fecha' es DATE
+            ->orderBy('id', 'ASC')
+            ->findAll();
+
+        $tiposEntreno = array_values(array_filter(array_unique(array_map(
+            static fn($e) => trim((string)($e['tipo_sesion'] ?? '')),
+            $entrenosDia
+        ))));
+
+        $huboEntreno = !empty($entrenosDia);
+
+        // Fechas (distintas) con entrenamiento en el rango del gráfico
+        // Si 'fecha' es DATETIME, cambia a: ->select('DATE(fecha) AS dia')
+        $entrenosPorDia = $entrenaday
+            ->select('fecha AS dia, COUNT(*) AS n')
+            ->where('fecha >=', $desde)
+            ->where('fecha <=', $hoy)
+            ->groupBy('dia')
+            ->orderBy('dia', 'ASC')
+            ->find();
+
+        // Array simple de días con entreno: ['2025-08-28', '2025-08-30', ...]
+        $diasConEntreno = array_map(static fn($r) => $r['dia'], $entrenosPorDia);
+
+        // Mapa rápido para marcar en el gráfico/calendario: ['2025-08-28' => 2, ...]
+        $mapEntrenos = [];
+        foreach ($entrenosPorDia as $r) {
+            $mapEntrenos[$r['dia']] = (int) $r['n'];
         }
 
+        // ===== Preparar arrays para el gráfico de peso =====
+        $labels = [];
+        $values = [];
+        $flagsEntreno = []; // true/false para cada punto del gráfico
+        foreach ($ultimoMes as $row) {
+            $dia = $row['fecha']; // YYYY-MM-DD
+            $labels[] = date('d/m', strtotime($dia));
+            $values[] = (float) $row['peso'];
+            $flagsEntreno[] = isset($mapEntrenos[$dia]); // marca si hubo entreno ese día
+        }
+
+        // === Tipos de entrenamiento por día (para la tabla) ===
+        // Si tu columna 'fecha' es DATETIME, usa DATE(fecha) AS dia y whereBetween por DATE(fecha)
+        $entrenosTodos = $entrenaday
+            ->select('fecha, tipo_sesion') // si es DATETIME: ->select('DATE(fecha) AS fecha, tipo_sesion')
+            ->where('fecha >=', $desde)
+            ->where('fecha <=', $hoy)
+            ->orderBy('fecha', 'ASC')
+            ->findAll();
+
+        $entrenosTiposPorDia = []; // ['YYYY-MM-DD' => ['Fuerza', 'Cardio', ...]]
+        foreach ($entrenosTodos as $e) {
+            $dia  = $e['fecha']; // si usas DATE(fecha) AS fecha, sigue siendo 'YYYY-MM-DD'
+            $tipo = trim((string)($e['tipo_sesion'] ?? ''));
+            if ($tipo === '') continue;
+            $entrenosTiposPorDia[$dia][] = $tipo;
+        }
+
+        // Quita duplicados por día y ordena bonito
+        foreach ($entrenosTiposPorDia as $dia => $lista) {
+            $lista = array_values(array_filter(array_unique($lista)));
+            sort($lista, SORT_NATURAL | SORT_FLAG_CASE);
+            $entrenosTiposPorDia[$dia] = $lista;
+        }
+
+
         return view('comidas/peso/index', [
-            'hoy'      => $hoy,
-            'ultimos'  => $ultimos,
-            'labels'   => $labels,
-            'values'   => $values,
+            'hoy'           => $hoy,
+            'desde'         => $desde,
+            'ultimos'       => $ultimos,
+            'labels'        => $labels,
+            'values'        => $values,
+            'flagsEntreno'  => $flagsEntreno,   // para pintar el gráfico (p.ej. color/marker distinto)
+            'diasConEntreno' => $diasConEntreno, // para un calendario/listado
+            'mapEntrenos'   => $mapEntrenos,    // si quieres mostrar conteos por día
+            'entrenosDia'   => $entrenosDia,
+            'entrenosTiposPorDia' => $entrenosTiposPorDia,
+            'tiposEntreno'  => $tiposEntreno,
+            'huboEntreno'   => $huboEntreno,
+
             // Por si venimos de un duplicado:
-            'dup_fecha' => session()->getFlashdata('dup_fecha'),
-            'dup_peso'  => session()->getFlashdata('dup_peso'),
-            'dup_id'    => session()->getFlashdata('dup_id'),
+            'dup_fecha'     => session()->getFlashdata('dup_fecha'),
+            'dup_peso'      => session()->getFlashdata('dup_peso'),
+            'dup_id'        => session()->getFlashdata('dup_id'),
         ]);
     }
+
 
     public function store()
     {
@@ -64,10 +146,11 @@ class Peso extends BaseController
         $existente = $model->where('fecha', $fecha)->first();
         if ($existente) {
             // Informar y devolver al formulario sin romper nada
-            session()->setFlashdata('warning',
+            session()->setFlashdata(
+                'warning',
                 'Ya existe un registro para esa fecha.'
-                . ' Valor guardado: ' . rtrim(rtrim((string)$existente['peso'], '0'), '.')
-                . ' kg. Puedes borrar el registro existente o elegir otra fecha.'
+                    . ' Valor guardado: ' . rtrim(rtrim((string)$existente['peso'], '0'), '.')
+                    . ' kg. Puedes borrar el registro existente o elegir otra fecha.'
             );
             // Enviar además datos del existente por si quieres mostrarlos en la vista
             session()->setFlashdata('dup_fecha', $existente['fecha']);
@@ -113,9 +196,9 @@ class Peso extends BaseController
         $desde   = date('Y-m-d', $desdeTs);
 
         $rows = $model->where('fecha >=', $desde)
-                      ->where('fecha <=', $hoy)
-                      ->orderBy('fecha', 'ASC')
-                      ->find();
+            ->where('fecha <=', $hoy)
+            ->orderBy('fecha', 'ASC')
+            ->find();
 
         return $this->response->setJSON($rows);
     }

@@ -29,23 +29,29 @@
     }
 
     .scene-images {
-    display: flex;
-    justify-content: flex-start; /* que se alineen a la izquierda */
-    align-items: flex-start;
-    gap: 6px;
-    margin-bottom: 6px;
-    flex-wrap: wrap; /* por si una imagen es demasiado ancha */
-}
+        display: flex;
+        justify-content: flex-start;
+        /* que se alineen a la izquierda */
+        align-items: flex-start;
+        gap: 6px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+        /* por si una imagen es demasiado ancha */
+    }
 
-.scene-images img {
-    height: auto;
-    max-height: 220px;     /* límite de altura */
-    width: auto;           /* sin ancho fijo */
-    max-width: 100%;       /* no sobrepasar el contenedor */
-    object-fit: contain;   /* que no recorte nada */
-    border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, .12);
-}
+    .scene-images img {
+        height: auto;
+        max-height: 220px;
+        /* límite de altura */
+        width: auto;
+        /* sin ancho fijo */
+        max-width: 100%;
+        /* no sobrepasar el contenedor */
+        object-fit: contain;
+        /* que no recorte nada */
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, .12);
+    }
 
 
     .scene-info strong {
@@ -98,13 +104,29 @@
             border-radius: 0;
         }
     }
+
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+
+    .link-muted {
+        color: #6c757d;
+        text-decoration: none;
+    }
+
+    .link-muted:hover {
+        color: #0d6efd;
+        text-decoration: underline;
+    }
 </style>
 
 <div class="container py-3">
     <h1 class="mb-4">Storyboard — <?= esc($proyecto['titulo']) ?></h1>
     <div class="d-flex gap-2 mb-3">
-            <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-        </div>
+        <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
+    </div>
 
     <?php foreach ($groups as $g): ?>
         <div class="storyboard-group">
@@ -127,16 +149,20 @@
                         </div>
 
                         <div class="scene-info">
+
                             <strong><?= esc($esc['escena_bloque']) ?> · Orden <?= esc($esc['orden']) ?></strong>
                             <?php if (!empty($esc['escena_tomas'])): ?>
                                 <div class="small">Toma/s: <?= esc($esc['escena_tomas']) ?></div>
                             <?php endif; ?>
-                            <?php if (!empty($esc['escena_accion'])): ?>
-                                <div class="small">Acción: <?= esc($esc['escena_accion']) ?></div>
+                            <?php if (!empty($esc['escena_descripcion'])): ?>
+                                <div class="small">Descripcion: <?= esc($esc['escena_descripcion']) ?></div>
                             <?php endif; ?>
-                            <?php if (!empty($esc['escena_ubicacion'])): ?>
-                                <div class="small">📍 <?= esc($esc['escena_ubicacion']) ?></div>
-                            <?php endif; ?>
+                            <a class="link-muted mt-5 no-print"
+                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $esc['id']) ?>">
+                                ✏️ Editar
+                            </a>
+
+
                         </div>
                     </div>
                 <?php endforeach; ?>

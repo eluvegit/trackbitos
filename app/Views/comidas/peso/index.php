@@ -58,7 +58,7 @@
             </div>
         </div>
     </div>
-<!-- Gráfico -->
+    <!-- Gráfico -->
     <div class="col-md-8">
         <div class="card shadow-sm">
             <div class="card-header">📈 Últimos 30 días</div>
@@ -69,7 +69,7 @@
             </div>
         </div>
     </div>
-    
+
 </div>
 
 
@@ -98,7 +98,7 @@ function fmt($n, $dec = 1)
                     <th style="width: 140px;">Fecha</th>
                     <th style="width: 140px;">Peso (kg)</th>
                     <th style="width: 140px;">IMC</th>
-                    <th style="width: 140px;">% grasa</th>
+                    <th style="width: 140px;">Entrenamiento</th>
                     <th class="text-end" style=""></th>
                 </tr>
             </thead>
@@ -110,24 +110,39 @@ function fmt($n, $dec = 1)
                         $bmi  = ($altura_m && $altura_m > 0) ? ($peso / ($altura_m * $altura_m)) : null;
 
                         // Deurenberg: %grasa = 1.20*IMC + 0.23*edad − 10.8*sexo − 5.4
-                        // sexoFlag: 1 = hombre, 0 = mujer
                         $bf  = null;
                         if ($bmi !== null && $edad !== null && $sexo !== null) {
                             $sexoFlag = (strtolower($sexo) === 'm') ? 1 : 0;
                             $bf = 1.20 * $bmi + 0.23 * (float)$edad - 10.8 * $sexoFlag - 5.4;
-                            // Limita a un rango razonable para evitar salidas raras
                             $bf = max(3, min(60, $bf));
+                        }
+
+                        $dia = $r['fecha']; // YYYY-MM-DD
+                        // Buscar entrenos de ese día (si la tabla de entrenos tiene más de uno)
+                        $entrenosDia = $mapEntrenos[$dia] ?? null;
+                        $tiposDia = [];
+                        if (!empty($entrenosGlobal[$dia])) { // <- si en el controlador mandas array con entrenos agrupados por fecha
+                            $tiposDia = array_map(fn($e) => $e['tipo_sesion'], $entrenosGlobal[$dia]);
                         }
                         ?>
                         <tr>
-                            <td><?= date('d/m/Y', strtotime($r['fecha'])) ?></td>
+                            <td><?= date('d/m/Y', strtotime($dia)) ?></td>
                             <td><?= esc(number_format((float)$r['peso'], 2, '.', '')) ?></td>
                             <td>
                                 <?= $bmi !== null ? fmt($bmi, 1) : '<span class="text-muted">—</span>' ?>
                             </td>
                             <td>
-                                <?= $bf !== null ? fmt($bf, 1) . ' %' : '<span class="text-muted">—</span>' ?>
+                                <?php
+                                $tipos = $entrenosTiposPorDia[$dia] ?? [];
+                                if (!empty($tipos)):
+                                ?>
+                                    ✅ <?= esc(implode(', ', $tipos)) ?>
+                                <?php else: ?>
+                                    <span class="text-muted">—</span>
+                                <?php endif; ?>
                             </td>
+
+
                             <td class="text-end">
                                 <a href="<?= site_url('comidas/peso/eliminar/' . $r['id']) ?>"
                                     class="btn btn-sm btn-outline-danger"
@@ -137,131 +152,185 @@ function fmt($n, $dec = 1)
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="4" class="text-center text-muted p-3">Sin registros todavía.</td>
+                        <td colspan="5" class="text-center text-muted p-3">Sin registros todavía.</td>
                     </tr>
                 <?php endif; ?>
+
             </tbody>
         </table>
     </div>
 </div>
 
 <style>
-  /* El card se expande y no recorta tooltips/leyendas */
-  .chart-body { overflow: visible; }
+    /* El card se expande y no recorta tooltips/leyendas */
+    .chart-body {
+        overflow: visible;
+    }
 
-  /* Contenedor responsivo: alto cómodo en móvil y escritorio */
-  .chart-wrap {
-    position: relative;
-    height: clamp(260px, 40vh, 420px); /* min 260px, ideal 40vh, máx 420px */
-    width: 100%;
-  }
+    /* Contenedor responsivo: alto cómodo en móvil y escritorio */
+    .chart-wrap {
+        position: relative;
+        height: clamp(260px, 40vh, 420px);
+        /* min 260px, ideal 40vh, máx 420px */
+        width: 100%;
+    }
 
-  /* Por si algún estilo externo fuerza altura del canvas */
-  #pesoChart { width: 100% !important; height: 100% !important; }
+    /* Por si algún estilo externo fuerza altura del canvas */
+    #pesoChart {
+        width: 100% !important;
+        height: 100% !important;
+    }
 </style>
 
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(() => {
-  const labels = <?= json_encode($labels ?? []) ?>;
-  const values = <?= json_encode($values ?? []) ?>;
+    (() => {
+        const labels = <?= json_encode($labels ?? []) ?>;
+        const values = <?= json_encode($values ?? []) ?>;
+        // <- nuevo: flags (true si hubo entreno ese día)
+        const flags = <?= json_encode($flagsEntreno ?? []) ?>;
 
-  // Helpers
-  const movingAverage = (arr, window = 7) => {
-    if (!arr || arr.length === 0) return [];
-    const out = new Array(arr.length).fill(null);
-    let sum = 0, q = [];
-    for (let i = 0; i < arr.length; i++) {
-      const v = Number(arr[i]);
-      if (!Number.isFinite(v)) { q.length = 0; sum = 0; continue; }
-      q.push(v); sum += v;
-      if (q.length > window) sum -= q.shift();
-      if (q.length === window) out[i] = +(sum / window).toFixed(2);
-    }
-    return out;
-  };
+        // === NUEVO DATASET: puntos de entreno ===
+        // Colocamos un punto sólo donde flags[i] es true (mismo valor Y que 'values')
+        const trainingPoints = (values || []).map((v, i) => (flags && flags[i]) ? v : null);
 
-  const median = (arr) => {
-    const nums = arr.filter(Number.isFinite).slice().sort((a,b)=>a-b);
-    if (!nums.length) return null;
-    const mid = Math.floor(nums.length/2);
-    return nums.length % 2 ? nums[mid] : (nums[mid-1] + nums[mid]) / 2;
-  };
+        // Helpers (igual que tenías) ...
+        const movingAverage = (arr, window = 7) => {
+            if (!arr || arr.length === 0) return [];
+            const out = new Array(arr.length).fill(null);
+            let sum = 0,
+                q = [];
+            for (let i = 0; i < arr.length; i++) {
+                const v = Number(arr[i]);
+                if (!Number.isFinite(v)) {
+                    q.length = 0;
+                    sum = 0;
+                    continue;
+                }
+                q.push(v);
+                sum += v;
+                if (q.length > window) sum -= q.shift();
+                if (q.length === window) out[i] = +(sum / window).toFixed(2);
+            }
+            return out;
+        };
+        const median = (arr) => {
+            const nums = arr.filter(Number.isFinite).slice().sort((a, b) => a - b);
+            if (!nums.length) return null;
+            const mid = Math.floor(nums.length / 2);
+            return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
+        };
 
-  // Datos derivados
-  const sma7   = movingAverage(values, 7);
-  const medVal = median(values);
-  const medLine = medVal !== null ? values.map(()=>+medVal.toFixed(2)) : [];
+        const sma7 = movingAverage(values, 7);
+        const medVal = median(values);
+        const medLine = medVal !== null ? values.map(() => +medVal.toFixed(2)) : [];
 
-  // Padding dinámico eje Y
-  const vmin = values.length ? Math.min(...values) : 0;
-  const vmax = values.length ? Math.max(...values) : 1;
-  const span = Math.max(1e-6, vmax - vmin);
-  const pad  = Math.max(0.5, span * 0.05);
+        const vmin = values.length ? Math.min(...values) : 0;
+        const vmax = values.length ? Math.max(...values) : 1;
+        const span = Math.max(1e-6, vmax - vmin);
+        const pad = Math.max(0.5, span * 0.05);
 
-  const ctx = document.getElementById('pesoChart').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Peso (kg)',
-          data: values,
-          borderWidth: 2,
-          tension: 0.2,
-          pointRadius: 2,
-          fill: true,
-          borderColor: '#0d6efd',
-          backgroundColor: 'rgba(13,110,253,0.12)'
-        },
-        {
-          label: 'Tendencia (SMA 7)',
-          data: sma7,
-          borderWidth: 3,
-          tension: 0.25,
-          pointRadius: 0,
-          spanGaps: true,
-          fill: false,
-          borderColor: '#198754' // verde Bootstrap
-        },
-        ...(medVal !== null ? [{
-          label: `Mediana (${medVal.toFixed(2)} kg)`,
-          data: medLine,
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: false,
-          borderDash: [6,6],
-          borderColor: '#6c757d' // gris
-        }] : [])
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      layout: { padding: { top: 8, bottom: 8, left: 4, right: 4 } },
-      scales: {
-        y: {
-          beginAtZero: false,
-          min: vmin - pad,
-          max: vmax + pad,
-          ticks: { padding: 6 }
-        },
-        x: {
-          ticks: { maxRotation: 0, minRotation: 0 },
-          grid: { display: false }
-        }
-      },
-      plugins: {
-        legend: { display: true },
-        tooltip: { intersect: false, mode: 'index' }
-      }
-    }
-  });
-})();
-
+        const ctx = document.getElementById('pesoChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                        label: 'Peso (kg)',
+                        data: values,
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 2,
+                        fill: true,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13,110,253,0.12)',
+                        order: 3
+                    },
+                    {
+                        label: 'Tendencia (SMA 7)',
+                        data: sma7,
+                        borderWidth: 3,
+                        tension: 0.25,
+                        pointRadius: 0,
+                        spanGaps: true,
+                        fill: false,
+                        borderColor: '#198754',
+                        order: 2
+                    },
+                    ...(medVal !== null ? [{
+                        label: `Mediana (${medVal.toFixed(2)} kg)`,
+                        data: medLine,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        borderDash: [6, 6],
+                        borderColor: '#6c757d',
+                        order: 1
+                    }] : []),
+                    // === AQUÍ VA EL PUNTO AMARILLO DE ENTRENAMIENTO ===
+                    {
+                        label: 'Entrenamiento',
+                        data: trainingPoints,
+                        type: 'line', // seguimos en línea pero sin trazarla
+                        showLine: false, // sólo puntos
+                        pointRadius: 6, // tamaño del punto
+                        pointHoverRadius: 8,
+                        pointStyle: 'circle',
+                        borderWidth: 2,
+                        // amarillo Bootstrap
+                        pointBackgroundColor: '#ffc107',
+                        pointBorderColor: '#ffc107',
+                        order: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                layout: {
+                    padding: {
+                        top: 8,
+                        bottom: 8,
+                        left: 4,
+                        right: 4
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: vmin - pad,
+                        max: vmax + pad,
+                        ticks: {
+                            padding: 6
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 0,
+                            minRotation: 0
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    tooltip: {
+                        intersect: false,
+                        mode: 'index',
+                        // Oculta el tooltip de "Entrenamiento" cuando sea null
+                        filter: (item) => item.raw !== null
+                    }
+                }
+            }
+        });
+    })();
 </script>
+
 
 <?= $this->endSection() ?>
