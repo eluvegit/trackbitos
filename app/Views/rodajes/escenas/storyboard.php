@@ -161,6 +161,10 @@
                                 href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $esc['id']) ?>">
                                 ✏️ Editar
                             </a>
+                            <a class="link-muted mt-5 no-print"
+                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/ver/' . $esc['id']) ?>">
+                                👁️ Ver
+                            </a>
 
 
                         </div>
