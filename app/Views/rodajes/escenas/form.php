@@ -18,6 +18,19 @@ $action = $escena
                     <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $escena['id']) ?>">Ver</a>
                 <?php endif; ?>
                 <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">Volver</a>
+
+                <?php if (!empty($prevId)): ?>
+                    <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $prevId) ?>">← Anterior</a>
+                <?php else: ?>
+                    <button class="btn btn-outline-secondary" type="button" disabled>← Anterior</button>
+                <?php endif; ?>
+
+                <?php if (!empty($nextId)): ?>
+                    <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $nextId) ?>">Siguiente →</a>
+                <?php else: ?>
+                    <button class="btn btn-outline-secondary" type="button" disabled>Siguiente →</button>
+                <?php endif; ?>
+
             </div>
         </div>
 

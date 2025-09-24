@@ -78,6 +78,42 @@ class RodajesEscenas extends BaseController
             return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
         }
 
+        // --- Navegación anterior/siguiente dentro del proyecto (orden, id) ---
+        $curOrden = (int) $data['escena']['orden'];
+        $curId    = (int) $data['escena']['id'];
+
+        $escenasModel = new \App\Models\RodajesEscenaModel();
+
+        // Siguiente: (orden > actual) OR (orden = actual AND id > actual) - asc
+        $next = $escenasModel->where('proyecto_id', $proyectoId)
+            ->groupStart()
+            ->where('orden >', $curOrden)
+            ->orGroupStart()
+            ->where('orden', $curOrden)
+            ->where('id >', $curId)
+            ->groupEnd()
+            ->groupEnd()
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->first();
+
+        // Anterior: (orden < actual) OR (orden = actual AND id < actual) - desc
+        $prev = $escenasModel->where('proyecto_id', $proyectoId)
+            ->groupStart()
+            ->where('orden <', $curOrden)
+            ->orGroupStart()
+            ->where('orden', $curOrden)
+            ->where('id <', $curId)
+            ->groupEnd()
+            ->groupEnd()
+            ->orderBy('orden', 'DESC')
+            ->orderBy('id', 'DESC')
+            ->first();
+
+        $data['nextId'] = $next['id'] ?? null;
+        $data['prevId'] = $prev['id'] ?? null;
+
+
         $data['imagenes_lugar'] = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
         $data['imagenes_insp']  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
 
