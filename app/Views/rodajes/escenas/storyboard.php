@@ -157,6 +157,32 @@
                             <?php if (!empty($esc['escena_descripcion'])): ?>
                                 <div class="small">Descripcion: <?= esc($esc['escena_descripcion']) ?></div>
                             <?php endif; ?>
+                            <?php if (!empty($esc['plano_ref_inspiracion_texto'])): ?>
+                                <div class="small my-4">
+                                    Enlaces referencia:
+                                    <ul class="mb-0">
+                                        <?php
+                                        $lines = preg_split('/\r\n|\r|\n/', trim($esc['plano_ref_inspiracion_texto']));
+                                        $count = 1;
+                                        foreach ($lines as $line) {
+                                            $line = trim($line);
+                                            if (!$line) continue;
+
+                                            if (preg_match('#^https?://#i', $line)) {
+                                                $host = parse_url($line, PHP_URL_HOST);
+                                                echo '<li><a href="' . esc($line) . '" target="_blank" rel="noopener">'
+                                                    . esc($host) . ' + enlace ' . $count
+                                                    . '</a></li>';
+                                                $count++;
+                                            } else {
+                                                echo '<li>' . esc($line) . '</li>';
+                                            }
+                                        }
+                                        ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
                             <a class="link-muted mt-5 no-print"
                                 href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $esc['id']) ?>">
                                 ✏️ Editar
