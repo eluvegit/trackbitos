@@ -162,7 +162,7 @@
                                 ✏️ Editar
                             </a>
                             <a class="link-muted mt-5 no-print"
-                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/ver/' . $esc['id']) ?>">
+                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $esc['id']) ?>">
                                 👁️ Ver
                             </a>
 
