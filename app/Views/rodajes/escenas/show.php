@@ -289,6 +289,55 @@ $renderRefs = function (string $txt) {
         <hr class="sep">
     </div>
 
+    <?php if (!empty($e['plano_notas'])): ?>
+        <dt>Notas</dt>
+        <dd><?= nl2br(esc($e['plano_notas'])) ?></dd>
+    <?php endif; ?>
+
+    <!-- GALERÍAS (en páginas aparte) -->
+    <div class="print-break">
+        <h2 class="mt-5">Referencias: Lugar y objetos</h2>
+        <?php if (empty($imagenes_lugar)): ?>
+            <div class="tiny muted">Sin imágenes.</div>
+        <?php else: ?>
+            <div class="gallery">
+                <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
+                    <a href="<?= $src ?>" target="_blank" rel="noopener">
+                        <img src="<?= $src ?>" alt="">
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="print-break">
+        <h2 class="mt-5">Referencias: Inspiración</h2>
+        <?php if (empty($imagenes_insp)): ?>
+            <div class="tiny muted">Sin imágenes.</div>
+        <?php else: ?>
+            <div class="gallery">
+                <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
+                    <a href="<?= $src ?>" target="_blank" rel="noopener">
+                        <img src="<?= $src ?>" alt="">
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- REFERENCIAS (TEXTO) -->
+    <div class="section my-5">
+        <h2>Referencias (texto)</h2>
+        <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
+            <h3>Lugar / objetos</h3>
+            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
+        <?php endif; ?>
+        <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
+            <h3>Inspiración</h3>
+            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
+        <?php endif; ?>
+    </div>
+
     <!-- BLOQUE TEXTUAL EN 2 COLUMNAS (UNA PÁGINA) -->
     <div class="print-onepage">
 
@@ -371,10 +420,6 @@ $renderRefs = function (string $txt) {
                     <dt>Toma alternativa</dt>
                     <dd><?= nl2br(esc($e['plano_toma_alternativa'])) ?></dd>
                 <?php endif; ?>
-                <?php if (!empty($e['plano_notas'])): ?>
-                    <dt>Notas</dt>
-                    <dd><?= nl2br(esc($e['plano_notas'])) ?></dd>
-                <?php endif; ?>
             </dl>
             <hr class="sep">
         </div>
@@ -395,51 +440,11 @@ $renderRefs = function (string $txt) {
             <hr class="sep">
         </div>
 
-        <!-- REFERENCIAS (TEXTO) -->
-        <div class="section">
-            <h2>Referencias (texto)</h2>
-            <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
-                <h3>Lugar / objetos</h3>
-                <div class="tiny"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
-            <?php endif; ?>
-            <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
-                <h3>Inspiración</h3>
-                <div class="tiny"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
-            <?php endif; ?>
-        </div>
+
 
     </div><!-- /print-onepage -->
 
-    <!-- GALERÍAS (en páginas aparte) -->
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Lugar y objetos</h2>
-        <?php if (empty($imagenes_lugar)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
-        <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
 
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Inspiración</h2>
-        <?php if (empty($imagenes_insp)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
-        <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
 
     <!-- Controles pantalla -->
     <div class="no-print mt-3 d-flex gap-2">

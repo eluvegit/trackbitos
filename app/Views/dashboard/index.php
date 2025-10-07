@@ -21,7 +21,7 @@
         ['ruta' => 'coche', 'icono' => '🚗', 'titulo' => 'Coche', 'texto' => 'Controla cambios de aceite, revisiones, neumáticos y más.'],
         ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Workflow (PROXIMAMENTE)', 'texto' => 'Gestión de flujo de trabajo en la edición de fotos.'],
         ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
-        ['ruta' => 'notion', 'icono' => '📒', 'titulo' => 'Notion (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Notion.'],
+        ['ruta' => 'enlaces', 'icono' => '📒', 'titulo' => 'Enlaces', 'texto' => 'Permite revisar los enlaces registrados interesantes.'],
         ['ruta' => 'telegram', 'icono' => '📨', 'titulo' => 'Telegram (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Telegram.'],
         ['ruta' => 'recordatorios', 'icono' => '📨', 'titulo' => 'Recordatorios (PRÓXIMAMENTE)', 'texto' => 'Permite recordar lo que hay que hacer periodicamente.'],
         ['ruta' => 'rodajes', 'icono' => '📨', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],

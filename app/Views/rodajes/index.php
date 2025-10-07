@@ -22,9 +22,15 @@
                         <td><?= esc($p->titulo ?? $p['titulo']) ?></td>
                         <td><?= esc($p->descripcion ?? $p['descripcion']) ?></td>
                         <td>
-                            <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('rodajes/edit/' . ($p->id ?? $p['id'])) ?>">Editar</a>
-                            <a class="btn btn-sm btn-outline-danger" href="<?= site_url('rodajes/delete/' . ($p->id ?? $p['id'])) ?>" onclick="return confirm('¿Eliminar proyecto?')">Eliminar</a>
-                            <a class="btn btn-sm btn-success" href="<?= site_url('rodajes/' . ($p->id ?? $p['id']) . '/escenas') ?>">Escenas</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('rodajes/edit/' . ($p->id ?? $p['id'])) ?>">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a class="btn btn-sm btn-success" href="<?= site_url('rodajes/' . ($p->id ?? $p['id']) . '/escenas') ?>">
+                                <i class="bi bi-film"></i>
+                            </a>
+                            <a class="btn btn-sm btn-primary" href="<?= site_url('rodajes/' . ($p->id ?? $p['id']) . '/escenas/storyboard') ?>">
+                                <i class="bi bi-layout-text-window-reverse"></i>
+                            </a>
                         </td>
                     </tr>
                 <?php endforeach; ?>

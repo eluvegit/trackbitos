@@ -71,6 +71,11 @@ $action = $escena
             </div>
 
             <div class="col-12">
+                <label class="form-label">Notas</label>
+                <textarea name="plano_notas" class="form-control" rows="2"><?= old('plano_notas', $e['plano_notas'] ?? '') ?></textarea>
+            </div>
+
+            <div class="col-12">
                 <label class="form-label">Descripción</label>
                 <textarea name="escena_descripcion" class="form-control" rows="2"><?= old('escena_descripcion', $e['escena_descripcion'] ?? '') ?></textarea>
             </div>
@@ -243,10 +248,7 @@ $action = $escena
                 <textarea name="plano_toma_alternativa" class="form-control" rows="2"><?= old('plano_toma_alternativa', $e['plano_toma_alternativa'] ?? '') ?></textarea>
             </div>
 
-            <div class="col-12">
-                <label class="form-label">Notas</label>
-                <textarea name="plano_notas" class="form-control" rows="2"><?= old('plano_notas', $e['plano_notas'] ?? '') ?></textarea>
-            </div>
+            
 
             <!-- SONIDO -->
             <div class="col-12">

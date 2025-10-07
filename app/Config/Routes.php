@@ -209,12 +209,9 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->post('update/(:num)', 'Alimentos::update/$1');
         $r->post('preview', 'Alimentos::preview');
         $r->post('delete/(:num)', 'Alimentos::delete/$1');
-
-
-
     });
 
-    
+
 
     // --- Recetas ---
     $routes->group('recetas', static function ($r) {
@@ -304,9 +301,54 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
     // (Opcional) Reordenar escenas por AJAX (enviar JSON: [{id, orden}, ...])
     // Implementa RodajesEscenas::reordenar($proyectoId) si lo quieres usar.
     $routes->post('(:num)/escenas/reordenar',             'RodajesEscenas::reordenar/$1');
-    
+
     // Ver escena (detalle)
     $routes->get('(:num)/escenas/show/(:num)', 'RodajesEscenas::show/$1/$2');
     // Storyboard
     $routes->get('(:num)/escenas/storyboard', 'RodajesEscenas::storyboard/$1');
+});
+
+
+$routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
+    $routes->get('/', 'Enlaces::index');
+    $routes->get('crear', 'Enlaces::crear');
+    $routes->post('guardar', 'Enlaces::guardar');
+    $routes->get('editar/(:num)', 'Enlaces::editar/$1');
+    $routes->post('actualizar/(:num)', 'Enlaces::actualizar/$1');
+    $routes->get('borrar/(:num)', 'Enlaces::borrar/$1');
+
+
+    // gestión de categorías
+    $routes->get('categorias', 'Enlaces::categorias');
+    $routes->post('categorias/guardar', 'Enlaces::guardarCategoria');
+    $routes->get('categorias/borrar/(:num)', 'Enlaces::borrarCategoria/$1');
+
+
+    // gestión de etiquetas
+    $routes->get('etiquetas', 'Enlaces::etiquetas');
+    $routes->post('etiquetas/guardar', 'Enlaces::guardarEtiqueta');
+    $routes->get('etiquetas/borrar/(:num)', 'Enlaces::borrarEtiqueta/$1');
+
+
+    // ajax
+    $routes->post('toggle-visto/(:num)', 'Enlaces::toggleVisto/$1');
+
+    
+    // Página tipo Notion:
+    $routes->get('pagina/(:num)', 'Enlaces::pagina/$1');
+
+    $routes->post('pagina/guardar/(:num)', 'Enlaces::guardarDoc/$1');        // guarda el HTML del editor en extra
+    $routes->post('editor-upload/(:num)', 'Enlaces::editorUpload/$1');       // subida de imágenes del editor
+
+
+    $routes->get('importar', 'Enlaces::importarForm');
+    $routes->post('importar', 'Enlaces::importarUpload');
+
+    $routes->get('revision',               'Enlaces::revision');              // dashboard de revisión
+    $routes->get('revision/item',          'Enlaces::revisionItem');          // coge el primero pendiente
+    $routes->get('revision/item/(:num)',   'Enlaces::revisionItem/$1');       // revisar uno concreto
+
+    $routes->post('revision/guardar/(:num)', 'Enlaces::revisionGuardar/$1');  // guarda y va al siguiente
+    $routes->post('revision/borrar/(:num)',  'Enlaces::revisionBorrar/$1');   // borra y va al siguiente
+    $routes->post('revision/saltar/(:num)',  'Enlaces::revisionSaltar/$1');   // siguiente sin cambios
 });

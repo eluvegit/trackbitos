@@ -37,11 +37,23 @@ class GimnasioEntrenamientos extends BaseController
     {
         $fecha = $this->request->getPost('fecha') ?? date('Y-m-d');
 
-        $model = new GimnasioEntrenamientosModel();
-        $id = $model->insert(['fecha' => $fecha]);
+        // ❗ Evitar duplicados por fecha
+        $existente = $this->entrenamientosModel
+            ->where('fecha', $fecha)
+            ->first();
+
+        if ($existente) {
+            return redirect()
+                ->to(site_url("gimnasio/entrenamientos/registro/{$existente['id']}"))
+                ->with('mensaje', "Ya existe un entrenamiento para {$fecha}. Te llevo a ese.");
+        }
+
+        // Crear solo si no existe
+        $id = $this->entrenamientosModel->insert(['fecha' => $fecha]);
 
         return redirect()->to(site_url("gimnasio/entrenamientos/registro/$id"));
     }
+
 
     public function eliminar($id)
     {
