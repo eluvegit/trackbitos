@@ -219,18 +219,13 @@ $action = $escena
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">Hora del día</label>
-                <select name="plano_hora_dia" class="form-select">
-                    <?php
-                    $opt = old('plano_hora_dia', $e['plano_hora_dia'] ?? '');
-                    $horas = ['Noche', 'Tarde', 'Día', 'Amanecer', 'Atardecer', 'Interior'];
-                    foreach ($horas as $p) {
-                        $sel = ($opt === $p) ? 'selected' : '';
-                        echo "<option $sel>$p</option>";
-                    }
-                    ?>
-                </select>
+                <label class="form-label">Clasificación de rodaje</label>
+                <input type="text" name="plano_hora_dia" class="form-control"
+                    placeholder="Ej: con actores, con atrezzo, sin producción"
+                    value="<?= old('plano_hora_dia', $e['plano_hora_dia'] ?? '') ?>">
+                <small class="text-muted">Introduce un texto identificativo para separar escenas según necesidad de producción.</small>
             </div>
+
 
             <div class="col-12">
                 <label class="form-label">Objetos en escena</label>
@@ -248,7 +243,7 @@ $action = $escena
                 <textarea name="plano_toma_alternativa" class="form-control" rows="2"><?= old('plano_toma_alternativa', $e['plano_toma_alternativa'] ?? '') ?></textarea>
             </div>
 
-            
+
 
             <!-- SONIDO -->
             <div class="col-12">

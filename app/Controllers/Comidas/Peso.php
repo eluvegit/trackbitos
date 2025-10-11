@@ -9,6 +9,9 @@ use CodeIgniter\I18n\Time;
 
 class Peso extends BaseController
 {
+    // Constante de clase (más limpio aún)
+    private int $diasRango = 90;  // cámbialo a 90 cuando quieras
+
     public function index()
     {
         helper(['form', 'url']);
@@ -16,11 +19,11 @@ class Peso extends BaseController
         $model = new ComidasPesoModel();
 
         // Últimos 30 registros (tabla)
-        $ultimos = $model->orderBy('fecha', 'DESC')->limit(30)->find();
+        $ultimos = $model->orderBy('fecha', 'DESC')->limit($this->diasRango)->find();
 
         // Rango del último mes para el gráfico
         $hoy     = Time::now('Europe/Madrid')->toDateString(); // YYYY-MM-DD
-        $desdeTs = strtotime('-30 days', strtotime($hoy));
+        $desdeTs = strtotime('-{$this->diasRango} days', strtotime($hoy));
         $desde   = date('Y-m-d', $desdeTs);
 
         $ultimoMes = $model->where('fecha >=', $desde)
@@ -30,6 +33,22 @@ class Peso extends BaseController
 
         // ===== Entrenamientos =====
         $entrenaday = new GimnasioEntrenamientosModel();
+
+        // ===== NUEVO: macros por día en el rango =====
+        $macrosPorDia = $this->getMacrosPorDia($desde, $hoy);
+
+        // (Opcional) kcal/kg y prot/kg si quieres ratios
+        $pesoPorDia = [];
+        foreach ($ultimoMes as $r) $pesoPorDia[$r['fecha']] = (float)$r['peso'];
+
+        $macrosExtendidos = [];
+        foreach ($macrosPorDia as $dia => $m) {
+            $p = $pesoPorDia[$dia] ?? null;
+            $macrosExtendidos[$dia] = $m + [
+                'kcal_por_kg' => $p ? round($m['kcal'] / $p, 1) : null,
+                'prot_por_kg' => $p ? round($m['proteina_g'] / $p, 2) : null,
+            ];
+        }
 
         // Fecha seleccionada para "entrenos del día" (query param ?fecha=YYYY-MM-DD) o hoy
         $fecha = $this->request->getGet('fecha') ?? $hoy;
@@ -118,6 +137,7 @@ class Peso extends BaseController
             'entrenosTiposPorDia' => $entrenosTiposPorDia,
             'tiposEntreno'  => $tiposEntreno,
             'huboEntreno'   => $huboEntreno,
+            'macrosPorDia' => $macrosExtendidos,
 
             // Por si venimos de un duplicado:
             'dup_fecha'     => session()->getFlashdata('dup_fecha'),
@@ -192,7 +212,7 @@ class Peso extends BaseController
         $model = new ComidasPesoModel();
 
         $hoy     = Time::now('Europe/Madrid')->toDateString();
-        $desdeTs = strtotime('-30 days', strtotime($hoy));
+        $desdeTs = strtotime('-{$this->diasRango} days', strtotime($hoy));
         $desde   = date('Y-m-d', $desdeTs);
 
         $rows = $model->where('fecha >=', $desde)
@@ -201,5 +221,45 @@ class Peso extends BaseController
             ->find();
 
         return $this->response->setJSON($rows);
+    }
+
+    /**
+     * Macros por día en rango [desde, hasta], solo con ALIMENTOS
+     * (mismo criterio que usas en Diario: SUM(cantidad_gramos * valor_100 / 100)).
+     * Devuelve: ['YYYY-MM-DD' => ['kcal'=>int,'proteina_g'=>float,'carbohidratos_g'=>float,'grasas_g'=>float]]
+     */
+    private function getMacrosPorDia(string $desde, string $hasta): array
+    {
+        $db = \Config\Database::connect();
+
+        $sql = "
+        SELECT cd.fecha,
+               COALESCE(SUM(ci.cantidad_gramos * ca.kcal          / 100), 0) AS kcal,
+               COALESCE(SUM(ci.cantidad_gramos * ca.proteina_g    / 100), 0) AS proteina_g,
+               COALESCE(SUM(ci.cantidad_gramos * ca.carbohidratos_g/100), 0) AS carbohidratos_g,
+               COALESCE(SUM(ci.cantidad_gramos * ca.grasas_g      / 100), 0) AS grasas_g
+        FROM comidas_ingestas ci
+        JOIN comidas_dias cd
+              ON cd.id = ci.dia_id
+        LEFT JOIN comidas_alimentos ca
+              ON ca.id = ci.item_id
+             AND ci.item_tipo = 'alimento'
+        WHERE cd.fecha BETWEEN ? AND ?
+        GROUP BY cd.fecha
+        ORDER BY cd.fecha ASC
+    ";
+
+        $rows = $db->query($sql, [$desde, $hasta])->getResultArray();
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['fecha']] = [
+                'kcal'           => (int) round((float)$r['kcal']),
+                'proteina_g'     => round((float)$r['proteina_g'], 1),
+                'carbohidratos_g' => round((float)$r['carbohidratos_g'], 1),
+                'grasas_g'       => round((float)$r['grasas_g'], 1),
+            ];
+        }
+        return $map;
     }
 }

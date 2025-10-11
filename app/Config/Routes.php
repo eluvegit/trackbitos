@@ -306,6 +306,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
     $routes->get('(:num)/escenas/show/(:num)', 'RodajesEscenas::show/$1/$2');
     // Storyboard
     $routes->get('(:num)/escenas/storyboard', 'RodajesEscenas::storyboard/$1');
+    $routes->get('(:num)/escenas/ordenrodaje', 'RodajesEscenas::storyboardPorClasificacion/$1');
 });
 
 

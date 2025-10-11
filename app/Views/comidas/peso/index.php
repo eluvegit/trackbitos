@@ -61,7 +61,7 @@
     <!-- Gráfico -->
     <div class="col-md-8">
         <div class="card shadow-sm">
-            <div class="card-header">📈 Últimos 30 días</div>
+            <div class="card-header">📈 Últimos 60 días</div>
             <div class="card-body chart-body">
                 <div class="chart-wrap">
                     <canvas id="pesoChart"></canvas>
@@ -88,7 +88,7 @@ function fmt($n, $dec = 1)
 <!-- Últimos registros -->
 <div class="card shadow-sm mt-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>🗂️ Últimos registros</span>
+        <span>🗂️ Últimos 60 registros</span>
         <small class="text-muted">Ordenados por fecha desc.</small>
     </div>
     <div class="card-body p-0">
@@ -97,7 +97,12 @@ function fmt($n, $dec = 1)
                 <tr>
                     <th style="width: 140px;">Fecha</th>
                     <th style="width: 140px;">Peso (kg)</th>
-                    <th style="width: 140px;">IMC</th>
+                    <th style="width: 140px;">Kcal</th>
+                    <th style="width: 140px;">Proteina</th>
+                    <th style="width: 140px;">Carbohidratos</th>
+                    <th style="width: 140px;">Grasas</th>
+                    <th style="width: 140px;">kcal (kg)</th>
+                    <th style="width: 140px;">prot (kg)</th>
                     <th style="width: 140px;">Entrenamiento</th>
                     <th class="text-end" style=""></th>
                 </tr>
@@ -108,6 +113,10 @@ function fmt($n, $dec = 1)
                         <?php
                         $peso = (float)($r['peso'] ?? 0);
                         $bmi  = ($altura_m && $altura_m > 0) ? ($peso / ($altura_m * $altura_m)) : null;
+
+                        $dia  = $r['fecha'];
+                        $peso = (float)$r['peso'];
+                        $m = $macrosPorDia[$dia] ?? null; // viene del controlador
 
                         // Deurenberg: %grasa = 1.20*IMC + 0.23*edad − 10.8*sexo − 5.4
                         $bf  = null;
@@ -128,9 +137,13 @@ function fmt($n, $dec = 1)
                         <tr>
                             <td><?= date('d/m/Y', strtotime($dia)) ?></td>
                             <td><?= esc(number_format((float)$r['peso'], 2, '.', '')) ?></td>
-                            <td>
-                                <?= $bmi !== null ? fmt($bmi, 1) : '<span class="text-muted">—</span>' ?>
-                            </td>
+                            <td><?= $m ? (int)$m['kcal'] : '—' ?></td>
+                            <td><?= $m ? number_format($m['proteina_g'], 1, ',', '') : '—' ?> g</td>
+                            <td><?= $m ? number_format($m['carbohidratos_g'], 1, ',', '') : '—' ?> g</td>
+                            <td><?= $m ? number_format($m['grasas_g'], 1, ',', '') : '—' ?> g</td>
+
+                            <td><?= ($m && $m['kcal_por_kg'] !== null) ? number_format($m['kcal_por_kg'], 1, ',', '') : '—' ?></td>
+                            <td><?= ($m && $m['prot_por_kg'] !== null) ? number_format($m['prot_por_kg'], 2, ',', '') : '—' ?></td>
                             <td>
                                 <?php
                                 $tipos = $entrenosTiposPorDia[$dia] ?? [];

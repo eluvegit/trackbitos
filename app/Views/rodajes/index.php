@@ -31,6 +31,9 @@
                             <a class="btn btn-sm btn-primary" href="<?= site_url('rodajes/' . ($p->id ?? $p['id']) . '/escenas/storyboard') ?>">
                                 <i class="bi bi-layout-text-window-reverse"></i>
                             </a>
+                            <a class="btn btn-sm btn-primary" href="<?= site_url('rodajes/' . ($p->id ?? $p['id']) . '/escenas/ordenrodaje') ?>">
+                                <i class="bi bi-sort-down"></i>
+                            </a>
                         </td>
                     </tr>
                 <?php endforeach; ?>

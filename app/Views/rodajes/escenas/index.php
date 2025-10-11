@@ -6,6 +6,7 @@
         <div class="d-flex gap-2">
             <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/create') ?>">➕ Nueva escena</a>
             <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/storyboard') ?>">🎬 Storyboard</a>
+            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/ordenrodaje') ?>">🎬 Clasificado</a>
             <a class="btn btn-secondary" href="<?= site_url('rodajes') ?>">← Volver a proyectos</a>
         </div>
     </div>
