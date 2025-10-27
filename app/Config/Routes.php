@@ -271,6 +271,8 @@ $routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
 
     $routes->post('toggle-visto/(:num)',             'Youtube::toggleVisto/$1');
     $routes->post('toggle-relevante/(:num)',         'Youtube::toggleRelevante/$1');
+    $routes->post('toggle-largo/(:num)',             'Youtube::toggleLargo/$1');
+
 });
 
 

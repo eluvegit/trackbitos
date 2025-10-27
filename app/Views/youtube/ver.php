@@ -4,7 +4,7 @@
 <h2>LISTA: <?= esc($lista['nombre']) ?></h2>
 
 <?php if (session('warn')): ?>
-  <div class="alert alert-warning"><?= esc(session('warn')) ?></div>
+    <div class="alert alert-warning"><?= esc(session('warn')) ?></div>
 <?php endif ?>
 
 
@@ -118,6 +118,7 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
             <th>Titulo</th>
             <th>✓</th>
             <th>★</th>
+            <th>🎬</th>
         </tr>
     </thead>
     <tbody>
@@ -146,7 +147,8 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
                 data-id="<?= (int)$v['id'] ?>"
                 data-posicion="<?= (int)$v['posicion'] ?>"
                 data-visto="<?= $isVisto ? '1' : '0' ?>"
-                data-relevante="<?= $isRel ? '1' : '0' ?>">
+                data-relevante="<?= $isRel ? '1' : '0' ?>"
+                data-largo="<?= !empty($v['largo']) ? '1' : '0' ?>">
                 <td class="cell-posicion"><?= (int)$v['posicion'] ?></td>
                 <td class="cell-titulo">
                     <a href="<?= esc($v['url']) ?>" target="_blank" rel="noopener" class="text-decoration-none <?= $titleClass ?>">
@@ -161,6 +163,11 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
                 <td class="cell-relevante">
                     <button class="btn btn-sm <?= $isRel ? 'btn-warning' : 'btn-outline-secondary' ?> js-toggle-relevante" data-id="<?= (int)$v['id'] ?>">
                         <?= $isRel ? '★' : '★' ?>
+                    </button>
+                </td>
+                <td class="cell-largo">
+                    <button class="btn btn-sm <?= !empty($v['largo']) ? 'btn-info' : 'btn-outline-secondary' ?> js-toggle-largo" data-id="<?= (int)$v['id'] ?>">
+                        <?= !empty($v['largo']) ? '🎬 Largo' : 'Largo' ?>
                     </button>
                 </td>
             </tr>
@@ -479,6 +486,28 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
             applyRowClasses(tr);
             updateView();
         });
+
+        // Toggle Largo
+        tbody.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.js-toggle-largo');
+            if (!btn) return;
+            const tr = btn.closest('tr');
+            const id = btn.dataset.id;
+            const url = '<?= site_url('youtube/toggle-largo') ?>/' + id;
+
+            const res = await postToggle(url);
+            if (!res.ok) return;
+
+            // Optimista: invertimos estado
+            const nuevo = tr.dataset.largo === '1' ? '0' : '1';
+            tr.dataset.largo = nuevo;
+
+            // Botón
+            btn.classList.toggle('btn-info', nuevo === '1');
+            btn.classList.toggle('btn-outline-secondary', nuevo === '0');
+            btn.textContent = (nuevo === '1') ? '🎬 Largo' : 'Largo';
+        });
+
     })();
 </script>
 

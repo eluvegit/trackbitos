@@ -434,6 +434,25 @@ class Youtube extends Controller
         return $this->response->setJSON(['ok' => true, 'relevante' => !$video['relevante']]);
     }
 
+    public function toggleLargo($id)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(403);
+        }
+
+        $model = new \App\Models\YoutubeVideosModel();
+        $video = $model->find($id);
+        if (!$video) {
+            return $this->response->setStatusCode(404);
+        }
+
+        $nuevoEstado = $video['largo'] ? 0 : 1;
+        $model->update($id, ['largo' => $nuevoEstado]);
+
+        return $this->response->setStatusCode(200);
+    }
+
+
 
     /** Devuelve true si el título indica vídeo borrado/privado (ES/EN, con o sin corchetes). */
     private function shouldSkipTitle(string $title): bool

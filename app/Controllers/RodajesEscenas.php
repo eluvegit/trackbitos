@@ -356,6 +356,8 @@ class RodajesEscenas extends BaseController
 
         // 4) Agrupar: bloques normales por nombre; transiciones como bloque independiente por escena
         $groups = [];
+        $blockFirstOrder = []; // guardamos el primer orden donde aparece cada bloque
+
         foreach ($escenas as $e) {
             $raw = (string)($e['escena_bloque'] ?? '');
             $ord = (int)($e['orden'] ?? 0);
@@ -368,7 +370,7 @@ class RodajesEscenas extends BaseController
             ];
 
             if ($isTransition($raw)) {
-                // Transición: su propio "bloque" que cae exactamente donde toca
+                // Transición: su propio bloque
                 $key = 'TRANS#' . $e['id'];
                 $groups[$key] = [
                     '_title' => ($raw !== '' ? $raw : 'Transición'),
@@ -378,7 +380,7 @@ class RodajesEscenas extends BaseController
                 continue;
             }
 
-            // Normal: agrupar por nombre (sin tildes/mayúsculas)
+            // Bloques normales
             $norm = strtoupper($unaccent($raw));
             if ($norm === '') $norm = 'OTROS';
             $key = 'BLOCK:' . $norm;
@@ -389,20 +391,31 @@ class RodajesEscenas extends BaseController
                     '_first' => $ord,
                     'items'  => [],
                 ];
-            } else {
-                // La posición del bloque es la de su primera aparición
-                if ($ord < $groups[$key]['_first']) {
-                    $groups[$key]['_first'] = $ord;
-                }
+                // registramos primer orden
+                $blockFirstOrder[$key] = $ord;
             }
 
             $groups[$key]['items'][] = $item;
+
+            // actualizamos el menor orden si aparece antes
+            if ($ord < $groups[$key]['_first']) {
+                $groups[$key]['_first'] = $ord;
+            }
         }
 
-        // 5) Orden final de bloques por primera aparición
+        // 5) Ordenar los grupos por el orden de aparición de su primera escena
         uasort($groups, function ($a, $b) {
-            return ($a['_first'] <=> $b['_first']) ?: strcmp($a['_title'], $b['_title']);
+            return ($a['_first'] <=> $b['_first']);
         });
+
+        // 6) Dentro de cada grupo, mantener orden de escena
+        foreach ($groups as &$g) {
+            usort($g['items'], function ($a, $b) {
+                return ($a['escena']['orden'] <=> $b['escena']['orden'])
+                    ?: ($a['escena']['id'] <=> $b['escena']['id']);
+            });
+        }
+        unset($g);
 
         return view('rodajes/escenas/storyboard', [
             'proyecto' => $proyecto,

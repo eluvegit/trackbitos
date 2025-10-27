@@ -8,7 +8,7 @@ class YoutubeVideosModel extends Model
 {
     protected $table         = 'youtube_videos';
     protected $primaryKey    = 'id';
-    protected $allowedFields = ['lista_id','posicion','url','video_id','titulo','visto','relevante'];
+    protected $allowedFields = ['lista_id','posicion','url','video_id','titulo','visto','relevante', 'largo'];
     protected $useTimestamps = false;
 
     public function baseQuery(int $listaId, array $filters = [], array $sort = [])
