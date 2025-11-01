@@ -3,7 +3,6 @@
 use App\Controllers\BaseController;
 use App\Models\ComidasAlimentosModel;
 use App\Models\ComidasAlimentoUnidadesModel;
-use App\Models\ComidasUnidadesModel;
 
 class Porciones extends BaseController
 {
@@ -37,13 +36,11 @@ class Porciones extends BaseController
                 ->with('errors', ['Alimento no encontrado.']);
         }
 
-        $unidades = (new ComidasUnidadesModel())->orderBy('nombre', 'ASC')->findAll();
 
         return view('comidas/porciones/form', [
             'title'    => 'Nueva porción · ' . $alimento['nombre'],
             'alimento' => $alimento,
             'row'      => null,
-            'unidades' => $unidades,
         ]);
     }
 
@@ -60,7 +57,6 @@ class Porciones extends BaseController
 
         $payload = [
             'alimento_id'         => (int) ($data['alimento_id'] ?? 0),
-            'unidad_id'           => (int) ($data['unidad_id'] ?? 0),
             'descripcion'         => trim($data['descripcion'] ?? ''),
             'gramos_equivalentes' => $toFloat($data['gramos_equivalentes'] ?? 0),
             'es_predeterminada'   => isset($data['es_predeterminada']) ? 1 : 0,
@@ -69,7 +65,6 @@ class Porciones extends BaseController
         // Validación mínima
         $errors = [];
         if ($payload['alimento_id'] <= 0)                $errors[] = 'Alimento requerido.';
-        if ($payload['unidad_id']   <= 0)                $errors[] = 'Unidad requerida.';
         if ($payload['gramos_equivalentes'] <= 0)        $errors[] = 'Equivalencia en gramos > 0.';
         if ($errors) return redirect()->back()->withInput()->with('errors', $errors);
 
@@ -101,13 +96,11 @@ class Porciones extends BaseController
         }
 
         $alimento = (new ComidasAlimentosModel())->find($row['alimento_id']);
-        $unidades = (new ComidasUnidadesModel())->orderBy('nombre','ASC')->findAll();
 
         return view('comidas/porciones/form', [
             'title'    => 'Editar porción · '.($alimento['nombre'] ?? ('#'.$row['alimento_id'])),
             'alimento' => $alimento,
             'row'      => $row,
-            'unidades' => $unidades,
         ]);
     }
 
@@ -129,7 +122,6 @@ class Porciones extends BaseController
         };
 
         $payload = [
-            'unidad_id'           => (int) ($data['unidad_id'] ?? 0),
             'descripcion'         => trim($data['descripcion'] ?? ''),
             'gramos_equivalentes' => $toFloat($data['gramos_equivalentes'] ?? 0),
             'es_predeterminada'   => isset($data['es_predeterminada']) ? 1 : 0,
@@ -137,7 +129,6 @@ class Porciones extends BaseController
 
         // Validación mínima
         $errors = [];
-        if ($payload['unidad_id'] <= 0)                 $errors[] = 'Unidad requerida.';
         if ($payload['gramos_equivalentes'] <= 0)       $errors[] = 'Equivalencia en gramos > 0.';
         if ($errors) return redirect()->back()->withInput()->with('errors', $errors);
 

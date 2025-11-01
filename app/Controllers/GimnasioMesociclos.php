@@ -89,7 +89,7 @@ class GimnasioMesociclos extends BaseController
                 'nombre'      => $this->request->getPost('nombre') ?? 'Mesociclo',
                 'ejercicio'   => $this->request->getPost('ejercicio') ?? 'Sentadillas',
                 'e1rm_base'   => (float)$this->request->getPost('e1rm_base'),
-                'redondeo_kg' => (float)($this->request->getPost('redondeo_kg') ?? 2.5),
+                'redondeo_kg' => (float)($this->request->getPost('redondeo_kg') ?? 5),
             ];
             $id = $this->planes->insert($data);
             return redirect()->to(site_url("gimnasio/mesociclos/{$id}"));
@@ -363,9 +363,9 @@ class GimnasioMesociclos extends BaseController
 
         // Sugerencia “por estado”: fatigado / justo / sobrado
         $e1rmActual = (float)$plan['e1rm_base'];
-        $sugFatigado = $e1rmActual - 2.5;         // o -2% si prefieres
+        $sugFatigado = $e1rmActual - 5;         // o -2% si prefieres
         $sugJusto    = $e1rmActual;               // igual
-        $sugSobrado  = $e1rmActual + 2.5;         // o +3%
+        $sugSobrado  = $e1rmActual + 5;         // o +3%
 
         return view('gimnasio/mesociclos/ajustar', [
             'plan'        => $plan,
@@ -395,9 +395,9 @@ class GimnasioMesociclos extends BaseController
 
         if ($modo === 'estado') {
             $estado = $this->request->getPost('estado'); // 'fatigado'|'justo'|'sobrado'
-            if ($estado === 'fatigado') $e1rmNuevo -= 2.5;          // o *0.98
+            if ($estado === 'fatigado') $e1rmNuevo -= 5;          // o *0.98
             if ($estado === 'justo')    $e1rmNuevo += 0.0;
-            if ($estado === 'sobrado')  $e1rmNuevo += 2.5;          // o *1.02..1.03
+            if ($estado === 'sobrado')  $e1rmNuevo += 5;          // o *1.02..1.03
         } elseif ($modo === 'medicion') {
             $peso = (float)$this->request->getPost('peso');
             $reps = (int)$this->request->getPost('reps');
@@ -410,8 +410,8 @@ class GimnasioMesociclos extends BaseController
             if ($val > 0) $e1rmNuevo = $val;
         }
 
-        // Redondea a múltiplos si quieres (2.5)
-        $step = (float)($plan['redondeo_kg'] ?? 2.5);
+        // Redondea a múltiplos si quieres (5)
+        $step = (float)($plan['redondeo_kg'] ?? 5);
         $e1rmNuevo = round($e1rmNuevo / $step) * $step;
 
         // Actualiza e1RM del plan

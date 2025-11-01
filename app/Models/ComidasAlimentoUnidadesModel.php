@@ -13,7 +13,7 @@ class ComidasAlimentoUnidadesModel extends Model
     protected $useSoftDeletes  = false;
 
     protected $allowedFields = [
-  'alimento_id','unidad_id','descripcion',
+  'alimento_id','descripcion',
   'gramos_equivalentes','es_predeterminada'
 ];
 

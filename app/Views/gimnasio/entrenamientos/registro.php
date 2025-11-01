@@ -192,6 +192,7 @@
                         <select name="tipo_sesion" id="tipo_sesion" class="form-control">
                             <option value="">-- Seleccionar --</option>
                             <option value="Cardio" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Cardio' ? 'selected' : '' ?>>Cardio</option>
+                            <option value="Escalada" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Escalada' ? 'selected' : '' ?>>Escalada</option>
                             <option value="HIIT" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'HIIT' ? 'selected' : '' ?>>HIIT</option>
                             <option value="Hipertrofia" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Hipertrofia' ? 'selected' : '' ?>>Hipertrofia</option>
                             <option value="Fuerza" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === 'Fuerza' ? 'selected' : '' ?>>Fuerza</option>

@@ -21,7 +21,7 @@
     </div>
     <div class="mb-3">
       <label class="form-label">Redondeo kg</label>
-      <input type="number" step="0.5" name="redondeo_kg" class="form-control" value="2.5">
+      <input type="number" step="0.5" name="redondeo_kg" class="form-control" value="5">
     </div>
     <button class="btn btn-primary">Crear</button>
   </form>
