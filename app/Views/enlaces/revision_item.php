@@ -13,10 +13,11 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h5 class="mb-0">Revisar enlace #<?= (int)$item['id'] ?></h5>
             <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success btn-sm" data-action="guardar" title="S">Guardar</button>
+
                 <?php if ($nextId): ?>
                     <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('enlaces/revision/item/' . $nextId) ?>">Siguiente</a>
                 <?php endif; ?>
-
                 <button type="submit"
                     class="btn btn-outline-danger btn-sm"
                     formaction="<?= site_url('enlaces/revision/borrar/' . $item['id']) ?>"
