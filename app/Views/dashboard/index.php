@@ -7,11 +7,8 @@
     </div>
 <?php endif; ?>
 
-<h1 class="mb-4">Bienvenido a Trackbitos</h1>
-<p class="mb-4">Selecciona una sección para comenzar:</p>
 
 <div class="row row-cols-1 row-cols-md-3 g-4">
-
     <?php
     $secciones = [
         ['ruta' => 'comidas/diario/hoy', 'icono' => '🍽️', 'titulo' => 'Comida', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
@@ -19,28 +16,41 @@
         ['ruta' => 'compras', 'icono' => '🛒', 'titulo' => 'Compras', 'texto' => 'Lleva control de tus compras, listas y gastos.'],
         ['ruta' => 'lentillas', 'icono' => '👁️', 'titulo' => 'Lentillas', 'texto' => 'Lleva un registro de cambios, limpieza y reemplazos.'],
         ['ruta' => 'coche', 'icono' => '🚗', 'titulo' => 'Coche', 'texto' => 'Controla cambios de aceite, revisiones, neumáticos y más.'],
-        ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Workflow (PROXIMAMENTE)', 'texto' => 'Gestión de flujo de trabajo en la edición de fotos.'],
         ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
         ['ruta' => 'enlaces', 'icono' => '📒', 'titulo' => 'Enlaces', 'texto' => 'Permite revisar los enlaces registrados interesantes.'],
-        ['ruta' => 'telegram', 'icono' => '📨', 'titulo' => 'Telegram (PRÓXIMAMENTE)', 'texto' => 'Permite revisar los enlaces registrados en Telegram.'],
         ['ruta' => 'journal', 'icono' => '📨', 'titulo' => 'Journal', 'texto' => 'Permite hacer y seguir tareas y bullet journal.'],
-        ['ruta' => 'rodajes', 'icono' => '📨', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
+        ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
+        ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Sesiones', 'texto' => 'Gestión de flujo de trabajo en la edición de fotos.', 'disabled' => true],
     ];
     ?>
 
-    <?php foreach ($secciones as $sec): ?>
-        <div class="col d-flex">
-            <a href="<?= site_url($sec['ruta']) ?>" class="text-decoration-none text-dark w-100 h-100">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><?= $sec['icono'] . ' ' . $sec['titulo'] ?></h5>
-                        <p class="card-text flex-grow-1"><?= $sec['texto'] ?></p>
+    <div class="row row-cols-3 g-3">
+        <?php foreach ($secciones as $sec): ?>
+            <div class="col d-flex">
+                <?php if(!empty($sec['disabled'])): ?>
+                    <div class="card shadow-sm w-100 bg-light text-muted" style="aspect-ratio: 1 / 1; cursor: not-allowed;">
+                        <div class="card-body d-flex flex-column justify-content-center align-items-center text-center p-2">
+                            <div class="mb-2" style="font-size: 2rem; line-height: 1;">
+                                <?= $sec['icono'] ?>
+                            </div>
+                            <h6 class="card-title mb-1"><?= $sec['titulo'] ?></h6>
+                        </div>
                     </div>
-                </div>
-            </a>
-        </div>
-    <?php endforeach; ?>
-
+                <?php else: ?>
+                    <a href="<?= site_url($sec['ruta']) ?>" class="text-decoration-none text-dark w-100">
+                        <div class="card shadow-sm w-100" style="aspect-ratio: 1 / 1;">
+                            <div class="card-body d-flex flex-column justify-content-center align-items-center text-center p-2">
+                                <div class="mb-2" style="font-size: 2rem; line-height: 1;">
+                                    <?= $sec['icono'] ?>
+                                </div>
+                                <h6 class="card-title mb-1"><?= $sec['titulo'] ?></h6>
+                            </div>
+                        </div>
+                    </a>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
 </div>
 
 <?= $this->endSection() ?>

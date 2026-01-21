@@ -11,3 +11,4 @@ class SubtaskModel extends Model
     protected $allowedFields = ['task_id', 'title', 'color', 'created_at', 'updated_at'];
     protected $useTimestamps = true;
 }
+ 

@@ -18,25 +18,28 @@
     <?php $isPrint = (service('request')->getGet('print') === '1'); ?>
     <?php if (!$isPrint): ?>
         <!-- Navbar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 mb-4">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>">
-                <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="logo-navbar">
-                <span>Trackbitos</span>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-2 py-0 mb-1">
+            <a class="navbar-brand d-flex align-items-center gap-1" href="<?= site_url('dashboard') ?>">
+                <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="img-fluid d-inline-block" style="height:16px;">
+                <span class="fs-6">Trackbitos</span>
             </a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav ms-auto">
                     <?php if (logged_in()): ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?= site_url('logout') ?>">Cerrar sesión</a>
+                            <a class="nav-link py-0" href="<?= site_url('logout') ?>">Cerrar sesión</a>
                         </li>
                     <?php else: ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?= site_url('login') ?>">Login</a>
+                            <a class="nav-link py-0" href="<?= site_url('login') ?>">Login</a>
                         </li>
                     <?php endif; ?>
                 </ul>
             </div>
         </nav>
+
+
+
     <?php endif; ?>
 
     <!-- Contenido principal -->
