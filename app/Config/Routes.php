@@ -354,4 +354,15 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     $routes->post('revision/guardar/(:num)', 'Enlaces::revisionGuardar/$1');  // guarda y va al siguiente
     $routes->post('revision/borrar/(:num)',  'Enlaces::revisionBorrar/$1');   // borra y va al siguiente
     $routes->post('revision/saltar/(:num)',  'Enlaces::revisionSaltar/$1');   // siguiente sin cambios
+
+    
+
+});
+
+$routes->group('journal', ['filter' => 'auth'], static function ($routes) {
+    // JOURNAL
+
+    $routes->get('/', 'Journal::index');
+    $routes->get('/view/(:num)', 'Journal::view/$1');
+    $routes->match(['get','post'], '/edit/(:num)', 'Journal::edit/$1');
 });
