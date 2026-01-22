@@ -368,4 +368,6 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('create', 'Journal::create');
     $routes->POST('delete/(:num)', 'Journal::delete/$1'); // o 'POST' si tu JS hace POST
     $routes->POST('delete-image/(:num)', 'Journal::deleteImage/$1');
+    $routes->POST('toggle-current/(:num)', 'Journal::toggleCurrent/$1');
+    $routes->POST('add-time/(:num)', 'Journal::addTime/$1');
 });

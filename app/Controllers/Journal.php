@@ -190,4 +190,51 @@ class Journal extends BaseController
             ->to('/journal/edit/' . $taskId)
             ->with('success', 'Imagen eliminada correctamente.');
     }
+
+    public function toggleCurrent($id)
+    {
+        $taskModel = new \App\Models\TaskModel();
+        $task = $taskModel->find($id);
+
+        if (!$task) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Tarea no encontrada']);
+        }
+
+        $task['is_current'] = $task['is_current'] ? 0 : 1;
+        $taskModel->update($id, ['is_current' => $task['is_current']]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'is_current' => $task['is_current']
+        ]);
+    }
+
+    public function addTime(int $id)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $minutes = (int) ($this->request->getJSON()->minutes ?? 0);
+        if ($minutes <= 0) {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $task = $this->taskModel->find($id);
+        if (!$task) {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $newTime = ($task['time_spent'] ?? 0) + $minutes;
+
+        $this->taskModel->update($id, [
+            'time_spent' => $newTime
+        ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'minutes' => $newTime,
+            'hours'   => number_format($newTime / 60, 2)
+        ]);
+    }
 }

@@ -1,70 +1,102 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+
 <style>
-    /* Tarjeta de categoría más compacta */
     .card {
         margin-bottom: 0.25rem;
-        /* menos espacio entre categorías */
         font-size: 0.8rem;
-        /* texto más pequeño */
     }
 
-    /* Cabecera de categoría */
     .card-header {
         padding: 0.25rem 0.35rem;
-        /* casi sin padding lateral */
         font-size: 0.85rem;
         cursor: pointer;
         color: #fff;
     }
 
-    /* Cuerpo de la categoría */
     .card-body {
         padding: 0.25rem 0.35rem;
     }
 
-    /* Listado de tareas */
     .list-group-item {
         padding: 0.2rem 0.35rem;
-        font-size: 0.8rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: relative;
     }
 
-    /* Input de nueva tarea */
     .new-task-input {
         padding: 0.2rem 0.35rem;
         font-size: 0.8rem;
         margin-top: 0.2rem;
     }
 
-    /* Encabezado principal */
-    h1 {
-        font-size: 1.2rem;
-
-    }
-
     .container {
         padding: 0.2rem;
-        margin: 0;
+    }
+
+    .task-progress {
+        margin-top: 20px;
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 4px;
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 2px;
+        padding: 0 4px 2px 4px;
+        pointer-events: none;
+    }
+
+    .task-progress-segment {
+        background-color: #e9ecef;
+        border-radius: 2px;
+    }
+
+    .task-progress-segment.filled {
+        background-color: #198754;
+    }
+
+    .task-time-trigger {
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .task-time-trigger:hover {
+        text-decoration: underline;
+    }
+
+    .task-title-link {
+        display: inline-block;
+        max-width: 100%;
+    }
+
+    .current-star {
+        display: flex;
+        align-items: center;
+        /* separación desde el texto */
+    }
+
+    .task-title {
+        flex-grow: 1;
+        margin-right: 0.5rem;
+        /* separación desde la estrella */
     }
 </style>
-
 
 <div class="container py-1">
 
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
         <h1 class="mt-0">Journal</h1>
 
-        <div class="btn-group" role="group" aria-label="Filtros Journal">
+        <div class="btn-group btn-group-sm">
             <?php
-            // Filtros desde GET o valores por defecto
-            $filterFocus = $filterFocus ?? 'todas';        // por defecto 'todas'
-            $filterPortadas = $filterPortadas ?? 'texto';  // por defecto 'texto'
+            $filterFocus = $filterFocus ?? 'todas';
+            $filterPortadas = $filterPortadas ?? 'texto';
 
-            // Texto de los botones y siguiente estado
-            $focusText = $filterFocus === 'focus' ? 'Todas' : 'Focus';
+            $focusText = $filterFocus === 'focus' ? 'Ver todas' : 'Focus';
             $focusNext = $filterFocus === 'focus' ? 'todas' : 'focus';
             $focusClass = $filterFocus === 'focus' ? 'btn-primary' : 'btn-outline-primary';
 
@@ -74,68 +106,119 @@
             ?>
 
             <a href="<?= site_url('journal?filterFocus=' . $focusNext . '&filterPortadas=' . $filterPortadas) ?>"
-                class="btn <?= $focusClass ?>">
-                <?= $focusText ?>
-            </a>
+                class="btn <?= $focusClass ?>"><?= $focusText ?></a>
 
             <a href="<?= site_url('journal?filterFocus=' . $filterFocus . '&filterPortadas=' . $portadasNext) ?>"
-                class="btn <?= $portadasClass ?>">
-                <?= $portadasText ?>
-            </a>
+                class="btn <?= $portadasClass ?>"><?= $portadasText ?></a>
         </div>
     </div>
 
-
-
-    <!-- Listado de categorías y tareas -->
     <?php foreach ($categories as $category): ?>
         <?php
         $catId = $category['id'];
         $catName = $category['name'];
         $catColor = $category['color'] ?? '#000000';
         $catTasks = $tasksByCategory[$catName] ?? [];
+
+        // Tiempo total de tareas actuales no completadas
+        $totalCurrentMinutes = 0;
+        foreach ($catTasks as $task) {
+            $completed = (int)($task['completed'] ?? 0);
+            $amplitude = (int)($task['amplitude'] ?? 0);
+            $isCurrent = !empty($task['is_current']);
+            if ($isCurrent && $completed < $amplitude) {
+                $totalCurrentMinutes += (int)($task['time_spent'] ?? 0);
+            }
+        }
+        $totalHours = number_format($totalCurrentMinutes / 60, 2);
+
+        // Contar tareas completadas (las que tienen fecha de finalización)
+        $completedCount = 0;
+        foreach ($catTasks as $task) {
+            if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
+                $completedCount++;
+            }
+        }
+
         ?>
+
         <div class="card mb-1">
-            <!-- Cabecera clicable -->
-            <div class="card-header" data-bs-toggle="collapse" href="#cat-<?= $catId ?>" style="cursor:pointer; background-color: <?= esc($catColor) ?>; color: #fff;">
-                <strong><?= esc($catName) ?></strong>
+            <div class="card-header d-flex justify-content-between align-items-center"
+                data-bs-toggle="collapse"
+                href="#cat-<?= $catId ?>"
+                style="background-color: <?= esc($catColor) ?>;">
+
+                <div>
+                    <strong><?= esc($catName) ?></strong>
+                    <span class="small ms-2"><?= $totalHours ?> h</span>
+                </div>
+
+                <span class="badge bg-light text-dark">
+                    <?= $completedCount ?> completada<?= $completedCount !== 1 ? 's' : '' ?>
+                </span>
             </div>
 
-            <!-- Bloque colapsable -->
+
             <div class="collapse" id="cat-<?= $catId ?>">
                 <div class="card-body">
 
-                    <!-- Listado de tareas -->
                     <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
                         <?php if (empty($catTasks)): ?>
                             <li class="list-group-item text-muted">No hay tareas aún.</li>
                         <?php else: ?>
                             <?php foreach ($catTasks as $task): ?>
-                                <li class="list-group-item d-flex justify-content-between align-items-center"
-                                    style="border-left: <?= !empty($task['is_current']) ? '15px' : '5px' ?> solid <?= esc($task['color']) ?>;">
-                                    <span><?= esc($task['title']) ?></span>
-                                    <div class="d-flex gap-1">
-                                        <button class="btn btn-sm btn-delete-task" data-task-id="<?= $task['id'] ?>">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-trash" viewBox="0 0 16 16">
-                                                <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0V6H6v6.5a.5.5 0 0 1-1 0v-7z" />
-                                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2H5V1.5A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5V2h2.5a1 1 0 0 1 1 1zM6 2v-.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V2H6z" />
-                                            </svg>
-                                        </button>
-                                        <button class="btn btn-sm btn-edit-task" data-task-id="<?= $task['id'] ?>">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-pencil" viewBox="0 0 16 16">
-                                                <path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2L3 10.207V13h2.793L14 4.793 11.207 2z" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </li>
+                                <?php
+                                $amplitude = (int)($task['amplitude'] ?? 0);
+                                $completed = (int)($task['completed'] ?? 0);
+                                $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
+                                $filled = (int)floor($percentage / 10);
+                                ?>
 
+                                <li class="list-group-item">
+
+                                    <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
+                                        <!-- Estrella -->
+                                        <span class="current-star btn-toggle-current" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
+                                            <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
+                                                    <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                                                </svg>
+                                            </button>
+                                        </span>
+
+
+                                        <!-- Título -->
+                                        <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
+                                            class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
+                                            <?= esc($task['title']) ?>
+                                        </a>
+
+
+                                    </div>
+
+                                    <!-- Tiempo -->
+                                    <span class="text-muted small task-time-trigger"
+                                        data-task-id="<?= $task['id'] ?>">
+                                        <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
+                                    </span>
+
+                                    <?php if ($amplitude > 0): ?>
+                                        <div class="task-progress">
+                                            <?php for ($i = 1; $i <= 10; $i++): ?>
+                                                <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
+                                            <?php endfor; ?>
+                                        </div>
+                                    <?php endif; ?>
+
+                                </li>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </ul>
 
-
-                    <!-- Caja para añadir nueva tarea -->
-                    <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>" data-category-name="<?= esc($catName) ?>">
+                    <input type="text"
+                        class="form-control new-task-input"
+                        placeholder="Nueva tarea..."
+                        data-category-id="<?= $catId ?>">
                 </div>
             </div>
         </div>
@@ -143,120 +226,119 @@
 
 </div>
 
+<!-- MODAL TIEMPO -->
+<div class="modal fade" id="timeModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Añadir tiempo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="number" id="timeMinutes" class="form-control" placeholder="Minutos" min="1">
+                <input type="hidden" id="timeTaskId">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="saveTimeBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
 
-        // --- Añadir nueva tarea al pulsar Enter ---
+        // Crear tarea
         document.querySelectorAll('.new-task-input').forEach(input => {
             input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const title = this.value.trim();
-                    const categoryId = this.dataset.categoryId;
-                    if (!title) return;
+                if (e.key !== 'Enter') return;
 
-                    fetch('<?= site_url('journal/create') ?>', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest'
-                            },
-                            body: JSON.stringify({
-                                title,
-                                category_id: categoryId
-                            })
+                const title = this.value.trim();
+                const categoryId = this.dataset.categoryId;
+                if (!title) return;
+
+                fetch('<?= site_url('journal/create') ?>', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            title,
+                            category_id: categoryId
                         })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                const list = document.getElementById('task-list-' + categoryId);
-
-                                // Quitar mensaje "No hay tareas aún"
-                                const emptyItem = list.querySelector('.text-muted');
-                                if (emptyItem) emptyItem.remove();
-
-                                // Crear el <li> con botones SVG de borrar y editar
-                                const li = document.createElement('li');
-                                li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                                li.style.borderLeft = '5px solid ' + (data.color || '#000000');
-
-                                li.innerHTML = `
-                            <span>${title}</span>
-                            <div class="d-flex gap-1">
-                                <!-- Botón Borrar -->
-                                <button class="btn btn-sm btn-delete-task" data-task-id="${data.id}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-trash" viewBox="0 0 16 16">
-                                        <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0V6H6v6.5a.5.5 0 0 1-1 0v-7z"/>
-                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2H5V1.5A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5V2h2.5a1 1 0 0 1 1 1zM6 2v-.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V2H6z"/>
-                                    </svg>
-                                </button>
-                                <!-- Botón Editar -->
-                                <button class="btn btn-sm btn-edit-task" data-task-id="${data.id}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-pencil" viewBox="0 0 16 16">
-                                        <path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2L3 10.207V13h2.793L14 4.793 11.207 2z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        `;
-
-                                list.appendChild(li);
-
-                                this.value = '';
-
-                                // Asignar eventos a los nuevos botones
-                                li.querySelector('.btn-delete-task').addEventListener('click', deleteTaskHandler);
-                                li.querySelector('.btn-edit-task').addEventListener('click', editTaskHandler); // Define editTaskHandler
-                            } else {
-                                alert('Error al crear la tarea');
-                            }
-                        })
-                        .catch(err => console.error(err));
-                }
+                    })
+                    .then(() => location.reload());
             });
         });
 
+        // Toggle current
+        document.querySelector('.container').addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-toggle-current');
+            if (!btn) return;
 
-        // --- Función para borrar tarea ---
-        function deleteTaskHandler() {
-            const taskId = this.dataset.taskId;
-            if (!taskId) return;
-            if (!confirm('¿Seguro que quieres borrar esta tarea?')) return;
-
-            fetch('<?= site_url('journal/delete') ?>/' + taskId, {
-                    method: 'DELETE',
+            fetch('<?= site_url('journal/toggle-current') ?>/' + btn.dataset.taskId, {
+                    method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success) {
-                        this.closest('li').remove();
-                    } else {
-                        alert('Error al borrar la tarea');
-                    }
-                })
-                .catch(err => console.error(err));
-        }
-
-        // --- Asignar evento a todos los botones de borrar existentes ---
-        document.querySelectorAll('.btn-delete-task').forEach(btn => {
-            btn.addEventListener('click', deleteTaskHandler);
+                    btn.querySelector('svg').setAttribute(
+                        'fill',
+                        data.is_current ? '#ffc107' : '#adb5bd'
+                    );
+                });
         });
 
-    });
+        // Modal tiempo
+        const timeModal = new bootstrap.Modal(document.getElementById('timeModal'));
 
-    // --- Función para editar tarea ---
-    function editTaskHandler() {
-        const taskId = this.dataset.taskId;
-        if (!taskId) return;
+        document.querySelector('.container').addEventListener('click', function(e) {
+            const trigger = e.target.closest('.task-time-trigger');
+            if (!trigger) return;
 
-        // Redirigir a la vista de edición
-        window.location.href = '<?= site_url('journal/edit') ?>/' + taskId;
-    }
+            document.getElementById('timeTaskId').value = trigger.dataset.taskId;
+            document.getElementById('timeMinutes').value = '';
+            timeModal.show();
+        });
 
-    // Asignar evento a todos los botones de editar existentes
-    document.querySelectorAll('.btn-edit-task').forEach(btn => {
-        btn.addEventListener('click', editTaskHandler);
+        document.getElementById('saveTimeBtn').addEventListener('click', function(e) {
+            e.preventDefault(); // <--- previene recarga
+            const taskId = document.getElementById('timeTaskId').value;
+            const minutes = parseInt(document.getElementById('timeMinutes').value);
+            if (!minutes || minutes <= 0) return;
+
+            fetch('<?= site_url('journal/add-time') ?>/' + taskId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        minutes
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('Error al guardar el tiempo');
+                        return;
+                    }
+
+                    // Actualiza el tiempo directamente en la tarea
+                    const li = document.querySelector('li.list-group-item a[href$="/' + taskId + '"]')
+                        .closest('li');
+
+                    li.querySelector('.text-muted.small').textContent = data.hours + ' h';
+                    timeModal.hide();
+                })
+                .catch(err => console.error(err));
+        });
+
+
     });
 </script>
 
