@@ -12,26 +12,25 @@ class Journal extends BaseController
     protected TaskModel $taskModel;
     protected JournalCategoryModel $categoryModel;
 
-
-
     public function __construct()
     {
         $this->taskLogModel = new TaskLogModel();
         $this->taskModel    = new TaskModel();
-        $this->categoryModel  = new JournalCategoryModel();
+        $this->categoryModel = new JournalCategoryModel();
     }
 
-    // INDEX: mostrar Journal con todas las categorías y sus tareas, con filtro focus
+    /**
+     * Mostrar Journal con todas las categorías y sus tareas, con filtros opcionales
+     */
     public function index()
     {
         $categories = $this->categoryModel->getAll();
-        $viewMode = $this->request->getGet('view') ?? 'portadas';  // 'portadas' o 'texto'
-        $filterFocus = $this->request->getGet('filterFocus') ?? 'todas'; // 'focus' o 'todas'
+        $viewMode = $this->request->getGet('view') ?? 'portadas';
+        $filterFocus = $this->request->getGet('filterFocus') ?? 'todas';
 
-        $taskLogs = $this->taskLogModel->getAll(); // registros históricos
-        $tasksByCategory = $this->taskModel->getAllGroupedByCategory(); // tareas activas por categoría
+        $tasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
-        // Aplicar filtro "focus" si se solicita
+        // Aplicar filtro focus
         if ($filterFocus === 'focus') {
             foreach ($tasksByCategory as $cat => &$tasks) {
                 $tasks = array_filter($tasks, fn($t) => !empty($t['is_current']));
@@ -39,123 +38,99 @@ class Journal extends BaseController
         }
 
         return view('journal/index', [
-            'view_mode'        => $viewMode,
-            'filterFocus'      => $filterFocus,
-            'task_logs'        => $taskLogs,
-            'categories'       => $categories,
-            'tasksByCategory'  => $tasksByCategory
+            'view_mode'       => $viewMode,
+            'filterFocus'     => $filterFocus,
+            'categories'      => $categories,
+            'tasksByCategory' => $tasksByCategory
         ]);
     }
 
-
+    /**
+     * Crear nueva tarea
+     */
     public function create()
     {
         $input = $this->request->getJSON();
         $title = trim($input->title ?? '');
         $categoryId = (int)($input->category_id ?? 0);
 
-        if ($title && $categoryId) {
-            // Buscar nombre y color de la categoría
-            $category = $this->categoryModel->getById($categoryId);
-            if (!$category) {
-                return $this->response->setJSON(['success' => false]);
-            }
-
-            // Insertar tarea
-            $taskId = $this->taskModel->insert([
-                'title'       => $title,
-                'category'    => $category['name'],
-                'color'       => $category['color'] ?? '#000000',
-                'created_at'  => date('Y-m-d H:i:s')
-            ], true); // el segundo parámetro devuelve el ID insertado
-
-            return $this->response->setJSON([
-                'success' => true,
-                'id'      => $taskId,
-                'color'   => $category['color'] ?? '#000000'
-            ]);
+        if (!$title || !$categoryId) {
+            return $this->response->setJSON(['success' => false]);
         }
 
-        return $this->response->setJSON(['success' => false]);
-    }
-
-
-
-
-    // VER UN REGISTRO (si quieres mantener TaskLogModel)
-    public function view(int $logId)
-    {
-        $log = $this->taskLogModel->getById($logId);
-
-        if (!$log) {
-            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        $category = $this->categoryModel->find($categoryId);
+        if (!$category) {
+            return $this->response->setJSON(['success' => false]);
         }
 
-        return view('journal/view', [
-            'log' => $log
+        $taskId = $this->taskModel->insert([
+            'title'      => $title,
+            'category'   => $category['name'],
+            'color'      => $category['color'] ?? '#000000',
+            'created_at' => date('Y-m-d H:i:s')
+        ], true);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'id'      => $taskId,
+            'color'   => $category['color'] ?? '#000000'
         ]);
     }
 
+    /**
+     * Editar tarea
+     */
     public function edit(int $taskId)
     {
         $task = $this->taskModel->find($taskId);
-
         if (!$task) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
         if ($this->request->getMethod() === 'POST') {
             $data = [
-                'title'       => $this->request->getPost('title'),
-                'start_time'  => $this->request->getPost('start_time'),
-                'end_time'    => $this->request->getPost('end_time'),
-                'time_spent'  => $this->request->getPost('time_spent'),
-                'amplitude'   => $this->request->getPost('amplitude'),
-                'completed'   => $this->request->getPost('completed'),
-                'note'        => $this->request->getPost('note'),
-                'is_current'  => $this->request->getPost('is_current') ? 1 : 0,
+                'title'      => $this->request->getPost('title'),
+                'start_time' => $this->request->getPost('start_time'),
+                'end_time'   => $this->request->getPost('end_time'),
+                'time_spent' => $this->request->getPost('time_spent'),
+                'amplitude'  => $this->request->getPost('amplitude'),
+                'completed'  => $this->request->getPost('completed'),
+                'note'       => $this->request->getPost('note'),
+                'is_current' => $this->request->getPost('is_current') ? 1 : 0,
             ];
 
-            // Subida de imagen opcional (reemplaza la anterior)
             $file = $this->request->getFile('image');
             if ($file && $file->isValid() && !$file->hasMoved()) {
-
                 $uploadPath = FCPATH . 'upload/images/journal/';
+                if (!is_dir($uploadPath)) mkdir($uploadPath, 0755, true);
 
-                // Crear carpeta si no existe
-                if (!is_dir($uploadPath)) {
-                    mkdir($uploadPath, 0755, true);
+                // Eliminar imagen anterior
+                if (!empty($task['image']) && is_file(FCPATH . $task['image'])) {
+                    unlink(FCPATH . $task['image']);
                 }
 
-                // --- Eliminar imagen anterior si existe ---
-                if (!empty($task['image'])) {
-                    $oldImagePath = FCPATH . $task['image'];
-                    if (is_file($oldImagePath)) {
-                        unlink($oldImagePath);
-                    }
-                }
-
-                // --- Guardar nueva imagen ---
                 $newName = $file->getRandomName();
                 $file->move($uploadPath, $newName);
-
-                // Guardamos la ruta relativa en BD
                 $data['image'] = 'upload/images/journal/' . $newName;
             }
-
-
 
             $this->taskModel->update($taskId, $data);
 
             return redirect()->to('/journal/edit/' . $taskId)->with('success', 'Registro actualizado correctamente.');
         }
 
+        // Obtener logs para calendario
+        $logs = $this->taskLogModel->where('task_id', $taskId)->orderBy('log_date', 'DESC')->findAll();
 
         return view('journal/edit', [
-            'task' => $task
+            'task' => $task,
+            'logs' => $logs
         ]);
     }
 
+    /**
+     * Eliminar tarea
+     */
     public function delete(int $taskId)
     {
         $task = $this->taskModel->find($taskId);
@@ -165,76 +140,182 @@ class Journal extends BaseController
         return $this->response->setJSON(['success' => true]);
     }
 
+    /**
+     * Eliminar imagen de tarea
+     */
     public function deleteImage(int $taskId)
     {
         $task = $this->taskModel->find($taskId);
+        if (!$task) throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
 
-        if (!$task) {
-            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        if (!empty($task['image']) && is_file(FCPATH . $task['image'])) {
+            unlink(FCPATH . $task['image']);
+            $this->taskModel->update($taskId, ['image' => null]);
         }
 
-        if (!empty($task['image'])) {
-            $imagePath = FCPATH . $task['image'];
-
-            if (is_file($imagePath)) {
-                unlink($imagePath);
-            }
-
-            // Limpiar campo en base de datos
-            $this->taskModel->update($taskId, [
-                'image' => null
-            ]);
-        }
-
-        return redirect()
-            ->to('/journal/edit/' . $taskId)
-            ->with('success', 'Imagen eliminada correctamente.');
+        return redirect()->to('/journal/edit/' . $taskId)->with('success', 'Imagen eliminada correctamente.');
     }
 
-    public function toggleCurrent($id)
+    /**
+     * Alternar estado "current"
+     */
+    public function toggleCurrent(int $taskId)
     {
-        $taskModel = new \App\Models\TaskModel();
-        $task = $taskModel->find($id);
+        $task = $this->taskModel->find($taskId);
+        if (!$task) return $this->response->setJSON(['success' => false, 'error' => 'Tarea no encontrada']);
 
-        if (!$task) {
-            return $this->response->setJSON(['success' => false, 'error' => 'Tarea no encontrada']);
-        }
+        $isCurrent = $task['is_current'] ? 0 : 1;
+        $this->taskModel->update($taskId, ['is_current' => $isCurrent]);
 
-        $task['is_current'] = $task['is_current'] ? 0 : 1;
-        $taskModel->update($id, ['is_current' => $task['is_current']]);
-
-        return $this->response->setJSON([
-            'success' => true,
-            'is_current' => $task['is_current']
-        ]);
+        return $this->response->setJSON(['success' => true, 'is_current' => $isCurrent]);
     }
 
-    public function addTime(int $id)
+    /**
+     * Añadir tiempo a tarea (AJAX)
+     */
+    public function addTime(int $taskId)
     {
         if (!$this->request->isAJAX()) {
-            return $this->response->setJSON(['success' => false]);
+            return $this->response->setStatusCode(400)->setJSON(['success' => false]);
         }
 
-        $minutes = (int) ($this->request->getJSON()->minutes ?? 0);
-        if ($minutes <= 0) {
-            return $this->response->setJSON(['success' => false]);
-        }
+        $task = $this->taskModel->find($taskId);
+        if (!$task) return $this->response->setJSON(['success' => false]);
 
-        $task = $this->taskModel->find($id);
-        if (!$task) {
-            return $this->response->setJSON(['success' => false]);
-        }
+        $data = $this->request->getJSON();
+        $minutes = (int)($data->minutes ?? 0);
+        if ($minutes <= 0) return $this->response->setJSON(['success' => false]);
 
         $newTime = ($task['time_spent'] ?? 0) + $minutes;
-
-        $this->taskModel->update($id, [
-            'time_spent' => $newTime
-        ]);
+        $this->taskModel->update($taskId, ['time_spent' => $newTime]);
 
         return $this->response->setJSON([
             'success' => true,
             'minutes' => $newTime,
             'hours'   => number_format($newTime / 60, 2)
         ]);
+    }
+
+
+    /**
+     * Añadir log de fecha a tarea (AJAX)
+     */
+    public function addLog(int $taskId)
+    {
+        // 1. Validar tarea
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'La tarea no existe'
+            ]);
+        }
+
+        // 2. Leer input (JSON o POST)
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+
+        $rawDate = trim($input['date'] ?? '');
+        $minutes = (int)($input['minutes'] ?? 0);
+
+        if ($rawDate === '') {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'La fecha es obligatoria'
+            ]);
+        }
+
+        if ($minutes < 0) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'Los minutos no pueden ser negativos'
+            ]);
+        }
+
+        // 3. Normalizar fecha
+        try {
+            $dateObj = new \DateTime($rawDate);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'Formato de fecha inválido'
+            ]);
+        }
+
+        $logDate = $dateObj->format('Y-m-d');
+
+        // 4. Insertar o acumular minutos
+        try {
+            $existing = $this->taskLogModel
+                ->where('task_id', $taskId)
+                ->where('log_date', $logDate)
+                ->first();
+
+            if ($existing) {
+                // Acumular minutos
+                $newMinutes = ((int)$existing['minutes']) + $minutes;
+
+                $this->taskLogModel->update($existing['id'], [
+                    'minutes' => $newMinutes
+                ]);
+            } else {
+                // Crear nuevo registro
+                $this->taskLogModel->insert([
+                    'task_id'  => $taskId,
+                    'log_date' => $logDate,
+                    'minutes'  => $minutes
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'AddLog error: ' . $e->getMessage());
+
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'No se pudo guardar el registro'
+            ]);
+        }
+
+        // 5. Respuesta OK
+        return $this->response->setJSON([
+            'success'  => true,
+            'date'     => $logDate,
+            'minutes'  => $minutes
+        ]);
+    }
+
+
+    /**
+     * Obtener logs de una tarea (AJAX)
+     */
+    public function getLogs(int $taskId)
+    {
+        $logs = $this->taskLogModel
+            ->where('task_id', $taskId)
+            ->orderBy('log_date', 'DESC')
+            ->findAll();
+
+        return $this->response->setJSON($logs);
+    }
+
+    public function updateLog(int $logId)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(400);
+        }
+
+        $input = $this->request->getJSON(true);
+
+        $minutes = (int)($input['minutes'] ?? -1);
+        $date    = trim($input['log_date'] ?? '');
+
+        if ($minutes < 0 || !$date) {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $this->taskLogModel->update($logId, [
+            'minutes'  => $minutes,
+            'log_date' => $date
+        ]);
+
+        return $this->response->setJSON(['success' => true]);
     }
 }

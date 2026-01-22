@@ -19,11 +19,13 @@
     }
 
     .list-group-item {
-        padding: 0.2rem 0.35rem;
+        padding: 0.4rem 0.35rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
         position: relative;
+        min-height: 40px;
+        /* espacio para barra de progreso */
     }
 
     .new-task-input {
@@ -37,16 +39,14 @@
     }
 
     .task-progress {
-        margin-top: 20px;
         position: absolute;
-        left: 0;
         bottom: 0;
+        left: 0;
         width: 100%;
-        height: 4px;
+        height: 6px;
         display: grid;
         grid-template-columns: repeat(10, 1fr);
         gap: 2px;
-        padding: 0 4px 2px 4px;
         pointer-events: none;
     }
 
@@ -76,13 +76,11 @@
     .current-star {
         display: flex;
         align-items: center;
-        /* separación desde el texto */
     }
 
     .task-title {
         flex-grow: 1;
         margin-right: 0.5rem;
-        /* separación desde la estrella */
     }
 </style>
 
@@ -132,14 +130,13 @@
         }
         $totalHours = number_format($totalCurrentMinutes / 60, 2);
 
-        // Contar tareas completadas (las que tienen fecha de finalización)
+        // Contar tareas completadas (con fecha end_time)
         $completedCount = 0;
         foreach ($catTasks as $task) {
             if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
                 $completedCount++;
             }
         }
-
         ?>
 
         <div class="card mb-1">
@@ -157,7 +154,6 @@
                     <?= $completedCount ?> completada<?= $completedCount !== 1 ? 's' : '' ?>
                 </span>
             </div>
-
 
             <div class="collapse" id="cat-<?= $catId ?>">
                 <div class="card-body">
@@ -186,13 +182,11 @@
                                             </button>
                                         </span>
 
-
                                         <!-- Título -->
                                         <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
                                             class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
                                             <?= esc($task['title']) ?>
                                         </a>
-
 
                                     </div>
 
@@ -226,16 +220,17 @@
 
 </div>
 
-<!-- MODAL TIEMPO -->
+<!-- MODAL TIEMPO Y FECHA -->
 <div class="modal fade" id="timeModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Añadir tiempo</h5>
+                <h5 class="modal-title">Añadir tiempo / Fecha</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <input type="number" id="timeMinutes" class="form-control" placeholder="Minutos" min="1">
+                <input type="number" id="timeMinutes" class="form-control mb-2" placeholder="Minutos" min="1">
+                <input type="date" id="taskDate" class="form-control mb-2" value="<?= date('Y-m-d') ?>">
                 <input type="hidden" id="timeTaskId">
             </div>
             <div class="modal-footer">
@@ -253,23 +248,21 @@
         document.querySelectorAll('.new-task-input').forEach(input => {
             input.addEventListener('keypress', function(e) {
                 if (e.key !== 'Enter') return;
-
                 const title = this.value.trim();
                 const categoryId = this.dataset.categoryId;
-                if (!title) return;
+                if (!title || !categoryId) return;
 
                 fetch('<?= site_url('journal/create') ?>', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: JSON.stringify({
-                            title,
-                            category_id: categoryId
-                        })
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        title,
+                        category_id: categoryId
                     })
-                    .then(() => location.reload());
+                }).then(() => location.reload());
             });
         });
 
@@ -286,16 +279,12 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    btn.querySelector('svg').setAttribute(
-                        'fill',
-                        data.is_current ? '#ffc107' : '#adb5bd'
-                    );
+                    btn.querySelector('svg').setAttribute('fill', data.is_current ? '#ffc107' : '#adb5bd');
                 });
         });
 
         // Modal tiempo
         const timeModal = new bootstrap.Modal(document.getElementById('timeModal'));
-
         document.querySelector('.container').addEventListener('click', function(e) {
             const trigger = e.target.closest('.task-time-trigger');
             if (!trigger) return;
@@ -305,37 +294,78 @@
             timeModal.show();
         });
 
-        document.getElementById('saveTimeBtn').addEventListener('click', function(e) {
-            e.preventDefault(); // <--- previene recarga
-            const taskId = document.getElementById('timeTaskId').value;
-            const minutes = parseInt(document.getElementById('timeMinutes').value);
-            if (!minutes || minutes <= 0) return;
+        // Guardar tiempo y fecha
+        document.getElementById('saveTimeBtn').addEventListener('click', async function(e) {
+            e.preventDefault();
 
-            fetch('<?= site_url('journal/add-time') ?>/' + taskId, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({
-                        minutes
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.success) {
+            const btn = this;
+
+            // Evitar doble click
+            if (btn.dataset.loading === '1') return;
+            btn.dataset.loading = '1';
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+
+            try {
+                const taskId = document.getElementById('timeTaskId').value;
+                const minutes = parseInt(document.getElementById('timeMinutes').value) || 0;
+                const date = document.getElementById('taskDate').value || '';
+
+                if (!taskId) throw new Error('TaskId vacío');
+
+                let errors = false;
+
+                if (minutes > 0) {
+                    const resTime = await fetch('<?= site_url('journal/add-time') ?>/' + taskId, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            minutes
+                        })
+                    });
+
+                    const timeData = await resTime.json();
+                    if (!timeData.success) {
                         alert('Error al guardar el tiempo');
-                        return;
+                        errors = true;
                     }
+                }
 
-                    // Actualiza el tiempo directamente en la tarea
-                    const li = document.querySelector('li.list-group-item a[href$="/' + taskId + '"]')
-                        .closest('li');
+                if (date) {
+                    const resDate = await fetch('<?= site_url('journal/add-log') ?>/' + taskId, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            date
+                        })
+                    });
 
-                    li.querySelector('.text-muted.small').textContent = data.hours + ' h';
+                    const dateData = await resDate.json();
+                    if (!dateData.success) {
+                        alert(dateData.error || 'Error al guardar la fecha');
+                        errors = true;
+                    }
+                }
+
+                if (!errors) {
                     timeModal.hide();
-                })
-                .catch(err => console.error(err));
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert('Error inesperado al guardar');
+            } finally {
+                // Rehabilitar botón solo si el modal sigue abierto
+                btn.dataset.loading = '0';
+                btn.disabled = false;
+                btn.textContent = 'Guardar';
+            }
         });
 
 

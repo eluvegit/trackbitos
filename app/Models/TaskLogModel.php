@@ -6,39 +6,49 @@ use CodeIgniter\Model;
 
 class TaskLogModel extends Model
 {
-    protected $table = 'task_logs';
+    protected $table = 'journal_task_logs';
     protected $primaryKey = 'id';
 
     protected $allowedFields = [
         'task_id',
-        'subtask_id',
-        'date',
-        'time_spent',
-        'progress',
-        'note',
-        'image'
+        'log_date',
+        'minutes',
     ];
 
-    protected $useTimestamps = true;
+      // 🔴 Desactivar timestamps
+    protected $useTimestamps = false;
 
+    /**
+     * Obtener todos los logs con información de tarea
+     */
     public function getAll()
     {
         return $this->select('
-                task_logs.*, 
-                tasks.title as task_title,
+                journal_task_logs.*,
+                tasks.title AS task_title,
                 tasks.category,
-                tasks.color,
-                subtasks.title as subtask_title
+                tasks.color
             ')
-            ->join('tasks', 'task_logs.task_id = tasks.id')
-            ->join('subtasks', 'task_logs.subtask_id = subtasks.id', 'left')
-            ->orderBy('task_logs.date', 'DESC')
+            ->join('tasks', 'journal_task_logs.task_id = tasks.id')
+            ->orderBy('journal_task_logs.log_date', 'DESC')
             ->findAll();
     }
 
+    /**
+     * Obtener log por ID
+     */
     public function getById(int $id)
     {
         return $this->where('id', $id)->first();
     }
+
+    /**
+     * Obtener logs por tarea
+     */
+    public function getByTaskId(int $taskId)
+    {
+        return $this->where('task_id', $taskId)
+                    ->orderBy('log_date', 'DESC')
+                    ->findAll();
+    }
 }
- 

@@ -360,14 +360,14 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
 });
 
 $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
-    // JOURNAL
     $routes->GET('', 'Journal::index');
-    $routes->GET('view/(:num)', 'Journal::view/$1');
     $routes->GET('edit/(:num)', 'Journal::edit/$1');
     $routes->POST('edit/(:num)', 'Journal::edit/$1');
     $routes->POST('create', 'Journal::create');
-    $routes->POST('delete/(:num)', 'Journal::delete/$1'); // o 'POST' si tu JS hace POST
+    $routes->POST('delete/(:num)', 'Journal::delete/$1');
     $routes->POST('delete-image/(:num)', 'Journal::deleteImage/$1');
     $routes->POST('toggle-current/(:num)', 'Journal::toggleCurrent/$1');
     $routes->POST('add-time/(:num)', 'Journal::addTime/$1');
+    $routes->POST('add-log/(:num)', 'Journal::addLog/$1');
+    $routes->GET('get-logs/(:num)', 'Journal::getLogs/$1');
 });

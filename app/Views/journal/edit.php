@@ -173,4 +173,32 @@
     </form>
 </div>
 
+<h5>Historial de fechas</h5>
+<div id="calendar" class="d-flex flex-wrap"></div>
+
+<script>
+fetch('<?= site_url('journal/get-logs/' . $task['id']) ?>')
+    .then(res => res.json())
+    .then(logs => {
+        const calendar = document.getElementById('calendar');
+        calendar.innerHTML = ''; // Limpiar antes de añadir
+
+        logs.forEach(l => {
+            const span = document.createElement('span');
+
+            // Formatear fecha: yyyy-mm-dd → dd/mm
+            const parts = l.log_date.split('-');
+            const formattedDate = parts[2] + '/' + parts[1];
+
+            // Mostrar fecha + minutos
+            span.textContent = `${formattedDate} - ${l.minutes ?? 0} min`;
+
+            span.className = 'badge bg-secondary me-1 mb-1';
+            calendar.appendChild(span);
+        });
+    });
+</script>
+
+
+
 <?= $this->endSection() ?>
