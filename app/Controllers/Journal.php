@@ -25,9 +25,9 @@ class Journal extends BaseController
     public function index()
     {
         $categories = $this->categoryModel->getAll();
-        $viewMode = $this->request->getGet('view') ?? 'portadas'; // 'portadas' o 'listado'
+        $viewMode = $this->request->getGet('view') ?? 'listado'; // 'portadas' o 'listado'
         $filterFocus = $this->request->getGet('filterFocus') ?? 'focus';
-        $filterPriority = $this->request->getGet('priority') ?? 0;
+        $filterPriority = $this->request->getGet('priority') ?? 1;
 
         $tasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
