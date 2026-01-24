@@ -25,8 +25,9 @@ class Journal extends BaseController
     public function index()
     {
         $categories = $this->categoryModel->getAll();
-        $viewMode = $this->request->getGet('view') ?? 'portadas';
-        $filterFocus = $this->request->getGet('filterFocus') ?? 'todas';
+        $viewMode = $this->request->getGet('view') ?? 'portadas'; // 'portadas' o 'listado'
+        $filterFocus = $this->request->getGet('filterFocus') ?? 'focus';
+        $filterPriority = $this->request->getGet('priority') ?? 0;
 
         $tasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
@@ -37,13 +38,44 @@ class Journal extends BaseController
             }
         }
 
+        // Ordenar tareas dentro de cada categoría por prioridad si se selecciona
+        if (!empty($filterPriority)) {
+            foreach ($tasksByCategory as $cat => &$tasks) {
+                usort($tasks, function ($a, $b) {
+                    return ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0);
+                });
+            }
+        }
+
+        // --- Función para calcular horas totales de cada categoría ---
+        $calculateTotalMinutes = function ($tasks) {
+            return array_sum(array_map(fn($t) => (int)($t['time_spent'] ?? 0), $tasks));
+        };
+
+        // Si se activa el modo "prioritario", ordenamos categorías por total de horas invertidas
+        if (!empty($filterPriority)) {
+            usort($categories, function ($a, $b) use ($tasksByCategory, $calculateTotalMinutes) {
+                $tasksA = $tasksByCategory[$a['name']] ?? [];
+                $tasksB = $tasksByCategory[$b['name']] ?? [];
+
+                $minutesA = $calculateTotalMinutes($tasksA);
+                $minutesB = $calculateTotalMinutes($tasksB);
+
+                // Orden descendente: más horas arriba
+                return $minutesB <=> $minutesA;
+            });
+        }
+
         return view('journal/index', [
             'view_mode'       => $viewMode,
             'filterFocus'     => $filterFocus,
+            'filterPriority'  => $filterPriority,
             'categories'      => $categories,
             'tasksByCategory' => $tasksByCategory
         ]);
     }
+
+
 
     /**
      * Crear nueva tarea
@@ -72,10 +104,16 @@ class Journal extends BaseController
 
         return $this->response->setJSON([
             'success' => true,
-            'id'      => $taskId,
-            'color'   => $category['color'] ?? '#000000'
+            'task' => [
+                'id'         => $taskId,
+                'title'      => $title,
+                'color'      => $category['color'] ?? '#000000',
+                'time_spent' => 0,
+                'is_current' => 0
+            ]
         ]);
     }
+
 
     /**
      * Editar tarea
@@ -134,10 +172,12 @@ class Journal extends BaseController
     public function delete(int $taskId)
     {
         $task = $this->taskModel->find($taskId);
-        if (!$task) return $this->response->setJSON(['success' => false]);
+        if (!$task) {
+            return redirect()->to('/journal')->with('error', 'La tarea no existe.');
+        }
 
         $this->taskModel->delete($taskId);
-        return $this->response->setJSON(['success' => true]);
+        return redirect()->to('/journal')->with('success', 'Tarea eliminada correctamente.');
     }
 
     /**

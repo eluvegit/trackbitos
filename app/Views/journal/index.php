@@ -87,29 +87,71 @@
 <div class="container py-1">
 
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-        <h1 class="mt-0">Journal</h1>
-
+        <div class="d-flex align-items-center">
+            <h3 class="mb-0" style="line-height: 1;">Journal</h3>
+        </div>
         <div class="btn-group btn-group-sm">
             <?php
-            $filterFocus = $filterFocus ?? 'todas';
-            $filterPortadas = $filterPortadas ?? 'texto';
+            // Prioridad
+            $priorityNext = $filterPriority ? 0 : 1; // Esto está bien, sigue funcionando
+            $priorityClass = $filterPriority ? 'btn-primary' : 'btn-outline-primary';
 
-            $focusText = $filterFocus === 'focus' ? 'Ver todas' : 'Focus';
+            // Focus
             $focusNext = $filterFocus === 'focus' ? 'todas' : 'focus';
             $focusClass = $filterFocus === 'focus' ? 'btn-primary' : 'btn-outline-primary';
 
-            $portadasText = $filterPortadas === 'portadas' ? 'Texto' : 'Portadas';
-            $portadasNext = $filterPortadas === 'portadas' ? 'texto' : 'portadas';
-            $portadasClass = $filterPortadas === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
+            // Vista
+            $portadasNext = $view_mode === 'portadas' ? 'listado' : 'portadas';
+            $portadasClass = $view_mode === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
             ?>
 
-            <a href="<?= site_url('journal?filterFocus=' . $focusNext . '&filterPortadas=' . $filterPortadas) ?>"
-                class="btn <?= $focusClass ?>"><?= $focusText ?></a>
+            <div class="btn-group btn-group-sm">
+                <!-- Prioridad -->
+                <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$view_mode}&priority={$priorityNext}") ?>"
+                    class="btn <?= $priorityClass ?>" title="Prioridad">
+                    <!-- Icono de exclamación -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0-1A6 6 0 1 1 8 2a6 6 0 0 1 0 12z" />
+                        <path d="M7.002 11a1 1 0 1 0 2 0 1 1 0 0 0-2 0zm.93-6.481a.5.5 0 0 1 .538.497v3.967a.5.5 0 0 1-1 0V5.016a.5.5 0 0 1 .462-.497z" />
+                    </svg>
+                </a>
 
-            <a href="<?= site_url('journal?filterFocus=' . $filterFocus . '&filterPortadas=' . $portadasNext) ?>"
-                class="btn <?= $portadasClass ?>"><?= $portadasText ?></a>
+                <!-- Focus -->
+                <a href="<?= site_url("journal?filterFocus={$focusNext}&view={$view_mode}&priority={$filterPriority}") ?>"
+                    class="btn <?= $focusClass ?>" title="Focus">
+                    <?php if ($filterFocus === 'focus'): ?>
+                        <!-- Estrella rellena -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ffc107" class="bi bi-star-fill" viewBox="0 0 16 16">
+                            <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                        </svg>
+                    <?php else: ?>
+                        <!-- Estrella vacía -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star" viewBox="0 0 16 16">
+                            <path d="M2.866 14.85c-.078.444.36.791.746.593L8 13.187l4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.523-3.356c.329-.314.158-.888-.283-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.495 4.935l-4.898.696c-.441.062-.612.636-.282.95l3.523 3.356-.83 4.73zM8 12.027l-3.763 1.933.717-4.088-2.97-2.829 4.102-.583L8 2.223l1.914 3.237 4.102.583-2.97 2.828.717 4.089L8 12.027z" />
+                        </svg>
+                    <?php endif; ?>
+                </a>
+
+
+                <!-- Vista -->
+                <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$portadasNext}&priority={$filterPriority}") ?>"
+                    class="btn <?= $portadasClass ?>" title="Vista">
+                    <?php if ($view_mode === 'portadas'): ?>
+                        <!-- Icono de cuadrícula -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-grid" viewBox="0 0 16 16">
+                            <path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z" />
+                        </svg>
+                    <?php else: ?>
+                        <!-- Icono de lista -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
+                        </svg>
+                    <?php endif; ?>
+                </a>
+            </div>
         </div>
     </div>
+
 
     <?php foreach ($categories as $category): ?>
         <?php
@@ -130,7 +172,7 @@
         }
         $totalHours = number_format($totalCurrentMinutes / 60, 2);
 
-        // Contar tareas completadas (con fecha end_time)
+        // Contar tareas completadas
         $completedCount = 0;
         foreach ($catTasks as $task) {
             if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
@@ -144,24 +186,73 @@
                 data-bs-toggle="collapse"
                 href="#cat-<?= $catId ?>"
                 style="background-color: <?= esc($catColor) ?>;">
-
                 <div>
                     <strong><?= esc($catName) ?></strong>
                     <span class="small ms-2"><?= $totalHours ?> h</span>
                 </div>
-
+                <?php
+                $totalTasks = count($catTasks); // total de tareas en la categoría
+                $pendingTasks = $totalTasks - $completedCount; // tareas pendientes
+                ?>
                 <span class="badge bg-light text-dark">
-                    <?= $completedCount ?> completada<?= $completedCount !== 1 ? 's' : '' ?>
+                    <?= $completedCount ?>/<?= $totalTasks ?> completadas
                 </span>
             </div>
 
             <div class="collapse" id="cat-<?= $catId ?>">
                 <div class="card-body">
 
-                    <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
-                        <?php if (empty($catTasks)): ?>
-                            <li class="list-group-item text-muted">No hay tareas aún.</li>
-                        <?php else: ?>
+                    <?php if ($view_mode === 'listado'): ?>
+                        <!-- MODO LISTA -->
+                        <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
+                            <?php if (empty($catTasks)): ?>
+                                <li class="list-group-item text-muted">No hay tareas aún.</li>
+                            <?php else: ?>
+                                <?php foreach ($catTasks as $task): ?>
+                                    <?php
+                                    $amplitude = (int)($task['amplitude'] ?? 0);
+                                    $completed = (int)($task['completed'] ?? 0);
+                                    $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
+                                    $filled = (int)floor($percentage / 10);
+                                    ?>
+                                    <li class="list-group-item">
+                                        <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
+                                            <!-- Estrella -->
+                                            <span class="current-star btn-toggle-current" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
+                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
+                                                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                                                    </svg>
+                                                </button>
+                                            </span>
+
+                                            <!-- Título -->
+                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
+                                                class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
+                                                <?= esc($task['title']) ?>
+                                            </a>
+                                        </div>
+
+                                        <!-- Tiempo -->
+                                        <span class="text-muted small task-time-trigger" data-task-id="<?= $task['id'] ?>">
+                                            <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
+                                        </span>
+
+                                        <?php if ($amplitude > 0): ?>
+                                            <div class="task-progress">
+                                                <?php for ($i = 1; $i <= 10; $i++): ?>
+                                                    <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
+                                                <?php endfor; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </ul>
+                        <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>">
+                    <?php else: ?>
+                        <!-- MODO PORTADAS -->
+                        <div class="row g-2">
                             <?php foreach ($catTasks as $task): ?>
                                 <?php
                                 $amplitude = (int)($task['amplitude'] ?? 0);
@@ -169,54 +260,61 @@
                                 $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
                                 $filled = (int)floor($percentage / 10);
                                 ?>
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <div class="card h-100">
 
-                                <li class="list-group-item">
+                                        <?php if (!empty($task['image'])): ?>
+                                            <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>">
+                                        <?php else: ?>
+                                            <div style="height:150px; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#6c757d;">
+                                                Sin imagen
+                                            </div>
+                                        <?php endif; ?>
 
-                                    <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
-                                        <!-- Estrella -->
-                                        <span class="current-star btn-toggle-current" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
-                                            <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
-                                                    <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                                                </svg>
-                                            </button>
-                                        </span>
+                                        <div class="card-body p-2 d-flex flex-column">
+                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-dark text-decoration-none flex-grow-1">
+                                                    <h6 class="card-title mb-0"><?= esc($task['title']) ?></h6>
+                                                </a>
 
-                                        <!-- Título -->
-                                        <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
-                                            class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
-                                            <?= esc($task['title']) ?>
-                                        </a>
+                                                <!-- Estrella -->
+                                                <span class="current-star btn-toggle-current ms-1" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
+                                                    <button style="all:unset; display:flex; align-items:center; justify-content:center; width:24px; height:24px;">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
+                                                            <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                                                        </svg>
+                                                    </button>
+                                                </span>
+                                            </div>
 
-                                    </div>
+                                            <!-- Tiempo (clicable para abrir modal) -->
+                                            <span class="text-muted small task-time-trigger mb-1"
+                                                data-task-id="<?= $task['id'] ?>"
+                                                style="cursor:pointer;">
+                                                <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
+                                            </span>
 
-                                    <!-- Tiempo -->
-                                    <span class="text-muted small task-time-trigger"
-                                        data-task-id="<?= $task['id'] ?>">
-                                        <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
-                                    </span>
-
-                                    <?php if ($amplitude > 0): ?>
-                                        <div class="task-progress">
-                                            <?php for ($i = 1; $i <= 10; $i++): ?>
-                                                <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
-                                            <?php endfor; ?>
+                                            <!-- Barra de progreso -->
+                                            <?php if ($amplitude > 0): ?>
+                                                <div class="task-progress mt-auto" style="height:6px; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;">
+                                                    <?php for ($i = 1; $i <= 10; $i++): ?>
+                                                        <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>" style="border-radius:2px; background-color: <?= $i <= $filled ? '#198754' : '#e9ecef' ?>;"></div>
+                                                    <?php endfor; ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
-                                    <?php endif; ?>
-
-                                </li>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-                    </ul>
+                        </div>
+                    <?php endif; ?>
 
-                    <input type="text"
-                        class="form-control new-task-input"
-                        placeholder="Nueva tarea..."
-                        data-category-id="<?= $catId ?>">
+
                 </div>
             </div>
         </div>
     <?php endforeach; ?>
+
 
 </div>
 
@@ -253,16 +351,65 @@
                 if (!title || !categoryId) return;
 
                 fetch('<?= site_url('journal/create') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({
-                        title,
-                        category_id: categoryId
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            title,
+                            category_id: categoryId
+                        })
                     })
-                }).then(() => location.reload());
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) {
+                            alert('No se pudo crear la tarea');
+                            return;
+                        }
+
+                        const task = data.task;
+                        const list = document.getElementById('task-list-' + categoryId);
+
+                        // Eliminar mensaje "No hay tareas"
+                        const empty = list.querySelector('.text-muted');
+                        if (empty) empty.remove();
+
+                        // Crear nodo de tarea
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item';
+
+                        li.innerHTML = `
+        <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
+            <span class="current-star btn-toggle-current" data-task-id="${task.id}">
+                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star-fill" viewBox="0 0 16 16">
+                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"/>
+                    </svg>
+                </button>
+            </span>
+
+            <a href="<?= site_url('journal/edit') ?>/${task.id}"
+               class="text-dark text-decoration-none task-title-link">
+                ${task.title}
+            </a>
+        </div>
+
+        <span class="text-muted small task-time-trigger" data-task-id="${task.id}">
+            0.00 h
+        </span>
+    `;
+
+                        list.appendChild(li);
+
+                        // Limpiar input
+                        input.value = '';
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert('Error al crear la tarea');
+                    });
+
             });
         });
 
@@ -297,10 +444,8 @@
         // Guardar tiempo y fecha
         document.getElementById('saveTimeBtn').addEventListener('click', async function(e) {
             e.preventDefault();
-
             const btn = this;
 
-            // Evitar doble click
             if (btn.dataset.loading === '1') return;
             btn.dataset.loading = '1';
             btn.disabled = true;
@@ -308,13 +453,14 @@
 
             try {
                 const taskId = document.getElementById('timeTaskId').value;
-                const minutes = parseInt(document.getElementById('timeMinutes').value) || 0;
+                let minutes = parseInt(document.getElementById('timeMinutes').value) || 0;
                 const date = document.getElementById('taskDate').value || '';
 
                 if (!taskId) throw new Error('TaskId vacío');
 
-                let errors = false;
+                let totalMinutes = 0;
 
+                // 1️⃣ Guardar minutos en task
                 if (minutes > 0) {
                     const resTime = await fetch('<?= site_url('journal/add-time') ?>/' + taskId, {
                         method: 'POST',
@@ -326,14 +472,16 @@
                             minutes
                         })
                     });
-
                     const timeData = await resTime.json();
-                    if (!timeData.success) {
-                        alert('Error al guardar el tiempo');
-                        errors = true;
-                    }
+                    if (!timeData.success) throw new Error('Error guardando tiempo');
+                    totalMinutes = timeData.minutes;
+
+                    // Actualizar UI
+                    const span = document.querySelector(`.task-time-trigger[data-task-id="${taskId}"]`);
+                    if (span) span.textContent = (totalMinutes / 60).toFixed(2) + ' h';
                 }
 
+                // 2️⃣ Guardar log de fecha si hay
                 if (date) {
                     const resDate = await fetch('<?= site_url('journal/add-log') ?>/' + taskId, {
                         method: 'POST',
@@ -342,26 +490,20 @@
                             'X-Requested-With': 'XMLHttpRequest'
                         },
                         body: JSON.stringify({
-                            date
-                        })
+                            date,
+                            minutes
+                        }) // enviar minutos también para acumular en log
                     });
-
                     const dateData = await resDate.json();
-                    if (!dateData.success) {
-                        alert(dateData.error || 'Error al guardar la fecha');
-                        errors = true;
-                    }
+                    if (!dateData.success) throw new Error(dateData.error || 'Error guardando log');
                 }
 
-                if (!errors) {
-                    timeModal.hide();
-                }
+                timeModal.hide();
 
             } catch (err) {
                 console.error(err);
-                alert('Error inesperado al guardar');
+                alert(err.message || 'Error inesperado al guardar');
             } finally {
-                // Rehabilitar botón solo si el modal sigue abierto
                 btn.dataset.loading = '0';
                 btn.disabled = false;
                 btn.textContent = 'Guardar';
