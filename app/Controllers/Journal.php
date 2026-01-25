@@ -24,54 +24,59 @@ class Journal extends BaseController
      */
     public function index()
     {
+        // 1. Traer todas las categorías
         $categories = $this->categoryModel->getAll();
-        $viewMode = $this->request->getGet('view') ?? 'listado'; // 'portadas' o 'listado'
+
+        // 2. Leer parámetros de la URL
+        $viewMode = $this->request->getGet('view') ?? 'listado';
         $filterFocus = $this->request->getGet('filterFocus') ?? 'focus';
         $filterPriority = $this->request->getGet('priority') ?? 1;
 
-        $tasksByCategory = $this->taskModel->getAllGroupedByCategory();
+        // 3. Traer todas las tareas agrupadas por categoría
+        $allTasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
-        // Aplicar filtro focus
+        // 4. CALCULAR TIEMPO TOTAL POR CATEGORÍA (todas las tareas, sin filtrar)
+        $totalTimeByCategory = [];
+        foreach ($categories as $cat) {
+            $catName = $cat['name'];
+            $tasks = $allTasksByCategory[$catName] ?? [];
+            $totalTimeByCategory[$catName] = array_sum(array_map(fn($t) => (int)($t['time_spent'] ?? 0), $tasks));
+        }
+
+        // 5. CREAR CÓPIA PARA LA VISTA Y APLICAR FILTROS
+        $tasksByCategory = $allTasksByCategory;
+
+        // Filtrar por focus
         if ($filterFocus === 'focus') {
             foreach ($tasksByCategory as $cat => &$tasks) {
                 $tasks = array_filter($tasks, fn($t) => !empty($t['is_current']));
             }
         }
 
-        // Ordenar tareas dentro de cada categoría por prioridad si se selecciona
+        // Ordenar tareas dentro de cada categoría por prioridad
         if (!empty($filterPriority)) {
             foreach ($tasksByCategory as $cat => &$tasks) {
-                usort($tasks, function ($a, $b) {
-                    return ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0);
-                });
+                usort($tasks, fn($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
             }
         }
 
-        // --- Función para calcular horas totales de cada categoría ---
-        $calculateTotalMinutes = function ($tasks) {
-            return array_sum(array_map(fn($t) => (int)($t['time_spent'] ?? 0), $tasks));
-        };
-
-        // Si se activa el modo "prioritario", ordenamos categorías por total de horas invertidas
+        // 6. Ordenar categorías por tiempo total si prioridad activada
         if (!empty($filterPriority)) {
-            usort($categories, function ($a, $b) use ($tasksByCategory, $calculateTotalMinutes) {
-                $tasksA = $tasksByCategory[$a['name']] ?? [];
-                $tasksB = $tasksByCategory[$b['name']] ?? [];
-
-                $minutesA = $calculateTotalMinutes($tasksA);
-                $minutesB = $calculateTotalMinutes($tasksB);
-
-                // Orden descendente: más horas arriba
-                return $minutesB <=> $minutesA;
+            usort($categories, function ($a, $b) use ($totalTimeByCategory) {
+                $timeA = $totalTimeByCategory[$a['name']] ?? 0;
+                $timeB = $totalTimeByCategory[$b['name']] ?? 0;
+                return $timeB <=> $timeA; // descendente
             });
         }
 
+        // 7. Enviar todo a la vista
         return view('journal/index', [
-            'view_mode'       => $viewMode,
-            'filterFocus'     => $filterFocus,
-            'filterPriority'  => $filterPriority,
-            'categories'      => $categories,
-            'tasksByCategory' => $tasksByCategory
+            'view_mode'           => $viewMode,
+            'filterFocus'         => $filterFocus,
+            'filterPriority'      => $filterPriority,
+            'categories'          => $categories,
+            'tasksByCategory'     => $tasksByCategory,
+            'totalTimeByCategory' => $totalTimeByCategory, // array con tiempo total
         ]);
     }
 

@@ -161,16 +161,8 @@
         $catTasks = $tasksByCategory[$catName] ?? [];
 
         // Tiempo total de tareas actuales no completadas
-        $totalCurrentMinutes = 0;
-        foreach ($catTasks as $task) {
-            $completed = (int)($task['completed'] ?? 0);
-            $amplitude = (int)($task['amplitude'] ?? 0);
-            $isCurrent = !empty($task['is_current']);
-            if ($isCurrent && $completed < $amplitude) {
-                $totalCurrentMinutes += (int)($task['time_spent'] ?? 0);
-            }
-        }
-        $totalHours = number_format($totalCurrentMinutes / 60, 2);
+        $totalHours = number_format(($totalTimeByCategory[$catName] ?? 0) / 60, 2);
+
 
         // Contar tareas completadas
         $completedCount = 0;
@@ -186,18 +178,48 @@
                 data-bs-toggle="collapse"
                 href="#cat-<?= $catId ?>"
                 style="background-color: <?= esc($catColor) ?>;">
+
                 <div>
                     <strong><?= esc($catName) ?></strong>
-                    <span class="small ms-2"><?= $totalHours ?> h</span>
+
+                    <!-- Mini barra de tareas -->
+                    <?php
+                    $totalTasks = count($catTasks);
+                    $currentTasks = 0;
+                    foreach ($catTasks as $task) {
+                        if (!empty($task['is_current'])) $currentTasks++;
+                    }
+                    ?>
+                    <span class="ms-2 badge bg-light text-dark"
+                        title="Tareas actuales">
+                        <?= $currentTasks ?> actuales
+                    </span>
+
+                    <span class="ms-1 badge bg-light text-dark"
+                        title="Total de tareas">
+                        <?= $totalTasks ?> total
+                    </span>
+
+                    <!-- Tiempo total -->
+                    <span class="small ms-2" title="Tiempo total">
+                        <?= $totalHours ?> h
+                    </span>
                 </div>
+
+                <!-- Progreso de completadas -->
                 <?php
-                $totalTasks = count($catTasks); // total de tareas en la categoría
-                $pendingTasks = $totalTasks - $completedCount; // tareas pendientes
+                $completedCount = 0;
+                foreach ($catTasks as $task) {
+                    if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
+                        $completedCount++;
+                    }
+                }
                 ?>
-                <span class="badge bg-light text-dark">
-                    <?= $completedCount ?>/<?= $totalTasks ?> completadas
+                <span class="badge bg-light text-dark" title="Completadas">
+                    <?= $completedCount ?>/<?= $totalTasks ?>
                 </span>
             </div>
+
 
             <div class="collapse" id="cat-<?= $catId ?>">
                 <div class="card-body">
