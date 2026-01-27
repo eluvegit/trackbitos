@@ -1,51 +1,89 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-4">📝 Compras / <strong><?= esc($supermercado_nombre) ?></strong> / FALTA</h2>
+<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
 
-<div class="mb-4">
-    <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>" class="btn btn-outline-secondary">← Volver a productos</a>
-    <button id="toggle-imagenes" class="btn btn-sm btn-outline-secondary ms-3">Ocultar imágenes</button>
-</div>
+    <i class="bi bi-cart3 text-primary"></i>
+
+    <span class="text-muted fw-normal">Compras</span>
+
+    <span class="text-muted">/</span>
+
+    <strong class="fw-semibold">
+        <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>"
+            class="text-dark text-decoration-none">
+            <?= esc($supermercado_nombre) ?>
+        </a>
+    </strong>
+
+    <span class="text-muted">/</span>
+
+    <span class="fw-semibold text-warning">
+        FALTA
+    </span>
+
+</h5>
 
 <!-- Accesos rápidos a listas -->
-<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 mb-4">
-    <div class="col">
-        <a href="<?= site_url('compras/' . $supermercado_id . '/comprados') ?>" class="text-decoration-none text-dark">
-            <div class="card shadow-sm h-100 border-success border-2">
-                <div class="card-body text-center">
-                    <h5 class="card-title">🛍️ Ir a comprar</h5>
-                    <p class="card-text text-muted">Lista de productos que has comprado.</p>
-                </div>
-            </div>
-        </a>
-    </div>
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+
+    <!-- Botón Reiniciar faltantes -->
+    <form action="<?= site_url('compras/limpiar/faltantes/' . $supermercado_id) ?>"
+        method="post"
+        class="m-0"
+        onsubmit="return confirm('¿Seguro que deseas reiniciar todos los faltantes?')">
+        <?= csrf_field() ?>
+        <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1">
+            🧹
+        </button>
+    </form>
+    <button id="toggle-imagenes"
+        class="btn btn-outline-secondary btn-sm">
+        Ocultar imágenes
+    </button>
+    <!-- Botón COMPRAR -->
+    <a href="<?= site_url('compras/' . $supermercado_id . '/comprados') ?>"
+        class="btn btn-outline-success btn-sm d-flex align-items-center gap-1">
+        <i class="bi bi-cart-check"></i>
+        COMPRAR
+    </a>
+
 </div>
-
-<form class="text-end mb-2" action="<?= site_url('compras/limpiar/faltantes/' . $supermercado_id) ?>" method="post" class="mb-3" onsubmit="return confirm('¿Seguro que deseas reiniciar todos los faltantes?')">
-    <?= csrf_field() ?>
-    <button class="btn btn-outline-danger">🧹 Reiniciar faltantes</button>
-</form>
-
 <!-- Lista de productos -->
-<div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3">
+<div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
     <?php foreach ($productos as $producto): ?>
-        <div class="col">
+        <div class="col d-flex">
             <div
-                class="card h-100 shadow-sm text-center producto-card <?= $producto['faltante'] ? 'border border-warning border-3' : '' ?>"
+                class="card shadow-sm w-100 small text-center producto-card d-flex flex-column justify-content-between"
                 data-producto-id="<?= $producto['id'] ?>"
                 data-faltante="<?= $producto['faltante'] ? '1' : '0' ?>"
-                style="cursor: pointer;">
+                style="
+                    cursor: pointer; 
+                    min-height: 200px;
+                    border: 2px solid <?= $producto['faltante'] ? '#ffc107' : 'transparent' ?>;
+                    transition: border-color 0.2s ease;
+                    padding: 0.5rem;
+                ">
+
                 <?php if (!empty($producto['imagen'])): ?>
-                    <img src="<?= esc($producto['imagen']) ?>" class="card-img-top imagen-producto" style="object-fit: cover; height: 150px;">
+                    <img src="<?= esc($producto['imagen']) ?>"
+                         class="card-img-top imagen-producto img-fluid mb-2"
+                         style="max-height: 120px; width: auto; margin: 0 auto; object-fit: contain;">
                 <?php endif; ?>
-                <div class="card-body">
-                    <h6 class="card-title mb-0"><?= esc($producto['nombre']) ?></h6>
+
+                <div class="card-body p-1 flex-grow-1 d-flex align-items-center justify-content-center">
+                    <div class="fw-semibold text-center" style="word-wrap: break-word;">
+                        <?= esc($producto['nombre']) ?>
+                    </div>
                 </div>
+
             </div>
         </div>
     <?php endforeach; ?>
 </div>
+
+
+
 
 <script>
     document.querySelectorAll('.producto-card').forEach(card => {
@@ -68,8 +106,7 @@
                 });
 
                 if (response.ok) {
-                    card.classList.toggle('border-warning');
-                    card.classList.toggle('border-3');
+                    card.style.borderColor = esFaltante ? 'transparent' : '#ffc107';
                     card.setAttribute('data-faltante', esFaltante ? '0' : '1');
                 } else {
                     alert('Error al actualizar el estado del producto.');
@@ -80,6 +117,7 @@
             }
         });
     });
+
 
     // Mostrar / ocultar imágenes
     document.getElementById('toggle-imagenes').addEventListener('click', () => {

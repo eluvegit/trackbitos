@@ -43,7 +43,7 @@
     <?php endif; ?>
 
     <!-- Contenido principal -->
-    <div class="container">
+    <div class="container mt-3">
         <?= $this->renderSection('content') ?>
     </div>
 
