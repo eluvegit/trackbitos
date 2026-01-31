@@ -78,7 +78,10 @@ function time_ago(?string $datetime): string
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
     <div class="d-flex align-items-center">
-        <h3 class="mb-0" style="line-height: 1;">Journal</h3>
+        <h3 class="mb-0 me-3" style="line-height: 1;">Journal</h3>
+        <button id="toggleAllBtn" class="btn btn-sm" type="button">
+            Mostrar todo
+        </button>
     </div>
     <div class="btn-group btn-group-sm">
         <?php
@@ -323,7 +326,7 @@ foreach ($categories as $category) {
 
                                     <div class="card-body p-2 d-flex flex-column">
                                         <div class="d-flex align-items-center justify-content-between mb-1">
-                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-dark text-decoration-none flex-grow-1">
+                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-decoration-none flex-grow-1 task-title-link">
                                                 <h6 class="card-title mb-0"><?= esc($task['title']) ?></h6>
                                             </a>
 
@@ -574,6 +577,24 @@ foreach ($categories as $category) {
                 btn.disabled = false;
                 btn.textContent = 'Guardar';
             }
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleAllBtn = document.getElementById('toggleAllBtn');
+        let allExpanded = false;
+
+        toggleAllBtn.addEventListener('click', function() {
+            document.querySelectorAll('.card .collapse').forEach(collapseEl => {
+                const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
+                if (allExpanded) {
+                    bsCollapse.hide();
+                } else {
+                    bsCollapse.show();
+                }
+            });
+            allExpanded = !allExpanded;
+            toggleAllBtn.textContent = allExpanded ? 'Cerrar todo' : 'Mostrar todo';
         });
     });
 </script>
