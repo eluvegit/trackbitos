@@ -65,9 +65,6 @@
 
 </div>
 
-<!-- Botón para abrir modal -->
-<button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAddControl">+</button>
-
 <!-- Modal -->
 <div class="modal fade" id="modalAddControl" tabindex="-1" aria-labelledby="modalAddControlLabel" aria-hidden="true">
   <div class="modal-dialog">

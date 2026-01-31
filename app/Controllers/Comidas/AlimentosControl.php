@@ -33,88 +33,103 @@ class AlimentosControl extends BaseController
         $db = \Config\Database::connect();
 
         // --- ALIMENTOS CONTROLADOS ---
-        foreach ($controlados as $c) {
-            $alimento_id = $c['alimento_id'];
+foreach ($controlados as $c) {
+    $alimento_id = $c['alimento_id'];
 
-            // 1️⃣ Última ingesta directa
-            $ultima_directa = $db->table('comidas_ingestas ci')
+    // 1️⃣ Última ingesta directa
+    $ultima_directa = $db->table('comidas_ingestas ci')
+        ->select('cd.fecha')
+        ->join('comidas_dias cd', 'cd.id = ci.dia_id')
+        ->where('ci.item_tipo', 'alimento')
+        ->where('ci.item_id', $alimento_id)
+        ->orderBy('cd.fecha', 'DESC')
+        ->limit(1)
+        ->get()
+        ->getRowArray();
+
+    $ultima_directa_fecha = $ultima_directa['fecha'] ?? null;
+
+    // 2️⃣ Recetas que contienen este alimento
+    $recetas = $db->table('comidas_receta_ingredientes cri')
+        ->select('cri.receta_id')
+        ->where('cri.alimento_id', $alimento_id)
+        ->get()
+        ->getResultArray();
+
+    $ultima_receta_fecha = null;
+    $veces_receta = 0;
+
+    if (!empty($recetas)) {
+        $receta_ids = array_column($recetas, 'receta_id');
+
+        // Buscar los IDs de esas recetas como alimentos
+        $alimentos_recetas = $db->table('comidas_alimentos')
+            ->select('id')
+            ->whereIn('receta_id', $receta_ids)
+            ->where('es_receta', 1)
+            ->get()
+            ->getResultArray();
+
+        $alimento_receta_ids = array_column($alimentos_recetas, 'id');
+
+        if (!empty($alimento_receta_ids)) {
+            // Última ingesta de cualquier receta que contenga el alimento
+            $ultima_receta = $db->table('comidas_ingestas ci')
                 ->select('cd.fecha')
                 ->join('comidas_dias cd', 'cd.id = ci.dia_id')
-                ->where('ci.item_tipo', 'alimento')
-                ->where('ci.item_id', $alimento_id)
+                ->where('ci.item_tipo', 'alimento') // porque la receta se registra como alimento
+                ->whereIn('ci.item_id', $alimento_receta_ids)
                 ->orderBy('cd.fecha', 'DESC')
+                ->limit(1)
                 ->get()
                 ->getRowArray();
 
-            $ultima_directa_fecha = $ultima_directa['fecha'] ?? null;
+            $ultima_receta_fecha = $ultima_receta['fecha'] ?? null;
 
-            // 2️⃣ Recetas que contienen este alimento
-            $recetas = $db->table('comidas_receta_ingredientes cri')
-                ->select('cri.receta_id')
-                ->where('cri.alimento_id', $alimento_id)
-                ->get()
-                ->getResultArray();
-
-            $ultima_receta_fecha = null;
-            $veces_receta = 0;
-
-            if (!empty($recetas)) {
-                $receta_ids = array_column($recetas, 'receta_id');
-
-                // Última ingesta de alguna receta que contenga el alimento
-                $ultima_receta = $db->table('comidas_ingestas ci')
-                    ->select('cd.fecha')
-                    ->join('comidas_dias cd', 'cd.id = ci.dia_id')
-                    ->where('ci.item_tipo', 'receta')
-                    ->whereIn('ci.item_id', $receta_ids)
-                    ->orderBy('cd.fecha', 'DESC')
-                    ->get()
-                    ->getRowArray();
-
-                $ultima_receta_fecha = $ultima_receta['fecha'] ?? null;
-
-                // Veces que se ha consumido en periodo
-                $fecha_inicio = (clone $hoy)->modify('-' . $c['periodo_dias'] . ' days')->format('Y-m-d');
-                $veces_receta = $db->table('comidas_ingestas ci')
-                    ->join('comidas_dias cd', 'cd.id = ci.dia_id')
-                    ->where('ci.item_tipo', 'receta')
-                    ->whereIn('ci.item_id', $receta_ids)
-                    ->where('cd.fecha >=', $fecha_inicio)
-                    ->countAllResults();
-            }
-
-            // 3️⃣ Comparar ingestas directas vs recetas
-            $ultima_fecha = $ultima_directa_fecha;
-            if ($ultima_receta_fecha && (!$ultima_directa_fecha || $ultima_receta_fecha > $ultima_directa_fecha)) {
-                $ultima_fecha = $ultima_receta_fecha;
-            }
-
-            $dias_desde_ultima = $ultima_fecha ? $hoy->diff(new \DateTime($ultima_fecha))->days : null;
-
-            // Veces totales en periodo
+            // Veces que se ha consumido en el periodo
             $fecha_inicio = (clone $hoy)->modify('-' . $c['periodo_dias'] . ' days')->format('Y-m-d');
-            $veces_directas = $db->table('comidas_ingestas ci')
+            $veces_receta = $db->table('comidas_ingestas ci')
                 ->join('comidas_dias cd', 'cd.id = ci.dia_id')
                 ->where('ci.item_tipo', 'alimento')
-                ->where('ci.item_id', $alimento_id)
+                ->whereIn('ci.item_id', $alimento_receta_ids)
                 ->where('cd.fecha >=', $fecha_inicio)
                 ->countAllResults();
-
-            $veces_en_periodo = $veces_directas + $veces_receta;
-
-            // Estado
-            $estado = ($veces_en_periodo >= $c['min_veces'] && $veces_en_periodo <= $c['max_veces']) ? 'verde' : 'rojo';
-
-            $alimentos_controlados[$alimento_id] = [
-                'id' => $c['id'],
-                'dias_desde_ultima' => $dias_desde_ultima,
-                'veces_en_periodo' => $veces_en_periodo,
-                'periodo_dias' => $c['periodo_dias'],
-                'min_veces' => $c['min_veces'],
-                'max_veces' => $c['max_veces'],
-                'estado' => $estado,
-            ];
         }
+    }
+
+    // 3️⃣ Comparar ingestas directas vs recetas
+    $ultima_fecha = $ultima_directa_fecha;
+    if ($ultima_receta_fecha && (!$ultima_directa_fecha || $ultima_receta_fecha > $ultima_directa_fecha)) {
+        $ultima_fecha = $ultima_receta_fecha;
+    }
+
+    $dias_desde_ultima = $ultima_fecha ? $hoy->diff(new \DateTime($ultima_fecha))->days : null;
+
+    // 4️⃣ Veces totales en periodo
+    $fecha_inicio = (clone $hoy)->modify('-' . $c['periodo_dias'] . ' days')->format('Y-m-d');
+    $veces_directas = $db->table('comidas_ingestas ci')
+        ->join('comidas_dias cd', 'cd.id = ci.dia_id')
+        ->where('ci.item_tipo', 'alimento')
+        ->where('ci.item_id', $alimento_id)
+        ->where('cd.fecha >=', $fecha_inicio)
+        ->countAllResults();
+
+    $veces_en_periodo = $veces_directas + $veces_receta;
+
+    // 5️⃣ Estado
+    $estado = ($veces_en_periodo >= $c['min_veces'] && $veces_en_periodo <= $c['max_veces']) ? 'verde' : 'rojo';
+
+    $alimentos_controlados[$alimento_id] = [
+        'id' => $c['id'],
+        'dias_desde_ultima' => $dias_desde_ultima,
+        'veces_en_periodo' => $veces_en_periodo,
+        'periodo_dias' => $c['periodo_dias'],
+        'min_veces' => $c['min_veces'],
+        'max_veces' => $c['max_veces'],
+        'estado' => $estado,
+    ];
+}
+
 
         // --- INGREDIENTES NO CONTROLADOS ---
         $ingredientes_no_controlados = [];
