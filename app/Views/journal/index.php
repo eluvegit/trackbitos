@@ -1,6 +1,46 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<style>
+    .task-progress {
+        display: flex;
+        gap: 1px;
+        margin-top: 4px;
+        height: 2px;
+    }
+
+    .task-progress-segment {
+        flex: 1;
+        height: 2px;
+        background-color: #e9ecef;
+        border-radius: 2px;
+    }
+
+    .task-progress-segment.filled {
+        background-color: green;
+    }
+
+    .task-title-link:hover {
+        text-decoration: underline;
+    }
+
+    .task-time-trigger {
+        cursor: pointer;
+    }
+
+    body {
+        font-size: 0.75rem;
+    }
+
+    .card-body {
+        margin: 0 !important;
+        padding: 4px !important;
+    }
+
+    .task-title-link {
+        color: beige;
+    }
+</style>
 
 <?php
 function time_ago(?string $datetime): string
@@ -36,192 +76,191 @@ function time_ago(?string $datetime): string
 }
 ?>
 
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+    <div class="d-flex align-items-center">
+        <h3 class="mb-0" style="line-height: 1;">Journal</h3>
+    </div>
+    <div class="btn-group btn-group-sm">
+        <?php
+        // Prioridad
+        $priorityNext = $filterPriority ? 0 : 1; // Esto está bien, sigue funcionando
+        $priorityClass = $filterPriority ? 'btn-primary' : 'btn-outline-primary';
 
-<div class="container py-1">
+        // Focus
+        $focusNext = $filterFocus === 'focus' ? 'todas' : 'focus';
+        $focusClass = $filterFocus === 'focus' ? 'btn-primary' : 'btn-outline-primary';
 
-    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-        <div class="d-flex align-items-center">
-            <h3 class="mb-0" style="line-height: 1;">Journal</h3>
-        </div>
+        // Vista
+        $portadasNext = $view_mode === 'portadas' ? 'listado' : 'portadas';
+        $portadasClass = $view_mode === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
+        ?>
+
         <div class="btn-group btn-group-sm">
-            <?php
-            // Prioridad
-            $priorityNext = $filterPriority ? 0 : 1; // Esto está bien, sigue funcionando
-            $priorityClass = $filterPriority ? 'btn-primary' : 'btn-outline-primary';
+            <!-- Prioridad -->
+            <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$view_mode}&priority={$priorityNext}") ?>"
+                class="btn <?= $priorityClass ?>" title="Prioridad">
+                <!-- Icono de exclamación -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0-1A6 6 0 1 1 8 2a6 6 0 0 1 0 12z" />
+                    <path d="M7.002 11a1 1 0 1 0 2 0 1 1 0 0 0-2 0zm.93-6.481a.5.5 0 0 1 .538.497v3.967a.5.5 0 0 1-1 0V5.016a.5.5 0 0 1 .462-.497z" />
+                </svg>
+            </a>
 
-            // Focus
-            $focusNext = $filterFocus === 'focus' ? 'todas' : 'focus';
-            $focusClass = $filterFocus === 'focus' ? 'btn-primary' : 'btn-outline-primary';
-
-            // Vista
-            $portadasNext = $view_mode === 'portadas' ? 'listado' : 'portadas';
-            $portadasClass = $view_mode === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
-            ?>
-
-            <div class="btn-group btn-group-sm">
-                <!-- Prioridad -->
-                <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$view_mode}&priority={$priorityNext}") ?>"
-                    class="btn <?= $priorityClass ?>" title="Prioridad">
-                    <!-- Icono de exclamación -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0-1A6 6 0 1 1 8 2a6 6 0 0 1 0 12z" />
-                        <path d="M7.002 11a1 1 0 1 0 2 0 1 1 0 0 0-2 0zm.93-6.481a.5.5 0 0 1 .538.497v3.967a.5.5 0 0 1-1 0V5.016a.5.5 0 0 1 .462-.497z" />
+            <!-- Focus -->
+            <a href="<?= site_url("journal?filterFocus={$focusNext}&view={$view_mode}&priority={$filterPriority}") ?>"
+                class="btn <?= $focusClass ?>" title="Focus">
+                <?php if ($filterFocus === 'focus'): ?>
+                    <!-- Estrella rellena -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ffc107" class="bi bi-star-fill" viewBox="0 0 16 16">
+                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
                     </svg>
-                </a>
-
-                <!-- Focus -->
-                <a href="<?= site_url("journal?filterFocus={$focusNext}&view={$view_mode}&priority={$filterPriority}") ?>"
-                    class="btn <?= $focusClass ?>" title="Focus">
-                    <?php if ($filterFocus === 'focus'): ?>
-                        <!-- Estrella rellena -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ffc107" class="bi bi-star-fill" viewBox="0 0 16 16">
-                            <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                        </svg>
-                    <?php else: ?>
-                        <!-- Estrella vacía -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star" viewBox="0 0 16 16">
-                            <path d="M2.866 14.85c-.078.444.36.791.746.593L8 13.187l4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.523-3.356c.329-.314.158-.888-.283-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.495 4.935l-4.898.696c-.441.062-.612.636-.282.95l3.523 3.356-.83 4.73zM8 12.027l-3.763 1.933.717-4.088-2.97-2.829 4.102-.583L8 2.223l1.914 3.237 4.102.583-2.97 2.828.717 4.089L8 12.027z" />
-                        </svg>
-                    <?php endif; ?>
-                </a>
+                <?php else: ?>
+                    <!-- Estrella vacía -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star" viewBox="0 0 16 16">
+                        <path d="M2.866 14.85c-.078.444.36.791.746.593L8 13.187l4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.523-3.356c.329-.314.158-.888-.283-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.495 4.935l-4.898.696c-.441.062-.612.636-.282.95l3.523 3.356-.83 4.73zM8 12.027l-3.763 1.933.717-4.088-2.97-2.829 4.102-.583L8 2.223l1.914 3.237 4.102.583-2.97 2.828.717 4.089L8 12.027z" />
+                    </svg>
+                <?php endif; ?>
+            </a>
 
 
-                <!-- Vista -->
-                <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$portadasNext}&priority={$filterPriority}") ?>"
-                    class="btn <?= $portadasClass ?>" title="Vista">
-                    <?php if ($view_mode === 'portadas'): ?>
-                        <!-- Icono de cuadrícula -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-grid" viewBox="0 0 16 16">
-                            <path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z" />
-                        </svg>
-                    <?php else: ?>
-                        <!-- Icono de lista -->
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
-                        </svg>
-                    <?php endif; ?>
-                </a>
-            </div>
+            <!-- Vista -->
+            <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$portadasNext}&priority={$filterPriority}") ?>"
+                class="btn <?= $portadasClass ?>" title="Vista">
+                <?php if ($view_mode === 'portadas'): ?>
+                    <!-- Icono de cuadrícula -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-grid" viewBox="0 0 16 16">
+                        <path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z" />
+                    </svg>
+                <?php else: ?>
+                    <!-- Icono de lista -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
+                    </svg>
+                <?php endif; ?>
+            </a>
         </div>
     </div>
+</div>
 
+<?php
+$taskCounts = [];
+foreach ($categories as $category) {
+    $catName = $category['name'];
+    $catTasksAll = $allTasksByCategory[$catName] ?? [];
+
+    $taskCounts[$catName] = [
+        'total'     => count($catTasksAll),
+        'current'   => count(array_filter($catTasksAll, fn($t) => !empty($t['is_current']))),
+        'completed' => count(array_filter($catTasksAll, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')),
+    ];
+}
+?>
+
+<?php foreach ($categories as $category): ?>
     <?php
-    $taskCounts = [];
-    foreach ($categories as $category) {
-        $catName = $category['name'];
-        $catTasksAll = $allTasksByCategory[$catName] ?? [];
+    $catId = $category['id'];
+    $catName = $category['name'];
+    $catColor = $category['color'] ?? '#000000';
+    $catTasks = $tasksByCategory[$catName] ?? [];
 
-        $taskCounts[$catName] = [
-            'total'     => count($catTasksAll),
-            'current'   => count(array_filter($catTasksAll, fn($t) => !empty($t['is_current']))),
-            'completed' => count(array_filter($catTasksAll, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')),
-        ];
+    // Tiempo total de tareas actuales no completadas
+    $totalHours = number_format(($totalTimeByCategory[$catName] ?? 0) / 60, 2);
+
+
+    // Contar tareas completadas
+    $completedCount = 0;
+    foreach ($catTasks as $task) {
+        if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
+            $completedCount++;
+        }
     }
     ?>
 
+    <?php
+    $totalTasks = count($catTasks); // total de tareas en la categoría
+    $currentTasks = count(array_filter($catTasks, fn($t) => !empty($t['is_current']))); // actuales
+    $completedTasks = count(array_filter($catTasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')); // completadas
+    ?>
+    <?php
+    $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
+    ?>
+    <div class="card mb-1">
+        <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
+            <?php
+            $current = $counts['current'];
+            $completed = $counts['completed'];
+            $total = max(1, $counts['total']); // evitar división por 0
 
-    <?php foreach ($categories as $category): ?>
-        <?php
-        $catId = $category['id'];
-        $catName = $category['name'];
-        $catColor = $category['color'] ?? '#000000';
-        $catTasks = $tasksByCategory[$catName] ?? [];
+            $currentPerc = round(($current / $total) * 100);
+            $completedPerc = round(($completed / $total) * 100);
+            $remainingPerc = 100 - $currentPerc - $completedPerc;
+            ?>
+            <!-- Fondo título -->
+            <div style="background-color: <?= esc($catColor) ?>; padding: 0.25rem 0.5rem; flex-grow:1; display:flex; align-items:center; gap:0.5rem;">
 
-        // Tiempo total de tareas actuales no completadas
-        $totalHours = number_format(($totalTimeByCategory[$catName] ?? 0) / 60, 2);
+                <!-- Izquierda -->
+                <div class="d-flex align-items-center gap-2">
+                    <span style="display:inline-block; width:35px; text-align:right;">
+                        <?= $progressByCategory[$catName]['completed'] ?>/<?= max(1, $progressByCategory[$catName]['total']) ?>
+                    </span>
 
+                    <strong><?= esc($catName) ?></strong>
+                    <?php
+                    $lastCategoryDate = $lastCategoryActivity[$catName] ?? null;
+                    ?>
+                    <span class="small text-muted">
+                        <strong><?= time_ago($lastCategoryDate) ?></strong>
+                    </span>
 
-        // Contar tareas completadas
-        $completedCount = 0;
-        foreach ($catTasks as $task) {
-            if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
-                $completedCount++;
-            }
-        }
-        ?>
-
-        <?php
-        $totalTasks = count($catTasks); // total de tareas en la categoría
-        $currentTasks = count(array_filter($catTasks, fn($t) => !empty($t['is_current']))); // actuales
-        $completedTasks = count(array_filter($catTasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')); // completadas
-        ?>
-        <?php
-        $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
-        ?>
-        <div class="card mb-1">
-            <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
-                <?php
-                $current = $counts['current'];
-                $completed = $counts['completed'];
-                $total = max(1, $counts['total']); // evitar división por 0
-
-                $currentPerc = round(($current / $total) * 100);
-                $completedPerc = round(($completed / $total) * 100);
-                $remainingPerc = 100 - $currentPerc - $completedPerc;
-                ?>
-                <!-- Fondo título -->
-                <div style="background-color: <?= esc($catColor) ?>; padding: 0.25rem 0.5rem; flex-grow:1; display:flex; align-items:center; gap:0.5rem;">
-
-                    <!-- Izquierda -->
-                    <div class="d-flex align-items-center gap-2">
-                        <span style="display:inline-block; width:35px; text-align:right;">
-                            <?= $progressByCategory[$catName]['completed'] ?>/<?= max(1, $progressByCategory[$catName]['total']) ?>
-                        </span>
-
-
-                        <strong><?= esc($catName) ?></strong>
-                        <?php
-                        $lastCategoryDate = $lastCategoryActivity[$catName] ?? null;
-                        ?>
-                        <span class="small text-muted">
-                            <strong><?= time_ago($lastCategoryDate) ?></strong>
-                        </span>
-
-
-                    </div>
-
-                    <!-- Derecha -->
-                    <span class="small ms-auto"><?= $totalHours ?> h</span>
                 </div>
 
-                <div style="position: relative; display:flex; width:50px; height:16px; margin-left:0.5rem; border-radius:4px; overflow:hidden; border:1px solid #ccc; cursor:pointer;"
-                    title="Actuales: <?= $progressByCategory[$category['name']]['current'] ?>, Completadas: <?= $progressByCategory[$category['name']]['completed'] ?>, Total: <?= $progressByCategory[$category['name']]['total'] ?>">
-
-                    <div style="width:<?= $progressByCategory[$category['name']]['currentPerc'] ?>%; background-color:#ffc107;"></div>
-                    <div style="width:<?= $progressByCategory[$category['name']]['completedPerc'] ?>%; background-color:#198754;"></div>
-                    <div style="width:<?= $progressByCategory[$category['name']]['remainingPerc'] ?>%; background-color:#e9ecef;"></div>
-                </div>
-
-
-
+                <!-- Derecha -->
+                <span class="small ms-auto"><?= $totalHours ?> h</span>
             </div>
 
+            <div style="position: relative; display:flex; width:50px; height:16px; margin-left:0.5rem; border-radius:4px; overflow:hidden; border:1px solid #ccc; cursor:pointer;"
+                title="Actuales: <?= $progressByCategory[$category['name']]['current'] ?>, Completadas: <?= $progressByCategory[$category['name']]['completed'] ?>, Total: <?= $progressByCategory[$category['name']]['total'] ?>">
 
+                <div style="width:<?= $progressByCategory[$category['name']]['currentPerc'] ?>%; background-color:#ffc107;"></div>
+                <div style="width:<?= $progressByCategory[$category['name']]['completedPerc'] ?>%; background-color:#198754;"></div>
+                <div style="width:<?= $progressByCategory[$category['name']]['remainingPerc'] ?>%; background-color:#e9ecef;"></div>
+            </div>
+        </div>
 
+        <div class="collapse" id="cat-<?= $catId ?>">
+            <div class="card-body">
 
+                <?php if ($view_mode === 'listado'): ?>
+                    <!-- MODO LISTA -->
+                    <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
+                        <?php if (empty($catTasks)): ?>
+                            <li class="list-group-item text-muted">No hay tareas aún.</li>
+                        <?php else: ?>
+                            <?php foreach ($catTasks as $task): ?>
+                                <?php
+                                $amplitude = (int)($task['amplitude'] ?? 0);
+                                $completed = (int)($task['completed'] ?? 0);
+                                $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
+                                $filled = (int)floor($percentage / 10);
+                                ?>
+                                <li class="list-group-item p-1">
 
-            <div class="collapse" id="cat-<?= $catId ?>">
-                <div class="card-body">
+                                    <!-- Fila principal -->
+                                    <div class="d-flex align-items-center gap-2">
 
-                    <?php if ($view_mode === 'listado'): ?>
-                        <!-- MODO LISTA -->
-                        <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
-                            <?php if (empty($catTasks)): ?>
-                                <li class="list-group-item text-muted">No hay tareas aún.</li>
-                            <?php else: ?>
-                                <?php foreach ($catTasks as $task): ?>
-                                    <?php
-                                    $amplitude = (int)($task['amplitude'] ?? 0);
-                                    $completed = (int)($task['completed'] ?? 0);
-                                    $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
-                                    $filled = (int)floor($percentage / 10);
-                                    ?>
-                                    <li class="list-group-item">
-                                        <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
+                                        <!-- Bloque izquierdo -->
+                                        <div class="d-flex align-items-center gap-1 flex-grow-1">
+
                                             <!-- Estrella -->
-                                            <span class="current-star btn-toggle-current" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
-                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
+                                            <span class="current-star btn-toggle-current"
+                                                data-task-id="<?= $task['id'] ?>">
+                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                                        width="16"
+                                                        height="16"
+                                                        fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>"
+                                                        class="bi bi-star-fill"
+                                                        viewBox="0 0 16 16">
                                                         <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
                                                     </svg>
                                                 </button>
@@ -232,111 +271,107 @@ function time_ago(?string $datetime): string
                                                 class="text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
                                                 <?= esc($task['title']) ?>
                                             </a>
-                                            <?php
-                                            $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
-                                            ?>
 
+                                            <!-- Fecha -->
                                             <span class="small text-muted">
-                                                <?= time_ago($lastTaskDate) ?>
+                                                <?= time_ago($lastTaskActivity[$task['id']] ?? null) ?>
                                             </span>
-
-
                                         </div>
 
                                         <!-- Tiempo -->
-                                        <span class="text-muted small task-time-trigger" data-task-id="<?= $task['id'] ?>">
+                                        <span class="text-muted small ms-auto task-time-trigger"
+                                            data-task-id="<?= $task['id'] ?>">
+                                            <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
+                                        </span>
+                                    </div>
+
+                                    <!-- Barra de progreso -->
+                                    <?php if ($amplitude > 0): ?>
+                                        <div class="task-progress mt-1">
+                                            <?php for ($i = 1; $i <= 10; $i++): ?>
+                                                <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
+                                            <?php endfor; ?>
+                                        </div>
+                                    <?php endif; ?>
+
+                                </li>
+
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                    <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>">
+                <?php else: ?>
+                    <!-- MODO PORTADAS -->
+                    <div class="row g-2">
+                        <?php foreach ($catTasks as $task): ?>
+                            <?php
+                            $amplitude = (int)($task['amplitude'] ?? 0);
+                            $completed = (int)($task['completed'] ?? 0);
+                            $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
+                            $filled = (int)floor($percentage / 10);
+                            ?>
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <div class="card h-100">
+
+                                    <?php if (!empty($task['image'])): ?>
+                                        <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>">
+                                    <?php else: ?>
+                                        <div style="height:150px; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#6c757d;">
+                                            Sin imagen
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="card-body p-2 d-flex flex-column">
+                                        <div class="d-flex align-items-center justify-content-between mb-1">
+                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-dark text-decoration-none flex-grow-1">
+                                                <h6 class="card-title mb-0"><?= esc($task['title']) ?></h6>
+                                            </a>
+
+                                            <!-- Estrella -->
+                                            <span class="current-star btn-toggle-current ms-1" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
+                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:24px; height:24px;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
+                                                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                                                    </svg>
+                                                </button>
+                                            </span>
+                                        </div>
+
+                                        <?php
+                                        $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
+                                        ?>
+
+                                        <span class="small text-muted">
+                                            <?= time_ago($lastTaskDate) ?>
+                                        </span>
+
+                                        <!-- Tiempo (clicable para abrir modal) -->
+                                        <span class="text-muted small task-time-trigger mb-1"
+                                            data-task-id="<?= $task['id'] ?>"
+                                            style="cursor:pointer;">
                                             <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
                                         </span>
 
+                                        <!-- Barra de progreso -->
                                         <?php if ($amplitude > 0): ?>
-                                            <div class="task-progress">
+                                            <div class="task-progress mt-auto" style="height:6px; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;">
                                                 <?php for ($i = 1; $i <= 10; $i++): ?>
-                                                    <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
+                                                    <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>" style="border-radius:2px; background-color: <?= $i <= $filled ? '#198754' : '#e9ecef' ?>;"></div>
                                                 <?php endfor; ?>
                                             </div>
                                         <?php endif; ?>
-                                    </li>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </ul>
-                        <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>">
-                    <?php else: ?>
-                        <!-- MODO PORTADAS -->
-                        <div class="row g-2">
-                            <?php foreach ($catTasks as $task): ?>
-                                <?php
-                                $amplitude = (int)($task['amplitude'] ?? 0);
-                                $completed = (int)($task['completed'] ?? 0);
-                                $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
-                                $filled = (int)floor($percentage / 10);
-                                ?>
-                                <div class="col-6 col-md-4 col-lg-3">
-                                    <div class="card h-100">
-
-                                        <?php if (!empty($task['image'])): ?>
-                                            <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>">
-                                        <?php else: ?>
-                                            <div style="height:150px; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#6c757d;">
-                                                Sin imagen
-                                            </div>
-                                        <?php endif; ?>
-
-                                        <div class="card-body p-2 d-flex flex-column">
-                                            <div class="d-flex align-items-center justify-content-between mb-1">
-                                                <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-dark text-decoration-none flex-grow-1">
-                                                    <h6 class="card-title mb-0"><?= esc($task['title']) ?></h6>
-                                                </a>
-
-                                                <!-- Estrella -->
-                                                <span class="current-star btn-toggle-current ms-1" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
-                                                    <button style="all:unset; display:flex; align-items:center; justify-content:center; width:24px; height:24px;">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
-                                                            <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                                                        </svg>
-                                                    </button>
-                                                </span>
-                                            </div>
-
-                                            <?php
-                                            $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
-                                            ?>
-
-                                            <span class="small text-muted">
-                                                <?= time_ago($lastTaskDate) ?>
-                                            </span>
-
-
-
-                                            <!-- Tiempo (clicable para abrir modal) -->
-                                            <span class="text-muted small task-time-trigger mb-1"
-                                                data-task-id="<?= $task['id'] ?>"
-                                                style="cursor:pointer;">
-                                                <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
-                                            </span>
-
-                                            <!-- Barra de progreso -->
-                                            <?php if ($amplitude > 0): ?>
-                                                <div class="task-progress mt-auto" style="height:6px; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;">
-                                                    <?php for ($i = 1; $i <= 10; $i++): ?>
-                                                        <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>" style="border-radius:2px; background-color: <?= $i <= $filled ? '#198754' : '#e9ecef' ?>;"></div>
-                                                    <?php endfor; ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
 
 
-                </div>
             </div>
         </div>
-    <?php endforeach; ?>
-
-
-</div>
+    </div>
+<?php endforeach; ?>
 
 <!-- MODAL TIEMPO Y FECHA -->
 <div class="modal fade" id="timeModal" tabindex="-1">
@@ -358,7 +393,6 @@ function time_ago(?string $datetime): string
         </div>
     </div>
 </div>
-
 <script>
     document.addEventListener('DOMContentLoaded', function() {
 
@@ -397,28 +431,40 @@ function time_ago(?string $datetime): string
 
                         // Crear nodo de tarea
                         const li = document.createElement('li');
-                        li.className = 'list-group-item';
+                        li.className = 'list-group-item p-1';
 
                         li.innerHTML = `
-        <div class="d-flex align-items-center gap-1 flex-grow-1 my-1">
+    <div class="d-flex align-items-center gap-2">
+
+        <div class="d-flex align-items-center gap-1 flex-grow-1">
+
             <span class="current-star btn-toggle-current" data-task-id="${task.id}">
-                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:32px; height:32px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star-fill" viewBox="0 0 16 16">
+                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         width="16"
+                         height="16"
+                         fill="#adb5bd"
+                         class="bi bi-star-fill"
+                         viewBox="0 0 16 16">
                         <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"/>
                     </svg>
                 </button>
             </span>
 
             <a href="<?= site_url('journal/edit') ?>/${task.id}"
-               class="text-dark text-decoration-none task-title-link">
+               class="text-decoration-none task-title-link">
                 ${task.title}
             </a>
+
+            <span class="small text-muted">hoy</span>
         </div>
 
-        <span class="text-muted small task-time-trigger" data-task-id="${task.id}">
+        <span class="text-muted small ms-auto task-time-trigger"
+              data-task-id="${task.id}">
             0.00 h
         </span>
-    `;
+    </div>
+`;
 
                         list.appendChild(li);
 
@@ -529,8 +575,6 @@ function time_ago(?string $datetime): string
                 btn.textContent = 'Guardar';
             }
         });
-
-
     });
 </script>
 

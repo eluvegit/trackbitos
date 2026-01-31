@@ -13,63 +13,8 @@
     <link href="<?= base_url('assets/css/style.css') ?>" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
 </head>
-<style>
-    .card,
-    .card-header,
-    .card-body,
-    .list-group-item {
-        background-color: #1e1e1e !important;
-        /* Fondo oscuro */
-        color: #e0e0e0 !important;
-        /* Texto claro */
-        border-color: #333 !important;
-        /* Bordes menos brillantes */
-    }
 
-<<<<<<< HEAD
-    .btn,
-    .btn-outline-primary,
-    .btn-primary {
-        color: #e0e0e0 !important;
-    }
-
-    a,
-    a.text-dark {
-        color: #e0e0e0 !important;
-    }
-    .text-muted {
-    color: #aaaaaa !important; /* gris más claro para fondo oscuro */
-}
-/* Tablas modo oscuro */
-table {
-    background-color: #1e1e1e; /* fondo de la tabla */
-    color: #e0e0e0; /* texto */
-    border-color: #333333; /* bordes */
-}
-
-table thead {
-    background-color: #2c2c2c; /* fondo del encabezado */
-    color: #ffffff; /* texto del encabezado */
-}
-
-table th, table td {
-    border-color: #333333; /* bordes de celdas */
-}
-
-table tbody tr:nth-child(even) {
-    background-color: #1a1a1a; /* filas alternas */
-}
-
-.table-hover tbody tr:hover {
-    background-color: #333333; /* hover filas */
-}
-
-</style>
-
-<body class="bg-dark text-light">
-=======
 <body data-bs-theme="dark">
->>>>>>> 8f2740303b8e451f4efb82ffff38852d26f8c6e1
     <?php $isPrint = (service('request')->getGet('print') === '1'); ?>
     <?php if (!$isPrint): ?>
         <!-- Navbar -->
