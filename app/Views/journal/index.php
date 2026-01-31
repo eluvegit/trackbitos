@@ -1,127 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<style>
-    /* Fondo general oscuro */
-    body,
-    .container {
-        background-color: rgba(var(--bs-dark-rgb),var(--bs-bg-opacity))!important;
-        color: #e0e0e0 !important;
-    }
-
-
-    .card {
-        margin-bottom: 0.25rem;
-        font-size: 0.8rem;
-        background-color: #1e1e1e;
-        border: 1px solid #333;
-        color: #e0e0e0;
-    }
-
-    .card-header {
-        padding: 0.25rem 0.35rem;
-        font-size: 0.85rem;
-        cursor: pointer;
-        color: #fff;
-    }
-
-    .card-body {
-        padding: 0.25rem 0.35rem;
-        color: #e0e0e0;
-    }
-
-    .list-group-item {
-        padding: 0.4rem 0.35rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: relative;
-        min-height: 40px;
-        background-color: #1e1e1e;
-        border-bottom: 1px solid #333;
-        color: #e0e0e0;
-    }
-
-    .list-group-item.text-muted {
-        color: #888 !important;
-    }
-
-    .new-task-input {
-        padding: 0.2rem 0.35rem;
-        font-size: 0.8rem;
-        margin-top: 0.2rem;
-        background-color: #2a2a2a;
-        border: 1px solid #444;
-        color: #e0e0e0;
-    }
-
-    /* Progreso de tareas */
-    .task-progress-segment {
-        background-color: #333;
-        border-radius: 2px;
-    }
-
-    .task-progress-segment.filled {
-        background-color: #198754;
-    }
-
-    .task-time-trigger {
-        cursor: pointer;
-        white-space: nowrap;
-        color: #ccc;
-    }
-
-    .task-title-link {
-        display: inline-block;
-        max-width: 100%;
-        color: #e0e0e0;
-    }
-
-    .task-title-link.text-decoration-line-through {
-        color: #888;
-    }
-
-    .current-star svg {
-        filter: drop-shadow(0 0 1px #000);
-    }
-
-    /* Botones toggle */
-    .btn-outline-primary {
-        color: #e0e0e0;
-        border-color: #555;
-    }
-
-    .btn-outline-primary:hover {
-        background-color: #333;
-        color: #fff;
-        border-color: #666;
-    }
-
-    .btn-primary {
-        background-color: #0d6efd;
-        border-color: #0d6efd;
-        color: #fff;
-    }
-
-    /* Modal */
-    .modal-content {
-        background-color: #1e1e1e;
-        color: #e0e0e0;
-        border: 1px solid #333;
-    }
-
-    .form-control {
-        background-color: #2a2a2a;
-        border: 1px solid #444;
-        color: #e0e0e0;
-    }
-
-    .btn-secondary {
-        background-color: #333;
-        border-color: #444;
-        color: #e0e0e0;
-    }
-</style>
 
 <?php
 function time_ago(?string $datetime): string
@@ -350,7 +229,7 @@ function time_ago(?string $datetime): string
 
                                             <!-- Título -->
                                             <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
-                                                class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
+                                                class="text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
                                                 <?= esc($task['title']) ?>
                                             </a>
                                             <?php
