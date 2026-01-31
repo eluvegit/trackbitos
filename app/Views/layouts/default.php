@@ -26,6 +26,7 @@
         /* Bordes menos brillantes */
     }
 
+<<<<<<< HEAD
     .btn,
     .btn-outline-primary,
     .btn-primary {
@@ -66,10 +67,13 @@ table tbody tr:nth-child(even) {
 </style>
 
 <body class="bg-dark text-light">
+=======
+<body data-bs-theme="dark">
+>>>>>>> 8f2740303b8e451f4efb82ffff38852d26f8c6e1
     <?php $isPrint = (service('request')->getGet('print') === '1'); ?>
     <?php if (!$isPrint): ?>
         <!-- Navbar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-2 py-0 mb-1">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
             <a class="navbar-brand d-flex align-items-center gap-1" href="<?= site_url('dashboard') ?>">
                 <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="img-fluid d-inline-block" style="height:16px;">
                 <span class="fs-6">Trackbitos</span>
@@ -78,11 +82,11 @@ table tbody tr:nth-child(even) {
                 <ul class="navbar-nav ms-auto">
                     <?php if (logged_in()): ?>
                         <li class="nav-item">
-                            <a class="nav-link py-0" href="<?= site_url('logout') ?>">Cerrar sesión</a>
+                            <a class="nav-link" href="<?= site_url('logout') ?>">Cerrar sesión</a>
                         </li>
                     <?php else: ?>
                         <li class="nav-item">
-                            <a class="nav-link py-0" href="<?= site_url('login') ?>">Login</a>
+                            <a class="nav-link" href="<?= site_url('login') ?>">Login</a>
                         </li>
                     <?php endif; ?>
                 </ul>
@@ -94,7 +98,7 @@ table tbody tr:nth-child(even) {
     <?php endif; ?>
 
     <!-- Contenido principal -->
-    <div class="container mt-3">
+    <div class="container">
         <?= $this->renderSection('content') ?>
     </div>
 

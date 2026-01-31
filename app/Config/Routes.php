@@ -198,6 +198,12 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
     });
 
 
+    // Alimentos controlados
+    $routes->get('alimentos-control', 'AlimentosControl::index', ['as' => 'comidas.alimentos_control.index']);
+    $routes->post('alimentos-control/add', 'AlimentosControl::add', ['as' => 'comidas.alimentos_control.add']);
+    $routes->get('alimentos-control/edit/(:num)', 'AlimentosControl::edit/$1', ['as' => 'comidas.alimentos_control.edit']);
+    $routes->post('alimentos-control/edit/(:num)', 'AlimentosControl::edit/$1'); // para procesar el formulario
+    $routes->get('alimentos-control/delete/(:num)', 'AlimentosControl::delete/$1', ['as' => 'comidas.alimentos_control.delete']);
 
 
     // --- Alimentos ---
@@ -272,7 +278,6 @@ $routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('toggle-visto/(:num)',             'Youtube::toggleVisto/$1');
     $routes->POST('toggle-relevante/(:num)',         'Youtube::toggleRelevante/$1');
     $routes->POST('toggle-largo/(:num)',             'Youtube::toggleLargo/$1');
-
 });
 
 
@@ -336,7 +341,7 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     // ajax
     $routes->POST('toggle-visto/(:num)', 'Enlaces::toggleVisto/$1');
 
-    
+
     // Página tipo Notion:
     $routes->GET('pagina/(:num)', 'Enlaces::pagina/$1');
 
@@ -355,7 +360,7 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('revision/borrar/(:num)',  'Enlaces::revisionBorrar/$1');   // borra y va al siguiente
     $routes->POST('revision/saltar/(:num)',  'Enlaces::revisionSaltar/$1');   // siguiente sin cambios
 
-    
+
 
 });
 

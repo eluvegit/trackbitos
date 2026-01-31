@@ -1,139 +1,59 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<!-- Forzar tema oscuro -->
-<style>
-    body.bg-light {
-        background-color: #1e1e1e !important;
-        /* gris oscuro suave */
-        color: #e0e0e0 !important;
-    }
-
-    .breadcrumb,
-    .d-flex.flex-wrap.gap-2.mb-3 {
-        background-color: #2a2a2a;
-        padding: 0.5rem 1rem;
-        border-radius: 0.25rem;
-    }
-
-    .card.producto-card {
-        background-color: #4b4b4b;
-        color: #e0e0e0;
-        border-radius: 0.5rem;
-        box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.5);
-        transition: all 0.2s ease;
-        padding: 0.5rem;
-        cursor: pointer;
-    }
-
-    .btn-outline-light,
-    .btn-outline-warning {
-        color: #e0e0e0;
-        border-color: #6c757d;
-    }
-
-    .btn-outline-light:hover,
-    .btn-outline-warning:hover {
-        color: #fff;
-        border-color: #adb5bd;
-        background-color: #3a3a3a;
-    }
-
-    .producto-imagen {
-        background-color: #212529;
-        border-radius: 0.25rem;
-        max-height: 120px;
-        object-fit: contain;
-    }
-
-    /* Estilo lista */
-    .lista .col {
-        flex: 1 0 100%;
-    }
-
-    .lista .producto-card {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .lista .producto-card .card-body {
-        flex-grow: 1;
-        text-align: left;
-        padding-left: 1rem;
-        display: flex;
-        align-items: center;
-    }
-
-    .lista .producto-card img {
-        width: 80px;
-        height: 80px;
-        margin: 0;
-        margin-right: 1rem;
-    }
-
-    .producto-card {
-        user-select: none;
-        /* Evita seleccionar texto */
-        -webkit-user-select: none;
-        /* Para Safari/iOS */
-        -moz-user-select: none;
-        /* Para Firefox */
-        -ms-user-select: none;
-        /* Para IE/Edge */
-    }
-</style>
-
-<script>
-    // Forzar body a bg-dark al cargar
-    document.addEventListener('DOMContentLoaded', () => {
-        document.body.classList.remove('bg-light');
-        document.body.classList.add('bg-dark');
-    });
-</script>
-
-<!-- Header / Breadcrumb -->
+<!-- Header / breadcrumb -->
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-cart3 text-info"></i>
+
     <span class="text-secondary fw-normal">Compras</span>
     <span class="text-secondary">/</span>
+
     <strong class="fw-semibold">
         <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>"
-            class="text-light text-decoration-none">
+            class="text-decoration-none text-body">
             <?= esc($supermercado_nombre) ?>
         </a>
     </strong>
+
     <span class="text-secondary">/</span>
-    <span class="fw-semibold text-success">COMPRAR</span>
+
+    <span class="fw-semibold text-success">
+        COMPRAR
+    </span>
 </h5>
 
-<!-- Acciones rápidas -->
+<!-- Acciones -->
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-    <button id="toggle-imagenes" class="btn btn-outline-light btn-sm">
+    <button id="toggle-imagenes" class="btn btn-outline-secondary btn-sm">
         Ocultar imágenes
     </button>
 
     <a href="<?= site_url('compras/' . $supermercado_id . '/faltantes') ?>"
         class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1">
-        <i class="bi bi-pencil-square"></i> FALTA
+        <i class="bi bi-pencil-square"></i>
+        FALTA
     </a>
 </div>
 
-<!-- Lista de productos -->
-<div id="productos-container" class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
+<!-- Productos -->
+<div id="productos-container"
+    class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
+
     <?php foreach ($productos as $producto): ?>
         <div class="col d-flex">
-            <div class="card shadow-sm w-100 small text-center producto-card d-flex flex-column justify-content-between"
+            <div class="card producto-card w-100 small text-center d-flex flex-column justify-content-between
+                        border-2 <?= $producto['comprado'] ? 'border-success' : 'border-transparent' ?>"
                 data-producto-id="<?= $producto['id'] ?>"
-                data-comprado="<?= $producto['comprado'] ? '1' : '0' ?>"
-                style="border: 2px solid <?= $producto['comprado'] ? '#fff' : 'transparent' ?>;">
+                data-comprado="<?= $producto['comprado'] ? '1' : '0' ?>">
 
                 <?php if (!empty($producto['imagen'])): ?>
                     <img src="<?= esc($producto['imagen']) ?>"
-                        class="producto-imagen img-fluid mb-2 mx-auto">
+                        class="producto-imagen img-fluid mb-2 mx-auto"
+                        style="max-height:120px; object-fit:contain;">
                 <?php endif; ?>
 
-                <div class="card-body p-2 flex-grow-1 d-flex align-items-center justify-content-center">
-                    <div class="fw-semibold text-center" style="word-wrap: break-word;">
+                <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                    <div class="fw-semibold">
                         <?= esc($producto['nombre']) ?>
                     </div>
                 </div>
@@ -147,30 +67,39 @@
     const container = document.getElementById('productos-container');
     const toggleBtn = document.getElementById('toggle-imagenes');
 
+    /* ===== Toggle imágenes / lista ===== */
     toggleBtn.addEventListener('click', () => {
         const imgs = document.querySelectorAll('.producto-imagen');
         const ocultar = imgs[0]?.style.display !== 'none';
 
-        // Ocultar o mostrar imágenes
         imgs.forEach(img => img.style.display = ocultar ? 'none' : '');
         toggleBtn.textContent = ocultar ? 'Mostrar imágenes' : 'Ocultar imágenes';
 
-        // Activar modo lista
-        if (ocultar) {
-            container.classList.add('lista');
-        } else {
-            container.classList.remove('lista');
+        container.classList.toggle('lista', ocultar);
+    });
+
+    /* ===== Estado visual inicial ===== */
+    document.querySelectorAll('.producto-card').forEach(card => {
+        if (card.dataset.comprado === '1') {
+            card.classList.add('bg-success-subtle');
         }
     });
 
-    // Toggle comprado
+    /* ===== Toggle comprado ===== */
     document.querySelectorAll('.producto-card').forEach(card => {
-        card.addEventListener('click', async () => {
-            const productoId = card.getAttribute('data-producto-id');
-            const esComprado = card.getAttribute('data-comprado') === '1';
+
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+
+        const toggleComprado = async () => {
+            const productoId = card.dataset.productoId;
+            const esComprado = card.dataset.comprado === '1';
+
             const url = esComprado ?
                 '<?= site_url('compras/producto') ?>/' + productoId + '/desmarcar-comprado' :
                 '<?= site_url('compras/producto') ?>/' + productoId + '/marcar-comprado';
+
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -180,15 +109,44 @@
                     },
                     body: '<?= csrf_token() ?>=<?= csrf_hash() ?>'
                 });
-                if (response.ok) {
-                    card.style.borderColor = esComprado ? 'transparent' : '#fff';
-                    card.setAttribute('data-comprado', esComprado ? '0' : '1');
-                } else alert('Error al actualizar el estado del producto.');
+
+                if (!response.ok) return;
+
+                card.dataset.comprado = esComprado ? '0' : '1';
+
+                card.classList.toggle('bg-success-subtle', !esComprado);
+                card.classList.toggle('border-success', !esComprado);
+                card.classList.toggle('border-transparent', esComprado);
+
             } catch (err) {
                 console.error(err);
-                alert('Fallo en la conexión con el servidor.');
             }
+        };
+
+        /* Touch */
+        card.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            moved = false;
+        }, {
+            passive: true
         });
+
+        card.addEventListener('touchmove', e => {
+            if (Math.abs(e.touches[0].clientX - startX) > 10 ||
+                Math.abs(e.touches[0].clientY - startY) > 10) {
+                moved = true;
+            }
+        }, {
+            passive: true
+        });
+
+        card.addEventListener('touchend', () => {
+            if (!moved) toggleComprado();
+        });
+
+        /* Click */
+        card.addEventListener('click', toggleComprado);
     });
 </script>
 
