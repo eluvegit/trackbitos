@@ -1,10 +1,5 @@
-<?= $this->extend('layouts/default') ?>
+<?= $this->extend('comidas/layout') ?>
 <?= $this->section('content') ?>
-
-<h2 class="mb-3">⚖️ Peso corporal</h2>
-<div class="mb-3">
-    <a href="<?= site_url('comidas/diario/hoy') ?>" class="btn btn-outline-secondary">← Volver</a>
-</div>
 
 <?php if (session()->getFlashdata('success')): ?>
     <div class="alert alert-success"><?= esc(session()->getFlashdata('success')) ?></div>

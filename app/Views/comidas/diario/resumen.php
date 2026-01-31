@@ -69,9 +69,9 @@ $rangotxt = fn($r, $u) => sprintf(
     <!-- Calendario -->
     <div class="mb-3">
         <div class="d-flex justify-content-between align-items-center">
-            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('-1 day')->format('Y-m-d')) ?>" class="btn btn-outline-secondary">&lt;</a>
-            <h4 class="m-0"><?= $fechaSel->format('d/m/Y') ?></h4>
-            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('+1 day')->format('Y-m-d')) ?>" class="btn btn-outline-secondary">&gt;</a>
+            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('-1 day')->format('Y-m-d')) ?>" class="btn btn-sm btn-outline-secondary">&lt;</a>
+            <h6 class="m-0"><?= $fechaSel->format('d/m/Y') ?></h4>
+            <a href="<?= site_url('comidas/diario/' . (clone $fechaSel)->modify('+1 day')->format('Y-m-d')) ?>" class="btn btn-sm btn-outline-secondary">&gt;</a>
         </div>
     </div>
 

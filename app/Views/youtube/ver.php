@@ -176,142 +176,216 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
 </table>
 
 <style>
-    /* Toque moderno */
-    #filters .btn {
-        border-radius: 999px;
-    }
+   /* ================================
+   General Cards y Anillos
+   ================================ */
 
-    #filters .btn-group .btn {
-        white-space: nowrap;
-    }
+.trk-card {
+    --trk-border: rgba(0,0,0,.08);
+    --trk-bg: var(--bs-body-bg);
+    display: grid;
+    grid-template-columns: 56px 1fr 18px;
+    gap: .9rem;
+    align-items: center;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--trk-border);
+    background: var(--trk-bg);
+    box-shadow: 0 6px 20px rgba(0,0,0,.06);
+    transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
+}
 
-    tr.opacity-50 {
-        transition: opacity .15s ease-in-out;
-    }
-</style>
+.trk-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0,0,0,.12);
+    border-color: #7c3aed; /* morado suave */
+}
 
-<style>
-    /* Contenedor */
-    .filterbar {
-        background: var(--bs-body-bg);
-    }
+.trk-body { min-width: 0; }
 
-    /* Grupo + etiqueta pequeña */
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-        gap: .35rem;
-    }
+.trk-title {
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.15;
+    color: var(--bs-emphasis-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-    .filter-label {
-        font-size: .72rem;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-        color: var(--bs-secondary-color);
-    }
+.trk-sub {
+    margin-top: .25rem;
+    font-size: .9rem;
+    color: var(--bs-secondary-color);
+}
 
-    /* Segmentos (píldoras) */
-    .seg {
-        display: inline-flex;
-        background: rgba(99, 102, 241, .08);
-        padding: 4px;
-        border-radius: 999px;
-        gap: 4px;
-    }
+.trk-chevron {
+    font-size: 26px;
+    color: rgba(0,0,0,.35);
+    transition: transform .15s ease, color .15s ease;
+}
+.trk-card:hover .trk-chevron { transform: translateX(2px); color: #7c3aed; }
 
-    .seg-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: .35rem;
-        padding: .35rem .6rem;
-        font-size: .85rem;
-        line-height: 1;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        color: var(--bs-emphasis-color);
-        background: transparent;
-        cursor: pointer;
-        transition: all .15s ease;
-    }
+.trk-ring {
+    --trk-accent: #6366f1; /* default */
+    --trk-track: rgba(0,0,0,.08);
+    position: relative;
+    width: 48px;
+    height: 48px;
+}
 
-    .seg-btn:hover {
-        background: rgba(99, 102, 241, .10);
-    }
+.trk-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(var(--trk-accent) var(--p), var(--trk-track) 0);
+}
 
-    .btn-check:checked+.seg-btn {
-        background: #fff;
-        border-color: rgba(99, 102, 241, .35);
-        box-shadow: 0 3px 10px rgba(99, 102, 241, .15);
-    }
+.trk-ring::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--trk-bg);
+    box-shadow: inset 0 0 0 1px var(--trk-border);
+}
 
-    /* Chips de filtro */
-    .chip {
-        display: inline-flex;
-        align-items: center;
-        gap: .45rem;
-        padding: .35rem .65rem;
-        font-size: .85rem;
-        line-height: 1;
-        border-radius: 999px;
-        border: 1px solid rgba(0, 0, 0, .08);
-        background: rgba(0, 0, 0, .03);
-        color: var(--bs-emphasis-color);
-        cursor: pointer;
-        transition: all .15s ease;
-    }
+.trk-ring__label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+}
 
-    .chip:hover {
-        background: rgba(0, 0, 0, .05);
-    }
+/* Estados de progreso */
+.trk-low { --trk-accent: #9ca3af; } /* gris */
+.trk-mid { --trk-accent: #facc15; } /* amarillo suave */
+.trk-good { --trk-accent: #34d399; } /* verde suave */
 
-    .btn-check:checked+.chip {
-        border-color: rgba(16, 185, 129, .35);
-        background: rgba(16, 185, 129, .08);
-        box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .25);
-    }
+/* ================================
+   Dark Mode Correcciones
+   ================================ */
+.text-bg-dark .trk-card,
+.bg-dark .trk-card {
+    --trk-border: rgba(255,255,255,.12);
+    --trk-bg: #1f1f2e; /* gris oscuro azulado */
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
 
-    /* Puntitos de color en chips */
-    .dot {
-        width: .55rem;
-        height: .55rem;
-        border-radius: 50%;
-        display: inline-block;
-    }
+.text-bg-dark .trk-card:hover {
+    border-color: #a78bfa; /* morado suave */
+    box-shadow: 0 10px 28px rgba(0,0,0,.4);
+}
 
-    .dot-gray {
-        background: #9ca3af;
-    }
+.text-bg-dark .trk-chevron {
+    color: rgba(255,255,255,.5);
+}
+.text-bg-dark .trk-card:hover .trk-chevron {
+    color: #a78bfa;
+}
 
-    .dot-amber {
-        background: #f59e0b;
-    }
+.text-bg-dark .trk-ring {
+    --trk-track: rgba(255,255,255,.12);
+}
+.text-bg-dark .trk-ring__label {
+    color: #d1d5db; /* gris claro */
+}
 
-    /* Dark mode friendly */
-    .text-bg-dark .seg {
-        background: rgba(99, 102, 241, .18);
-    }
+/* Acabado de los colores de progreso en dark */
+.text-bg-dark .trk-low { --trk-accent: #6b7280; }   /* gris suave */
+.text-bg-dark .trk-mid { --trk-accent: #fbbf24; }   /* amarillo cálido */
+.text-bg-dark .trk-good { --trk-accent: #34d399; }  /* verde aqua */
 
-    .text-bg-dark .seg-btn:hover {
-        background: rgba(99, 102, 241, .22);
-    }
+/* ================================
+   Filtros, Segments y Chips
+   ================================ */
 
-    .text-bg-dark .btn-check:checked+.seg-btn {
-        background: rgba(255, 255, 255, .06);
-    }
+.filterbar { background: var(--bs-body-bg); }
 
-    .text-bg-dark .chip {
-        border-color: rgba(255, 255, 255, .12);
-        background: rgba(255, 255, 255, .03);
-    }
+.filter-group { display: flex; flex-direction: column; gap: .35rem; }
+.filter-label {
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
 
-    .text-bg-dark .chip:hover {
-        background: rgba(255, 255, 255, .06);
-    }
+.seg {
+    display: inline-flex;
+    background: rgba(124,58,237,.1); /* morado suave */
+    padding: 4px;
+    border-radius: 999px;
+    gap: 4px;
+}
 
-    .text-bg-dark .btn-check:checked+.chip {
-        border-color: rgba(16, 185, 129, .45);
-        background: rgba(16, 185, 129, .15);
-    }
+.seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .35rem .6rem;
+    font-size: .85rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--bs-emphasis-color);
+    background: transparent;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.seg-btn:hover { background: rgba(124,58,237,.15); }
+.btn-check:checked + .seg-btn {
+    background: #7c3aed;
+    color: #fff;
+    border-color: #7c3aed;
+    box-shadow: 0 2px 6px rgba(124,58,237,.35);
+}
+
+/* Chips */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .35rem .65rem;
+    font-size: .85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: rgba(0,0,0,.03);
+    color: var(--bs-emphasis-color);
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.chip:hover { background: rgba(0,0,0,.05); }
+.btn-check:checked + .chip {
+    border-color: #34d399;
+    background: rgba(52,211,153,.15);
+    box-shadow: inset 0 0 0 1px rgba(52,211,153,.25);
+}
+
+.dot { width:.55rem; height:.55rem; border-radius:50%; display:inline-block; }
+.dot-gray { background:#9ca3af; }
+.dot-amber { background:#fbbf24; }
+
+#f-counter { color: var(--bs-secondary-color); }
+
+/* Dark Mode Filters */
+.text-bg-dark .filterbar { background: #1f1f2e; }
+.text-bg-dark .seg { background: rgba(124,58,237,.2); }
+.text-bg-dark .seg-btn { color: #e0e0e0; }
+.text-bg-dark .seg-btn:hover { background: rgba(124,58,237,.3); }
+.text-bg-dark .btn-check:checked + .seg-btn { background: #a78bfa; color: #fff; border-color: #a78bfa; box-shadow: 0 2px 6px rgba(167,139,250,.4); }
+
+.text-bg-dark .chip { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); color: #e0e0e0; }
+.text-bg-dark .chip:hover { background: rgba(255,255,255,.06); }
+.text-bg-dark .btn-check:checked + .chip { border-color: #34d399; background: rgba(52,211,153,.2); box-shadow: inset 0 0 0 1px rgba(52,211,153,.25); }
+
+.text-bg-dark .dot-gray { background: #6b7280; }
+.text-bg-dark .dot-amber { background: #fbbf24; }
+.text-bg-dark .filter-label { color: #b0b0b0; }
+.text-bg-dark #f-counter { color: #aaa; }
+
 </style>
 
 

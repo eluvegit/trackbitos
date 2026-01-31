@@ -189,116 +189,105 @@
 
 
 <style>
-    /* ====== Trackbitos vibes ====== */
-    .track-card {
-        position: relative;
-        display: grid;
-        grid-template-columns: 44px 1fr 18px;
-        gap: .9rem;
-        align-items: center;
-        padding: .9rem 1rem;
-        border-radius: 16px;
-        border: 1px solid rgba(0, 0, 0, .06);
-        background:
-            radial-gradient(1200px 200px at -10% -20%, rgba(99, 102, 241, .08), transparent 60%),
-            var(--bs-body-bg);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, .06);
-        transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
-    }
+    /* ====== Tarjeta Trackbitos / YouTube Dark Mode Mejorado ====== */
+.trk-card {
+    --trk-border: rgba(255,255,255,.1);
+    --trk-bg: #1e1e2e;
+    --trk-accent: #6366f1;
+    display: grid;
+    grid-template-columns: 48px 1fr 18px;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--trk-border);
+    background: var(--trk-bg);
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
+}
 
-    .track-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, .10);
-        border-color: rgba(99, 102, 241, .25);
-    }
+.trk-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.6);
+    border-color: #6366f1;
+}
 
-    .track-card:active {
-        transform: translateY(0);
-    }
+.trk-body { min-width:0; }
 
-    .track-card-accent {
-        content: "";
-        position: absolute;
-        inset: 0;
-        border-radius: 16px;
-        pointer-events: none;
-        background: linear-gradient(90deg, rgba(99, 102, 241, .12), rgba(99, 102, 241, 0));
-        opacity: .0;
-        transition: opacity .2s ease;
-    }
+.trk-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.15;
+    color: #e0e0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-    .track-card:hover .track-card-accent {
-        opacity: .6;
-    }
+.trk-sub {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: #b0b0b0;
+}
 
-    .track-card-icon {
-        width: 44px;
-        height: 44px;
-        display: grid;
-        place-items: center;
-        border-radius: 12px;
-        background: rgba(99, 102, 241, .12);
-        color: rgb(79, 70, 229);
-    }
+.trk-chevron {
+    font-size: 22px;
+    color: #aaaaaa;
+    transition: transform .15s ease, color .15s ease;
+}
 
-    .track-card-body {
-        min-width: 0;
-    }
+.trk-card:hover .trk-chevron { color: #ffffff; }
 
-    .track-card-title {
-        font-weight: 600;
-        line-height: 1.1;
-        font-size: 1rem;
-        color: var(--bs-emphasis-color);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+/* ====== Anillo de progreso ====== */
+.trk-ring {
+    position: relative;
+    width: 40px;
+    height: 40px;
+}
 
-    .track-card-meta .badge {
-        font-weight: 600;
-    }
+.trk-ring::before {
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background: conic-gradient(var(--trk-accent) var(--p,0%), rgba(255,255,255,0.12) 0);
+}
 
-    .track-card-chevron {
-        font-size: 26px;
-        line-height: 1;
-        color: rgba(0, 0, 0, .35);
-        transition: transform .15s ease, color .15s ease;
-    }
+.trk-ring::after {
+    content:"";
+    position:absolute;
+    inset:5px;
+    border-radius:50%;
+    background: var(--trk-bg);
+    box-shadow: inset 0 0 0 1px var(--trk-border);
+}
 
-    .track-card:hover .track-card-chevron {
-        transform: translateX(2px);
-        color: rgba(0, 0, 0, .55);
-    }
+.trk-ring__label {
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    font-size:0.65rem;
+    font-weight:600;
+    color:#e0e0e0;
+}
 
-    /* Dark mode friendly (si usas .bg-dark/.text-bg-dark) */
-    .text-bg-dark .track-card,
-    .bg-dark .track-card {
-        border-color: rgba(255, 255, 255, .08);
-        background:
-            radial-gradient(1200px 200px at -10% -20%, rgba(99, 102, 241, .18), transparent 60%),
-            rgba(255, 255, 255, .02);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
-    }
+.trk-low { --trk-accent: #9ca3af; }    /* gris claro */
+.trk-mid { --trk-accent: #f59e0b; }    /* ámbar brillante */
+.trk-good { --trk-accent: #10b981; }   /* verde lima */
 
-    .text-bg-dark .track-card:hover,
-    .bg-dark .track-card:hover {
-        border-color: rgba(99, 102, 241, .45);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
-    }
+/* Iconos circulares */
+.track-card-icon {
+    width: 40px;
+    height: 40px;
+    display:grid;
+    place-items:center;
+    border-radius:10px;
+    background: rgba(99,102,241,.25);
+    color: #d0d0ff;
+    font-size:1.1rem;
+}
 
-    .text-bg-dark .track-card-icon {
-        background: rgba(99, 102, 241, .2);
-        color: rgba(167, 139, 250, 1);
-    }
-
-    .text-bg-dark .track-card-chevron {
-        color: rgba(255, 255, 255, .5);
-    }
-
-    .text-bg-dark .track-card:hover .track-card-chevron {
-        color: rgba(255, 255, 255, .75);
-    }
 </style>
 
 <?= $this->endSection() ?>

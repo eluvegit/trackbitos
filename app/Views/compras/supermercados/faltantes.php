@@ -2,94 +2,113 @@
 <?= $this->section('content') ?>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <i class="bi bi-cart3 text-info"></i>
 
-    <i class="bi bi-cart3 text-primary"></i>
+    <span class="text-secondary">Compras</span>
+    <span class="text-secondary">/</span>
 
-    <span class="text-muted fw-normal">Compras</span>
+    <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>"
+        class="fw-semibold text-decoration-none link-light">
+        <?= esc($supermercado_nombre) ?>
+    </a>
 
-    <span class="text-muted">/</span>
-
-    <strong class="fw-semibold">
-        <a href="<?= site_url('compras/productos/' . $supermercado_id) ?>"
-            class="text-dark text-decoration-none">
-            <?= esc($supermercado_nombre) ?>
-        </a>
-    </strong>
-
-    <span class="text-muted">/</span>
+    <span class="text-secondary">/</span>
 
     <span class="fw-semibold text-warning">
         FALTA
     </span>
-
 </h5>
 
-<!-- Accesos rápidos a listas -->
+<!-- Acciones -->
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
 
-    <!-- Botón Reiniciar faltantes -->
     <form action="<?= site_url('compras/limpiar/faltantes/' . $supermercado_id) ?>"
         method="post"
         class="m-0"
         onsubmit="return confirm('¿Seguro que deseas reiniciar todos los faltantes?')">
         <?= csrf_field() ?>
-        <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1">
+        <button class="btn btn-outline-danger btn-sm">
             🧹
         </button>
     </form>
-    <button id="toggle-imagenes"
-        class="btn btn-outline-secondary btn-sm">
+
+    <button id="toggle-imagenes" class="btn btn-outline-light btn-sm">
         Ocultar imágenes
     </button>
-    <!-- Botón COMPRAR -->
+
     <a href="<?= site_url('compras/' . $supermercado_id . '/comprados') ?>"
         class="btn btn-outline-success btn-sm d-flex align-items-center gap-1">
         <i class="bi bi-cart-check"></i>
         COMPRAR
     </a>
-
 </div>
-<!-- Lista de productos -->
-<div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
+
+<!-- Productos -->
+<div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2" id="productos-container">
     <?php foreach ($productos as $producto): ?>
         <div class="col d-flex">
-            <div
-                class="card shadow-sm w-100 small text-center producto-card d-flex flex-column justify-content-between"
+            <div class="card producto-card w-100 small text-center d-flex flex-column justify-content-between"
                 data-producto-id="<?= $producto['id'] ?>"
-                data-faltante="<?= $producto['faltante'] ? '1' : '0' ?>"
-                style="
-                    cursor: pointer; 
-                    min-height: 200px;
-                    border: 2px solid <?= $producto['faltante'] ? '#ffc107' : 'transparent' ?>;
-                    transition: border-color 0.2s ease;
-                    padding: 0.5rem;
-                ">
+                data-faltante="<?= $producto['faltante'] ? '1' : '0' ?>">
 
                 <?php if (!empty($producto['imagen'])): ?>
                     <img src="<?= esc($producto['imagen']) ?>"
-                         class="card-img-top imagen-producto img-fluid mb-2"
-                         style="max-height: 120px; width: auto; margin: 0 auto; object-fit: contain;">
+                        class="img-fluid mb-2 mx-auto producto-imagen"
+                        style="max-height:120px; object-fit:contain;">
                 <?php endif; ?>
 
-                <div class="card-body p-1 flex-grow-1 d-flex align-items-center justify-content-center">
-                    <div class="fw-semibold text-center" style="word-wrap: break-word;">
+                <div class="card-body p-1 d-flex align-items-center justify-content-center">
+                    <div class="fw-semibold text-center">
                         <?= esc($producto['nombre']) ?>
                     </div>
                 </div>
-
             </div>
         </div>
     <?php endforeach; ?>
 </div>
 
-
-
-
 <script>
+    const container = document.getElementById('productos-container');
+    const toggleBtn = document.getElementById('toggle-imagenes');
+
+    /* ===== Toggle imágenes / lista ===== */
+    toggleBtn.addEventListener('click', () => {
+        const imgs = document.querySelectorAll('.producto-imagen');
+        const ocultar = imgs[0]?.style.display !== 'none';
+
+        imgs.forEach(img => img.style.display = ocultar ? 'none' : '');
+        toggleBtn.textContent = ocultar ? 'Mostrar imágenes' : 'Ocultar imágenes';
+
+        container.classList.toggle('lista', ocultar);
+    });
+
+    /* ===== Estado visual inicial ===== */
     document.querySelectorAll('.producto-card').forEach(card => {
-        card.addEventListener('click', async () => {
-            const productoId = card.getAttribute('data-producto-id');
-            const esFaltante = card.getAttribute('data-faltante') === '1';
+        if (card.dataset.faltante === '1') {
+            marcarFaltante(card);
+        }
+    });
+
+    /* ===== Helpers visuales ===== */
+    function marcarFaltante(card) {
+        card.classList.add('border-warning', 'border-2', 'bg-warning-subtle');
+    }
+
+    function desmarcarFaltante(card) {
+        card.classList.remove('border-warning', 'border-2', 'bg-warning-subtle');
+    }
+
+    /* ===== Toggle faltante ===== */
+    document.querySelectorAll('.producto-card').forEach(card => {
+
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        let touchHandled = false;
+
+        const toggleFaltante = async () => {
+            const productoId = card.dataset.productoId;
+            const esFaltante = card.dataset.faltante === '1';
 
             const url = esFaltante ?
                 '<?= site_url('compras/producto') ?>/' + productoId + '/desmarcar-faltante' :
@@ -105,27 +124,57 @@
                     body: '<?= csrf_token() ?>=<?= csrf_hash() ?>'
                 });
 
-                if (response.ok) {
-                    card.style.borderColor = esFaltante ? 'transparent' : '#ffc107';
-                    card.setAttribute('data-faltante', esFaltante ? '0' : '1');
+                if (!response.ok) return;
+
+                // 🔒 Estado fuente de la verdad
+                card.dataset.faltante = esFaltante ? '0' : '1';
+
+                if (esFaltante) {
+                    desmarcarFaltante(card);
                 } else {
-                    alert('Error al actualizar el estado del producto.');
+                    marcarFaltante(card);
                 }
-            } catch (err) {
-                console.error(err);
-                alert('Fallo en la conexión con el servidor.');
+
+            } catch (e) {
+                console.error(e);
             }
+        };
+
+        /* --- Touch --- */
+        card.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            moved = false;
+            touchHandled = false;
+        }, {
+            passive: true
+        });
+
+        card.addEventListener('touchmove', e => {
+            if (
+                Math.abs(e.touches[0].clientX - startX) > 10 ||
+                Math.abs(e.touches[0].clientY - startY) > 10
+            ) {
+                moved = true;
+            }
+        }, {
+            passive: true
+        });
+
+        card.addEventListener('touchend', e => {
+            if (moved) return;
+
+            touchHandled = true;
+            toggleFaltante();
+        });
+
+        /* --- Click (solo desktop) --- */
+        card.addEventListener('click', () => {
+            if (touchHandled) return; // ⛔ evita doble ejecución
+            toggleFaltante();
         });
     });
-
-
-    // Mostrar / ocultar imágenes
-    document.getElementById('toggle-imagenes').addEventListener('click', () => {
-        const imgs = document.querySelectorAll('.imagen-producto');
-        const ocultar = imgs[0]?.style.display !== 'none';
-        imgs.forEach(img => img.style.display = ocultar ? 'none' : 'block');
-        document.getElementById('toggle-imagenes').textContent = ocultar ? 'Mostrar imágenes' : 'Ocultar imágenes';
-    });
 </script>
+
 
 <?= $this->endSection() ?>
