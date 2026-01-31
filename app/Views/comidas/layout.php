@@ -15,7 +15,58 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
 </head>
-<body class="bg-light">
+<style>
+    .card,
+    .card-header,
+    .card-body,
+    .list-group-item {
+        background-color: #1e1e1e !important;
+        /* Fondo oscuro */
+        color: #e0e0e0 !important;
+        /* Texto claro */
+        border-color: #333 !important;
+        /* Bordes menos brillantes */
+    }
+
+    .btn,
+    .btn-outline-primary,
+    .btn-primary {
+        color: #e0e0e0 !important;
+    }
+
+    a,
+    a.text-dark {
+        color: #e0e0e0 !important;
+    }
+    .text-muted {
+    color: #aaaaaa !important; /* gris más claro para fondo oscuro */
+}
+/* Tablas modo oscuro */
+table {
+    background-color: #1e1e1e; /* fondo de la tabla */
+    color: #e0e0e0; /* texto */
+    border-color: #333333; /* bordes */
+}
+
+table thead {
+    background-color: #2c2c2c; /* fondo del encabezado */
+    color: #ffffff; /* texto del encabezado */
+}
+
+table th, table td {
+    border-color: #333333; /* bordes de celdas */
+}
+
+table tbody tr:nth-child(even) {
+    background-color: #1a1a1a; /* filas alternas */
+}
+
+.table-hover tbody tr:hover {
+    background-color: #333333; /* hover filas */
+}
+
+</style>
+<body class="bg-dark">
 
     <!-- Navbar principal (idéntica a la tuya) -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 mb-3">

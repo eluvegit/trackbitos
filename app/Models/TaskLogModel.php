@@ -15,7 +15,7 @@ class TaskLogModel extends Model
         'minutes',
     ];
 
-      // 🔴 Desactivar timestamps
+    // 🔴 Desactivar timestamps
     protected $useTimestamps = false;
 
     /**
@@ -48,7 +48,44 @@ class TaskLogModel extends Model
     public function getByTaskId(int $taskId)
     {
         return $this->where('task_id', $taskId)
-                    ->orderBy('log_date', 'DESC')
-                    ->findAll();
+            ->orderBy('log_date', 'DESC')
+            ->findAll();
+    }
+
+    /**
+     * Última actividad por tarea
+     * @return array [task_id => last_activity]
+     */
+    public function getLastActivityPerTask(): array
+    {
+        $rows = $this->select('task_id, MAX(log_date) as last_activity')
+            ->groupBy('task_id')
+            ->findAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['task_id']] = $row['last_activity'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Última actividad por categoría
+     * @return array [category => last_activity]
+     */
+    public function getLastActivityPerCategory(): array
+    {
+        $rows = $this->select('tasks.category, MAX(journal_task_logs.log_date) as last_activity')
+            ->join('tasks', 'tasks.id = journal_task_logs.task_id')
+            ->groupBy('tasks.category')
+            ->findAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['category']] = $row['last_activity'];
+        }
+
+        return $result;
     }
 }

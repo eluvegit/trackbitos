@@ -60,6 +60,13 @@ class Journal extends BaseController
             }
         }
 
+        $taskLogModel = new TaskLogModel();
+
+        $lastTaskActivity = $taskLogModel->getLastActivityPerTask();
+        $lastCategoryActivity = $taskLogModel->getLastActivityPerCategory();
+
+
+
         // 6. Ordenar categorías por tiempo total si prioridad activada
         if (!empty($filterPriority)) {
             usort($categories, function ($a, $b) use ($totalTimeByCategory) {
@@ -69,6 +76,30 @@ class Journal extends BaseController
             });
         }
 
+        $progressByCategory = [];
+
+        foreach ($categories as $category) {
+            $catName = $category['name'];
+            $catTasks = $allTasksByCategory[$catName] ?? [];
+
+            $total = count($catTasks);
+            $current = count(array_filter($catTasks, fn($t) => !empty($t['is_current'])));
+            $completed = count(array_filter($catTasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00'));
+
+            $totalSafe = max($total, 1); // evitar división por 0
+
+            $progressByCategory[$catName] = [
+                'total' => $total,
+                'current' => $current,
+                'completed' => $completed,
+                'currentPerc' => round(($current / $totalSafe) * 100),
+                'completedPerc' => round(($completed / $totalSafe) * 100),
+                'remainingPerc' => round(100 - (($current / $totalSafe) * 100) - (($completed / $totalSafe) * 100))
+            ];
+        }
+
+
+
         // 7. Enviar todo a la vista
         return view('journal/index', [
             'view_mode'           => $viewMode,
@@ -77,6 +108,9 @@ class Journal extends BaseController
             'categories'          => $categories,
             'tasksByCategory'     => $tasksByCategory,
             'totalTimeByCategory' => $totalTimeByCategory, // array con tiempo total
+            'lastTaskActivity'    => $lastTaskActivity,
+            'lastCategoryActivity' => $lastCategoryActivity,
+            'progressByCategory'   => $progressByCategory // <--- aquí lo pasamos
         ]);
     }
 

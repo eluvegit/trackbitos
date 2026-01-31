@@ -2,9 +2,20 @@
 <?= $this->section('content') ?>
 
 <style>
+    /* Fondo general oscuro */
+    body,
+    .container {
+        background-color: rgba(var(--bs-dark-rgb),var(--bs-bg-opacity))!important;
+        color: #e0e0e0 !important;
+    }
+
+
     .card {
         margin-bottom: 0.25rem;
         font-size: 0.8rem;
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        color: #e0e0e0;
     }
 
     .card-header {
@@ -16,6 +27,7 @@
 
     .card-body {
         padding: 0.25rem 0.35rem;
+        color: #e0e0e0;
     }
 
     .list-group-item {
@@ -25,33 +37,27 @@
         align-items: center;
         position: relative;
         min-height: 40px;
-        /* espacio para barra de progreso */
+        background-color: #1e1e1e;
+        border-bottom: 1px solid #333;
+        color: #e0e0e0;
+    }
+
+    .list-group-item.text-muted {
+        color: #888 !important;
     }
 
     .new-task-input {
         padding: 0.2rem 0.35rem;
         font-size: 0.8rem;
         margin-top: 0.2rem;
+        background-color: #2a2a2a;
+        border: 1px solid #444;
+        color: #e0e0e0;
     }
 
-    .container {
-        padding: 0.2rem;
-    }
-
-    .task-progress {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 6px;
-        display: grid;
-        grid-template-columns: repeat(10, 1fr);
-        gap: 2px;
-        pointer-events: none;
-    }
-
+    /* Progreso de tareas */
     .task-progress-segment {
-        background-color: #e9ecef;
+        background-color: #333;
         border-radius: 2px;
     }
 
@@ -62,27 +68,95 @@
     .task-time-trigger {
         cursor: pointer;
         white-space: nowrap;
-    }
-
-    .task-time-trigger:hover {
-        text-decoration: underline;
+        color: #ccc;
     }
 
     .task-title-link {
         display: inline-block;
         max-width: 100%;
+        color: #e0e0e0;
     }
 
-    .current-star {
-        display: flex;
-        align-items: center;
+    .task-title-link.text-decoration-line-through {
+        color: #888;
     }
 
-    .task-title {
-        flex-grow: 1;
-        margin-right: 0.5rem;
+    .current-star svg {
+        filter: drop-shadow(0 0 1px #000);
+    }
+
+    /* Botones toggle */
+    .btn-outline-primary {
+        color: #e0e0e0;
+        border-color: #555;
+    }
+
+    .btn-outline-primary:hover {
+        background-color: #333;
+        color: #fff;
+        border-color: #666;
+    }
+
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    /* Modal */
+    .modal-content {
+        background-color: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #333;
+    }
+
+    .form-control {
+        background-color: #2a2a2a;
+        border: 1px solid #444;
+        color: #e0e0e0;
+    }
+
+    .btn-secondary {
+        background-color: #333;
+        border-color: #444;
+        color: #e0e0e0;
     }
 </style>
+
+<?php
+function time_ago(?string $datetime): string
+{
+    if (!$datetime) {
+        return 'sin actividad';
+    }
+
+    $time = strtotime($datetime);
+    $diff = time() - $time;
+
+    $days = floor($diff / 86400); // segundos en un día
+    if ($days < 1) {
+        return 'hoy';
+    }
+
+    if ($days < 7) {
+        return "hace {$days} días";
+    }
+
+    $weeks = floor($days / 7);
+    if ($weeks < 5) {
+        return "hace {$weeks} sem";
+    }
+
+    $months = floor($days / 30);
+    if ($months < 12) {
+        return "hace {$months} meses";
+    }
+
+    $years = floor($days / 365);
+    return "hace {$years} años";
+}
+?>
+
 
 <div class="container py-1">
 
@@ -152,6 +226,20 @@
         </div>
     </div>
 
+    <?php
+    $taskCounts = [];
+    foreach ($categories as $category) {
+        $catName = $category['name'];
+        $catTasksAll = $allTasksByCategory[$catName] ?? [];
+
+        $taskCounts[$catName] = [
+            'total'     => count($catTasksAll),
+            'current'   => count(array_filter($catTasksAll, fn($t) => !empty($t['is_current']))),
+            'completed' => count(array_filter($catTasksAll, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')),
+        ];
+    }
+    ?>
+
 
     <?php foreach ($categories as $category): ?>
         <?php
@@ -173,52 +261,64 @@
         }
         ?>
 
+        <?php
+        $totalTasks = count($catTasks); // total de tareas en la categoría
+        $currentTasks = count(array_filter($catTasks, fn($t) => !empty($t['is_current']))); // actuales
+        $completedTasks = count(array_filter($catTasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')); // completadas
+        ?>
+        <?php
+        $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
+        ?>
         <div class="card mb-1">
-            <div class="card-header d-flex justify-content-between align-items-center"
-                data-bs-toggle="collapse"
-                href="#cat-<?= $catId ?>"
-                style="background-color: <?= esc($catColor) ?>;">
+            <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
+                <?php
+                $current = $counts['current'];
+                $completed = $counts['completed'];
+                $total = max(1, $counts['total']); // evitar división por 0
 
-                <div>
-                    <strong><?= esc($catName) ?></strong>
+                $currentPerc = round(($current / $total) * 100);
+                $completedPerc = round(($completed / $total) * 100);
+                $remainingPerc = 100 - $currentPerc - $completedPerc;
+                ?>
+                <!-- Fondo título -->
+                <div style="background-color: <?= esc($catColor) ?>; padding: 0.25rem 0.5rem; flex-grow:1; display:flex; align-items:center; gap:0.5rem;">
 
-                    <!-- Mini barra de tareas -->
-                    <?php
-                    $totalTasks = count($catTasks);
-                    $currentTasks = 0;
-                    foreach ($catTasks as $task) {
-                        if (!empty($task['is_current'])) $currentTasks++;
-                    }
-                    ?>
-                    <span class="ms-2 badge bg-light text-dark"
-                        title="Tareas actuales">
-                        <?= $currentTasks ?> actuales
-                    </span>
+                    <!-- Izquierda -->
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="display:inline-block; width:35px; text-align:right;">
+                            <?= $progressByCategory[$catName]['completed'] ?>/<?= max(1, $progressByCategory[$catName]['total']) ?>
+                        </span>
 
-                    <span class="ms-1 badge bg-light text-dark"
-                        title="Total de tareas">
-                        <?= $totalTasks ?> total
-                    </span>
 
-                    <!-- Tiempo total -->
-                    <span class="small ms-2" title="Tiempo total">
-                        <?= $totalHours ?> h
-                    </span>
+                        <strong><?= esc($catName) ?></strong>
+                        <?php
+                        $lastCategoryDate = $lastCategoryActivity[$catName] ?? null;
+                        ?>
+                        <span class="small text-muted">
+                            <strong><?= time_ago($lastCategoryDate) ?></strong>
+                        </span>
+
+
+                    </div>
+
+                    <!-- Derecha -->
+                    <span class="small ms-auto"><?= $totalHours ?> h</span>
                 </div>
 
-                <!-- Progreso de completadas -->
-                <?php
-                $completedCount = 0;
-                foreach ($catTasks as $task) {
-                    if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
-                        $completedCount++;
-                    }
-                }
-                ?>
-                <span class="badge bg-light text-dark" title="Completadas">
-                    <?= $completedCount ?>/<?= $totalTasks ?>
-                </span>
+                <div style="position: relative; display:flex; width:50px; height:16px; margin-left:0.5rem; border-radius:4px; overflow:hidden; border:1px solid #ccc; cursor:pointer;"
+                    title="Actuales: <?= $progressByCategory[$category['name']]['current'] ?>, Completadas: <?= $progressByCategory[$category['name']]['completed'] ?>, Total: <?= $progressByCategory[$category['name']]['total'] ?>">
+
+                    <div style="width:<?= $progressByCategory[$category['name']]['currentPerc'] ?>%; background-color:#ffc107;"></div>
+                    <div style="width:<?= $progressByCategory[$category['name']]['completedPerc'] ?>%; background-color:#198754;"></div>
+                    <div style="width:<?= $progressByCategory[$category['name']]['remainingPerc'] ?>%; background-color:#e9ecef;"></div>
+                </div>
+
+
+
             </div>
+
+
+
 
 
             <div class="collapse" id="cat-<?= $catId ?>">
@@ -253,6 +353,15 @@
                                                 class="text-dark text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
                                                 <?= esc($task['title']) ?>
                                             </a>
+                                            <?php
+                                            $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
+                                            ?>
+
+                                            <span class="small text-muted">
+                                                <?= time_ago($lastTaskDate) ?>
+                                            </span>
+
+
                                         </div>
 
                                         <!-- Tiempo -->
@@ -308,6 +417,16 @@
                                                     </button>
                                                 </span>
                                             </div>
+
+                                            <?php
+                                            $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
+                                            ?>
+
+                                            <span class="small text-muted">
+                                                <?= time_ago($lastTaskDate) ?>
+                                            </span>
+
+
 
                                             <!-- Tiempo (clicable para abrir modal) -->
                                             <span class="text-muted small task-time-trigger mb-1"
