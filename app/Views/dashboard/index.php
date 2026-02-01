@@ -7,7 +7,6 @@
     </div>
 <?php endif; ?>
 
-
 <?php
 $secciones = [
     ['ruta' => 'comidas/diario/hoy', 'icono' => '🍽️', 'titulo' => 'Comida', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
@@ -19,7 +18,7 @@ $secciones = [
     ['ruta' => 'enlaces', 'icono' => '📒', 'titulo' => 'Enlaces', 'texto' => 'Permite revisar los enlaces registrados interesantes.'],
     ['ruta' => 'journal', 'icono' => '📨', 'titulo' => 'Journal', 'texto' => 'Permite hacer y seguir tareas y bullet journal.'],
     ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
-    ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Sesiones', 'texto' => 'Gestión de flujo de trabajo en la edición de fotos.', 'disabled' => true],
+    ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Sesiones', 'texto' => 'PROXIMAMAMENTE<br>Gestión de flujo de trabajo en la edición de fotos.', 'disabled' => true],
 ];
 ?>
 
@@ -27,7 +26,7 @@ $secciones = [
     <?php foreach ($secciones as $sec): ?>
         <div class="col d-flex">
             <?php if (!empty($sec['disabled'])): ?>
-                <div class="card shadow-sm w-100 bg-light text-muted" style="aspect-ratio: 1 / 1; cursor: not-allowed;">
+                <div class="card shadow-sm w-100" style="aspect-ratio: 1 / 1; cursor: not-allowed;">
                     <div class="card-body d-flex flex-column justify-content-center align-items-center text-center p-2">
                         <div class="mb-2" style="font-size: 2rem; line-height: 1;">
                             <?= $sec['icono'] ?>
@@ -40,7 +39,7 @@ $secciones = [
                     </div>
                 </div>
             <?php else: ?>
-                <a href="<?= site_url($sec['ruta']) ?>" class="text-decoration-none text-dark w-100">
+                <a href="<?= site_url($sec['ruta']) ?>" class="text-decoration-none  w-100">
                     <div class="card shadow-sm w-100" style="aspect-ratio: 1 / 1;">
                         <div class="card-body d-flex flex-column justify-content-center align-items-center text-center p-2">
                             <div class="mb-2" style="font-size: 2rem; line-height: 1;">
