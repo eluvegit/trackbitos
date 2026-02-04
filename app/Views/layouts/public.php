@@ -14,7 +14,7 @@
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
 </head>
 
-<body class="bg-light">
+<body data-bs-theme="dark">
 
     <!-- Navbar -->
     <?php $auth = service('authentication'); ?>
