@@ -3,7 +3,7 @@
 <?= $this->section('content') ?>
 
 <div class="container d-flex justify-content-center align-items-center">
-    <div class="col-md-5 col-lg-4">
+    <div class="col-md-3 col-lg-2 col-6">
         <div class="card shadow-sm">
             <h2 class="card-header fs-5 py-2"><?= lang('Auth.loginTitle') ?></h2>
             <div class="card-body p-3">
