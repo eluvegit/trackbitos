@@ -27,430 +27,554 @@ $renderRefs = function (string $txt) {
     return nl2br(auto_link(esc($txt), 'both', true));
 };
 ?>
-
 <style>
-    /* ====== IMPRESIÓN A4, TEXTO CONDENSADO SIN CAJAS ====== */
-    @media print {
+    /* ============================================================
+   RODAJE UI — Compatible con Bootstrap 5 + Dark Mode
+   Todo está encapsulado en .rodaje-ui para no romper Bootstrap
+   ============================================================ */
 
-        /* Oculta cualquier cabecera/pie propio de la página */
-        .no-print,
-        .print-hide-header,
-        .print-hide-footer,
-        header,
-        footer,
-        .toolbar,
-        .page-header,
-        .page-footer {
-            display: none !important;
-            visibility: hidden !important;
-            height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-        }
-
-        /* Márgenes de página (ajusta si quieres más área útil) */
-        @page {
-            margin: 10mm;
-        }
+    .rodaje-ui {
+        /* Variables conectadas al sistema Bootstrap */
+        --r-primary: var(--bs-primary);
+        --r-primary-rgb: var(--bs-primary-rgb);
+        --r-bg: var(--bs-body-bg);
+        --r-surface: var(--bs-tertiary-bg);
+        --r-border: var(--bs-border-color);
+        --r-text: var(--bs-body-color);
+        --r-muted: var(--bs-secondary-color);
+        --r-radius: var(--bs-border-radius);
+        --r-radius-lg: var(--bs-border-radius-lg);
     }
 
-    @page {
-        size: A4 portrait;
-        margin: 12mm;
+    /* Ajuste específico dark mode si el tema no define tertiary */
+    [data-bs-theme="dark"] .rodaje-ui {
+        --r-surface: #1e1e1e;
     }
 
-    :root {
-        --print-font: 10px;
-        --line: 1.25;
-        --gap: 10px;
+    /* ================= HEADER ================= */
+
+    .rodaje-ui .hero-header {
+        background: linear-gradient(135deg,
+                rgba(var(--r-primary-rgb), .95),
+                rgba(var(--r-primary-rgb), .65));
+        color: #fff;
+        padding: 1.5rem;
+        border-radius: var(--r-radius-lg);
+        margin-bottom: 1.5rem;
     }
 
-    @media print {
-
-        html,
-        body {
-            background: #fff !important;
-        }
-
-        body {
-            font-size: var(--print-font);
-            line-height: var(--line);
-            color: #000;
-        }
-
-        .no-print {
-            display: none !important;
-        }
-
-        .h1 {
-            font-size: 14px;
-            font-weight: 700;
-            margin: 0 0 4px 0;
-        }
-
-        .muted {
-            color: #333;
-        }
-
-        .sep {
-            border: 0;
-            border-top: 1px solid #000;
-            margin: 6px 0;
-        }
-
-        .tiny {
-            font-size: 9px;
-        }
-
-        /* Bloque textual: 2 columnas para comprimir a una sola página */
-        .print-onepage {
-            column-count: 2;
-            column-gap: var(--gap);
-            page-break-after: always;
-        }
-
-        .section {
-            break-inside: avoid;
-            margin-bottom: 6px;
-        }
-
-        .section h2 {
-            font-size: 11px;
-            margin: 0 0 4px 0;
-        }
-
-        .section h3 {
-            font-size: 10px;
-            margin: 0 0 3px 0;
-        }
-
-        .kv {
-            margin: 0 0 2px 0;
-        }
-
-        .kv dt {
-            float: left;
-            width: 40%;
-            clear: left;
-            font-weight: 600;
-        }
-
-        .kv dd {
-            margin-left: 42%;
-        }
-
-        .kv:after {
-            content: "";
-            display: block;
-            clear: both;
-        }
-
-        /* Chips inline (sin cajas) */
-        .chips {
-            margin: 2px 0 4px 0;
-        }
-
-        .chip {
-            margin-right: 6px;
-        }
-
-        /* Galerías: nueva página, miniaturas básicas */
-        .print-break {
-            page-break-before: always;
-        }
-
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-
-        .gallery img {
-            width: 100%;
-            height: 45mm;
-            object-fit: cover;
-            border: 1px solid #000;
-        }
-
-        /* Si aún se pasa, descomenta para reducir un poco todo el bloque de texto */
-        /* .print-onepage { zoom: 0.94; } */
+    .rodaje-ui .hero-title {
+        font-size: 1.6rem;
+        font-weight: 600;
+        margin: 0;
     }
 
-    @media screen {
-        .toolbar {
-            position: sticky;
-            top: 0;
-            background: #fff;
-            padding: .75rem 0;
-            border-bottom: 1px solid rgba(0, 0, 0, .08);
-            margin-bottom: .75rem;
-        }
-
-        .h1 {
-            font-size: 20px;
-            margin-bottom: .25rem;
-        }
-
-        .sep {
-            border: 0;
-            border-top: 1px solid rgba(0, 0, 0, .2);
-            margin: .5rem 0;
-        }
+    .rodaje-ui .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+        margin-top: .5rem;
     }
 
-    @media print {
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(40mm, 1fr));
-            /* columnas adaptables */
-            gap: 4mm;
-        }
-
-        .gallery img {
-            width: 100%;
-            height: auto;
-            /* mantiene proporción */
-            max-height: 40mm;
-            /* límite para no ocupar toda la página */
-            object-fit: cover;
-            border: 1px solid #000;
-        }
+    .rodaje-ui .hero-badge {
+        background: rgba(255, 255, 255, .15);
+        padding: .25rem .6rem;
+        border-radius: 999px;
+        font-size: .75rem;
     }
 
-    @media screen {
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            /* responsive en pantalla */
-            gap: 8px;
-        }
+    /* ================= CARDS ================= */
 
-        .gallery img {
-            width: 100%;
-            height: auto;
-            max-height: 180px;
-            /* más pequeña en pantalla */
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 0, 0, .15);
-        }
+    .rodaje-ui .info-card {
+        background: var(--r-surface);
+        border: 1px solid var(--r-border);
+        border-radius: var(--r-radius);
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: .2s ease;
     }
 
-    .kv-2col {
+    .rodaje-ui .info-card:hover {
+        box-shadow: var(--bs-box-shadow-sm);
+    }
+
+    .rodaje-ui .card-header {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin-bottom: .75rem;
+        padding-bottom: .4rem;
+        border-bottom: 1px solid var(--r-border);
+    }
+
+    .rodaje-ui .card-title {
+        font-size: .95rem;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    /* ================= GRID ESPECIFICACIONES ================= */
+
+    .rodaje-ui .specs-grid {
         display: grid;
-        grid-template-columns: auto 1fr auto 1fr;
-        /* 2 columnas de pares dt/dd */
-        column-gap: 12px;
-        row-gap: 4px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: .5rem;
     }
 
-    .kv-2col dt {
-        font-weight: bold;
-        margin: 0;
+    .rodaje-ui .spec-item {
+        background: var(--r-bg);
+        border: 1px solid var(--r-border);
+        border-radius: var(--r-radius);
+        padding: .5rem .6rem;
     }
 
-    .kv-2col dd {
-        margin: 0;
+    .rodaje-ui .spec-label {
+        font-size: .65rem;
+        text-transform: uppercase;
+        color: var(--r-muted);
+    }
+
+    .rodaje-ui .spec-value {
+        font-size: .85rem;
+        font-weight: 500;
+    }
+
+    /* ================= CHIPS ================= */
+
+    .rodaje-ui .chips-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+    }
+
+    .rodaje-ui .chip {
+        background: rgba(var(--r-primary-rgb), .15);
+        color: var(--r-primary);
+        padding: .2rem .55rem;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 500;
+    }
+
+    /* ================= GALERÍA ================= */
+
+    .rodaje-ui .gallery-section {
+        background: var(--r-surface);
+        border: 1px solid var(--r-border);
+        border-radius: var(--r-radius);
+        padding: 1rem;
+    }
+
+    .rodaje-ui .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: .6rem;
+    }
+
+    .rodaje-ui .gallery-item {
+        border-radius: var(--r-radius);
+        overflow: hidden;
+        border: 1px solid var(--r-border);
+        aspect-ratio: 4/3;
+    }
+
+    .rodaje-ui .gallery-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* ================= TEXTO ================= */
+
+    .rodaje-ui .text-section {
+        background: var(--r-surface);
+        border: 1px solid var(--r-border);
+        border-left: 3px solid var(--r-primary);
+        border-radius: var(--r-radius);
+        padding: .75rem;
+        margin-bottom: .75rem;
+    }
+
+    .rodaje-ui .text-label {
+        font-size: .7rem;
+        text-transform: uppercase;
+        color: var(--r-primary);
+        margin-bottom: .25rem;
+    }
+
+    .rodaje-ui .text-content {
+        font-size: .85rem;
+    }
+
+    /* ================= TOOLBAR ================= */
+
+    .rodaje-ui .toolbar {
+        position: sticky;
+        top: 0;
+        background: var(--r-bg);
+        border-bottom: 1px solid var(--r-border);
+        padding: .5rem 0;
+        margin-bottom: 1rem;
+        z-index: 10;
+    }
+
+    /* ================= LAYOUT ================= */
+
+    .rodaje-ui .content-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    @media (min-width: 992px) {
+        .rodaje-ui .content-grid {
+            grid-template-columns: 2fr 1fr;
+        }
+    }
+
+    /* ================= PRINT ================= */
+
+    @media print {
+
+        .rodaje-ui .toolbar,
+        .rodaje-ui .no-print,
+        header,
+        footer {
+            display: none !important;
+        }
+
+        .rodaje-ui {
+            font-size: 10px;
+        }
+
+        .rodaje-ui .info-card {
+            break-inside: avoid;
+            border: 1px solid #000;
+            background: #fff !important;
+            color: #000 !important;
+        }
+
+        .rodaje-ui .hero-header {
+            background: #000 !important;
+            color: #fff !important;
+        }
+
+        .rodaje-ui .gallery-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
     }
 </style>
+<div class="rodaje-ui">
 
-<div class="container py-3">
+    <div class="container-fluid px-3 py-2">
 
-    <!-- Toolbar pantalla (no se imprime) -->
-    <div class="toolbar no-print d-flex justify-content-between">
-        <div>
-            <div class="h1"><?= esc($proyecto['titulo']) ?> — Escena</div>
-            <div class="tiny muted">
-                Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?>
-            </div>
-        </div>
-        <div class="d-flex gap-2 mb-3">
-            <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $e['id']) ?>?print=1">🖨️ PDF</a>
-            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
-        </div>
-    </div>
-
-    <!-- ENCABEZADO IMPRESIÓN -->
-    <div class="section">
-        <div class="h1"><?= esc($bloque ?: 'Bloque sin título') ?><?php if ($tomas): ?> · Toma/s: <?= esc($tomas) ?><?php endif; ?></div>
-        <div class="muted tiny">
-            Orden: <?= esc($orden) ?><?php if ($hora): ?> · Hora del día: <?= esc($hora) ?><?php endif; ?><?php if ($ubic): ?> · 📍 <?= esc($ubic) ?><?php endif; ?><?php if ($actores): ?> · Actores: Sí<?php endif; ?><?php if ($fx): ?> · FX: <?= esc($fx) ?><?php endif; ?>
-        </div>
-        <?php if ($plano || $angulo || $mov || $soporte): ?>
-            <div class="chips tiny">
-                <?php if ($plano): ?><span class="chip"><strong>Plano:</strong> <?= esc($plano) ?></span><?php endif; ?>
-                <?php if ($angulo): ?><span class="chip"><strong>Ángulo:</strong> <?= esc($angulo) ?></span><?php endif; ?>
-                <?php if ($mov): ?><span class="chip"><strong>Movimiento:</strong> <?= esc($mov) ?></span><?php endif; ?>
-                <?php if ($soporte): ?><span class="chip"><strong>Soporte:</strong> <?= esc($soporte) ?></span><?php endif; ?>
-            </div>
-        <?php endif; ?>
-        <hr class="sep">
-    </div>
-
-    <?php if (!empty($e['plano_notas'])): ?>
-        <dt>Notas</dt>
-        <dd><?= nl2br(esc($e['plano_notas'])) ?></dd>
-    <?php endif; ?>
-
-    <!-- GALERÍAS (en páginas aparte) -->
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Lugar y objetos</h2>
-        <?php if (empty($imagenes_lugar)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
-        <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
+        <!-- Toolbar -->
+        <div class="toolbar no-print">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h4 mb-1"><?= esc($proyecto['titulo']) ?></h1>
+                    <div class="text-muted small">Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?></div>
+                </div>
+                <div class="btn-group">
+                    <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">
+                        ← Volver
                     </a>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Inspiración</h2>
-        <?php if (empty($imagenes_insp)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
-        <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
+                    <button class="btn btn-primary" onclick="window.print()">
+                        🖨️ Imprimir
+                    </button>
+                    <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">
+                        ✏️ Editar
                     </a>
-                <?php endforeach; ?>
+                </div>
+            </div>
+
+
+            <!-- Hero Header -->
+            <div class="hero-header">
+                <h1 class="hero-title"><?= esc($bloque ?: 'Escena sin título') ?></h1>
+                <div class="hero-meta">
+                    <?php if ($orden): ?><span class="hero-badge">📋 Orden: <?= esc($orden) ?></span><?php endif; ?>
+                    <?php if ($tomas): ?><span class="hero-badge">🎬 Toma/s: <?= esc($tomas) ?></span><?php endif; ?>
+                    <?php if ($ubic): ?><span class="hero-badge">📍 <?= esc($ubic) ?></span><?php endif; ?>
+                    <?php if ($hora): ?><span class="hero-badge">🕐 <?= esc($hora) ?></span><?php endif; ?>
+                    <?php if ($actores): ?><span class="hero-badge">👥 Con actores</span><?php endif; ?>
+                    <?php if ($fx): ?><span class="hero-badge">✨ FX: <?= esc($fx) ?></span><?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Chips de configuración visual -->
+            <?php if ($plano || $angulo || $mov || $soporte): ?>
+                <div class="chips-container">
+                    <?php if ($plano): ?><span class="chip">📐 <?= esc($plano) ?></span><?php endif; ?>
+                    <?php if ($angulo): ?><span class="chip chip-accent">📷 <?= esc($angulo) ?></span><?php endif; ?>
+                    <?php if ($mov): ?><span class="chip">🎥 <?= esc($mov) ?></span><?php endif; ?>
+                    <?php if ($soporte): ?><span class="chip chip-success">🔧 <?= esc($soporte) ?></span><?php endif; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+        <!-- Grid principal -->
+        <div class="content-grid">
+
+            <!-- Columna izquierda -->
+            <div>
+                <!-- Escena -->
+                <?php if (!empty($e['escena_descripcion']) || !empty($e['escena_objetivo']) || !empty($e['escena_accion'])): ?>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon">🎬</div>
+                            <h2 class="card-title">Escena</h2>
+                        </div>
+
+                        <?php if (!empty($e['escena_descripcion'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Descripción</div>
+                                <div class="text-content"><?= nl2br(esc($e['escena_descripcion'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['escena_objetivo'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Objetivo narrativo</div>
+                                <div class="text-content"><?= nl2br(esc($e['escena_objetivo'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['escena_accion'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Acción</div>
+                                <div class="text-content"><?= nl2br(esc($e['escena_accion'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['escena_cont_previa']) || !empty($e['escena_cont_posterior'])): ?>
+                            <div class="row g-2 mt-2">
+                                <?php if (!empty($e['escena_cont_previa'])): ?>
+                                    <div class="col-md-6">
+                                        <div class="text-section">
+                                            <div class="text-label">← Continuidad previa</div>
+                                            <div class="text-content"><?= nl2br(esc($e['escena_cont_previa'])) ?></div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($e['escena_cont_posterior'])): ?>
+                                    <div class="col-md-6">
+                                        <div class="text-section">
+                                            <div class="text-label">Continuidad posterior →</div>
+                                            <div class="text-content"><?= nl2br(esc($e['escena_cont_posterior'])) ?></div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Construcción del plano -->
+                <?php if (!empty($e['plano_esquema_iluminacion']) || !empty($e['plano_objetos']) || !empty($e['plano_toma_alternativa'])): ?>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon">💡</div>
+                            <h2 class="card-title">Construcción del plano</h2>
+                        </div>
+
+                        <?php if (!empty($e['plano_esquema_iluminacion'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Esquema de iluminación</div>
+                                <div class="text-content"><?= nl2br(esc($e['plano_esquema_iluminacion'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['plano_objetos'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Objetos en escena</div>
+                                <div class="text-content"><?= nl2br(esc($e['plano_objetos'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['plano_toma_alternativa'])): ?>
+                            <div class="text-section">
+                                <div class="text-label">Toma alternativa</div>
+                                <div class="text-content"><?= nl2br(esc($e['plano_toma_alternativa'])) ?></div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Sonido -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="card-icon">🎙️</div>
+                        <h2 class="card-title">Sonido</h2>
+                    </div>
+
+                    <div class="chips-container">
+                        <span class="chip <?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'chip-success' : '' ?>">
+                            <?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? '✓' : '✗' ?> Ambiente
+                        </span>
+                        <span class="chip <?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'chip-success' : '' ?>">
+                            <?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? '✓' : '✗' ?> Antiviento
+                        </span>
+                    </div>
+
+                    <?php if (!empty($e['sonido_dialogo_escrito'])): ?>
+                        <div class="text-section">
+                            <div class="text-label">Diálogo escrito</div>
+                            <div class="text-content"><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($e['plano_notas'])): ?>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon">📝</div>
+                            <h2 class="card-title">Notas</h2>
+                        </div>
+                        <div class="text-content"><?= nl2br(esc($e['plano_notas'])) ?></div>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Columna derecha -->
+            <div>
+                <!-- Especificaciones de cámara -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="card-icon">📹</div>
+                        <h2 class="card-title">Cámara</h2>
+                    </div>
+
+                    <div class="specs-grid">
+                        <?php if (!empty($e['camara_modelo'])): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Modelo</div>
+                                <div class="spec-value"><?= esc($e['camara_modelo']) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($optica): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Óptica</div>
+                                <div class="spec-value"><?= esc($optica) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($apertura): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Apertura</div>
+                                <div class="spec-value"><?= esc($apertura) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($fps): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">FPS</div>
+                                <div class="spec-value"><?= esc($fps) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($vel): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Velocidad</div>
+                                <div class="spec-value"><?= esc($vel) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($iso): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">ISO</div>
+                                <div class="spec-value"><?= esc($iso) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($wb): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Balance blancos</div>
+                                <div class="spec-value"><?= esc($wb) ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($nd): ?>
+                            <div class="spec-item">
+                                <div class="spec-label">Filtro ND</div>
+                                <div class="spec-value"><?= esc($nd) ?></div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Referencias de texto -->
+        <?php if (!empty($e['plano_ref_lugar_texto']) || !empty($e['plano_ref_inspiracion_texto'])): ?>
+            <div class="info-card">
+                <div class="card-header">
+                    <div class="card-icon">🔗</div>
+                    <h2 class="card-title">Referencias (enlaces)</h2>
+                </div>
+
+                <div class="row g-3">
+                    <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
+                        <div class="col-md-6">
+                            <div class="text-label">Lugar / Objetos</div>
+                            <div class="text-content"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
+                        <div class="col-md-6">
+                            <div class="text-label">Inspiración</div>
+                            <div class="text-content"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endif; ?>
-    </div>
 
-    <!-- REFERENCIAS (TEXTO) -->
-    <div class="section my-5">
-        <h2>Referencias (texto)</h2>
-        <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
-            <h3>Lugar / objetos</h3>
-            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
+        <!-- Galerías de imágenes -->
+        <?php if (!empty($imagenes_lugar)): ?>
+            <div class="gallery-section">
+                <div class="card-header">
+                    <div class="card-icon">🖼️</div>
+                    <h2 class="card-title">Referencias visuales: Lugar y objetos</h2>
+                </div>
+                <div class="gallery-grid">
+                    <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
+                        <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item">
+                            <img src="<?= $src ?>" alt="Referencia de lugar" loading="lazy">
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         <?php endif; ?>
-        <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
-            <h3>Inspiración</h3>
-            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
+
+        <?php if (!empty($imagenes_insp)): ?>
+            <div class="gallery-section">
+                <div class="card-header">
+                    <div class="card-icon">✨</div>
+                    <h2 class="card-title">Referencias visuales: Inspiración</h2>
+                </div>
+                <div class="gallery-grid">
+                    <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
+                        <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item">
+                            <img src="<?= $src ?>" alt="Referencia de inspiración" loading="lazy">
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         <?php endif; ?>
-    </div>
 
-    <!-- BLOQUE TEXTUAL EN 2 COLUMNAS (UNA PÁGINA) -->
-    <div class="print-onepage">
-
-        <!-- ESCENA -->
-        <div class="section">
-            <h2>Escena</h2>
-            <dl class="kv">
-                <?php if (!empty($e['escena_descripcion'])): ?>
-                    <dt>Descripción</dt>
-                    <dd><?= nl2br(esc($e['escena_descripcion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_objetivo'])): ?>
-                    <dt>Objetivo narrativo</dt>
-                    <dd><?= nl2br(esc($e['escena_objetivo'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_accion'])): ?>
-                    <dt>Acción</dt>
-                    <dd><?= nl2br(esc($e['escena_accion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_cont_previa'])): ?>
-                    <dt>Continuidad (previa)</dt>
-                    <dd><?= nl2br(esc($e['escena_cont_previa'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_cont_posterior'])): ?>
-                    <dt>Continuidad (posterior)</dt>
-                    <dd><?= nl2br(esc($e['escena_cont_posterior'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
+        <!-- Footer Actions -->
+        <div class="no-print mt-4 pb-4 d-flex justify-content-center gap-2">
+            <a class="btn-custom btn-secondary-custom" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">
+                ← Volver al listado
+            </a>
+            <button class="btn-custom btn-primary-custom" onclick="window.print()">
+                🖨️ Imprimir / Guardar PDF
+            </button>
+            <a class="btn-custom btn-primary-custom" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">
+                ✏️ Editar escena
+            </a>
         </div>
-
-        <!-- CÁMARA -->
-        <div class="section">
-            <h2>Cámara</h2>
-            <dl class="kv kv-2col">
-                <?php if ($optica): ?><dt>Óptica</dt>
-                    <dd><?= esc($optica) ?></dd><?php endif; ?>
-                <?php if ($apertura): ?><dt>Apertura</dt>
-                    <dd><?= esc($apertura) ?></dd><?php endif; ?>
-                <?php if ($fps): ?><dt>FPS</dt>
-                    <dd><?= esc($fps) ?></dd><?php endif; ?>
-                <?php if ($vel): ?><dt>Velocidad</dt>
-                    <dd><?= esc($vel) ?></dd><?php endif; ?>
-                <?php if ($iso): ?><dt>ISO</dt>
-                    <dd><?= esc($iso) ?></dd><?php endif; ?>
-                <?php if ($wb): ?><dt>Balance blancos</dt>
-                    <dd><?= esc($wb) ?></dd><?php endif; ?>
-                <?php if ($nd): ?><dt>Filtro ND</dt>
-                    <dd><?= esc($nd) ?></dd><?php endif; ?>
-                <?php if ($plano): ?><dt>Tipo de plano</dt>
-                    <dd><?= esc($plano) ?></dd><?php endif; ?>
-                <?php if ($angulo): ?><dt>Ángulo</dt>
-                    <dd><?= esc($angulo) ?></dd><?php endif; ?>
-                <?php if ($mov): ?><dt>Movimiento</dt>
-                    <dd><?= esc($mov) ?></dd><?php endif; ?>
-                <?php if ($soporte): ?><dt>Soporte</dt>
-                    <dd><?= esc($soporte) ?></dd><?php endif; ?>
-                <?php if (!empty($e['camara_modelo'])): ?><dt>Cámara</dt>
-                    <dd><?= esc($e['camara_modelo']) ?></dd><?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-
-        <!-- CONSTRUCCIÓN DEL PLANO -->
-        <div class="section">
-            <h2>Construcción del plano</h2>
-            <dl class="kv">
-                <?php if (!empty($e['plano_esquema_iluminacion'])): ?>
-                    <dt>Esquema de iluminación</dt>
-                    <dd><?= nl2br(esc($e['plano_esquema_iluminacion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['plano_objetos'])): ?>
-                    <dt>Objetos en escena</dt>
-                    <dd><?= nl2br(esc($e['plano_objetos'])) ?></dd>
-                <?php endif; ?>
-                <dt>Actores</dt>
-                <dd><?= $actores ? 'Sí' : 'No' ?></dd>
-                <?php if (!empty($e['plano_toma_alternativa'])): ?>
-                    <dt>Toma alternativa</dt>
-                    <dd><?= nl2br(esc($e['plano_toma_alternativa'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-        <!-- SONIDO -->
-        <div class="section">
-            <h2>Sonido</h2>
-            <dl class="kv">
-                <dt>Ambiente</dt>
-                <dd><?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
-                <dt>Antiviento</dt>
-                <dd><?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
-                <?php if (!empty($e['sonido_dialogo_escrito'])): ?>
-                    <dt>Diálogo escrito</dt>
-                    <dd><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-
-
-    </div><!-- /print-onepage -->
-
-
-
-    <!-- Controles pantalla -->
-    <div class="no-print mt-3 d-flex gap-2">
-        <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-        <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
-        <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
     </div>
 </div>
 
