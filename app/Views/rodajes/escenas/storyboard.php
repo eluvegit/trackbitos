@@ -9,7 +9,7 @@
     .storyboard-group h2 {
         font-size: 16px;
         margin-bottom: .5rem;
-        border-bottom: 2px solid #ccc;
+        border-bottom: 2px solid var(--bs-border-color);
         padding-bottom: .25rem;
     }
 
@@ -21,12 +21,14 @@
 
     .storyboard-scene {
         width: 220px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: var(--bs-border-radius);
         padding: 6px;
-        background: #fff;
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
         font-size: 12px;
     }
+
 
     .scene-images {
         display: flex;
@@ -62,8 +64,9 @@
 
     .scene-info .small {
         font-size: 11px;
-        color: #666;
+        color: var(--bs-secondary-color);
     }
+
 
     /* Pantalla */
     .scene-images {
@@ -85,7 +88,7 @@
         height: auto;
         object-fit: cover;
         border-radius: 4px;
-        border: 1px solid rgba(0, 0, 0, .12);
+        border: 1px solid var(--bs-border-color);
         max-height: 220px;
         /* opcional para que no se hagan muy altas en pantalla */
     }
@@ -152,13 +155,25 @@
 
                             <strong><?= esc($esc['escena_bloque']) ?> · Orden <?= esc($esc['orden']) ?></strong>
                             <?php if (!empty($esc['escena_tomas'])): ?>
-                                <div class="small">Toma/s: <?= esc($esc['escena_tomas']) ?></div>
+                                <div class="small"><span class="text-info">Toma/s: </span><?= esc($esc['escena_tomas']) ?></div>
                             <?php endif; ?>
                             <?php if (!empty($esc['escena_descripcion'])): ?>
-                                <div class="small">Descripcion: <?= esc($esc['escena_descripcion']) ?></div>
+                                <div class="small"><span class="text-info">Descripcion: </span><?= esc($esc['escena_descripcion']) ?></div>
                             <?php endif; ?>
+
+
+                            <?php if (!empty($esc['sonido_dialogo_escrito'])): ?>
+                                <figure class="mt-2 mb-0">
+                                    <blockquote class="blockquote small fst-italic text-uppercase mb-1">
+                                        <?= esc($esc['sonido_dialogo_escrito']) ?>
+                                    </blockquote>
+                                </figure>
+                            <?php endif; ?>
+
+
+
                             <?php if (!empty($esc['plano_ref_inspiracion_texto'])): ?>
-                                <div class="small my-4">
+                                <div class="small">
                                     Enlaces referencia:
                                     <ul class="mb-0">
                                         <?php
@@ -183,15 +198,16 @@
                                 </div>
                             <?php endif; ?>
 
-                            <a class="link-muted mt-5 no-print"
-                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $esc['id']) ?>">
-                                ✏️ Editar
-                            </a>
-                            <a class="link-muted mt-5 no-print"
-                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $esc['id']) ?>">
-                                👁️ Ver
-                            </a>
-
+                            <div class="mt-4">
+                                <a class="link-muted no-print"
+                                    href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $esc['id']) ?>">
+                                    ✏️ Editar
+                                </a>
+                                <a class="link-muted no-print"
+                                    href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $esc['id']) ?>">
+                                    👁️ Ver
+                                </a>
+                            </div>
 
                         </div>
                     </div>
