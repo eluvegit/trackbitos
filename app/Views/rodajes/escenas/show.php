@@ -81,34 +81,134 @@ $renderRefs = fn($txt) => nl2br(auto_link(esc($txt), 'both', true));
     }
 </style>
 
+<style>
+    /* Cuadrícula moderna */
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+    }
+
+    .gallery-item {
+        aspect-ratio: 1 / 1;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f0f0f0;
+        display: block;
+        border: 1px solid #eee;
+        transition: transform 0.2s ease;
+    }
+
+    .gallery-item:hover {
+        transform: scale(1.02);
+    }
+
+    .gallery-item img,
+    .gallery-item video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Estilo específico para vídeos */
+    .video-item {
+        background: #000;
+    }
+
+    .video-overlay-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 255, 255, 0.8);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #000;
+        font-size: 1.5rem;
+        pointer-events: none;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+</style>
+
 <div class="container-fluid px-3 py-2">
 
     <!-- TOOLBAR STICKY -->
-    <div class="sticky-top bg-body border-bottom py-2 mb-3 no-print">
-        <div class="d-flex justify-content-between align-items-center">
+    <div class="bg-body border-bottom py-2 mb-3 no-print">
+        <div class="d-flex justify-content-between align-items-center mb-2">
             <div>
-                <h1 class="h4 mb-1"><?= esc($proyecto['titulo']) ?></h1>
-                <div class="text-muted small">
-                    Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?>
-                </div>
+                <h1 class="h5 mb-0 text-truncate" style="max-width: 250px;">
+                    <?= esc($proyecto['titulo']) ?>
+                </h1>
             </div>
-            <div class="btn-group">
-                <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-                <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir</button>
-                <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
+
+            <div class="btn-group shadow-sm">
+                <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>" title="Volver">
+                    <i class="bi bi-arrow-left small"></i>
+                </a>
+                <button class="btn btn-sm btn-light border" onclick="window.print()" title="Imprimir">
+                    <i class="bi bi-printer small"></i>
+                </button>
+                <a class="btn btn-sm btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>" title="Editar">
+                    <i class="bi bi-pencil small"></i>
+                </a>
             </div>
         </div>
 
+        <style>
+            /* Forzamos a que el icono sea ligeramente más pequeño que el texto del botón */
+            .btn-sm i.small {
+                font-size: 0.85rem;
+                vertical-align: middle;
+            }
+
+            /* Ajuste opcional para que en móviles no se amontone */
+            @media (max-width: 576px) {
+                .h5 {
+                    font-size: 1rem;
+                }
+            }
+        </style>
+
         <!-- HERO HEADER -->
-        <div class="hero-header rounded-3 p-4 mb-4">
-            <h2 class="fw-semibold"><?= esc($bloque ?: 'Escena sin título') ?></h2>
-            <div class="d-flex flex-wrap gap-2 small mt-2">
-                <?php if ($orden): ?><span class="badge bg-light text-dark">Orden <?= $orden ?></span><?php endif; ?>
-                <?php if ($tomas): ?><span class="badge bg-light text-dark">Tomas <?= esc($tomas) ?></span><?php endif; ?>
-                <?php if ($ubic): ?><span class="badge bg-light text-dark"><?= esc($ubic) ?></span><?php endif; ?>
-                <?php if ($hora): ?><span class="badge bg-light text-dark"><?= esc($hora) ?></span><?php endif; ?>
-                <?php if ($actores): ?><span class="badge bg-warning text-dark">Con actores</span><?php endif; ?>
-                <?php if ($fx): ?><span class="badge bg-info text-dark">FX <?= esc($fx) ?></span><?php endif; ?>
+        <div class="hero-header rounded-3 p-3 p-md-4 mb-4">
+            <h2 class="fw-bold mb-2 text-wrap text-break">
+                <?= esc($bloque ?: 'Escena sin título') ?>
+            </h2>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <?php if ($orden): ?>
+                    <span class="badge bg-light text-dark shadow-sm">Orden: <?= $orden ?></span>
+                <?php endif; ?>
+
+                <?php if ($tomas): ?>
+                    <span class="badge bg-light text-dark shadow-sm text-wrap">
+                        Toma: <?= esc($tomas) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($ubic): ?>
+                    <span class="badge bg-light text-dark shadow-sm">
+                        <i class="bi bi-geo-alt-fill me-1"></i><?= esc($ubic) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($hora): ?>
+                    <span class="badge bg-light text-dark shadow-sm">
+                        <i class="bi bi-clock-fill me-1"></i><?= esc($hora) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($actores): ?>
+                    <span class="badge bg-warning text-dark shadow-sm">Con actores</span>
+                <?php endif; ?>
+
+                <?php if ($fx): ?>
+                    <span class="badge bg-info text-dark shadow-sm">FX <?= esc($fx) ?></span>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -147,7 +247,7 @@ $renderRefs = fn($txt) => nl2br(auto_link(esc($txt), 'both', true));
                             <span class="badge <?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'bg-success' : 'bg-secondary' ?>">Ambiente</span>
                             <span class="badge <?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'bg-success' : 'bg-secondary' ?>">Antiviento</span>
                         </div>
-                       <p class="fst-italic"><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></p>
+                        <p class="fst-italic"><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></p>
                     </div>
                 </div>
             <?php endif; ?>
@@ -263,32 +363,87 @@ $renderRefs = fn($txt) => nl2br(auto_link(esc($txt), 'both', true));
         </div>
     <?php endif; ?>
 
-    <!-- GALERÍAS DE IMÁGENES -->
+    <?php
+    // Helper interno para renderizar media (puedes moverlo arriba en la vista)
+    $renderMedia = function ($img) {
+        $src = base_url($img['ruta']);
+        $extension = strtolower(pathinfo($img['ruta'], PATHINFO_EXTENSION));
+        $esVideo = in_array($extension, ['mp4', 'webm', 'ogg', 'mov']);
+
+        if ($esVideo): ?>
+            <div class="gallery-item video-item position-relative">
+                <video class="w-100 h-100" style="object-fit: cover;" muted playsinline>
+                    <source src="<?= $src ?>" type="video/<?= $extension ?>">
+                </video>
+                <div class="video-overlay-icon">
+                    <i class="bi bi-play-fill"></i>
+                </div>
+                <a href="<?= $src ?>" target="_blank" class="stretched-link"></a>
+            </div>
+        <?php else: ?>
+            <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item">
+                <img src="<?= $src ?>" alt="Referencia visual" loading="lazy">
+            </a>
+    <?php endif;
+    };
+    ?>
+
     <?php if (!empty($imagenes_lugar)): ?>
-        <div class="card shadow-sm mt-4">
-            <div class="card-body">
-                <h6 class="fw-semibold mb-3">Referencias visuales: Lugar y objetos</h6>
+        <div class="card shadow-sm border-0 mt-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3 d-flex align-items-center">
+                    <i class="bi bi-geo-alt me-2 text-primary"></i>Lugar y objetos
+                </h6>
                 <div class="gallery-grid">
-                    <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
-                        <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item"><img src="<?= $src ?>" alt="Referencia de lugar" loading="lazy"></a>
-                    <?php endforeach; ?>
+                    <?php foreach ($imagenes_lugar as $img) $renderMedia($img); ?>
                 </div>
             </div>
         </div>
     <?php endif; ?>
 
     <?php if (!empty($imagenes_insp)): ?>
-        <div class="card shadow-sm mt-4">
-            <div class="card-body">
-                <h6 class="fw-semibold mb-3">Referencias visuales: Inspiración</h6>
+        <div class="card shadow-sm border-0 mt-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3 d-flex align-items-center">
+                    <i class="bi bi-lightbulb me-2 text-warning"></i>Inspiración
+                </h6>
                 <div class="gallery-grid">
-                    <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
-                        <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item"><img src="<?= $src ?>" alt="Referencia de inspiración" loading="lazy"></a>
-                    <?php endforeach; ?>
+                    <?php foreach ($imagenes_insp as $img) $renderMedia($img); ?>
                 </div>
             </div>
         </div>
     <?php endif; ?>
+
+    <div class="row mt-5 mb-4 no-print">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center bg-dark p-3 rounded-3 border">
+                <div>
+                    <?php if ($prevId): ?>
+                        <a class="btn btn-outline-primary" href="<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$prevId") ?>">
+                            <i class="bi bi-arrow-left me-2"></i> Escena Anterior
+                        </a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="text-muted small fw-bold text-uppercase">
+                    Fin de Escena <?= $orden ?>
+                </div>
+
+                <div>
+                    <?php if ($nextId): ?>
+                        <a class="btn btn-primary shadow-sm" href="<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$nextId") ?>">
+                            Siguiente Escena <i class="bi bi-arrow-right ms-2"></i>
+                        </a>
+                    <?php else: ?>
+                        <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">
+                            <i class="bi bi-check-circle me-2"></i> Finalizar Revisión
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
 </div>
 
@@ -297,6 +452,17 @@ $renderRefs = fn($txt) => nl2br(auto_link(esc($txt), 'both', true));
         const p = new URLSearchParams(location.search);
         if (p.get('print') === '1') setTimeout(() => window.print(), 300);
     })();
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === "ArrowLeft") {
+            <?php if ($prevId): ?> location.href = "<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$prevId") ?>";
+            <?php endif; ?>
+        }
+        if (e.key === "ArrowRight") {
+            <?php if ($nextId): ?> location.href = "<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$nextId") ?>";
+            <?php endif; ?>
+        }
+    });
 </script>
 
 <?= $this->endSection() ?>

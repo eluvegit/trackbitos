@@ -55,8 +55,8 @@ $action = $escena
         border-radius: 3px;
     }
 
-    .form-label{
-        color:yellow !important;
+    .form-label {
+        color: yellow !important;
     }
 </style>
 
@@ -316,40 +316,72 @@ $action = $escena
 
             <div class="col-12 col-md-4">
                 <div class="row g-2">
-                    <div class="col-12">
-                        <label class="form-label">Lugar y objetos (imágenes)</label>
-                        <input type="file" class="form-control" name="lugar_objetos[]" accept="image/*" multiple>
-                        <?php if (!empty($imagenes_lugar ?? [])): ?>
-                            <div class="d-flex gap-1 mt-1 flex-wrap">
-                                <?php foreach ($imagenes_lugar as $img): ?>
-                                    <div class="position-relative">
-                                        <img class="img-thumb" src="<?= base_url('/' . $img['ruta']) ?>" alt="">
-                                        <a class="position-absolute top-0 end-0 btn btn-xs btn-danger m-1"
-                                            href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . $e['id'] . '/imagen/delete/' . $img['id']) ?>"
-                                            onclick="return confirm('¿Eliminar?')"
-                                            style="padding: 0.1rem 0.3rem; line-height: 1;">✕</a>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
+                    <div class="row g-4">
+                        <div class="col-12">
+                            <label class="form-label fw-bold"><i class="bi bi-geo-alt me-1"></i>Lugar y objetos (Imágenes/Vídeos)</label>
+                            <input type="file" class="form-control shadow-sm" name="lugar_objetos[]" accept="image/*,video/*" multiple>
 
-                    <div class="col-12">
-                        <label class="form-label">Inspiración (imágenes)</label>
-                        <input type="file" class="form-control" name="inspiracion[]" accept="image/*" multiple>
-                        <?php if (!empty($imagenes_insp ?? [])): ?>
-                            <div class="d-flex gap-1 mt-1 flex-wrap">
-                                <?php foreach ($imagenes_insp as $img): ?>
-                                    <div class="position-relative">
-                                        <img class="img-thumb" src="<?= base_url('/' . $img['ruta']) ?>" alt="">
-                                        <a class="position-absolute top-0 end-0 btn btn-xs btn-danger m-1"
-                                            href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . $e['id'] . '/imagen/delete/' . $img['id']) ?>"
-                                            onclick="return confirm('¿Eliminar?')"
-                                            style="padding: 0.1rem 0.3rem; line-height: 1;">✕</a>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
+                            <?php if (!empty($imagenes_lugar ?? [])): ?>
+                                <div class="d-flex gap-2 mt-3 flex-wrap">
+                                    <?php foreach ($imagenes_lugar as $img): ?>
+                                        <div class="media-preview-container position-relative">
+                                            <?php
+                                            $extension = pathinfo($img['ruta'], PATHINFO_EXTENSION);
+                                            $esVideo = in_array(strtolower($extension), ['mp4', 'webm', 'ogg', 'mov']);
+                                            ?>
+
+                                            <?php if ($esVideo): ?>
+                                                <video class="img-thumb rounded shadow-sm" muted>
+                                                    <source src="<?= base_url('/' . $img['ruta']) ?>" type="video/<?= $extension ?>">
+                                                </video>
+                                                <div class="video-overlay"><i class="bi bi-play-circle-fill"></i></div>
+                                            <?php else: ?>
+                                                <img class="img-thumb rounded shadow-sm" src="<?= base_url('/' . $img['ruta']) ?>" alt="Preview">
+                                            <?php endif; ?>
+
+                                            <a class="delete-media-btn"
+                                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . $e['id'] . '/imagen/delete/' . $img['id']) ?>"
+                                                onclick="return confirm('¿Eliminar este archivo?')">
+                                                <i class="bi bi-x"></i>
+                                            </a>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <label class="form-label fw-bold"><i class="bi bi-lightbulb me-1"></i>Inspiración (Imágenes/Vídeos)</label>
+                            <input type="file" class="form-control shadow-sm" name="inspiracion[]" accept="image/*,video/*" multiple>
+
+                            <?php if (!empty($imagenes_insp ?? [])): ?>
+                                <div class="d-flex gap-2 mt-3 flex-wrap">
+                                    <?php foreach ($imagenes_insp as $img): ?>
+                                        <div class="media-preview-container position-relative">
+                                            <?php
+                                            $extInsp = pathinfo($img['ruta'], PATHINFO_EXTENSION);
+                                            $esVideoInsp = in_array(strtolower($extInsp), ['mp4', 'webm', 'ogg', 'mov']);
+                                            ?>
+
+                                            <?php if ($esVideoInsp): ?>
+                                                <video class="img-thumb rounded shadow-sm" muted>
+                                                    <source src="<?= base_url('/' . $img['ruta']) ?>" type="video/<?= $extInsp ?>">
+                                                </video>
+                                                <div class="video-overlay"><i class="bi bi-play-circle-fill"></i></div>
+                                            <?php else: ?>
+                                                <img class="img-thumb rounded shadow-sm" src="<?= base_url('/' . $img['ruta']) ?>" alt="Preview">
+                                            <?php endif; ?>
+
+                                            <a class="delete-media-btn"
+                                                href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/' . $e['id'] . '/imagen/delete/' . $img['id']) ?>"
+                                                onclick="return confirm('¿Eliminar este archivo?')">
+                                                <i class="bi bi-x"></i>
+                                            </a>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="col-12 col-md-12">
