@@ -14,7 +14,7 @@
 
     <div class="row g-4">
         <?php if (!empty($proyectos)): ?>
-            <?php foreach ($proyectos as $p): 
+            <?php foreach ($proyectos as $p):
                 $id = $p->id ?? $p['id'];
                 $titulo = $p->titulo ?? $p['titulo'];
                 $desc = $p->descripcion ?? $p['descripcion'];
@@ -28,17 +28,18 @@
                                     <i class="bi bi-pencil-square"></i>
                                 </a>
                             </div>
-                            
+
                             <h5 class="card-title fw-bold mb-2"><?= esc($titulo) ?></h5>
                             <p class="card-text text-muted small mb-4 text-truncate-2">
                                 <?= esc($desc) ?>
                             </p>
-                            
+
                             <div class="d-grid gap-2">
-                                <a class="btn btn-outline-dark btn-sm d-flex align-items-center justify-content-center" href="<?= site_url('rodajes/' . $id . '/escenas') ?>">
+                                <a class="btn btn-outline-light btn-sm d-flex align-items-center justify-content-center" href="<?= site_url('rodajes/' . $id . '/escenas') ?>">
                                     <i class="bi bi-film me-2"></i> Ver Escenas
                                 </a>
-                                <div class="btn-group w-100">
+
+                                <div class="btn-group w-100 shadow-sm">
                                     <a class="btn btn-light border btn-sm text-primary" title="Storyboard" href="<?= site_url('rodajes/' . $id . '/escenas/storyboard') ?>">
                                         <i class="bi bi-layout-text-window-reverse me-1"></i> Story
                                     </a>
@@ -46,6 +47,12 @@
                                         <i class="bi bi-sort-down me-1"></i> Plan
                                     </a>
                                 </div>
+
+                                <a class="btn btn-dark btn-sm d-flex align-items-center justify-content-center border-secondary"
+                                    href="<?= site_url('rodajes/' . $id . '/dialogos') ?>"
+                                    style="background-color: #1a1a1a;">
+                                    <i class="bi bi-chat-quote me-2 text-info"></i> Diálogos
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -64,20 +71,24 @@
     /* Pequeños ajustes CSS para ese "look" moderno */
     .hover-shadow:hover {
         transform: translateY(-5px);
-        box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.1)!important;
+        box-shadow: 0 .5rem 1.5rem rgba(0, 0, 0, .1) !important;
     }
+
     .transition {
         transition: all 0.3s ease-in-out;
     }
+
     .text-truncate-2 {
         display: -webkit-box;
         -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;  
+        -webkit-box-orient: vertical;
         overflow: hidden;
     }
+
     .card {
         border-radius: 12px;
     }
+
     .btn {
         border-radius: 8px;
     }

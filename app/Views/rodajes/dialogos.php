@@ -11,10 +11,11 @@
     .script-container {
         max-width: 900px;
         margin: 0 auto;
-        background-color: #1e1e1e; /* Gris muy oscuro pero distinguible */
+        background-color: #1e1e1e;
+        /* Gris muy oscuro pero distinguible */
         min-height: 100vh;
         padding: 60px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         border-left: 1px solid #333;
         border-right: 1px solid #333;
     }
@@ -28,14 +29,14 @@
 
     .dialogue-text {
         font-family: 'Courier New', Courier, monospace;
-        font-size: 1.15rem;
-        line-height: 1.7;
-        white-space: pre-wrap;
-        color: #d1d1d1; /* Blanco suave para evitar reflejos altos */
+        font-size: 0.875rem;
+        line-height: 1;
+        color: #d1d1d1;
+        /* Blanco suave para evitar reflejos altos */
         padding-left: 1.5rem;
         border-left: 2px solid #444;
-        background: rgba(255,255,255,0.02);
-        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 1rem 0.8rem;
         border-radius: 0 8px 8px 0;
     }
 
@@ -61,24 +62,64 @@
 
     /* Estilo para impresión: Volvemos a blanco y negro automáticamente */
     @media print {
-        body { background: white !important; color: black !important; }
-        .no-print { display: none !important; }
-        .script-container { 
-            box-shadow: none; 
-            padding: 0; 
-            width: 100%; 
-            max-width: 100%; 
+        body {
+            background: white !important;
+            color: black !important;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .script-container {
+            box-shadow: none;
+            padding: 0;
+            width: 100%;
+            max-width: 100%;
             background: white !important;
             border: none;
         }
-        .scene-block { break-inside: avoid; border-bottom: 1px solid #eee; margin-bottom: 2rem; }
-        .dialogue-text { 
-            color: black !important; 
+
+        .scene-block {
+            break-inside: avoid;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 2rem;
+        }
+
+        .dialogue-text {
+            color: black !important;
             border-left: 2px solid #ccc !important;
             background: none !important;
         }
-        .scene-title { color: black !important; }
-        .meta-info { color: #666 !important; }
+
+        .scene-title {
+            color: black !important;
+        }
+
+        .meta-info {
+            color: #666 !important;
+        }
+    }
+
+    /* Estilo para que el enlace no parezca un link azul genérico */
+    .hover-link {
+        transition: all 0.2s ease;
+        display: inline-block;
+    }
+
+    .hover-link:hover {
+        transform: scale(1.1);
+        /* Efecto de aumento sutil */
+        filter: brightness(1.2);
+        /* Brilla un poco más al pasar el mouse */
+    }
+
+    /* Evitar que el enlace se vea en la impresión */
+    @media print {
+        .hover-link span {
+            color: black !important;
+            text-decoration: none !important;
+        }
     }
 </style>
 
@@ -114,19 +155,25 @@
     <?php else: ?>
         <?php foreach ($escenas as $e): ?>
             <div class="scene-block mb-5">
-                <div class="scene-header d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="meta-info mb-1">Escena <?= esc($e['id']) ?> • Orden <?= esc($e['orden']) ?></div>
+                <div class="scene-header mb-3 pb-2">
+                    <div class="mb-1">
                         <h3 class="h5 fw-bold mb-0 scene-title text-uppercase">
+                            <a href="<?= site_url("rodajes/{$proyecto['id']}/escenas/show/{$e['id']}") ?>"
+                                class="text-decoration-none me-2 hover-link"
+                                title="Ver detalle de escena">
+                                <span class="text-primary">#<?= esc($e['orden']) ?></span>
+                            </a>
                             <?= esc($e['escena_bloque'] ?: 'Sin Identificar') ?>
                         </h3>
                     </div>
-                    <div class="text-end">
-                        <span class="badge bg-secondary opacity-75 small"><?= esc($e['escena_ubicacion']) ?></span>
-                        <div class="small text-muted mt-1"><?= esc($e['plano_hora_dia']) ?></div>
+
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="meta-info small">
+                            <i class="bi bi-geo-alt-fill me-1"></i><?= esc($e['escena_ubicacion'] ?: 'Localización no definida') ?>
+                        </div>
                     </div>
                 </div>
-                
+
                 <div class="dialogue-text">
                     <?= nl2br(esc($e['sonido_dialogo_escrito'])) ?>
                 </div>
