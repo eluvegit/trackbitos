@@ -8,6 +8,22 @@
         color: #e0e0e0;
     }
 
+    @media print {
+
+        /* Oculta la cabecera del layout default */
+        header,
+        .navbar,
+        .main-header {
+            display: none !important;
+        }
+
+        /* Elimina márgenes extra que el layout pueda tener en el body */
+        body {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+    }
+
     .script-container {
         max-width: 900px;
         margin: 0 auto;
@@ -127,7 +143,7 @@
     <div class="d-flex justify-content-between align-items-center px-lg-5">
         <div>
             <h1 class="h5 mb-0 text-white"><?= esc($proyecto['titulo']) ?></h1>
-            <p class="text-secondary small mb-0">Script de Diálogos • Dark Review</p>
+            <p class="text-secondary small mb-0">• Script de Diálogos •</p>
         </div>
         <div class="btn-group">
             <a href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>" class="btn btn-sm btn-outline-light">
@@ -143,7 +159,7 @@
 <div class="script-container">
     <div class="text-center mb-5">
         <h1 class="display-6 fw-bold text-white text-uppercase"><?= esc($proyecto['titulo']) ?></h1>
-        <span class="badge badge-dark-mode mt-2">REGISTRO DE DIÁLOGOS</span>
+        <span class="badge badge-dark-mode mt-2">LÍNEAS de DIÁLOGOS</span>
         <div class="mt-4 border-top border-secondary w-25 mx-auto"></div>
     </div>
 
@@ -182,7 +198,7 @@
     <?php endif; ?>
 
     <div class="text-center mt-5 pt-5 border-top border-secondary meta-info">
-        MASTER DIALOGUE LIST • PROYECTO ID: <?= $proyecto['id'] ?> • <?= date('Y') ?>
+        • PROYECTO ID: <?= $proyecto['titulo'] ?> • <?= date('Y') ?> •
     </div>
 </div>
 

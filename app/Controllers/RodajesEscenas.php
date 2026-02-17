@@ -12,20 +12,53 @@ class RodajesEscenas extends BaseController
     public function index($proyectoId)
     {
         $proyectos = new RodajesProyectoModel();
-        $escenas   = new RodajesEscenaModel();
+        $escenasModel = new RodajesEscenaModel();
+        $imgsModel = new RodajesEscenaImagenModel();
 
         $proyecto = $proyectos->find($proyectoId);
-        if (!$proyecto) {
-            return redirect()->to(site_url('rodajes'));
-        }
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
 
-        $data['proyecto'] = $proyecto;
-        $data['escenas']  = $escenas->where('proyecto_id', $proyectoId)
+        $escenas = $escenasModel->where('proyecto_id', $proyectoId)
             ->orderBy('orden', 'ASC')
-            ->orderBy('id', 'ASC')
             ->findAll();
 
-        return view('rodajes/escenas/index', $data);
+        $multimedia = [];
+        if (!empty($escenas)) {
+            $ids = array_column($escenas, 'id');
+
+            // Traemos todos los archivos asociados a las escenas de este proyecto
+            $files = $imgsModel->whereIn('escena_id', $ids)->findAll();
+
+            foreach ($files as $f) {
+                $eid = $f['escena_id'];
+                $ruta = $f['ruta'];
+
+                // Extraer extensión de forma segura
+                $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+
+                // Definir si es video
+                $esVideo = in_array($ext, ['mp4', 'webm', 'ogg', 'mov']);
+
+                /**
+                 * LÓGICA DE PRIORIDAD:
+                 * 1. Si no hay nada para esta escena, lo guardamos.
+                 * 2. Si lo que hay es una imagen y lo nuevo es un vídeo, lo pisamos (prioridad vídeo).
+                 */
+                if (!isset($multimedia[$eid]) || ($esVideo && !$multimedia[$eid]['es_video'])) {
+                    $multimedia[$eid] = [
+                        'ruta'     => $ruta,
+                        'es_video' => $esVideo,
+                        'ext'      => $ext // Fundamental para el <source type="video/...">
+                    ];
+                }
+            }
+        }
+
+        return view('rodajes/escenas/index', [
+            'proyecto'   => $proyecto,
+            'escenas'    => $escenas,
+            'multimedia' => $multimedia // Ahora sí viaja con la info de extensión
+        ]);
     }
 
     public function dialogos($proyectoId)
