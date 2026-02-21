@@ -293,6 +293,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('edit/(:num)',       'Rodajes::edit/$1');
     $routes->POST('update/(:num)',    'Rodajes::update/$1');
     $routes->GET('delete/(:num)',     'Rodajes::delete/$1');
+    
 
     // ---- Escenas (anidadas bajo proyecto) ----
     $routes->GET('(:num)/escenas',                        'RodajesEscenas::index/$1');
@@ -301,6 +302,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('(:num)/escenas/edit/(:num)',            'RodajesEscenas::edit/$1/$2');
     $routes->POST('(:num)/escenas/update/(:num)',         'RodajesEscenas::update/$1/$2');
     $routes->GET('(:num)/escenas/delete/(:num)',          'RodajesEscenas::delete/$1/$2');
+    $routes->get('(:num)/dialogos',                       'RodajesEscenas::dialogos/$1');
 
     // Imágenes de referencia (borrado)
     $routes->GET('(:num)/escenas/(:num)/imagen/delete/(:num)', 'RodajesEscenas::deleteImage/$1/$2/$3');

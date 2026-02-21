@@ -51,7 +51,7 @@
 
     <!-- Footer opcional -->
 
-    <footer class="text-center mt-5 mb-3 text-muted">
+    <footer class="text-center mt-5 mb-3 text-muted no-print">
         <small>&copy; <?= date('Y') ?> Trackbitos</small>
     </footer>
 

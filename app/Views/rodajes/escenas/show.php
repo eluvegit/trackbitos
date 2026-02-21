@@ -23,443 +23,446 @@ $nd        = trim($e['camara_nd'] ?? '');
 $fx        = trim($e['escena_efecto_especial'] ?? '');
 $actores   = ($e['plano_actores'] ?? 'N') === 'S';
 
-$renderRefs = function (string $txt) {
-    return nl2br(auto_link(esc($txt), 'both', true));
-};
+$renderRefs = fn($txt) => nl2br(auto_link(esc($txt), 'both', true));
 ?>
 
 <style>
-    /* ====== IMPRESIÓN A4, TEXTO CONDENSADO SIN CAJAS ====== */
-    @media print {
-
-        /* Oculta cualquier cabecera/pie propio de la página */
-        .no-print,
-        .print-hide-header,
-        .print-hide-footer,
-        header,
-        footer,
-        .toolbar,
-        .page-header,
-        .page-footer {
-            display: none !important;
-            visibility: hidden !important;
-            height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-        }
-
-        /* Márgenes de página (ajusta si quieres más área útil) */
-        @page {
-            margin: 10mm;
-        }
+    /* Sticky Toolbar y Hero */
+    .hero-header {
+        background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), .95), rgba(var(--bs-primary-rgb), .65));
+        color: #fff;
     }
 
-    @page {
-        size: A4 portrait;
-        margin: 12mm;
+    .chip {
+        background: rgba(var(--bs-primary-rgb), .12);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 999px;
+        font-size: .75rem;
+        padding: .25rem .6rem;
     }
 
-    :root {
-        --print-font: 10px;
-        --line: 1.25;
-        --gap: 10px;
-    }
-
-    @media print {
-
-        html,
-        body {
-            background: #fff !important;
-        }
-
-        body {
-            font-size: var(--print-font);
-            line-height: var(--line);
-            color: #000;
-        }
-
-        .no-print {
-            display: none !important;
-        }
-
-        .h1 {
-            font-size: 14px;
-            font-weight: 700;
-            margin: 0 0 4px 0;
-        }
-
-        .muted {
-            color: #333;
-        }
-
-        .sep {
-            border: 0;
-            border-top: 1px solid #000;
-            margin: 6px 0;
-        }
-
-        .tiny {
-            font-size: 9px;
-        }
-
-        /* Bloque textual: 2 columnas para comprimir a una sola página */
-        .print-onepage {
-            column-count: 2;
-            column-gap: var(--gap);
-            page-break-after: always;
-        }
-
-        .section {
-            break-inside: avoid;
-            margin-bottom: 6px;
-        }
-
-        .section h2 {
-            font-size: 11px;
-            margin: 0 0 4px 0;
-        }
-
-        .section h3 {
-            font-size: 10px;
-            margin: 0 0 3px 0;
-        }
-
-        .kv {
-            margin: 0 0 2px 0;
-        }
-
-        .kv dt {
-            float: left;
-            width: 40%;
-            clear: left;
-            font-weight: 600;
-        }
-
-        .kv dd {
-            margin-left: 42%;
-        }
-
-        .kv:after {
-            content: "";
-            display: block;
-            clear: both;
-        }
-
-        /* Chips inline (sin cajas) */
-        .chips {
-            margin: 2px 0 4px 0;
-        }
-
-        .chip {
-            margin-right: 6px;
-        }
-
-        /* Galerías: nueva página, miniaturas básicas */
-        .print-break {
-            page-break-before: always;
-        }
-
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-
-        .gallery img {
-            width: 100%;
-            height: 45mm;
-            object-fit: cover;
-            border: 1px solid #000;
-        }
-
-        /* Si aún se pasa, descomenta para reducir un poco todo el bloque de texto */
-        /* .print-onepage { zoom: 0.94; } */
-    }
-
-    @media screen {
-        .toolbar {
-            position: sticky;
-            top: 0;
-            background: #fff;
-            padding: .75rem 0;
-            border-bottom: 1px solid rgba(0, 0, 0, .08);
-            margin-bottom: .75rem;
-        }
-
-        .h1 {
-            font-size: 20px;
-            margin-bottom: .25rem;
-        }
-
-        .sep {
-            border: 0;
-            border-top: 1px solid rgba(0, 0, 0, .2);
-            margin: .5rem 0;
-        }
-    }
-
-    @media print {
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(40mm, 1fr));
-            /* columnas adaptables */
-            gap: 4mm;
-        }
-
-        .gallery img {
-            width: 100%;
-            height: auto;
-            /* mantiene proporción */
-            max-height: 40mm;
-            /* límite para no ocupar toda la página */
-            object-fit: cover;
-            border: 1px solid #000;
-        }
-    }
-
-    @media screen {
-        .gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            /* responsive en pantalla */
-            gap: 8px;
-        }
-
-        .gallery img {
-            width: 100%;
-            height: auto;
-            max-height: 180px;
-            /* más pequeña en pantalla */
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 0, 0, .15);
-        }
-    }
-
-    .kv-2col {
+    .gallery-grid {
         display: grid;
-        grid-template-columns: auto 1fr auto 1fr;
-        /* 2 columnas de pares dt/dd */
-        column-gap: 12px;
-        row-gap: 4px;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: .75rem;
     }
 
-    .kv-2col dt {
-        font-weight: bold;
-        margin: 0;
+    .gallery-item {
+        aspect-ratio: 4/3;
+        overflow: hidden;
+        border-radius: var(--bs-border-radius);
+        border: 1px solid var(--bs-border-color);
     }
 
-    .kv-2col dd {
-        margin: 0;
+    .gallery-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .gallery-item:hover img {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Print */
+    @media print {
+
+        .no-print,
+        header,
+        footer {
+            display: none !important;
+        }
+
+        .card {
+            break-inside: avoid;
+        }
     }
 </style>
 
-<div class="container py-3">
+<style>
+    /* Cuadrícula moderna */
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+    }
 
-    <!-- Toolbar pantalla (no se imprime) -->
-    <div class="toolbar no-print d-flex justify-content-between">
-        <div>
-            <div class="h1"><?= esc($proyecto['titulo']) ?> — Escena</div>
-            <div class="tiny muted">
-                Proyecto #<?= esc($proyecto['id']) ?> · Escena #<?= esc($e['id']) ?>
+    .gallery-item {
+        aspect-ratio: 1 / 1;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f0f0f0;
+        display: block;
+        border: 1px solid #eee;
+        transition: transform 0.2s ease;
+    }
+
+    .gallery-item:hover {
+        transform: scale(1.02);
+    }
+
+    .gallery-item img,
+    .gallery-item video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Estilo específico para vídeos */
+    .video-item {
+        background: #000;
+    }
+
+    .video-overlay-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 255, 255, 0.8);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #000;
+        font-size: 1.5rem;
+        pointer-events: none;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+</style>
+
+<div class="container-fluid px-3 py-2">
+
+    <!-- TOOLBAR STICKY -->
+    <div class="bg-body border-bottom py-2 mb-3 no-print">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <h1 class="h5 mb-0 text-truncate" style="max-width: 250px;">
+                    <?= esc($proyecto['titulo']) ?>
+                </h1>
+            </div>
+
+            <div class="btn-group shadow-sm">
+                <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>" title="Volver">
+                    <i class="bi bi-arrow-left small"></i>
+                </a>
+                <button class="btn btn-sm btn-light border" onclick="window.print()" title="Imprimir">
+                    <i class="bi bi-printer small"></i>
+                </button>
+                <a class="btn btn-sm btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>" title="Editar">
+                    <i class="bi bi-pencil small"></i>
+                </a>
             </div>
         </div>
-        <div class="d-flex gap-2 mb-3">
-            <a class="btn btn-outline-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/show/' . $e['id']) ?>?print=1">🖨️ PDF</a>
-            <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
-        </div>
-    </div>
 
-    <!-- ENCABEZADO IMPRESIÓN -->
-    <div class="section">
-        <div class="h1"><?= esc($bloque ?: 'Bloque sin título') ?><?php if ($tomas): ?> · Toma/s: <?= esc($tomas) ?><?php endif; ?></div>
-        <div class="muted tiny">
-            Orden: <?= esc($orden) ?><?php if ($hora): ?> · Hora del día: <?= esc($hora) ?><?php endif; ?><?php if ($ubic): ?> · 📍 <?= esc($ubic) ?><?php endif; ?><?php if ($actores): ?> · Actores: Sí<?php endif; ?><?php if ($fx): ?> · FX: <?= esc($fx) ?><?php endif; ?>
+        <style>
+            /* Forzamos a que el icono sea ligeramente más pequeño que el texto del botón */
+            .btn-sm i.small {
+                font-size: 0.85rem;
+                vertical-align: middle;
+            }
+
+            /* Ajuste opcional para que en móviles no se amontone */
+            @media (max-width: 576px) {
+                .h5 {
+                    font-size: 1rem;
+                }
+            }
+        </style>
+
+        <!-- HERO HEADER -->
+        <div class="hero-header rounded-3 p-3 p-md-4 mb-4">
+            <h2 class="fw-bold mb-2 text-wrap text-break">
+                <?= esc($bloque ?: 'Escena sin título') ?>
+            </h2>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <?php if ($orden): ?>
+                    <span class="badge bg-light text-dark shadow-sm">Orden: <?= $orden ?></span>
+                <?php endif; ?>
+
+                <?php if ($tomas): ?>
+                    <span class="badge bg-light text-dark shadow-sm text-wrap">
+                        Toma: <?= esc($tomas) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($ubic): ?>
+                    <span class="badge bg-light text-dark shadow-sm">
+                        <i class="bi bi-geo-alt-fill me-1"></i><?= esc($ubic) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($hora): ?>
+                    <span class="badge bg-light text-dark shadow-sm">
+                        <i class="bi bi-clock-fill me-1"></i><?= esc($hora) ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($actores): ?>
+                    <span class="badge bg-warning text-dark shadow-sm">Con actores</span>
+                <?php endif; ?>
+
+                <?php if ($fx): ?>
+                    <span class="badge bg-info text-dark shadow-sm">FX <?= esc($fx) ?></span>
+                <?php endif; ?>
+            </div>
         </div>
+
+        <!-- CHIPS DE CÁMARA -->
         <?php if ($plano || $angulo || $mov || $soporte): ?>
-            <div class="chips tiny">
-                <?php if ($plano): ?><span class="chip"><strong>Plano:</strong> <?= esc($plano) ?></span><?php endif; ?>
-                <?php if ($angulo): ?><span class="chip"><strong>Ángulo:</strong> <?= esc($angulo) ?></span><?php endif; ?>
-                <?php if ($mov): ?><span class="chip"><strong>Movimiento:</strong> <?= esc($mov) ?></span><?php endif; ?>
-                <?php if ($soporte): ?><span class="chip"><strong>Soporte:</strong> <?= esc($soporte) ?></span><?php endif; ?>
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                <?php if ($plano): ?><span class="chip">📐 <?= esc($plano) ?></span><?php endif; ?>
+                <?php if ($angulo): ?><span class="chip">📷 <?= esc($angulo) ?></span><?php endif; ?>
+                <?php if ($mov): ?><span class="chip">🎥 <?= esc($mov) ?></span><?php endif; ?>
+                <?php if ($soporte): ?><span class="chip">🔧 <?= esc($soporte) ?></span><?php endif; ?>
             </div>
         <?php endif; ?>
-        <hr class="sep">
     </div>
 
-    <?php if (!empty($e['plano_notas'])): ?>
-        <dt>Notas</dt>
-        <dd><?= nl2br(esc($e['plano_notas'])) ?></dd>
+    <!-- CONTENIDO PRINCIPAL -->
+    <div class="row g-4">
+
+        <!-- IZQUIERDA: descripción, objetivo, acción, sonido, notas -->
+        <div class="col-lg-8">
+            <?php foreach (['Descripción' => 'escena_descripcion', 'Objetivo narrativo' => 'escena_objetivo', 'Acción' => 'escena_accion'] as $label => $field): ?>
+                <?php if (!empty($e[$field])): ?>
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-body border-start border-3 ps-3">
+                            <div class="text-uppercase small text-primary fw-semibold"><?= $label ?></div>
+                            <?= nl2br(esc($e[$field])) ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+
+            <?php if (!empty($e['sonido_dialogo_escrito'])): ?>
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">Sonido</div>
+                        <div class="mb-2 d-flex gap-2">
+                            <span class="badge <?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'bg-success' : 'bg-secondary' ?>">Ambiente</span>
+                            <span class="badge <?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'bg-success' : 'bg-secondary' ?>">Antiviento</span>
+                        </div>
+                        <p class="fst-italic"><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></p>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+
+
+            <!-- CONSTRUCCIÓN DEL PLANO -->
+
+            <?php if (!empty($e['plano_esquema_iluminacion']) || !empty($e['plano_objetos']) || !empty($e['plano_toma_alternativa'])): ?>
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">Construcción del plano</div>
+
+                        <?php if (!empty($e['plano_esquema_iluminacion'])): ?>
+                            <div class="mb-2">
+                                <div class="fw-medium text-primary">Esquema de iluminación</div>
+                                <?= nl2br(esc($e['plano_esquema_iluminacion'])) ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['plano_objetos'])): ?>
+                            <div class="mb-2">
+                                <div class="fw-medium text-primary">Objetos en escena</div>
+                                <?= nl2br(esc($e['plano_objetos'])) ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($e['plano_toma_alternativa'])): ?>
+                            <div class="mb-2">
+                                <div class="fw-medium text-primary">Toma alternativa</div>
+                                <?= nl2br(esc($e['plano_toma_alternativa'])) ?>
+                            </div>
+                        <?php endif; ?>
+
+                    </div>
+                </div>
+            <?php endif; ?>
+
+        </div>
+
+        <!-- DERECHA: cámara -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3 text-primary">Cámara</h6>
+                    <div class="row g-2">
+                        <?php foreach (['Óptica' => $optica, 'Apertura' => $apertura, 'FPS' => $fps, 'Velocidad' => $vel, 'ISO' => $iso, 'WB' => $wb, 'ND' => $nd] as $label => $value): ?>
+                            <?php if ($value): ?>
+                                <div class="col-6">
+                                    <div class="border rounded p-2 bg-body text-body h-100 d-flex flex-column justify-content-center align-items-start">
+                                        <div class="fw-medium text-secondary small"><?= $label ?></div>
+                                        <div class="fw-semibold"><?= esc($value) ?></div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php if (!empty($e['plano_notas'])): ?>
+                <div class="card shadow-sm my-3">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">Notas</div>
+                        <?= nl2br(esc($e['plano_notas'])) ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($e['escena_cont_previa']) || !empty($e['escena_cont_posterior'])): ?>
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-3">Continuidad</div>
+
+                        <div class="row g-3">
+                            <?php if (!empty($e['escena_cont_previa'])): ?>
+                                <div class="col-md-6">
+                                    <div class="text-uppercase small text-muted">Plano anterior</div>
+                                    <?= nl2br(esc($e['escena_cont_previa'])) ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($e['escena_cont_posterior'])): ?>
+                                <div class="col-md-6">
+                                    <div class="text-uppercase small text-muted">Plano posterior</div>
+                                    <?= nl2br(esc($e['escena_cont_posterior'])) ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+
+    <!-- REFERENCIAS DE TEXTO -->
+    <?php if (!empty($e['plano_ref_lugar_texto']) || !empty($e['plano_ref_inspiracion_texto'])): ?>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <?php if (!empty($e['plano_ref_lugar_texto'])): ?><div class="col-md-6">
+                            <h6 class="fw-semibold">Referencias visuales: Lugar y objetos</h6><?= $renderRefs($e['plano_ref_lugar_texto']) ?>
+                        </div><?php endif; ?>
+
+                    <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?><div class="col-md-6">
+                            <h6 class="fw-semibold">Referencias visuales: Inspiración</h6><?= $renderRefs($e['plano_ref_inspiracion_texto']) ?>
+                        </div><?php endif; ?>
+                </div>
+            </div>
+        </div>
     <?php endif; ?>
 
-    <!-- GALERÍAS (en páginas aparte) -->
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Lugar y objetos</h2>
-        <?php if (empty($imagenes_lugar)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
-        <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_lugar as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
-                    </a>
-                <?php endforeach; ?>
+    <?php
+    // Helper interno para renderizar media (puedes moverlo arriba en la vista)
+    $renderMedia = function ($img) {
+        $src = base_url($img['ruta']);
+        $extension = strtolower(pathinfo($img['ruta'], PATHINFO_EXTENSION));
+        $esVideo = in_array($extension, ['mp4', 'webm', 'ogg', 'mov']);
+
+        if ($esVideo): ?>
+            <div class="gallery-item video-item position-relative">
+                <video class="w-100 h-100" style="object-fit: cover;" muted playsinline>
+                    <source src="<?= $src ?>" type="video/<?= $extension ?>">
+                </video>
+                <div class="video-overlay-icon">
+                    <i class="bi bi-play-fill"></i>
+                </div>
+                <a href="<?= $src ?>" target="_blank" class="stretched-link"></a>
             </div>
-        <?php endif; ?>
-    </div>
-
-    <div class="print-break">
-        <h2 class="mt-5">Referencias: Inspiración</h2>
-        <?php if (empty($imagenes_insp)): ?>
-            <div class="tiny muted">Sin imágenes.</div>
         <?php else: ?>
-            <div class="gallery">
-                <?php foreach ($imagenes_insp as $img): $src = base_url($img['ruta']); ?>
-                    <a href="<?= $src ?>" target="_blank" rel="noopener">
-                        <img src="<?= $src ?>" alt="">
-                    </a>
-                <?php endforeach; ?>
+            <a href="<?= $src ?>" target="_blank" rel="noopener" class="gallery-item">
+                <img src="<?= $src ?>" alt="Referencia visual" loading="lazy">
+            </a>
+    <?php endif;
+    };
+    ?>
+
+    <?php if (!empty($imagenes_lugar)): ?>
+        <div class="card shadow-sm border-0 mt-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3 d-flex align-items-center">
+                    <i class="bi bi-geo-alt me-2 text-primary"></i>Lugar y objetos
+                </h6>
+                <div class="gallery-grid">
+                    <?php foreach ($imagenes_lugar as $img) $renderMedia($img); ?>
+                </div>
             </div>
-        <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($imagenes_insp)): ?>
+        <div class="card shadow-sm border-0 mt-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3 d-flex align-items-center">
+                    <i class="bi bi-lightbulb me-2 text-warning"></i>Inspiración
+                </h6>
+                <div class="gallery-grid">
+                    <?php foreach ($imagenes_insp as $img) $renderMedia($img); ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <div class="row mt-5 mb-4 no-print">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center bg-dark p-3 rounded-3 border">
+                <div>
+                    <?php if ($prevId): ?>
+                        <a class="btn btn-outline-primary" href="<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$prevId") ?>">
+                            <i class="bi bi-arrow-left me-2"></i> Escena Anterior
+                        </a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="text-muted small fw-bold text-uppercase">
+                    Fin de Escena <?= $orden ?>
+                </div>
+
+                <div>
+                    <?php if ($nextId): ?>
+                        <a class="btn btn-primary shadow-sm" href="<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$nextId") ?>">
+                            Siguiente Escena <i class="bi bi-arrow-right ms-2"></i>
+                        </a>
+                    <?php else: ?>
+                        <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">
+                            <i class="bi bi-check-circle me-2"></i> Finalizar Revisión
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- REFERENCIAS (TEXTO) -->
-    <div class="section my-5">
-        <h2>Referencias (texto)</h2>
-        <?php if (!empty($e['plano_ref_lugar_texto'])): ?>
-            <h3>Lugar / objetos</h3>
-            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_lugar_texto']) ?></div>
-        <?php endif; ?>
-        <?php if (!empty($e['plano_ref_inspiracion_texto'])): ?>
-            <h3>Inspiración</h3>
-            <div class="tiny"><?= $renderRefs((string)$e['plano_ref_inspiracion_texto']) ?></div>
-        <?php endif; ?>
-    </div>
 
-    <!-- BLOQUE TEXTUAL EN 2 COLUMNAS (UNA PÁGINA) -->
-    <div class="print-onepage">
-
-        <!-- ESCENA -->
-        <div class="section">
-            <h2>Escena</h2>
-            <dl class="kv">
-                <?php if (!empty($e['escena_descripcion'])): ?>
-                    <dt>Descripción</dt>
-                    <dd><?= nl2br(esc($e['escena_descripcion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_objetivo'])): ?>
-                    <dt>Objetivo narrativo</dt>
-                    <dd><?= nl2br(esc($e['escena_objetivo'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_accion'])): ?>
-                    <dt>Acción</dt>
-                    <dd><?= nl2br(esc($e['escena_accion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_cont_previa'])): ?>
-                    <dt>Continuidad (previa)</dt>
-                    <dd><?= nl2br(esc($e['escena_cont_previa'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['escena_cont_posterior'])): ?>
-                    <dt>Continuidad (posterior)</dt>
-                    <dd><?= nl2br(esc($e['escena_cont_posterior'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-        <!-- CÁMARA -->
-        <div class="section">
-            <h2>Cámara</h2>
-            <dl class="kv kv-2col">
-                <?php if ($optica): ?><dt>Óptica</dt>
-                    <dd><?= esc($optica) ?></dd><?php endif; ?>
-                <?php if ($apertura): ?><dt>Apertura</dt>
-                    <dd><?= esc($apertura) ?></dd><?php endif; ?>
-                <?php if ($fps): ?><dt>FPS</dt>
-                    <dd><?= esc($fps) ?></dd><?php endif; ?>
-                <?php if ($vel): ?><dt>Velocidad</dt>
-                    <dd><?= esc($vel) ?></dd><?php endif; ?>
-                <?php if ($iso): ?><dt>ISO</dt>
-                    <dd><?= esc($iso) ?></dd><?php endif; ?>
-                <?php if ($wb): ?><dt>Balance blancos</dt>
-                    <dd><?= esc($wb) ?></dd><?php endif; ?>
-                <?php if ($nd): ?><dt>Filtro ND</dt>
-                    <dd><?= esc($nd) ?></dd><?php endif; ?>
-                <?php if ($plano): ?><dt>Tipo de plano</dt>
-                    <dd><?= esc($plano) ?></dd><?php endif; ?>
-                <?php if ($angulo): ?><dt>Ángulo</dt>
-                    <dd><?= esc($angulo) ?></dd><?php endif; ?>
-                <?php if ($mov): ?><dt>Movimiento</dt>
-                    <dd><?= esc($mov) ?></dd><?php endif; ?>
-                <?php if ($soporte): ?><dt>Soporte</dt>
-                    <dd><?= esc($soporte) ?></dd><?php endif; ?>
-                <?php if (!empty($e['camara_modelo'])): ?><dt>Cámara</dt>
-                    <dd><?= esc($e['camara_modelo']) ?></dd><?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-
-        <!-- CONSTRUCCIÓN DEL PLANO -->
-        <div class="section">
-            <h2>Construcción del plano</h2>
-            <dl class="kv">
-                <?php if (!empty($e['plano_esquema_iluminacion'])): ?>
-                    <dt>Esquema de iluminación</dt>
-                    <dd><?= nl2br(esc($e['plano_esquema_iluminacion'])) ?></dd>
-                <?php endif; ?>
-                <?php if (!empty($e['plano_objetos'])): ?>
-                    <dt>Objetos en escena</dt>
-                    <dd><?= nl2br(esc($e['plano_objetos'])) ?></dd>
-                <?php endif; ?>
-                <dt>Actores</dt>
-                <dd><?= $actores ? 'Sí' : 'No' ?></dd>
-                <?php if (!empty($e['plano_toma_alternativa'])): ?>
-                    <dt>Toma alternativa</dt>
-                    <dd><?= nl2br(esc($e['plano_toma_alternativa'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-        <!-- SONIDO -->
-        <div class="section">
-            <h2>Sonido</h2>
-            <dl class="kv">
-                <dt>Ambiente</dt>
-                <dd><?= ($e['sonido_ambiente'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
-                <dt>Antiviento</dt>
-                <dd><?= ($e['sonido_antiviento'] ?? 'N') === 'S' ? 'Sí' : 'No' ?></dd>
-                <?php if (!empty($e['sonido_dialogo_escrito'])): ?>
-                    <dt>Diálogo escrito</dt>
-                    <dd><?= nl2br(esc($e['sonido_dialogo_escrito'])) ?></dd>
-                <?php endif; ?>
-            </dl>
-            <hr class="sep">
-        </div>
-
-
-
-    </div><!-- /print-onepage -->
-
-
-
-    <!-- Controles pantalla -->
-    <div class="no-print mt-3 d-flex gap-2">
-        <a class="btn btn-secondary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas') ?>">← Volver</a>
-        <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
-        <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/edit/' . $e['id']) ?>">✏️ Editar</a>
-    </div>
 </div>
 
 <script>
-    // Auto-print si llega ?print=1
     (function() {
         const p = new URLSearchParams(location.search);
         if (p.get('print') === '1') setTimeout(() => window.print(), 300);
     })();
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === "ArrowLeft") {
+            <?php if ($prevId): ?> location.href = "<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$prevId") ?>";
+            <?php endif; ?>
+        }
+        if (e.key === "ArrowRight") {
+            <?php if ($nextId): ?> location.href = "<?= site_url("rodajes/{$proyecto['id']}/escenas/show/$nextId") ?>";
+            <?php endif; ?>
+        }
+    });
 </script>
 
 <?= $this->endSection() ?>
