@@ -130,6 +130,10 @@ class Enlaces extends BaseController
 
         $enlaces = $builder->get()->getResultArray();
 
+        $pendientesRevision = (int) $db->table('enlaces_items')
+            ->selectCount('id', 'c')->where('(titulo IS NULL OR titulo = "")', null, false)
+            ->get()->getRow('c');
+
         // Carga para filtros y chips
         $categorias = $this->categorias->orderBy('nombre', 'ASC')->findAll();
         $etiquetas  = $this->etiquetas->orderBy('nombre', 'ASC')->findAll();
@@ -195,20 +199,74 @@ class Enlaces extends BaseController
         // Selección actual de tags por IDs (de texto + checkboxes)
         $tagIdsSel = $tagIds;
 
+        // --- Chips de filtros activos + contador (para el botón "Filtros" y el panel) ---
+        $catById = array_column($categorias, 'nombre', 'id');
+        $tagById = array_column($etiquetas, 'nombre', 'id');
+
+        $baseParams = array_filter([
+            'q'     => $q,
+            'visto' => $visto,
+            'match' => $match,
+        ], fn($v) => $v !== '' && $v !== null);
+
+        $chipsActivos = [];
+        foreach ($cats as $cid) {
+            if (!isset($catById[$cid])) continue;
+            $chipsActivos[] = [
+                'texto' => $catById[$cid],
+                'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                    'cats'     => array_values(array_diff($cats, [$cid])),
+                    'tag_ids'  => $tagIdsSel,
+                ]),
+            ];
+        }
+        foreach ($tagIdsSel as $tid) {
+            if (!isset($tagById[$tid])) continue;
+            $chipsActivos[] = [
+                'texto' => $tagById[$tid],
+                'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                    'cats'     => $cats,
+                    'tag_ids'  => array_values(array_diff($tagIdsSel, [$tid])),
+                ]),
+            ];
+        }
+        if ($visto === '0' || $visto === '1') {
+            $chipsActivos[] = [
+                'texto' => $visto === '0' ? 'No vistos' : 'Vistos',
+                'url'   => site_url('enlaces') . '?' . http_build_query(array_filter([
+                    'q' => $q, 'match' => $match,
+                ], fn($v) => $v !== '' && $v !== null) + ['cats' => $cats, 'tag_ids' => $tagIdsSel]),
+            ];
+        }
+        if ($q !== '') {
+            $chipsActivos[] = [
+                'texto' => '"' . $q . '"',
+                'url'   => site_url('enlaces') . '?' . http_build_query(array_filter([
+                    'visto' => $visto, 'match' => $match,
+                ], fn($v) => $v !== '' && $v !== null) + ['cats' => $cats, 'tag_ids' => $tagIdsSel]),
+            ];
+        }
+
+        // Cuenta solo lo que vive dentro del panel colapsable (para el badge y el auto-expandir)
+        $panelActiveCount = count($cats) + count($tagIdsSel) + ($visto === '0' || $visto === '1' ? 1 : 0);
+
         return view('enlaces/index', [
-            'enlaces'        => $enlaces,
-            'categorias'     => $categorias,
-            'catCount'       => $catCount,
-            'etiquetas'      => $etiquetas,
-            'catsPorEnlace'  => $catsPorEnlace,
-            'tagsPorEnlace'  => $tagsPorEnlace,
-            'cats'           => $cats,
-            'tags'           => $tags,       // si sigues mostrando el input de texto
-            'tagIdsSel'      => $tagIdsSel,  // seleccion actual (IDs)
-            'tagsDisp'       => $tagsDisp,   // etiquetas disponibles en estos resultados
-            'q'              => $q,
-            'visto'          => $visto,
-            'match'          => $match,
+            'enlaces'          => $enlaces,
+            'categorias'       => $categorias,
+            'catCount'         => $catCount,
+            'etiquetas'        => $etiquetas,
+            'catsPorEnlace'    => $catsPorEnlace,
+            'tagsPorEnlace'    => $tagsPorEnlace,
+            'cats'             => $cats,
+            'tags'             => $tags,       // si sigues mostrando el input de texto
+            'tagIdsSel'        => $tagIdsSel,  // seleccion actual (IDs)
+            'tagsDisp'         => $tagsDisp,   // etiquetas disponibles en estos resultados
+            'q'                => $q,
+            'visto'            => $visto,
+            'match'            => $match,
+            'chipsActivos'      => $chipsActivos,
+            'panelActiveCount'  => $panelActiveCount,
+            'pendientesRevision' => $pendientesRevision,
         ]);
     }
 

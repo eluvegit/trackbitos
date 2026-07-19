@@ -116,8 +116,10 @@ class Journal extends BaseController
 
     /**
      * "¿Qué hago ahora?": sortea (ponderado) 3-4 categorías candidatas para
-     * hacer algo, combinando cuánto hace que no se toca la categoría con el
-     * peso que le ha dado el usuario (0 = excluida del reparto).
+     * hacer algo, combinando cuánto hace que no se toca la categoría, el
+     * peso que le ha dado el usuario (0 = excluida del reparto) y cuántas
+     * horas tiene ya acumuladas (para compensar las que apenas se invierten,
+     * no solo las que llevan tiempo sin tocarse).
      */
     public function queHacer()
     {
@@ -141,11 +143,18 @@ class Journal extends BaseController
             $ultima = $lastUpdatedByCategory[$catName] ?? null;
             $dias = $ultima ? (int) floor((time() - strtotime($ultima)) / 86400) : 365;
 
+            $horas = array_sum(array_column($tareas, 'time_spent')) / 60;
+            // Cuantas más horas ya acumuladas tiene la categoría, más se
+            // amortigua su puntuación (de forma suave, con logaritmo, para
+            // no anular de golpe categorías con mucho tiempo invertido).
+            $factorHoras = 1 / (1 + log(1 + $horas));
+
             $candidatos[] = [
                 'categoria' => $cat,
                 'tareas'    => $tareas,
                 'dias'      => $dias,
-                'score'     => max(1, $dias) * $peso,
+                'horas'     => round($horas, 1),
+                'score'     => max(1, $dias) * $peso * $factorHoras,
             ];
         }
 
@@ -165,9 +174,17 @@ class Journal extends BaseController
         }
         unset($s);
 
+        // Horas totales de TODAS las categorías (no solo las sugeridas), para
+        // mostrarlas también en el panel de ajuste de pesos.
+        $horasPorCategoria = [];
+        foreach ($allTasksByCategory as $catName => $tareas) {
+            $horasPorCategoria[$catName] = round(array_sum(array_column($tareas, 'time_spent')) / 60, 1);
+        }
+
         return view('journal/que_hacer', [
-            'sugeridos'  => $sugeridos,
-            'categorias' => $categories,
+            'sugeridos'         => $sugeridos,
+            'categorias'        => $categories,
+            'horasPorCategoria' => $horasPorCategoria,
         ]);
     }
 

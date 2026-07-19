@@ -38,7 +38,7 @@ if (!function_exists('qh_tiempo_relativo')) {
             <div class="qh-card-header" style="border-left: 4px solid <?= esc($cat['color'] ?: '#7c3aed') ?>;">
                 <div class="qh-card-title-row">
                     <strong class="qh-card-title"><?= esc($cat['name']) ?></strong>
-                    <span class="qh-card-tiempo"><?= qh_tiempo_relativo($s['dias']) ?></span>
+                    <span class="qh-card-tiempo"><?= qh_tiempo_relativo($s['dias']) ?> · <?= $s['horas'] ?>h totales</span>
                 </div>
 
                 <div class="qh-peso" data-cat-id="<?= (int)$cat['id'] ?>">
@@ -85,6 +85,7 @@ if (!function_exists('qh_tiempo_relativo')) {
                 <div class="qh-all-item">
                     <span class="qh-all-dot" style="background: <?= esc($cat['color'] ?: '#7c3aed') ?>;"></span>
                     <span class="qh-all-name"><?= esc($cat['name']) ?></span>
+                    <span class="qh-all-horas"><?= esc($horasPorCategoria[$cat['name']] ?? 0) ?>h</span>
 
                     <div class="qh-peso" data-cat-id="<?= (int)$cat['id'] ?>">
                         <button type="button" class="qh-peso-btn" data-delta="-1">−</button>
@@ -220,6 +221,7 @@ if (!function_exists('qh_tiempo_relativo')) {
 }
 .qh-all-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
 .qh-all-name { flex: 1 1 auto; min-width: 0; font-size: .85rem; color: var(--bs-emphasis-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qh-all-horas { flex: 0 0 auto; font-size: .74rem; color: var(--bs-secondary-color); }
 </style>
 
 <script>
