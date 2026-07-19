@@ -383,6 +383,10 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('add-log/(:num)', 'Journal::addLog/$1');
     $routes->GET('get-logs/(:num)', 'Journal::getLogs/$1');
     $routes->POST('update-log/(:num)', 'Journal::updateLog/$1');
+
+    // ---- ¿Qué hago ahora? ----
+    $routes->GET('que-hacer', 'Journal::queHacer');
+    $routes->POST('categorias/(:num)/peso', 'Journal::actualizarPeso/$1');
 });
 
 // ---- Hogar: checklist rutinario de tareas por habitación ----

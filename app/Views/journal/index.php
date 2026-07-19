@@ -79,6 +79,9 @@ function time_ago(?string $datetime): string
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
     <div class="d-flex align-items-center">
         <h3 class="mb-0 me-3" style="line-height: 1;">Journal</h3>
+        <a href="<?= site_url('journal/que-hacer') ?>" class="btn btn-sm btn-outline-primary me-2">
+            <i class="bi bi-shuffle"></i> ¿Qué hago?
+        </a>
         <button id="toggleAllBtn" class="btn btn-sm" type="button">
             Mostrar todo
         </button>
