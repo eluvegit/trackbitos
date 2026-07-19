@@ -1,16 +1,31 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('lentillas/_estilos') ?>
 
-<a href="<?= site_url('lentillas/compras') ?>" class="btn btn-outline-secondary mb-3">&larr; Volver a Compras</a>
+<div class="d-flex align-items-center gap-2 mb-3 small lentillas-crumb">
+    <a href="<?= site_url('lentillas') ?>" class="text-muted text-decoration-none">Lentillas</a>
+    <span class="text-muted">/</span>
+    <a href="<?= site_url('lentillas/compras') ?>" class="text-muted text-decoration-none">Compras</a>
+    <span class="text-muted">/</span>
+    <span class="fw-semibold">Editar</span>
+</div>
 
-<h2 class="mb-4">Editar Compra</h2>
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div class="lentillas-header-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-pencil-square"></i>
+    </div>
+    <div>
+        <h2 class="mb-0">Editar compra</h2>
+        <small class="text-muted">Actualiza los datos de esta compra</small>
+    </div>
+</div>
 
-<div class="card shadow-sm">
-    <div class="card-body">
+<div class="card border-0 shadow-sm lentillas-card">
+    <div class="card-body p-4">
         <form method="post" action="<?= site_url('lentillas/compras/actualizar/' . $compra['id']) ?>">
             <?= csrf_field() ?>
 
-            <div class="row mb-3">
+            <div class="row g-3">
                 <div class="col-md-3">
                     <label for="tipo" class="form-label">Tipo</label>
                     <select name="tipo" id="tipo" class="form-select" required>
@@ -38,7 +53,12 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-success">Actualizar Compra</button>
+            <div class="mt-4 text-end">
+                <a href="<?= site_url('lentillas/compras') ?>" class="btn btn-outline-secondary me-2">Cancelar</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Actualizar compra
+                </button>
+            </div>
         </form>
     </div>
 </div>

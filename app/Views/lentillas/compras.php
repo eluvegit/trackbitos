@@ -1,19 +1,39 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('lentillas/_estilos') ?>
 
-<div class="d-flex align-items-center mb-4">
-    <i class="bi bi-cart-plus fs-4 me-2 text-primary"></i>
-    <h2 class="mb-0">Lentillas <span class="text-muted">/</span> <span class="text-secondary">Registro de Compras</span></h2>
+<div class="d-flex align-items-center gap-2 mb-3 small lentillas-crumb">
+    <a href="<?= site_url('lentillas') ?>" class="text-muted text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Lentillas
+    </a>
+    <span class="text-muted">/</span>
+    <span class="fw-semibold">Compras</span>
 </div>
 
-<a href="<?= site_url('lentillas') ?>" class="btn btn-outline-secondary mb-3">&larr; Volver a Lentillas</a>
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div class="lentillas-header-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-cart3"></i>
+    </div>
+    <div>
+        <h2 class="mb-0">Compras</h2>
+        <small class="text-muted">Registro de lentillas, gafas y líquidos</small>
+    </div>
+</div>
 
-<div class="card mb-4 shadow-sm">
-    <div class="card-body">
+<?php if (session()->getFlashdata('message')): ?>
+    <div class="alert alert-success d-flex align-items-center" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
+        <div><?= session('message') ?></div>
+    </div>
+<?php endif; ?>
+
+<div class="card border-0 shadow-sm lentillas-card mb-4">
+    <div class="card-body p-4">
+        <h6 class="text-uppercase small text-muted mb-3">Nueva compra</h6>
         <form method="post" action="<?= site_url('lentillas/compras') ?>">
             <?= csrf_field() ?>
 
-            <div class="row mb-3">
+            <div class="row g-3">
                 <div class="col-md-3">
                     <label for="tipo" class="form-label">Tipo</label>
                     <select name="tipo" id="tipo" class="form-select" required>
@@ -41,39 +61,81 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary">Guardar Compra</button>
+            <div class="mt-3 text-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>Guardar compra
+                </button>
+            </div>
         </form>
     </div>
 </div>
 
-<h4 class="my-5 text-center">Histórico de Compras</h4>
-
-<?php if (!empty($compras)): ?>
-    <div class="d-flex flex-column align-items-center gap-3">
-    <?php foreach ($compras as $compra): ?>
-        <div class="card w-100 shadow-sm" style="max-width: 700px;">
-            <div class="card-body">
-                <h6 class="card-subtitle mb-2 text-muted"><?= esc(date('d/m/Y', strtotime($compra['fecha']))) ?></h6>
-                <h5 class="card-title"><?= esc($compra['tipo']) ?></h5>
-                <p class="card-text mb-1"><strong>Precio:</strong> <?= esc(number_format($compra['precio'], 2)) ?> €</p>
-                <?php if (!empty($compra['notas'])): ?>
-                    <p class="card-text"><strong>Notas:</strong> <?= esc($compra['notas']) ?></p>
-                <?php endif; ?>
-            </div>
-            <div class="card-footer d-flex justify-content-between">
-                <a href="<?= site_url('lentillas/compras/editar/' . $compra['id']) ?>" class="btn btn-sm btn-outline-primary">Editar</a>
-                <form action="<?= site_url('lentillas/compras/eliminar/' . $compra['id']) ?>" method="post" onsubmit="return confirm('¿Eliminar esta compra?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="_method" value="DELETE">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Borrar</button>
-                </form>
-            </div>
-        </div>
-    <?php endforeach; ?>
+<div class="d-flex align-items-center gap-2 my-5">
+    <h4 class="mb-0">Histórico de compras</h4>
+    <?php if (!empty($compras)): ?>
+        <span class="badge rounded-pill text-bg-secondary"><?= count($compras) ?></span>
+    <?php endif; ?>
 </div>
 
+<?php if (!empty($compras)): ?>
+    <div class="row g-3">
+        <?php foreach ($compras as $compra):
+            $tipo = strtolower($compra['tipo']);
+            $meta = match ($tipo) {
+                'lentillas' => ['color' => 'primary', 'icon' => 'bi-record-circle'],
+                'gafas'     => ['color' => 'info', 'icon' => 'bi-eyeglasses'],
+                'líquido'   => ['color' => 'success', 'icon' => 'bi-droplet'],
+                default     => ['color' => 'secondary', 'icon' => 'bi-bag'],
+            };
+        ?>
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card border-0 shadow-sm lentillas-card lentillas-entry">
+                    <div class="d-flex">
+                        <div class="lentillas-card-accent-start bg-<?= $meta['color'] ?>"></div>
+                        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3 py-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="datos-icon bg-<?= $meta['color'] ?> bg-opacity-10 text-<?= $meta['color'] ?>">
+                                    <i class="bi <?= $meta['icon'] ?>"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0"><?= esc($compra['tipo']) ?></h6>
+                                    <div class="text-muted small">
+                                        <?= esc(date('d/m/Y', strtotime($compra['fecha']))) ?> ·
+                                        <span class="fw-semibold text-body"><?= esc(number_format($compra['precio'], 2)) ?> €</span>
+                                    </div>
+                                    <?php if (!empty($compra['notas'])): ?>
+                                        <div class="small mt-1"><?= esc($compra['notas']) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <a href="<?= site_url('lentillas/compras/editar/' . $compra['id']) ?>" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="<?= site_url('lentillas/compras/eliminar/' . $compra['id']) ?>" method="post" onsubmit="return confirm('¿Eliminar esta compra?');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
 <?php else: ?>
-    <p class="text-muted">No hay compras registradas aún.</p>
+    <p class="text-muted text-center">No hay compras registradas aún.</p>
 <?php endif; ?>
+
+<style>
+    .lentillas-entry .lentillas-card-accent-start {
+        border-top-left-radius: 12px;
+        border-bottom-left-radius: 12px;
+    }
+</style>
 
 <?= $this->endSection() ?>

@@ -3,21 +3,39 @@
 use CodeIgniter\I18n\Time; ?>
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('lentillas/_estilos') ?>
 
-<div class="d-flex align-items-center mb-4">
-    <i class="bi bi-arrow-repeat fs-4 me-2 text-primary"></i>
-    <h2 class="mb-0">Lentillas <span class="text-muted">/</span> <span class="text-secondary">Cambios y revisiones</span></h2>
+<div class="d-flex align-items-center gap-2 mb-3 small lentillas-crumb">
+    <a href="<?= site_url('lentillas') ?>" class="text-muted text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Lentillas
+    </a>
+    <span class="text-muted">/</span>
+    <span class="fw-semibold">Cambios y revisiones</span>
 </div>
-<a href="<?= site_url('lentillas') ?>" class="btn btn-outline-secondary mb-3">&larr; Volver a Lentillas</a>
+
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div class="lentillas-header-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-arrow-repeat"></i>
+    </div>
+    <div>
+        <h2 class="mb-0">Cambios y revisiones</h2>
+        <small class="text-muted">Lentillas, estuche, líquidos y presión del ojo</small>
+    </div>
+</div>
 
 <?php if (session()->getFlashdata('message')): ?>
-    <div class="alert alert-success"><?= session('message') ?></div>
+    <div class="alert alert-success d-flex align-items-center" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
+        <div><?= session('message') ?></div>
+    </div>
 <?php endif; ?>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert alert-danger"><?= session('error') ?></div>
+    <div class="alert alert-danger d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <div><?= session('error') ?></div>
+    </div>
 <?php endif; ?>
-
 
 <!-- Tarjetas de acción rápida -->
 <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
@@ -25,21 +43,21 @@ use CodeIgniter\I18n\Time; ?>
     $acciones = [
         [
             'elemento' => 'lentillas',
-            'texto'    => 'Hoy cambié las Lentillas 👁️👁️',
+            'texto'    => 'Hoy cambié las Lentillas',
             'color'    => 'primary',
-            'icono'    => 'eye'
+            'icono'    => 'bi-eye'
         ],
         [
             'elemento' => 'líquido',
-            'texto'    => 'Hoy cambié el Líquido 💧',
+            'texto'    => 'Hoy cambié el Líquido',
             'color'    => 'info',
-            'icono'    => 'droplet'
+            'icono'    => 'bi-droplet'
         ],
         [
             'elemento' => 'estuche',
-            'texto'    => 'Hoy cambié el Estuche 🧳',
+            'texto'    => 'Hoy cambié el Estuche',
             'color'    => 'warning',
-            'icono'    => 'box'
+            'icono'    => 'bi-briefcase'
         ]
     ];
     ?>
@@ -51,12 +69,13 @@ use CodeIgniter\I18n\Time; ?>
                 <input type="hidden" name="elemento" value="<?= esc($accion['elemento']) ?>">
                 <input type="hidden" name="fecha" value="<?= date('Y-m-d') ?>">
 
-                <button type="submit" class="card text-start shadow-sm border-0 w-100 h-100 btn btn-<?= $accion['color'] ?>-subtle p-3">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-<?= $accion['icono'] ?> fs-2 me-3 text-<?= $accion['color'] ?>"></i>
-                        <div>
-                            <strong><?= esc($accion['texto']) ?></strong>
+                <button type="submit" class="card text-start border-0 shadow-sm w-100 h-100 lentillas-card lentillas-quick-btn p-0">
+                    <div class="lentillas-card-accent bg-<?= $accion['color'] ?>"></div>
+                    <div class="d-flex align-items-center gap-3 p-3">
+                        <div class="datos-icon bg-<?= $accion['color'] ?> bg-opacity-10 text-<?= $accion['color'] ?>">
+                            <i class="bi <?= $accion['icono'] ?>"></i>
                         </div>
+                        <strong><?= esc($accion['texto']) ?></strong>
                     </div>
                 </button>
             </form>
@@ -64,13 +83,13 @@ use CodeIgniter\I18n\Time; ?>
     <?php endforeach; ?>
 </div>
 
-
 <!-- Formulario personalizado -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
+<div class="card border-0 shadow-sm lentillas-card mb-4">
+    <div class="card-body p-4">
+        <h6 class="text-uppercase small text-muted mb-3">Registrar otro cambio</h6>
         <form method="post" action="<?= site_url('lentillas/sustituciones') ?>">
             <?= csrf_field() ?>
-            <div class="row">
+            <div class="row g-3">
                 <div class="col-md-4">
                     <label for="elemento" class="form-label">Elemento</label>
                     <select name="elemento" id="elemento" class="form-select" required>
@@ -82,7 +101,6 @@ use CodeIgniter\I18n\Time; ?>
                         <option value="líquido">Líquido</option>
                         <option value="presión">Presión de ojos</option>
                     </select>
-
                 </div>
 
                 <div class="col-md-3">
@@ -97,62 +115,74 @@ use CodeIgniter\I18n\Time; ?>
             </div>
 
             <div class="mt-3 text-end">
-                <button type="submit" class="btn btn-primary">Registrar Sustitución</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>Registrar sustitución
+                </button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Histórico -->
-<h4 class="my-5 text-center">Historial de Sustituciones</h4>
+<div class="d-flex align-items-center gap-2 my-5">
+    <h4 class="mb-0">Historial de sustituciones</h4>
+    <?php if (!empty($sustituciones)): ?>
+        <span class="badge rounded-pill text-bg-secondary"><?= count($sustituciones) ?></span>
+    <?php endif; ?>
+</div>
 
 <?php if (!empty($sustituciones)): ?>
-    <div class="row g-4">
+    <div class="row g-3">
         <?php foreach ($sustituciones as $sust):
             $tipo = strtolower($sust['elemento']);
 
-            // Color e icono según tipo
-            $bg = match ($tipo) {
-                'lentilla izquierda' => 'primary',
-                'lentilla derecha'   => 'primary',
-                'estuche'            => 'warning',
-                'líquido'            => 'info',
-                default              => 'secondary'
-            };
-
-            $icon = match ($tipo) {
-                'lentilla izquierda' => '👁️‍🗨️',
-                'lentilla derecha'   => '👁️',
-                'estuche'            => '🧳',
-                'líquido'            => '💧',
-                default              => '🔁'
+            // Color, icono y lateralidad según tipo
+            $meta = match ($tipo) {
+                'lentilla izquierda' => ['color' => 'primary', 'icon' => 'bi-eye', 'badge' => 'OI', 'badgeClass' => 'ojo-badge-izq'],
+                'lentilla derecha'   => ['color' => 'info', 'icon' => 'bi-eye', 'badge' => 'OD', 'badgeClass' => 'ojo-badge-der'],
+                'lentillas'          => ['color' => 'primary', 'icon' => 'bi-record-circle', 'badge' => null, 'badgeClass' => null],
+                'estuche'            => ['color' => 'warning', 'icon' => 'bi-briefcase', 'badge' => null, 'badgeClass' => null],
+                'líquido'            => ['color' => 'success', 'icon' => 'bi-droplet', 'badge' => null, 'badgeClass' => null],
+                default              => ['color' => 'secondary', 'icon' => 'bi-arrow-repeat', 'badge' => null, 'badgeClass' => null],
             };
         ?>
-            <div class="col-md-6 offset-md-3">
-                <div class="card border-start border-1 border-<?= $bg ?> shadow-sm h-100">
-                    <div class="card-body d-flex flex-column justify-content-between">
-                        <div>
-                            <div class="d-flex align-items-center mb-2">
-                                <div class="display-6 me-2"><?= $icon ?></div>
-                                <h5 class="card-title mb-0"><?= ucfirst($sust['elemento']) ?></h5>
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card border-0 shadow-sm lentillas-card lentillas-entry">
+                    <div class="d-flex">
+                        <div class="lentillas-card-accent-start bg-<?= $meta['color'] ?>"></div>
+                        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3 py-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="datos-icon bg-<?= $meta['color'] ?> bg-opacity-10 text-<?= $meta['color'] ?>">
+                                    <i class="bi <?= $meta['icon'] ?>"></i>
+                                </div>
+                                <div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <h6 class="mb-0"><?= ucfirst($sust['elemento']) ?></h6>
+                                        <?php if ($meta['badge']): ?>
+                                            <span class="badge rounded-pill ojo-badge <?= $meta['badgeClass'] ?>"><?= $meta['badge'] ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="text-muted small">
+                                        <?= date('d/m/Y', strtotime($sust['fecha'])) ?> ·
+                                        <span class="fst-italic"><?= \CodeIgniter\I18n\Time::parse($sust['fecha'])->humanize() ?></span>
+                                    </div>
+                                    <?php if (!empty($sust['notas'])): ?>
+                                        <div class="small mt-1"><?= esc($sust['notas']) ?></div>
+                                    <?php endif ?>
+                                </div>
                             </div>
-                            <p class="text-muted mb-1">
-                                <?= date('d/m/Y', strtotime($sust['fecha'])) ?> ·
-                                <small class="fst-italic"><?= \CodeIgniter\I18n\Time::parse($sust['fecha'])->humanize() ?></small>
-                            </p>
 
-                            <?php if (!empty($sust['notas'])): ?>
-                                <p class="mb-2"><?= esc($sust['notas']) ?></p>
-                            <?php endif ?>
-                        </div>
-
-                        <div class="text-end">
-                            <a href="<?= site_url('lentillas/sustituciones/editar/' . $sust['id']) ?>" class="btn btn-sm btn-outline-secondary me-2">Editar</a>
-
-                            <form action="<?= site_url('lentillas/sustituciones/eliminar/' . $sust['id']) ?>" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar esta sustitución?');">
-                                <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
-                            </form>
+                            <div class="d-flex gap-2">
+                                <a href="<?= site_url('lentillas/sustituciones/editar/' . $sust['id']) ?>" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form action="<?= site_url('lentillas/sustituciones/eliminar/' . $sust['id']) ?>" method="post" onsubmit="return confirm('¿Eliminar esta sustitución?');">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -160,8 +190,18 @@ use CodeIgniter\I18n\Time; ?>
         <?php endforeach; ?>
     </div>
 <?php else: ?>
-    <p class="text-muted">No hay sustituciones registradas aún.</p>
+    <p class="text-muted text-center">No hay sustituciones registradas aún.</p>
 <?php endif; ?>
 
+<style>
+    .lentillas-quick-btn {
+        cursor: pointer;
+    }
+
+    .lentillas-entry .lentillas-card-accent-start {
+        border-top-left-radius: 12px;
+        border-bottom-left-radius: 12px;
+    }
+</style>
 
 <?= $this->endSection() ?>
