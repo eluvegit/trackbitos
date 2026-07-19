@@ -114,7 +114,112 @@ class Journal extends BaseController
         ]);
     }
 
+    /**
+     * "¿Qué hago ahora?": sortea (ponderado) 3-4 categorías candidatas para
+     * hacer algo, combinando cuánto hace que no se toca la categoría con el
+     * peso que le ha dado el usuario (0 = excluida del reparto).
+     */
+    public function queHacer()
+    {
+        $categories = $this->categoryModel->getAll();
+        $lastUpdatedByCategory = $this->taskModel->getLastUpdatedPerCategory();
+        $allTasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
+        $candidatos = [];
+        foreach ($categories as $cat) {
+            $peso = (int) ($cat['peso'] ?? 3);
+            if ($peso <= 0) {
+                continue; // excluida del reparto
+            }
+
+            $catName = $cat['name'];
+            $tareas = $allTasksByCategory[$catName] ?? [];
+            if (empty($tareas)) {
+                continue; // sin tareas, no tiene sentido sugerirla
+            }
+
+            $ultima = $lastUpdatedByCategory[$catName] ?? null;
+            $dias = $ultima ? (int) floor((time() - strtotime($ultima)) / 86400) : 365;
+
+            $candidatos[] = [
+                'categoria' => $cat,
+                'tareas'    => $tareas,
+                'dias'      => $dias,
+                'score'     => max(1, $dias) * $peso,
+            ];
+        }
+
+        $sugeridos = $this->sorteoPonderado($candidatos, 4);
+
+        // Para cada sugerida, elegir unas pocas tareas a mostrar: primero las
+        // que tienen estrella, luego el resto por orden reciente.
+        foreach ($sugeridos as &$s) {
+            $tareas = $s['tareas'];
+            usort($tareas, function ($a, $b) {
+                $aCur = !empty($a['is_current']);
+                $bCur = !empty($b['is_current']);
+                return $aCur === $bCur ? 0 : ($aCur ? -1 : 1);
+            });
+            $s['tareas_muestra'] = array_slice($tareas, 0, 4);
+            $s['tareas_total'] = count($tareas);
+        }
+        unset($s);
+
+        return view('journal/que_hacer', [
+            'sugeridos'  => $sugeridos,
+            'categorias' => $categories,
+        ]);
+    }
+
+    /**
+     * Reparto ponderado sin reemplazo: cada candidato tiene tantas
+     * "papeletas" como su score, se sortea uno, se saca del bombo y se repite.
+     */
+    private function sorteoPonderado(array $candidatos, int $n): array
+    {
+        $pool = array_values($candidatos);
+        $elegidos = [];
+
+        while (count($elegidos) < $n && !empty($pool)) {
+            $total = array_sum(array_column($pool, 'score'));
+            if ($total <= 0) {
+                break;
+            }
+
+            $r = mt_rand(1, $total);
+            $acumulado = 0;
+            foreach ($pool as $i => $c) {
+                $acumulado += $c['score'];
+                if ($r <= $acumulado) {
+                    $elegidos[] = $c;
+                    unset($pool[$i]);
+                    $pool = array_values($pool);
+                    break;
+                }
+            }
+        }
+
+        return $elegidos;
+    }
+
+    /**
+     * Ajusta el peso de una categoría en el reparto de "¿Qué hago ahora?"
+     * (0 = excluida, 1-5 = cuánto peso tiene).
+     */
+    public function actualizarPeso(int $categoryId)
+    {
+        $categoria = $this->categoryModel->find($categoryId);
+        if (!$categoria) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $peso = (int) $this->request->getPost('peso');
+        $peso = max(0, min(5, $peso));
+
+        $this->categoryModel->skipValidation(true)->update($categoryId, ['peso' => $peso]);
+
+        return $this->response->setJSON(['success' => true, 'peso' => $peso]);
+    }
 
     /**
      * Crear nueva tarea

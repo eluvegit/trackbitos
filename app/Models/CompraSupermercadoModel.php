@@ -8,7 +8,7 @@ class CompraSupermercadoModel extends Model
 {
     protected $table            = 'compra_supermercados';
     protected $primaryKey       = 'id';
-    protected $allowedFields    = ['nombre', 'descripcion', 'created_at', 'updated_at'];
+    protected $allowedFields    = ['nombre', 'descripcion', 'orden', 'visible', 'created_at', 'updated_at'];
     protected $useTimestamps    = true;
 
     protected $validationRules = [

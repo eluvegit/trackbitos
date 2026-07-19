@@ -1,490 +1,476 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2>LISTA: <?= esc($lista['nombre']) ?></h2>
+<?php
+// Leemos los valores por si llegan con ?orden=...&no_vistos=1&relevantes=1
+$req = service('request');
+$orden = $orden ?? (string)$req->getGet('orden'); // '' | recientes | antiguos | no_vistos | vistos | relevantes
+$nv  = $req->getGet('no_vistos') ? 1 : 0;
+$rel = $req->getGet('relevantes') ? 1 : 0;
+$hasFilters = $orden || $nv || $rel;
+$pendientes = $stats['total'] - $stats['vistos'];
+
+$ordenOptions = [
+    ''           => 'Orden: posición',
+    'recientes'  => 'Más recientes',
+    'antiguos'   => 'Más antiguos',
+    'no_vistos'  => 'No vistos primero',
+    'vistos'     => 'Vistos primero',
+    'relevantes' => 'Relevantes primero',
+];
+?>
+
+<!-- Cabecera -->
+<div class="yt-header mb-3">
+    <a href="<?= site_url('youtube') ?>" class="yt-back"><i class="bi bi-chevron-left"></i> Listas</a>
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mt-1">
+        <h2 class="yt-title mb-0"><?= esc($lista['nombre']) ?></h2>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= site_url('youtube/' . $lista['slug'] . '/importar') ?>">
+                <i class="bi bi-upload"></i> <span class="d-none d-sm-inline">Importar</span>
+            </a>
+            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= site_url('youtube/' . $lista['slug'] . '/editar') ?>">
+                <i class="bi bi-pencil"></i> <span class="d-none d-sm-inline">Editar</span>
+            </a>
+        </div>
+    </div>
+</div>
 
 <?php if (session('warn')): ?>
     <div class="alert alert-warning"><?= esc(session('warn')) ?></div>
 <?php endif ?>
 
-
-<div class="mb-2">
-    <!--<a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-playlist') ?>">Importar Playlist</a>
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-texto') ?>">Importar texto</a>
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar-html') ?>">Importar HTML</a>-->
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/importar') ?>">Importar JSON</a>
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube/' . $lista['slug'] . '/editar') ?>">Editar</a>
-    <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('youtube') ?>">← Volver</a>
+<!-- Resumen -->
+<div class="yt-stats mb-3">
+    <div class="yt-stats-row">
+        <div class="yt-stat">
+            <span class="yt-stat-num"><?= (int)$stats['total'] ?></span>
+            <span class="yt-stat-label">Total</span>
+        </div>
+        <div class="yt-stat">
+            <span class="yt-stat-num"><?= (int)$stats['vistos'] ?></span>
+            <span class="yt-stat-label">Vistos</span>
+        </div>
+        <div class="yt-stat">
+            <span class="yt-stat-num"><?= (int)$stats['relevantes'] ?></span>
+            <span class="yt-stat-label">Relevantes</span>
+        </div>
+        <div class="yt-stat">
+            <span class="yt-stat-num"><?= (int)$pendientes ?></span>
+            <span class="yt-stat-label">Pendientes</span>
+        </div>
+    </div>
+    <div class="yt-progress" title="<?= $stats['pct_vistos'] ?>% visto">
+        <div class="yt-progress-bar" style="width: <?= $stats['pct_vistos'] ?>%"></div>
+    </div>
 </div>
 
-<?php
-// Leemos los valores por si llegan con ?sort_...&no_vistos=1&relevantes=1
-$req = service('request');
-$sv  = (string)$req->getGet('sort_vistos');        // '' | 'no_vistos_primero' | 'vistos_primero'
-$sr  = (string)$req->getGet('sort_relevantes');    // '' | 'primero'
-$nv  = $req->getGet('no_vistos') ? 1 : 0;
-$rel = $req->getGet('relevantes') ? 1 : 0;
-?>
+<!-- Filtros -->
+<form id="filters" class="filterbar mb-3">
+    <div class="filters-row">
+        <select name="orden" id="f-orden" class="form-select form-select-sm yt-select">
+            <?php foreach ($ordenOptions as $value => $label): ?>
+                <option value="<?= esc($value) ?>" <?= $orden === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
+            <?php endforeach; ?>
+        </select>
 
-<!-- Toolbar de filtros (estilo moderno, aplica al instante) -->
-<form id="filters" class="filterbar card border-0 shadow-sm mb-3">
-    <div class="card-body d-flex flex-wrap align-items-center gap-3">
+        <input class="btn-check" type="checkbox" id="f-nv" name="no_vistos" value="1" <?= ($nv ? 'checked' : '') ?>>
+        <label class="chip" for="f-nv"><i class="bi bi-circle"></i> No vistos</label>
 
-        <!-- Segmento: Orden por vistos -->
-        <div class="filter-group">
-            <div class="filter-label">Orden Vistos</div>
-            <div class="seg">
-                <input type="radio" class="btn-check" name="sort_vistos" id="sv-none" value="" <?= ($sv === '' ? 'checked' : '') ?>>
-                <label class="seg-btn" for="sv-none" title="Sin ordenar">—</label>
+        <input class="btn-check" type="checkbox" id="f-rel" name="relevantes" value="1" <?= ($rel ? 'checked' : '') ?>>
+        <label class="chip" for="f-rel"><i class="bi bi-star-fill"></i> Relevantes</label>
 
-                <input type="radio" class="btn-check" name="sort_vistos" id="sv-no" value="no_vistos_primero" <?= ($sv === 'no_vistos_primero' ? 'checked' : '') ?>>
-                <label class="seg-btn" for="sv-no">
-                    <!-- ojo “no visto” -->
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9a4.5 4.5 0 0 1 0 9Z" />
-                    </svg>
-                    No vistos primero
-                </label>
+        <span class="small text-muted ms-auto" id="f-counter">
+            <?= count($videos) ?>/<?= (int)$stats['total'] ?>
+        </span>
 
-                <input type="radio" class="btn-check" name="sort_vistos" id="sv-si" value="vistos_primero" <?= ($sv === 'vistos_primero' ? 'checked' : '') ?>>
-                <label class="seg-btn" for="sv-si">
-                    <!-- check “visto” -->
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fill="currentColor" d="M9.55 17.45L4.8 12.7l1.4-1.4l3.35 3.35l7.2-7.2l1.4 1.4Z" />
-                    </svg>
-                    Vistos primero
-                </label>
-            </div>
-        </div>
-
-        <!-- Segmento: Relevantes -->
-        <div class="filter-group">
-            <div class="filter-label">Relevantes</div>
-            <div class="seg">
-                <input type="radio" class="btn-check" name="sort_relevantes" id="sr-none" value="" <?= ($sr === '' ? 'checked' : '') ?>>
-                <label class="seg-btn" for="sr-none">—</label>
-
-                <input type="radio" class="btn-check" name="sort_relevantes" id="sr-primero" value="primero" <?= ($sr === 'primero' ? 'checked' : '') ?>>
-                <label class="seg-btn" for="sr-primero">
-                    <!-- estrella -->
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fill="currentColor" d="m12 17.27l6.18 3.73l-1.64-7.03L21 9.24l-7.19-.61L12 2L10.19 8.63L3 9.24l4.46 4.73L5.82 21z" />
-                    </svg>
-                    Primero
-                </label>
-            </div>
-        </div>
-
-        <!-- Chips: Solo no vistos / Solo relevantes -->
-        <div class="d-flex align-items-center gap-2 mt-4">
-            <input class="btn-check" type="checkbox" id="f-nv" name="no_vistos" value="1" <?= ($nv ? 'checked' : '') ?>>
-            <label class="chip" for="f-nv">
-                <span class="dot dot-gray"></span> Solo no vistos
-            </label>
-
-            <input class="btn-check" type="checkbox" id="f-rel" name="relevantes" value="1" <?= ($rel ? 'checked' : '') ?>>
-            <label class="chip" for="f-rel">
-                <span class="dot dot-amber"></span> Solo relevantes
-            </label>
-        </div>
-
-        <!-- Lado derecho: contador + limpiar -->
-        <div class="ms-auto d-flex align-items-center gap-2 mt-4">
-            <span class="small text-muted" id="f-counter">
-                Mostrando <?= count($videos) ?> de <?= (int)$stats['total'] ?>
-            </span>
-
-            <?php if ($sv || $sr || $nv || $rel): ?>
-                <a class="btn btn-sm btn-light border" href="<?= site_url('youtube/' . $lista['slug']) ?>">
-                    Limpiar
-                </a>
-            <?php endif; ?>
-        </div>
+        <?php if ($hasFilters): ?>
+            <a class="yt-clear" href="<?= site_url('youtube/' . $lista['slug']) ?>" title="Limpiar filtros">
+                <i class="bi bi-x-lg"></i>
+            </a>
+        <?php endif; ?>
     </div>
 </form>
 
+<!-- Listado de vídeos -->
+<div class="video-list" id="videos-list">
+    <?php foreach ($videos as $v): ?>
+        <?php
+        $isVisto = !empty($v['visto']);
+        $isRel   = !empty($v['relevante']);
+        $isLargo = !empty($v['largo']);
+        ?>
+        <div
+            class="video-item <?= $isVisto ? 'is-visto' : '' ?> <?= $isRel ? 'is-relevante' : '' ?>"
+            data-id="<?= (int)$v['id'] ?>"
+            data-posicion="<?= (int)$v['posicion'] ?>"
+            data-visto="<?= $isVisto ? '1' : '0' ?>"
+            data-relevante="<?= $isRel ? '1' : '0' ?>"
+            data-largo="<?= $isLargo ? '1' : '0' ?>">
 
-<div class="alert alert-secondary">
-    Total: <strong><?= $stats['total'] ?></strong> ·
-    Vistos: <strong><?= $stats['vistos'] ?></strong> (<?= $stats['pct_vistos'] ?>%) ·
-    Relevantes: <strong><?= $stats['relevantes'] ?></strong> (<?= $stats['pct_relev'] ?>%) ·
-    Pendientes: <strong><?= $stats['total'] - $stats['vistos'] ?></strong> (<?= $stats['total'] ? round(($stats['total'] - $stats['vistos']) * 100 / $stats['total'], 1) : 0 ?>%)
+            <button type="button" class="video-btn video-check js-toggle-visto" data-id="<?= (int)$v['id'] ?>" aria-pressed="<?= $isVisto ? 'true' : 'false' ?>" aria-label="Marcar como visto">
+                <i class="bi <?= $isVisto ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
+            </button>
+
+            <a href="<?= esc($v['url']) ?>" target="_blank" rel="noopener" class="video-link">
+                <span class="video-title"><?= esc($v['titulo'] ?: 'Abrir') ?></span>
+                <span class="video-meta">#<?= (int)$v['posicion'] ?></span>
+            </a>
+
+            <div class="video-actions">
+                <button type="button" class="video-btn video-star js-toggle-relevante" data-id="<?= (int)$v['id'] ?>" aria-pressed="<?= $isRel ? 'true' : 'false' ?>" aria-label="Marcar relevante">
+                    <i class="bi <?= $isRel ? 'bi-star-fill' : 'bi-star' ?>"></i>
+                </button>
+
+                <button type="button" class="video-btn video-largo js-toggle-largo <?= $isLargo ? 'is-active' : '' ?>" data-id="<?= (int)$v['id'] ?>" aria-pressed="<?= $isLargo ? 'true' : 'false' ?>" aria-label="Marcar como vídeo largo">
+                    <i class="bi bi-camera-reels"></i>
+                </button>
+            </div>
+        </div>
+    <?php endforeach; ?>
 </div>
 
-<table class="table table-sm table-hover align-middle" id="videos-table">
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Titulo</th>
-            <th>✓</th>
-            <th>★</th>
-            <th>🎬</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($videos as $v): ?>
-            <?php
-            $isVisto = !empty($v['visto']);
-            $isRel   = !empty($v['relevante']);
-
-            // Clases para la fila
-            $rowClasses = [];
-            if ($isRel) {
-                $rowClasses[] = 'table-warning';
-            } elseif (!$isVisto) {
-                $rowClasses[] = 'table-light';
-            }
-            if ($isVisto) {
-                $rowClasses[] = 'opacity-50';
-            }
-            $rowClassStr = implode(' ', $rowClasses);
-
-            // Estilo del título (negrita si NO visto)
-            $titleClass = $isVisto ? '' : 'fw-bold';
-            ?>
-            <tr
-                class="<?= $rowClassStr ?>"
-                data-id="<?= (int)$v['id'] ?>"
-                data-posicion="<?= (int)$v['posicion'] ?>"
-                data-visto="<?= $isVisto ? '1' : '0' ?>"
-                data-relevante="<?= $isRel ? '1' : '0' ?>"
-                data-largo="<?= !empty($v['largo']) ? '1' : '0' ?>">
-                <td class="cell-posicion"><?= (int)$v['posicion'] ?></td>
-                <td class="cell-titulo">
-                    <a href="<?= esc($v['url']) ?>" target="_blank" rel="noopener" class="text-decoration-none <?= $titleClass ?>">
-                        <?= esc($v['titulo'] ?: 'Abrir') ?>
-                    </a>
-                </td>
-                <td class="cell-visto">
-                    <button class="btn btn-sm <?= $isVisto ? 'btn-success' : 'btn-outline-secondary' ?> js-toggle-visto" data-id="<?= (int)$v['id'] ?>">
-                        <?= $isVisto ? '✓' : '✓' ?>
-                    </button>
-                </td>
-                <td class="cell-relevante">
-                    <button class="btn btn-sm <?= $isRel ? 'btn-warning' : 'btn-outline-secondary' ?> js-toggle-relevante" data-id="<?= (int)$v['id'] ?>">
-                        <?= $isRel ? '★' : '★' ?>
-                    </button>
-                </td>
-                <td class="cell-largo">
-                    <button class="btn btn-sm <?= !empty($v['largo']) ? 'btn-info' : 'btn-outline-secondary' ?> js-toggle-largo" data-id="<?= (int)$v['id'] ?>">
-                        <?= !empty($v['largo']) ? '🎬 Largo' : 'Largo' ?>
-                    </button>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
+<div class="video-empty d-none" id="videos-empty">
+    <i class="bi bi-inbox"></i>
+    <p>No hay vídeos que coincidan con estos filtros.</p>
+</div>
 
 <style>
-   /* ================================
-   General Cards y Anillos
-   ================================ */
-
-.trk-card {
-    --trk-border: rgba(0,0,0,.08);
-    --trk-bg: var(--bs-body-bg);
-    display: grid;
-    grid-template-columns: 56px 1fr 18px;
-    gap: .9rem;
-    align-items: center;
-    padding: 14px 16px;
-    border-radius: 16px;
-    border: 1px solid var(--trk-border);
-    background: var(--trk-bg);
-    box-shadow: 0 6px 20px rgba(0,0,0,.06);
-    transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
-}
-
-.trk-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 28px rgba(0,0,0,.12);
-    border-color: #7c3aed; /* morado suave */
-}
-
-.trk-body { min-width: 0; }
-
-.trk-title {
-    font-weight: 600;
-    font-size: 1rem;
-    line-height: 1.15;
-    color: var(--bs-emphasis-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.trk-sub {
-    margin-top: .25rem;
-    font-size: .9rem;
-    color: var(--bs-secondary-color);
-}
-
-.trk-chevron {
-    font-size: 26px;
-    color: rgba(0,0,0,.35);
-    transition: transform .15s ease, color .15s ease;
-}
-.trk-card:hover .trk-chevron { transform: translateX(2px); color: #7c3aed; }
-
-.trk-ring {
-    --trk-accent: #6366f1; /* default */
-    --trk-track: rgba(0,0,0,.08);
-    position: relative;
-    width: 48px;
-    height: 48px;
-}
-
-.trk-ring::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: conic-gradient(var(--trk-accent) var(--p), var(--trk-track) 0);
-}
-
-.trk-ring::after {
-    content: "";
-    position: absolute;
-    inset: 6px;
-    border-radius: 50%;
-    background: var(--trk-bg);
-    box-shadow: inset 0 0 0 1px var(--trk-border);
-}
-
-.trk-ring__label {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: .75rem;
-    font-weight: 600;
-    color: var(--bs-secondary-color);
-}
-
-/* Estados de progreso */
-.trk-low { --trk-accent: #9ca3af; } /* gris */
-.trk-mid { --trk-accent: #facc15; } /* amarillo suave */
-.trk-good { --trk-accent: #34d399; } /* verde suave */
-
 /* ================================
-   Dark Mode Correcciones
+   Cabecera
    ================================ */
-.text-bg-dark .trk-card,
-.bg-dark .trk-card {
-    --trk-border: rgba(255,255,255,.12);
-    --trk-bg: #1f1f2e; /* gris oscuro azulado */
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-}
-
-.text-bg-dark .trk-card:hover {
-    border-color: #a78bfa; /* morado suave */
-    box-shadow: 0 10px 28px rgba(0,0,0,.4);
-}
-
-.text-bg-dark .trk-chevron {
-    color: rgba(255,255,255,.5);
-}
-.text-bg-dark .trk-card:hover .trk-chevron {
-    color: #a78bfa;
-}
-
-.text-bg-dark .trk-ring {
-    --trk-track: rgba(255,255,255,.12);
-}
-.text-bg-dark .trk-ring__label {
-    color: #d1d5db; /* gris claro */
-}
-
-/* Acabado de los colores de progreso en dark */
-.text-bg-dark .trk-low { --trk-accent: #6b7280; }   /* gris suave */
-.text-bg-dark .trk-mid { --trk-accent: #fbbf24; }   /* amarillo cálido */
-.text-bg-dark .trk-good { --trk-accent: #34d399; }  /* verde aqua */
-
-/* ================================
-   Filtros, Segments y Chips
-   ================================ */
-
-.filterbar { background: var(--bs-body-bg); }
-
-.filter-group { display: flex; flex-direction: column; gap: .35rem; }
-.filter-label {
-    font-size: .72rem;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--bs-secondary-color);
-}
-
-.seg {
-    display: inline-flex;
-    background: rgba(124,58,237,.1); /* morado suave */
-    padding: 4px;
-    border-radius: 999px;
-    gap: 4px;
-}
-
-.seg-btn {
+.yt-back {
     display: inline-flex;
     align-items: center;
-    gap: .35rem;
-    padding: .35rem .6rem;
     font-size: .85rem;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    color: var(--bs-emphasis-color);
-    background: transparent;
-    cursor: pointer;
-    transition: all .15s ease;
+    color: var(--bs-secondary-color);
+    text-decoration: none;
 }
-.seg-btn:hover { background: rgba(124,58,237,.15); }
-.btn-check:checked + .seg-btn {
-    background: #7c3aed;
-    color: #fff;
-    border-color: #7c3aed;
-    box-shadow: 0 2px 6px rgba(124,58,237,.35);
+.yt-back:hover { color: var(--bs-emphasis-color); }
+
+.yt-title {
+    font-size: 1.35rem;
+    font-weight: 700;
 }
 
-/* Chips */
+/* ================================
+   Resumen / stats
+   ================================ */
+.yt-stats {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 16px;
+    padding: 12px 14px;
+}
+
+.yt-stats-row {
+    display: flex;
+    gap: 1.25rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.yt-stat {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+}
+
+.yt-stat-num {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--bs-emphasis-color);
+}
+
+.yt-stat-label {
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.yt-progress {
+    margin-top: 10px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(124, 58, 237, .12);
+    overflow: hidden;
+}
+
+.yt-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    transition: width .2s ease;
+}
+
+/* ================================
+   Filtros — barra minimalista de una línea
+   ================================ */
+.filters-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.yt-select {
+    width: auto;
+    max-width: 170px;
+    border-radius: 999px;
+    font-size: .8rem;
+}
+
 .chip {
     display: inline-flex;
     align-items: center;
-    gap: .45rem;
-    padding: .35rem .65rem;
-    font-size: .85rem;
+    gap: .35rem;
+    padding: .32rem .6rem;
+    font-size: .78rem;
+    white-space: nowrap;
     border-radius: 999px;
-    border: 1px solid rgba(0,0,0,.08);
-    background: rgba(0,0,0,.03);
-    color: var(--bs-emphasis-color);
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
     cursor: pointer;
     transition: all .15s ease;
 }
-.chip:hover { background: rgba(0,0,0,.05); }
+.chip:hover { filter: brightness(1.1); }
 .btn-check:checked + .chip {
     border-color: #34d399;
     background: rgba(52,211,153,.15);
-    box-shadow: inset 0 0 0 1px rgba(52,211,153,.25);
+    box-shadow: inset 0 0 0 1px rgba(52,211,153,.3);
+    color: #34d399;
 }
 
-.dot { width:.55rem; height:.55rem; border-radius:50%; display:inline-block; }
-.dot-gray { background:#9ca3af; }
-.dot-amber { background:#fbbf24; }
+#f-counter { color: var(--bs-secondary-color); font-size: .78rem; white-space: nowrap; }
 
-#f-counter { color: var(--bs-secondary-color); }
+.yt-clear {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: var(--bs-secondary-color);
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    font-size: .75rem;
+    flex: 0 0 auto;
+}
+.yt-clear:hover { color: var(--bs-emphasis-color); }
 
-/* Dark Mode Filters */
-.text-bg-dark .filterbar { background: #1f1f2e; }
-.text-bg-dark .seg { background: rgba(124,58,237,.2); }
-.text-bg-dark .seg-btn { color: #e0e0e0; }
-.text-bg-dark .seg-btn:hover { background: rgba(124,58,237,.3); }
-.text-bg-dark .btn-check:checked + .seg-btn { background: #a78bfa; color: #fff; border-color: #a78bfa; box-shadow: 0 2px 6px rgba(167,139,250,.4); }
+/* ================================
+   Listado de vídeos
+   ================================ */
+.video-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
 
-.text-bg-dark .chip { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); color: #e0e0e0; }
-.text-bg-dark .chip:hover { background: rgba(255,255,255,.06); }
-.text-bg-dark .btn-check:checked + .chip { border-color: #34d399; background: rgba(52,211,153,.2); box-shadow: inset 0 0 0 1px rgba(52,211,153,.25); }
+.video-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    transition: background-color .15s ease, border-color .15s ease;
+}
 
-.text-bg-dark .dot-gray { background: #6b7280; }
-.text-bg-dark .dot-amber { background: #fbbf24; }
-.text-bg-dark .filter-label { color: #b0b0b0; }
-.text-bg-dark #f-counter { color: #aaa; }
+.video-item.is-relevante {
+    border-color: rgba(245, 158, 11, .4);
+    background: rgba(245, 158, 11, .06);
+}
 
+.video-item.is-visto {
+    opacity: .55;
+}
+
+.video-item.is-visto:hover,
+.video-item.is-visto:focus-within {
+    opacity: .9;
+}
+
+.video-btn {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.video-btn:hover { filter: brightness(1.15); }
+.video-btn:active { transform: scale(.92); }
+
+.video-check[aria-pressed="true"] {
+    color: #10b981;
+    border-color: rgba(16,185,129,.4);
+    background: rgba(16,185,129,.12);
+}
+
+.video-star[aria-pressed="true"] {
+    color: #f59e0b;
+    border-color: rgba(245,158,11,.4);
+    background: rgba(245,158,11,.12);
+}
+
+.video-largo.is-active {
+    color: #6366f1;
+    border-color: rgba(99,102,241,.4);
+    background: rgba(99,102,241,.12);
+}
+
+.video-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.video-link {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-decoration: none;
+    padding: 4px 0;
+}
+
+.video-title {
+    font-weight: 600;
+    font-size: .95rem;
+    line-height: 1.3;
+    color: var(--bs-emphasis-color);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.video-item.is-visto .video-title {
+    font-weight: 400;
+    color: var(--bs-secondary-color);
+}
+
+.video-meta {
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+}
+
+.video-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--bs-secondary-color);
+}
+.video-empty i { font-size: 2rem; opacity: .5; }
+.video-empty p { margin-top: .5rem; margin-bottom: 0; }
+
+/* ================================
+   Mobile
+   ================================ */
+@media (max-width: 575.98px) {
+    .yt-title { font-size: 1.15rem; }
+    .yt-select { max-width: none; flex: 1 1 100%; }
+    .video-item { padding: 8px; gap: 8px; }
+    .video-btn { width: 36px; height: 36px; font-size: 1rem; }
+    .video-title { font-size: .9rem; }
+}
 </style>
-
 
 <script>
     (() => {
-        const table = document.getElementById('videos-table');
-        const tbody = table.querySelector('tbody');
+        const list  = document.getElementById('videos-list');
+        const empty = document.getElementById('videos-empty');
 
         const inputs = {
-            sortVistos: document.querySelectorAll('input[name="sort_vistos"]'),
-            sortRel: document.querySelectorAll('input[name="sort_relevantes"]'),
+            orden: document.getElementById('f-orden'),
             noVistos: document.getElementById('f-nv'),
             relev: document.getElementById('f-rel'),
         };
         const counter = document.getElementById('f-counter');
 
         function currentOptions() {
-            const sv = [...inputs.sortVistos].find(r => r.checked)?.value || '';
-            const sr = [...inputs.sortRel].find(r => r.checked)?.value || '';
+            const orden = inputs.orden.value || '';
             const nv = inputs.noVistos.checked ? 1 : 0;
             const rl = inputs.relev.checked ? 1 : 0;
-            return {
-                sv,
-                sr,
-                nv,
-                rl
-            };
+            return { orden, nv, rl };
         }
 
-        function applyRowClasses(tr) {
-            const visto = tr.dataset.visto === '1';
-            const rel = tr.dataset.relevante === '1';
+        function applyItemState(item) {
+            const visto = item.dataset.visto === '1';
+            const rel   = item.dataset.relevante === '1';
+            const largo = item.dataset.largo === '1';
 
-            tr.classList.remove('opacity-50', 'table-warning', 'table-light');
+            item.classList.toggle('is-visto', visto);
+            item.classList.toggle('is-relevante', rel);
 
-            if (rel) tr.classList.add('table-warning');
-            else if (!visto) tr.classList.add('table-light');
-            if (visto) tr.classList.add('opacity-50');
+            const checkBtn = item.querySelector('.video-check');
+            checkBtn.setAttribute('aria-pressed', visto ? 'true' : 'false');
+            checkBtn.querySelector('i').className = visto ? 'bi bi-check-circle-fill' : 'bi bi-circle';
 
-            // título bold si no visto
-            const a = tr.querySelector('.cell-titulo a');
-            if (a) a.classList.toggle('fw-bold', !visto);
+            const starBtn = item.querySelector('.video-star');
+            starBtn.setAttribute('aria-pressed', rel ? 'true' : 'false');
+            starBtn.querySelector('i').className = rel ? 'bi bi-star-fill' : 'bi bi-star';
+
+            const largoBtn = item.querySelector('.video-largo');
+            largoBtn.setAttribute('aria-pressed', largo ? 'true' : 'false');
+            largoBtn.classList.toggle('is-active', largo);
         }
 
         function filterRows() {
-            const {
-                nv,
-                rl
-            } = currentOptions();
-            let shown = 0,
-                total = 0;
+            const { nv, rl } = currentOptions();
+            let shown = 0;
 
-            tbody.querySelectorAll('tr').forEach(tr => {
-                total++;
-                const visto = tr.dataset.visto === '1';
-                const rel = tr.dataset.relevante === '1';
+            list.querySelectorAll('.video-item').forEach(item => {
+                const visto = item.dataset.visto === '1';
+                const rel   = item.dataset.relevante === '1';
 
                 let visible = true;
                 if (nv && visto) visible = false;
                 if (rl && !rel) visible = false;
 
-                tr.style.display = visible ? '' : 'none';
+                item.style.display = visible ? '' : 'none';
                 if (visible) shown++;
             });
 
             if (counter) {
                 const baseTotal = <?= (int)$stats['total'] ?>;
-                counter.textContent = `Mostrando ${shown} de ${baseTotal}`;
+                counter.textContent = `${shown}/${baseTotal}`;
             }
+
+            empty.classList.toggle('d-none', shown !== 0);
         }
 
         function sortRows() {
-            const {
-                sv,
-                sr
-            } = currentOptions();
-            const rows = [...tbody.querySelectorAll('tr')].filter(tr => tr.style.display !== 'none');
+            const { orden } = currentOptions();
+            const items = [...list.querySelectorAll('.video-item')].filter(item => item.style.display !== 'none');
 
-            rows.sort((a, b) => {
-                const av = Number(a.dataset.visto),
-                    bv = Number(b.dataset.visto); // 0 / 1
-                const ar = Number(a.dataset.relevante),
-                    br = Number(b.dataset.relevante); // 0 / 1
-                const ap = Number(a.dataset.posicion),
-                    bp = Number(b.dataset.posicion); // int
+            items.sort((a, b) => {
+                const av = Number(a.dataset.visto), bv = Number(b.dataset.visto);
+                const ar = Number(a.dataset.relevante), br = Number(b.dataset.relevante);
+                const ap = Number(a.dataset.posicion), bp = Number(b.dataset.posicion);
 
-                // 1) Relevantes primero (desc)
-                if (sr === 'primero' && ar !== br) return br - ar;
-
-                // 2) Orden por vistos
-                if (sv === 'no_vistos_primero' && av !== bv) return av - bv; // 0 < 1
-                if (sv === 'vistos_primero' && av !== bv) return bv - av; // 1 < 0
-
-                // 3) Desempate por posición asc
-                return ap - bp;
+                switch (orden) {
+                    case 'recientes':   return bp - ap;
+                    case 'no_vistos':   return (av !== bv) ? av - bv : ap - bp;
+                    case 'vistos':      return (av !== bv) ? bv - av : ap - bp;
+                    case 'relevantes':  return (ar !== br) ? br - ar : ap - bp;
+                    case 'antiguos':
+                    default:            return ap - bp;
+                }
             });
 
-            // Reinsertar en orden
-            rows.forEach(tr => tbody.appendChild(tr));
+            items.forEach(item => list.appendChild(item));
         }
 
         function updateView() {
@@ -492,12 +478,10 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
             sortRows();
         }
 
-        // Eventos en filtros
-        [...inputs.sortVistos, ...inputs.sortRel].forEach(r => r.addEventListener('change', updateView));
+        inputs.orden.addEventListener('change', updateView);
         inputs.noVistos.addEventListener('change', updateView);
         inputs.relev.addEventListener('change', updateView);
 
-        // Inicial
         updateView();
 
         // === Toggles AJAX con actualización instantánea ===
@@ -511,81 +495,34 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
             });
         }
 
-        // Toggle Visto
-        tbody.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.js-toggle-visto');
-            if (!btn) return;
-            const tr = btn.closest('tr');
-            const id = btn.dataset.id;
-            const url = '<?= site_url('youtube/toggle-visto') ?>/' + id;
+        const toggleBase = {
+            visto: '<?= site_url('youtube/toggle-visto') ?>',
+            relevante: '<?= site_url('youtube/toggle-relevante') ?>',
+            largo: '<?= site_url('youtube/toggle-largo') ?>',
+        };
 
+        list.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.video-btn');
+            if (!btn) return;
+            const item = btn.closest('.video-item');
+            const id = btn.dataset.id;
+
+            let field;
+            if (btn.classList.contains('js-toggle-visto')) field = 'visto';
+            else if (btn.classList.contains('js-toggle-relevante')) field = 'relevante';
+            else if (btn.classList.contains('js-toggle-largo')) field = 'largo';
+            else return;
+
+            const url = toggleBase[field] + '/' + id;
             const res = await postToggle(url);
             if (!res.ok) return;
 
-            // Optimista: invertimos estado
-            const nuevo = tr.dataset.visto === '1' ? '0' : '1';
-            tr.dataset.visto = nuevo;
-
-            // Botón
-            btn.classList.toggle('btn-success', nuevo === '1');
-            btn.classList.toggle('btn-outline-secondary', nuevo === '0');
-            btn.textContent = (nuevo === '1') ? '✓ Visto' : 'Marcar visto';
-
-            // Clases y reordenado/filtro
-            applyRowClasses(tr);
+            item.dataset[field] = item.dataset[field] === '1' ? '0' : '1';
+            applyItemState(item);
             updateView();
         });
-
-        // Toggle Relevante
-        tbody.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.js-toggle-relevante');
-            if (!btn) return;
-            const tr = btn.closest('tr');
-            const id = btn.dataset.id;
-            const url = '<?= site_url('youtube/toggle-relevante') ?>/' + id;
-
-            const res = await postToggle(url);
-            if (!res.ok) return;
-
-            // Optimista: invertimos estado
-            const nuevo = tr.dataset.relevante === '1' ? '0' : '1';
-            tr.dataset.relevante = nuevo;
-
-            // Botón
-            btn.classList.toggle('btn-warning', nuevo === '1');
-            btn.classList.toggle('btn-outline-secondary', nuevo === '0');
-            btn.textContent = (nuevo === '1') ? '★ Relevante' : 'Marcar relevante';
-
-            // Clases y reordenado/filtro
-            applyRowClasses(tr);
-            updateView();
-        });
-
-        // Toggle Largo
-        tbody.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.js-toggle-largo');
-            if (!btn) return;
-            const tr = btn.closest('tr');
-            const id = btn.dataset.id;
-            const url = '<?= site_url('youtube/toggle-largo') ?>/' + id;
-
-            const res = await postToggle(url);
-            if (!res.ok) return;
-
-            // Optimista: invertimos estado
-            const nuevo = tr.dataset.largo === '1' ? '0' : '1';
-            tr.dataset.largo = nuevo;
-
-            // Botón
-            btn.classList.toggle('btn-info', nuevo === '1');
-            btn.classList.toggle('btn-outline-secondary', nuevo === '0');
-            btn.textContent = (nuevo === '1') ? '🎬 Largo' : 'Largo';
-        });
-
     })();
-</script>
 
-<script>
     (() => {
         const form = document.getElementById('filters');
         if (!form) return;
@@ -604,6 +541,5 @@ $rel = $req->getGet('relevantes') ? 1 : 0;
         form.addEventListener('change', apply);
     })();
 </script>
-
 
 <?= $this->endSection() ?>

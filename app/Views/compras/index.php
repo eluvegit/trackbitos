@@ -21,17 +21,22 @@
         <i class="bi bi-plus-circle fs-5"></i>
     </a>
 
+    <a href="<?= site_url('compras/supermercados/gestionar') ?>"
+        class="text-decoration-none text-muted"
+        title="Reordenar y ocultar supermercados">
+        <i class="bi bi-sliders fs-6"></i>
+    </a>
+
 </h5>
 
 <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-3">
     <?php foreach ($supermercados as $s): ?>
         <div class="col d-flex h-100">
-            <a href="<?= site_url('compras/productos/' . $s['id']) ?>"
+            <a href="<?= site_url('compras/' . $s['id'] . '/comprados') ?>"
                class="text-decoration-none text-dark w-100 d-flex">
                 <div class="card shadow-sm w-100 text-center d-flex flex-column justify-content-center" style="min-height: 140px;">
                     <i class="bi bi-cart fs-3 text-primary mb-2"></i>
-                    <h6 class="card-title mb-1"><?= esc($s['nombre']) ?></h6>
-                    <p class="d-none d-md-block small text-muted mb-0"><?= esc($s['descripcion'] ?? '') ?></p>
+                    <h6 class="card-title mb-0"><?= esc($s['nombre']) ?></h6>
                 </div>
             </a>
         </div>

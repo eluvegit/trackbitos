@@ -11,7 +11,7 @@ class YoutubeVideosModel extends Model
     protected $allowedFields = ['lista_id','posicion','url','video_id','titulo','visto','relevante', 'largo'];
     protected $useTimestamps = false;
 
-    public function baseQuery(int $listaId, array $filters = [], array $sort = [])
+    public function baseQuery(int $listaId, array $filters = [], string $orden = '')
     {
         $qb = $this->where('lista_id', $listaId);
 
@@ -23,18 +23,25 @@ class YoutubeVideosModel extends Model
             $qb->where('relevante', 1);
         }
 
-        // Ordenación
-        // 1) orden original (posicion ASC) — siempre primero
-        $qb->orderBy('posicion','ASC');
-        // 2) “vistos” (los no vistos primero si sort['vistos']='no_vistos_primero')
-        if (!empty($sort['vistos']) && $sort['vistos'] === 'no_vistos_primero') {
-            $qb->orderBy('visto','ASC');
-        } elseif (!empty($sort['vistos']) && $sort['vistos'] === 'vistos_primero') {
-            $qb->orderBy('visto','DESC');
-        }
-        // 3) “relevantes” (relevantes primero)
-        if (!empty($sort['relevantes']) && $sort['relevantes'] === 'primero') {
-            $qb->orderBy('relevante','DESC');
+        // Ordenación: 'posicion' hace de criterio principal salvo que se pida
+        // ordenar por recientes, y de desempate en el resto de casos.
+        switch ($orden) {
+            case 'recientes':
+                $qb->orderBy('posicion', 'DESC');
+                break;
+            case 'no_vistos':
+                $qb->orderBy('visto', 'ASC')->orderBy('posicion', 'ASC');
+                break;
+            case 'vistos':
+                $qb->orderBy('visto', 'DESC')->orderBy('posicion', 'ASC');
+                break;
+            case 'relevantes':
+                $qb->orderBy('relevante', 'DESC')->orderBy('posicion', 'ASC');
+                break;
+            case 'antiguos':
+            default:
+                $qb->orderBy('posicion', 'ASC');
+                break;
         }
 
         return $qb;

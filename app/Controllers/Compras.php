@@ -14,15 +14,62 @@ class Compras extends BaseController
     public function index()
     {
         $superModel = new CompraSupermercadoModel();
-        $data['supermercados'] = $superModel->findAll();
+        $data['supermercados'] = $superModel
+            ->where('visible', 1)
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
         return view('compras/index', $data);
     }
 
     public function supermercados()
     {
         $superModel = new CompraSupermercadoModel();
-        $data['supermercados'] = $superModel->findAll();
+        $data['supermercados'] = $superModel
+            ->where('visible', 1)
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
         return view('compras/index', $data);
+    }
+
+    public function gestionarSupermercados()
+    {
+        $superModel = new CompraSupermercadoModel();
+        $data['supermercados'] = $superModel
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
+        return view('compras/supermercados/gestionar', $data);
+    }
+
+    public function reordenarSupermercados()
+    {
+        $ids = $this->request->getJSON(true)['orden'] ?? null;
+        if (!is_array($ids) || empty($ids)) {
+            return $this->response->setStatusCode(400)->setJSON(['ok' => false]);
+        }
+
+        $superModel = new CompraSupermercadoModel();
+        foreach ($ids as $index => $id) {
+            $superModel->skipValidation(true)->update((int) $id, ['orden' => $index + 1]);
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function toggleVisibleSupermercado($id)
+    {
+        $superModel = new CompraSupermercadoModel();
+        $supermercado = $superModel->find($id);
+        if (!$supermercado) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        $nuevo = $supermercado['visible'] ? 0 : 1;
+        $superModel->skipValidation(true)->update($id, ['visible' => $nuevo]);
+
+        return $this->response->setJSON(['ok' => true, 'visible' => (bool) $nuevo]);
     }
 
     public function nuevoSupermercado()
@@ -33,7 +80,12 @@ class Compras extends BaseController
     public function crearSupermercado()
     {
         $superModel = new CompraSupermercadoModel();
-        $superModel->insert(['nombre' => $this->request->getPost('nombre')]);
+        $siguienteOrden = (int) ($superModel->selectMax('orden')->first()['orden'] ?? 0) + 1;
+
+        $superModel->insert([
+            'nombre' => $this->request->getPost('nombre'),
+            'orden'  => $siguienteOrden,
+        ]);
         return redirect()->to(site_url('compras/supermercados'));
     }
 

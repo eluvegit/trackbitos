@@ -80,6 +80,11 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
     $routes->POST('supermercados/actualizar/(:num)', 'Compras::guardarSupermercado/$1');
     $routes->POST('supermercados/(:num)/borrar', 'Compras::eliminarSupermercado');
 
+    // Gestión: reordenar y ocultar del menú
+    $routes->GET('supermercados/gestionar', 'Compras::gestionarSupermercados');
+    $routes->POST('supermercados/reordenar', 'Compras::reordenarSupermercados');
+    $routes->POST('supermercados/(:num)/visibilidad', 'Compras::toggleVisibleSupermercado/$1');
+
     // Productos
     $routes->GET('productos/(:num)', 'Compras::productos/$1');
     $routes->POST('productos/nuevo', 'Compras::crearProducto');
@@ -377,4 +382,43 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('add-time/(:num)', 'Journal::addTime/$1');
     $routes->POST('add-log/(:num)', 'Journal::addLog/$1');
     $routes->GET('get-logs/(:num)', 'Journal::getLogs/$1');
+    $routes->POST('update-log/(:num)', 'Journal::updateLog/$1');
+});
+
+// ---- Hogar: checklist rutinario de tareas por habitación ----
+$routes->group('hogar', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'Hogar::index');
+    $routes->GET('pendientes', 'Hogar::pendientes');
+    $routes->GET('gestionar', 'Hogar::gestionar');
+
+    $routes->GET('habitaciones/nueva', 'Hogar::nuevaHabitacion');
+    $routes->POST('habitaciones/crear', 'Hogar::crearHabitacion');
+    $routes->GET('habitaciones/editar/(:num)', 'Hogar::editarHabitacion/$1');
+    $routes->POST('habitaciones/actualizar/(:num)', 'Hogar::actualizarHabitacion/$1');
+    $routes->POST('habitaciones/borrar/(:num)', 'Hogar::borrarHabitacion/$1');
+    $routes->POST('habitaciones/reordenar', 'Hogar::reordenarHabitaciones');
+
+    $routes->GET('tareas/editar/(:num)', 'Hogar::editarTarea/$1');
+    $routes->GET('tareas/(:num)/historial', 'Hogar::historialTarea/$1');
+    $routes->POST('tareas/logs/(:num)/borrar', 'Hogar::borrarLog/$1');
+    $routes->POST('tareas/actualizar/(:num)', 'Hogar::actualizarTarea/$1');
+    $routes->POST('tareas/borrar/(:num)', 'Hogar::borrarTarea/$1');
+    $routes->POST('tareas/crear', 'Hogar::crearTarea');
+    $routes->POST('tareas/reordenar', 'Hogar::reordenarTareas');
+    $routes->POST('tareas/(:num)/marcar', 'Hogar::marcarTarea/$1');
+    $routes->POST('tareas/(:num)/renovar', 'Hogar::renovarTarea/$1');
+
+    $routes->POST('(:num)/renovar-todo', 'Hogar::renovarTodo/$1');
+    $routes->GET('(:num)', 'Hogar::habitacion/$1');
+});
+
+// ---- Recordatorios: fechas de eventos recurrentes (ITV, DNI, vacunas, etc.) ----
+$routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'Recordatorios::index');
+    $routes->GET('nuevo', 'Recordatorios::nuevo');
+    $routes->POST('crear', 'Recordatorios::crear');
+    $routes->GET('editar/(:num)', 'Recordatorios::editar/$1');
+    $routes->POST('actualizar/(:num)', 'Recordatorios::actualizar/$1');
+    $routes->POST('borrar/(:num)', 'Recordatorios::borrar/$1');
+    $routes->POST('(:num)/renovar', 'Recordatorios::renovar/$1');
 });

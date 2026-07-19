@@ -7,6 +7,25 @@
     </div>
 <?php endif; ?>
 
+<?php if (!empty($recordatoriosUrgentes)): ?>
+    <?php $hayCaducado = !empty(array_filter($recordatoriosUrgentes, fn($r) => $r['nivel'] === 'caducado')); ?>
+    <div class="alert <?= $hayCaducado ? 'alert-danger' : 'alert-warning' ?>">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-calendar-heart"></i>
+            <strong>Recordatorios próximos</strong>
+        </div>
+        <ul class="mb-2 ps-3">
+            <?php foreach ($recordatoriosUrgentes as $r): ?>
+                <li>
+                    <?= esc($r['titulo']) ?>
+                    — <span class="fw-semibold"><?= esc($r['texto']) ?></span>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <a href="<?= site_url('recordatorios') ?>" class="alert-link small">Ver todos los recordatorios →</a>
+    </div>
+<?php endif; ?>
+
 <?php
 $secciones = [
     ['ruta' => 'comidas/diario/hoy', 'icono' => '🍽️', 'titulo' => 'Comida', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
@@ -17,6 +36,8 @@ $secciones = [
     ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
     ['ruta' => 'enlaces', 'icono' => '📒', 'titulo' => 'Enlaces', 'texto' => 'Permite revisar los enlaces registrados interesantes.'],
     ['ruta' => 'journal', 'icono' => '📨', 'titulo' => 'Journal', 'texto' => 'Permite hacer y seguir tareas y bullet journal.'],
+    ['ruta' => 'hogar', 'icono' => '🏠', 'titulo' => 'Hogar', 'texto' => 'Checklist rutinario de limpieza y tareas del hogar por habitación.'],
+    ['ruta' => 'recordatorios', 'icono' => '📅', 'titulo' => 'Recordatorios', 'texto' => 'ITV, revisiones médicas, vacunas, DNI, carnet... y cuándo tocan.'],
     ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
     ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Sesiones', 'texto' => 'PROXIMAMAMENTE<br>Gestión de flujo de trabajo en la edición de fotos.', 'disabled' => true],
 ];

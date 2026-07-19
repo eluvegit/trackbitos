@@ -10,7 +10,7 @@ class JournalCategoryModel extends Model
     protected $primaryKey = 'id';
 
     // Campos permitidos para insert/update
-    protected $allowedFields = ['name', 'color', 'icon', 'description'];
+    protected $allowedFields = ['name', 'color', 'icon', 'description', 'peso'];
 
     // Timestamps automáticos
     protected $useTimestamps = true;

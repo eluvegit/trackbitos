@@ -120,14 +120,13 @@ class Youtube extends Controller
             'solo_no_vistos'  => (bool) $this->request->getGet('no_vistos'),
             'solo_relevantes' => (bool) $this->request->getGet('relevantes'),
         ];
-        $sort = [
-            'vistos'     => $this->request->getGet('sort_vistos'),      // no_vistos_primero | vistos_primero | null
-            'relevantes' => $this->request->getGet('sort_relevantes'),  // primero | null
-        ];
+        // '' | recientes | antiguos | no_vistos | vistos | relevantes
+        $orden = (string) $this->request->getGet('orden');
 
         // Listado: usa un CLONE del modelo para no compartir estado del builder
         $videosModel    = clone $this->videos;
-        $data['videos'] = $videosModel->baseQuery($lista['id'], $filters, $sort)->findAll();
+        $data['videos'] = $videosModel->baseQuery($lista['id'], $filters, $orden)->findAll();
+        $data['orden']  = $orden;
 
         // Estadísticas: conexión limpia con db_connect() (no $this->db)
         $db = db_connect();

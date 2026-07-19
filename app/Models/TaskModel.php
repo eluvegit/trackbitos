@@ -46,4 +46,26 @@ class TaskModel extends Model
 
         return $grouped;
     }
+
+    /**
+     * Última vez que se tocó (editó/actualizó) alguna tarea de cada categoría.
+     * Usa updated_at de las tareas, no el historial de fechas: refleja mucho
+     * mejor la actividad real porque el historial apenas se usa en comparación
+     * con editar la tarea directamente.
+     *
+     * @return array [category => last_updated]
+     */
+    public function getLastUpdatedPerCategory(): array
+    {
+        $rows = $this->select('category, MAX(updated_at) as last_updated')
+            ->groupBy('category')
+            ->findAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['category']] = $row['last_updated'];
+        }
+
+        return $result;
+    }
 }
