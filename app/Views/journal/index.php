@@ -232,7 +232,37 @@ foreach ($categories as $category) {
 
         <div class="collapse" id="cat-<?= $catId ?>">
             <div class="card-body">
+                <?php
+                usort($catTasks, function ($a, $b) {
+                    // 1. Estados booleanos
+                    $aDone = (!empty($a['end_time']) && $a['end_time'] !== '0000-00-00 00:00:00');
+                    $bDone = (!empty($b['end_time']) && $b['end_time'] !== '0000-00-00 00:00:00');
+                    $aCurrent = !empty($a['is_current']);
+                    $bCurrent = !empty($b['is_current']);
 
+                    // --- PRIORIDAD 1: GRUPOS (Actuales > Pendientes > Completadas) ---
+                    if ($aDone !== $bDone) return $aDone ? 1 : -1;
+                    if ($aCurrent !== $bCurrent) return $aCurrent ? -1 : 1;
+
+                    // --- PRIORIDAD 2: PROGRESO (Mayor a Menor) ---
+                    // Calculamos el ratio de progreso (completado / amplitud)
+                    $aAmp = (int)($a['amplitude'] ?? 0);
+                    $bAmp = (int)($b['amplitude'] ?? 0);
+                    $aProg = $aAmp > 0 ? (int)($a['completed'] ?? 0) / $aAmp : 0;
+                    $bProg = $bAmp > 0 ? (int)($b['completed'] ?? 0) / $bAmp : 0;
+
+                    if ($aProg !== $bProg) {
+                        return ($aProg > $bProg) ? -1 : 1;
+                    }
+
+                    // --- PRIORIDAD 3: TIEMPO INVERTIDO (Mayor a Menor) ---
+                    $aTime = (int)($a['time_spent'] ?? 0);
+                    $bTime = (int)($b['time_spent'] ?? 0);
+
+                    if ($aTime === $bTime) return 0;
+                    return ($aTime > $bTime) ? -1 : 1;
+                });
+                ?>
                 <?php if ($view_mode === 'listado'): ?>
                     <!-- MODO LISTA -->
                     <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
@@ -246,7 +276,12 @@ foreach ($categories as $category) {
                                 $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
                                 $filled = (int)floor($percentage / 10);
                                 ?>
-                                <li class="list-group-item p-1">
+
+                                <?php
+                                // Detectar si está completada
+                                $isDone = (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00');
+                                ?>
+                                <li class="list-group-item p-1 <?= $isDone ? 'opacity-50' : '' ?>">
 
                                     <!-- Fila principal -->
                                     <div class="d-flex align-items-center gap-2">
