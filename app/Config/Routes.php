@@ -326,6 +326,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
 
 $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'Enlaces::index');
+    $routes->GET('etiquetas-disponibles', 'Enlaces::etiquetasDisponibles');
     $routes->GET('crear', 'Enlaces::crear');
     $routes->POST('guardar', 'Enlaces::guardar');
     $routes->GET('editar/(:num)', 'Enlaces::editar/$1');

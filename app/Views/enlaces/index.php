@@ -125,22 +125,19 @@
             $tieneBadges = !empty($catsPorEnlace[$e['id']]) || !empty($tagsPorEnlace[$e['id']]);
             ?>
             <div class="enl-item <?= $isVisto ? 'is-visto' : '' ?>">
-                <div class="enl-item-favicon">
+                <a href="<?= site_url('enlaces/pagina/' . $e['id']) ?>" class="enl-item-favicon" title="Ver página interna">
                     <?php if ($dominio): ?>
                         <img src="https://www.google.com/s2/favicons?domain=<?= urlencode($dominio) ?>&sz=32"
                              alt="" loading="lazy" onerror="this.style.visibility='hidden'">
                     <?php else: ?>
                         <i class="bi bi-link-45deg"></i>
                     <?php endif; ?>
-                </div>
+                </a>
 
                 <div class="enl-item-body">
                     <div class="enl-item-title-row">
-                        <a href="<?= site_url('enlaces/pagina/' . $e['id']) ?>" class="enl-item-title">
+                        <a href="<?= esc($e['url']) ?>" target="_blank" rel="noopener" class="enl-item-title">
                             <?= esc($e['titulo']) ?>
-                        </a>
-                        <a href="<?= esc($e['url']) ?>" target="_blank" rel="noopener" class="enl-item-open" title="Abrir enlace externo">
-                            <i class="bi bi-box-arrow-up-right"></i>
                         </a>
                     </div>
 
@@ -383,7 +380,9 @@
         place-items: center;
         overflow: hidden;
         margin-top: 2px;
+        text-decoration: none;
     }
+    .enl-item-favicon:hover { background: var(--bs-border-color); }
     .enl-item-favicon img { width: 18px; height: 18px; }
     .enl-item-favicon i { color: var(--bs-secondary-color); font-size: 1rem; }
 
@@ -399,15 +398,6 @@
     }
     .enl-item.is-visto .enl-item-title { font-weight: 400; }
     .enl-item-title:hover { text-decoration: underline; }
-
-    .enl-item-open {
-        flex: 0 0 auto;
-        color: var(--bs-secondary-color);
-        display: inline-flex;
-        align-items: center;
-        font-size: .8rem;
-    }
-    .enl-item-open:hover { color: var(--bs-emphasis-color); }
 
     .enl-item-meta { font-size: .78rem; color: var(--bs-secondary-color); margin-top: 2px; }
     .enl-item-domain { font-weight: 600; }
@@ -454,9 +444,27 @@
             this.root = root;
             this.options = options;
             this.selected = new Set(selectedIds.map(String));
+            // Guarda el nombre/contador con el que se seleccionó cada chip, para
+            // que no desaparezca visualmente si luego se refrescan las opciones
+            // (p. ej. al cambiar de categoría) y ese id deja de estar en la lista.
+            this.selectedMeta = new Map();
+            options.forEach(o => {
+                if (this.selected.has(String(o.id))) this.selectedMeta.set(String(o.id), o);
+            });
             this.fieldName = fieldName;
             this.onChange = onChange || (() => {});
             this.build();
+        }
+
+        // Sustituye las opciones disponibles (p. ej. tras un refresco en vivo)
+        // sin tocar la selección actual.
+        setOptions(newOptions) {
+            this.options = newOptions;
+            newOptions.forEach(o => {
+                if (this.selected.has(String(o.id))) this.selectedMeta.set(String(o.id), o);
+            });
+            this.renderChips();
+            if (!this.dropdownEl.hidden) this.renderDropdown();
         }
 
         build() {
@@ -483,7 +491,7 @@
         renderChips() {
             this.chipsEl.innerHTML = '';
             this.selected.forEach(id => {
-                const opt = this.options.find(o => String(o.id) === id);
+                const opt = this.selectedMeta.get(id) || this.options.find(o => String(o.id) === id);
                 if (!opt) return;
                 const chip = document.createElement('span');
                 chip.className = 'cp-chip';
@@ -521,6 +529,7 @@
                     item.innerHTML = `<span>${o.nombre}</span><span class="cp-option-count">${o.count}</span>`;
                     item.addEventListener('click', () => {
                         this.selected.add(String(o.id));
+                        this.selectedMeta.set(String(o.id), o);
                         this.inputEl.value = '';
                         this.renderChips();
                         this.dropdownEl.hidden = true;
@@ -564,7 +573,40 @@
         document.getElementById('matchWrap').style.display = total >= 2 ? '' : 'none';
     }
 
-    const catPicker = new ChipPicker(document.getElementById('pickerCategorias'), catOptions, catSelected, 'cats[]', updateMatchVisibility);
+    // Refresca en vivo las etiquetas disponibles según las categorías
+    // seleccionadas ahora mismo (sin haber pulsado "Aplicar filtros" todavía).
+    let refreshTagsSeq = 0;
+    async function refreshTagOptions() {
+        const seq = ++refreshTagsSeq;
+        const params = new URLSearchParams();
+        catPicker.selected.forEach(id => params.append('cats[]', id));
+        <?php if ($q !== ''): ?>
+            params.set('q', <?= json_encode($q) ?>);
+        <?php endif; ?>
+
+        try {
+            const res = await fetch('<?= site_url('enlaces/etiquetas-disponibles') ?>?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok || seq !== refreshTagsSeq) return; // respuesta obsoleta, ignorar
+
+            const data = await res.json();
+            tagPicker.setOptions((data.tags || []).map(t => ({
+                id: t.id,
+                nombre: t.nombre,
+                count: t.total ?? 0,
+            })));
+        } catch (err) {
+            // sin conexión o fallo puntual: dejamos las opciones de etiquetas tal cual
+        }
+    }
+
+    function onCatChange() {
+        updateMatchVisibility();
+        refreshTagOptions();
+    }
+
+    const catPicker = new ChipPicker(document.getElementById('pickerCategorias'), catOptions, catSelected, 'cats[]', onCatChange);
     const tagPicker = new ChipPicker(document.getElementById('pickerEtiquetas'), tagOptions, tagSelected, 'tag_ids[]', updateMatchVisibility);
     updateMatchVisibility();
 

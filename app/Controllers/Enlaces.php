@@ -270,6 +270,59 @@ class Enlaces extends BaseController
         ]);
     }
 
+    /**
+     * AJAX: etiquetas disponibles según las categorías (y búsqueda) seleccionadas
+     * en vivo en el formulario, sin haber aplicado aún los filtros. Se usa para
+     * refrescar el selector de etiquetas al tocar una categoría.
+     */
+    public function etiquetasDisponibles()
+    {
+        $req = service('request');
+        $db  = \Config\Database::connect();
+
+        $catsRaw = $req->getGet('cats');
+        $cats = [];
+        if (is_array($catsRaw)) {
+            $cats = array_values(array_unique(array_map('intval', $catsRaw)));
+        } elseif (is_string($catsRaw) && $catsRaw !== '') {
+            $cats = array_values(array_unique(array_map('intval', explode(',', $catsRaw))));
+        }
+
+        $q = trim((string) $req->getGet('q'));
+
+        $builder = $db->table('enlaces_items e')->select('e.id');
+
+        if ($q !== '') {
+            $builder->groupStart()
+                ->like('e.titulo', $q)
+                ->orLike('e.url', $q)
+                ->orLike('e.extra', $q)
+                ->groupEnd();
+        }
+
+        if (!empty($cats)) {
+            $builder->join('enlaces_item_categorias eic', 'eic.item_id = e.id', 'inner')
+                ->whereIn('eic.categoria_id', $cats)
+                ->groupBy('e.id');
+        }
+
+        $ids = array_column($builder->get()->getResultArray(), 'id');
+
+        $tags = [];
+        if ($ids) {
+            $tags = $db->table('enlaces_item_etiquetas ee')
+                ->select('ee.etiqueta_id AS id, t.nombre, COUNT(*) AS total')
+                ->join('enlaces_etiquetas t', 't.id = ee.etiqueta_id')
+                ->whereIn('ee.item_id', $ids)
+                ->groupBy('ee.etiqueta_id, t.nombre')
+                ->orderBy('total', 'DESC')
+                ->orderBy('t.nombre', 'ASC')
+                ->get()->getResultArray();
+        }
+
+        return $this->response->setJSON(['tags' => $tags]);
+    }
+
 
     public function crear()
     {

@@ -2,7 +2,10 @@
 <?= $this->section('content') ?>
 
 <?php
-function tituloBonito($clave) {
+helper('gimnasio');
+
+function tituloBonito($clave)
+{
     return [
         'press banca' => 'Press banca',
         'peso muerto' => 'Peso muerto',
@@ -11,97 +14,151 @@ function tituloBonito($clave) {
 }
 ?>
 
-<h2 class="mb-4">📈 Estadísticas — Principales (Press banca, Peso muerto, Sentadillas)</h2>
-<div class="mb-3">
-    <a href="<?= site_url('gimnasio') ?>" class="btn btn-outline-secondary">← Volver a gimnasio</a>
-</div>
+<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <i class="bi bi-graph-up-arrow text-primary"></i>
+    <a href="<?= site_url('gimnasio') ?>" class="text-decoration-none text-muted fw-normal">Gimnasio</a>
+    <span class="text-muted">/</span>
+    <strong class="fw-semibold">Estadísticas principales</strong>
+</h5>
+<p class="text-muted small mb-3">
+    Progresión estimada a 1 repetición máxima (fórmula de Epley) de tus tres básicos, para comparar de un vistazo
+    tu mejor marca con lo que estás haciendo ahora.
+</p>
 
-<?php foreach (['press banca','peso muerto','sentadillas'] as $clave): ?>
-    <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
+<?php foreach (['press banca', 'peso muerto', 'sentadillas'] as $clave): ?>
+    <?php $bloque = $bloques[$clave] ?? null; ?>
+    <div class="gim-stat-card mb-3">
+        <div class="gim-stat-header">
             <strong><?= tituloBonito($clave) ?></strong>
             <?php if (!empty($ejercicios[$clave])): ?>
-                <a href="<?= site_url('gimnasio/ejercicios/estadisticas/'.$ejercicios[$clave]['id']) ?>"
-                   class="btn btn-sm">📄 Vista completa</a>
+                <a href="<?= site_url('gimnasio/ejercicios/estadisticas/' . $ejercicios[$clave]['id']) ?>" class="gim-stat-link">
+                    Historial completo <i class="bi bi-chevron-right"></i>
+                </a>
             <?php endif; ?>
         </div>
-        <div class="card-body">
-            <?php if (empty($ejercicios[$clave])): ?>
-                <div class="alert alert-light border mb-0">
-                    No se ha encontrado el ejercicio “<?= tituloBonito($clave) ?>” en tu base de datos.
+
+        <?php if (empty($ejercicios[$clave])): ?>
+            <p class="text-muted small mb-0 p-3">No se ha encontrado el ejercicio "<?= tituloBonito($clave) ?>" en tu base de datos.</p>
+        <?php elseif (empty($bloque['progresion'])): ?>
+            <p class="text-muted small mb-0 p-3">Todavía no hay series con peso registradas para <?= tituloBonito($clave) ?>.</p>
+        <?php else: ?>
+            <?php
+            $pr = $bloque['pr'];
+            $ultimo = $bloque['ultimo'];
+            $diff = round($ultimo['e1rm'] - $pr['e1rm'], 1);
+            ?>
+            <div class="gim-stat-numbers">
+                <div class="gim-stat-num">
+                    <span class="gim-stat-num-label"><i class="bi bi-trophy-fill"></i> Mejor marca (est.)</span>
+                    <span class="gim-stat-num-value"><?= $pr['e1rm'] ?> kg</span>
+                    <span class="gim-stat-num-sub"><?= $pr['peso'] ?>kg × <?= $pr['reps'] ?> · <?= date('d/m/Y', strtotime($pr['fecha'])) ?></span>
                 </div>
-            <?php else: ?>
-                <?php
-                    $resumen = $bloques[$clave]['resumen'] ?? [];
-                    $detalle = $bloques[$clave]['detalle'] ?? [];
-                ?>
+                <div class="gim-stat-num">
+                    <span class="gim-stat-num-label"><i class="bi bi-calendar-check"></i> Última sesión</span>
+                    <span class="gim-stat-num-value"><?= $ultimo['e1rm'] ?> kg</span>
+                    <span class="gim-stat-num-sub">
+                        <?= $ultimo['peso'] ?>kg × <?= $ultimo['reps'] ?> · <?= date('d/m/Y', strtotime($ultimo['fecha'])) ?>
+                        <?php if ($diff === 0.0): ?>
+                            <span class="gim-badge gim-badge-pr">= tu PR</span>
+                        <?php else: ?>
+                            <span class="gim-badge">(<?= $diff ?> kg vs. PR)</span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+            </div>
 
-                <?php if (!empty($resumen)): ?>
-                    <h5 class="mb-2">Resumen por fecha</h5>
-                    <table class="table table-sm table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Total series</th>
-                                <th>Total repeticiones</th>
-                                <th>Volumen (kg)</th>
-                                <th>Registros</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($resumen as $r): ?>
-                                <tr>
-                                    <td><?= date('d/m/Y', strtotime($r['fecha'])) ?></td>
-                                    <td><?= (int)$r['total_series'] ?></td>
-                                    <td><?= (int)$r['total_reps'] ?></td>
-                                    <td><?= $r['total_volumen'] ?? 0 ?></td>
-                                    <td><?= (int)$r['registros'] ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-
-                    <h5 class="mt-4 mb-2">Detalle de series</h5>
-                    <table class="table table-sm table-striped">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Series</th>
-                                <th>Reps</th>
-                                <th>Peso</th>
-                                <th>Volumen (kg)</th>
-                                <th>RPE</th>
-                                <th>Nota</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($detalle as $d): ?>
-                                <?php
-                                    $series = (int)$d['series'];
-                                    $reps   = (int)$d['repeticiones'];
-                                    $peso   = $d['peso'] ?? 0;
-                                    $vol    = $peso > 0 ? $series * $reps * $peso : null;
-                                ?>
-                                <tr>
-                                    <td><?= date('d/m/Y', strtotime($d['fecha'])) ?></td>
-                                    <td><?= $series ?></td>
-                                    <td><?= $reps ?></td>
-                                    <td><?= $peso > 0 ? $peso . ' kg' : '—' ?></td>
-                                    <td><?= $vol !== null ? $vol : '—' ?></td>
-                                    <td><?= ($d['rpe'] !== null && $d['rpe'] !== '') ? esc($d['rpe']) : '—' ?></td>
-                                    <td><?= !empty($d['nota']) ? esc($d['nota']) : '—' ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php else: ?>
-                    <div class="alert alert-light border mb-0">
-                        No hay registros para “<?= tituloBonito($clave) ?>”.
-                    </div>
-                <?php endif; ?>
+            <?php if (count($bloque['progresion']) >= 2): ?>
+                <div class="gim-chart">
+                    <?= gim_svg_chart($bloque['progresion']) ?>
+                </div>
+                <p class="text-muted small text-center mb-0"><?= count($bloque['progresion']) ?> sesiones registradas · 1RM estimado en el tiempo</p>
             <?php endif; ?>
-        </div>
+
+            <div class="gim-recent">
+                <?php foreach ($bloque['reciente'] as $r): ?>
+                    <div class="gim-recent-item <?= $r['fecha'] === $pr['fecha'] ? 'is-pr' : '' ?>">
+                        <span class="gim-recent-fecha"><?= date('d/m/Y', strtotime($r['fecha'])) ?></span>
+                        <span class="gim-recent-peso"><?= $r['peso'] ?>kg × <?= $r['reps'] ?></span>
+                        <span class="gim-recent-e1rm"><?= $r['e1rm'] ?> kg <?php if ($r['fecha'] === $pr['fecha']): ?><i class="bi bi-trophy-fill"></i><?php endif; ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
     </div>
 <?php endforeach; ?>
+
+<style>
+.gim-stat-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 14px;
+    background: var(--bs-tertiary-bg);
+    overflow: hidden;
+}
+.gim-stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+.gim-stat-header strong { color: var(--bs-emphasis-color); }
+.gim-stat-link {
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+}
+.gim-stat-link:hover { color: var(--bs-emphasis-color); }
+
+.gim-stat-numbers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+}
+.gim-stat-num { display: flex; flex-direction: column; gap: 2px; }
+.gim-stat-num-label {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+}
+.gim-stat-num-value { font-size: 1.4rem; font-weight: 700; color: var(--bs-emphasis-color); line-height: 1.1; }
+.gim-stat-num-sub { font-size: .72rem; color: var(--bs-secondary-color); }
+
+.gim-badge {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: .68rem;
+    color: var(--bs-secondary-color);
+}
+.gim-badge-pr { color: #f59e0b; font-weight: 700; }
+
+.gim-chart { padding: 4px 10px 0; }
+.gim-chart-svg { width: 100%; height: 100px; display: block; }
+
+.gim-recent { display: flex; flex-direction: column; padding: 4px 0 6px; }
+.gim-recent-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    font-size: .82rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+.gim-recent-item.is-pr { background: rgba(245, 158, 11, .08); }
+.gim-recent-fecha { color: var(--bs-secondary-color); flex: 0 0 auto; width: 80px; }
+.gim-recent-peso { color: var(--bs-emphasis-color); flex: 1 1 auto; }
+.gim-recent-e1rm { color: var(--bs-secondary-color); flex: 0 0 auto; display: flex; align-items: center; gap: .3rem; }
+.gim-recent-item.is-pr .gim-recent-e1rm { color: #f59e0b; font-weight: 700; }
+
+@media (max-width: 420px) {
+    .gim-stat-numbers { grid-template-columns: 1fr; }
+    .gim-recent-fecha { width: 68px; }
+}
+</style>
 
 <?= $this->endSection() ?>
