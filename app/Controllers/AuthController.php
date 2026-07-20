@@ -7,6 +7,7 @@ use CodeIgniter\Session\Session;
 use Myth\Auth\Config\Auth as AuthConfig;
 use Myth\Auth\Entities\User;
 use Myth\Auth\Models\UserModel;
+use Myth\Auth\Password;
 
 class AuthController extends Controller
 {
@@ -405,6 +406,50 @@ class AuthController extends Controller
 
         // Success!
         return redirect()->route('login')->with('message', lang('Auth.activationSuccess'));
+    }
+
+    //--------------------------------------------------------------------
+    // Cuenta (usuario ya autenticado)
+    //--------------------------------------------------------------------
+
+    /**
+     * Muestra el formulario para cambiar la contraseña del usuario actual.
+     */
+    public function account()
+    {
+        return view('cuenta/password', ['user' => $this->auth->user()]);
+    }
+
+    /**
+     * Cambia la contraseña del usuario actualmente autenticado, tras
+     * verificar que conoce la contraseña actual.
+     */
+    public function updatePassword()
+    {
+        $rules = [
+            'current_password' => 'required',
+            'password'         => 'required|strong_password',
+            'pass_confirm'     => 'required|matches[password]',
+        ];
+
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $user = $this->auth->user();
+
+        if (! Password::verify($this->request->getPost('current_password'), $user->password_hash)) {
+            return redirect()->back()->withInput()->with('error', 'La contraseña actual no es correcta.');
+        }
+
+        $users           = model(UserModel::class);
+        $user->password  = $this->request->getPost('password');
+
+        if (! $users->save($user)) {
+            return redirect()->back()->withInput()->with('errors', $users->errors());
+        }
+
+        return redirect()->route('account')->with('message', 'Contraseña actualizada correctamente.');
     }
 
     protected function _render(string $view, array $data = [])

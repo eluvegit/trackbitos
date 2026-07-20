@@ -9,6 +9,11 @@ use App\Models\CarReminderModel;
 
 class Coche extends BaseController
 {
+    public function __construct()
+    {
+        helper('recordatorio');
+    }
+
     public function index()
     {
         $reminderModel = new CarReminderModel();
@@ -97,7 +102,7 @@ class Coche extends BaseController
             'notes'        => '',
         ]);
 
-        return redirect()->to('/coche/acciones')->with('message', 'Acción "' . esc($title) . '" registrada para hoy');
+        return redirect()->to('/coche/acciones')->with('success', 'Acción "' . esc($title) . '" registrada para hoy.');
     }
 
 
@@ -111,8 +116,12 @@ class Coche extends BaseController
     public function guardarAccion()
     {
         $model = new CarActionModel();
-        $model->save($this->request->getPost());
-        return redirect()->to('/coche/acciones');
+
+        if (! $model->save($this->request->getPost())) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo guardar la acción.');
+        }
+
+        return redirect()->to('/coche/acciones')->with('success', 'Acción guardada correctamente.');
     }
 
     public function editarAccion($id)
@@ -127,7 +136,7 @@ class Coche extends BaseController
     public function borrarAccion($id)
     {
         (new CarActionModel())->delete($id);
-        return redirect()->to('/coche/acciones');
+        return redirect()->to('/coche/acciones')->with('success', 'Acción eliminada correctamente.');
     }
 
     // ========== AVERÍAS ==========
@@ -147,8 +156,12 @@ class Coche extends BaseController
     public function guardarAveria()
     {
         $model = new CarFaultModel();
-        $model->save($this->request->getPost());
-        return redirect()->to('/coche/averias');
+
+        if (! $model->save($this->request->getPost())) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo guardar la avería.');
+        }
+
+        return redirect()->to('/coche/averias')->with('success', 'Avería guardada correctamente.');
     }
 
     public function editarAveria($id)
@@ -161,7 +174,7 @@ class Coche extends BaseController
     public function borrarAveria($id)
     {
         (new CarFaultModel())->delete($id);
-        return redirect()->to('/coche/averias');
+        return redirect()->to('/coche/averias')->with('success', 'Avería eliminada correctamente.');
     }
 
     // ========== RECORDATORIOS ==========
@@ -182,16 +195,29 @@ class Coche extends BaseController
 
             $diasPasados = null;
             $vencido = false;
+            $dias = null;
+            $texto = 'Sin registros';
+            $nivel = null;
 
             if ($ultima && $r['interval_days']) {
                 $fechaUltima = \CodeIgniter\I18n\Time::parse($ultima['date']);
                 $diasPasados = $fechaUltima->difference(\CodeIgniter\I18n\Time::now())->getDays();
                 $vencido = $diasPasados >= $r['interval_days'];
+
+                $fechaVencimiento = date('Y-m-d', strtotime($ultima['date'] . ' +' . (int) $r['interval_days'] . ' days'));
+                $estado = recordatorio_estado($fechaVencimiento);
+                $dias = $estado['dias'];
+                $texto = $estado['texto'];
+                $nivel = $estado['nivel'];
             }
 
             $ultimasAcciones[$r['id']] = [
                 'dias_pasados' => $diasPasados,
-                'vencido' => $vencido
+                'vencido' => $vencido,
+                'ultima_fecha' => $ultima['date'] ?? null,
+                'dias' => $dias,
+                'texto' => $texto,
+                'nivel' => $nivel,
             ];
         }
 
@@ -210,8 +236,12 @@ class Coche extends BaseController
     public function guardarRecordatorio()
     {
         $model = new CarReminderModel();
-        $model->save($this->request->getPost());
-        return redirect()->to('/coche/recordatorios');
+
+        if (! $model->save($this->request->getPost())) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo guardar el recordatorio.');
+        }
+
+        return redirect()->to('/coche/recordatorios')->with('success', 'Recordatorio guardado correctamente.');
     }
 
     public function editarRecordatorio($id)
@@ -224,6 +254,51 @@ class Coche extends BaseController
     public function borrarRecordatorio($id)
     {
         (new CarReminderModel())->delete($id);
-        return redirect()->to('/coche/recordatorios');
+        return redirect()->to('/coche/recordatorios')->with('success', 'Recordatorio eliminado correctamente.');
+    }
+
+    /**
+     * Registra el cumplimiento de un recordatorio (crea una acción con la
+     * fecha indicada) y devuelve el nuevo estado para actualizar la tarjeta
+     * sin tener que rehacer todo el cálculo en el cliente.
+     */
+    public function renovarRecordatorio(int $id)
+    {
+        $reminderModel = new CarReminderModel();
+        $reminder = $reminderModel->find($id);
+
+        if (! $reminder || ! $reminder['interval_days']) {
+            return $this->response->setStatusCode(400)->setJSON(['ok' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $fechaRealizado = trim($input['fecha_realizado'] ?? '');
+
+        try {
+            $fecha = $fechaRealizado !== '' ? new \DateTime($fechaRealizado) : new \DateTime('today');
+        } catch (\Throwable $e) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Fecha inválida']);
+        }
+
+        $fechaFormateada = $fecha->format('Y-m-d');
+
+        $accionModel = new CarActionModel();
+        $accionModel->save([
+            'title'       => $reminder['title'],
+            'date'        => $fechaFormateada,
+            'reminder_id' => $id,
+            'kilometers'  => null,
+            'notes'       => '',
+        ]);
+
+        $fechaVencimiento = (clone $fecha)->modify('+' . (int) $reminder['interval_days'] . ' days')->format('Y-m-d');
+        $estado = recordatorio_estado($fechaVencimiento);
+
+        return $this->response->setJSON([
+            'ok'        => true,
+            'fecha_fmt' => $fecha->format('d/m/Y'),
+            'texto'     => $estado['texto'],
+            'nivel'     => $estado['nivel'],
+        ]);
     }
 }

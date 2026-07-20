@@ -48,9 +48,9 @@ $routes->group('coche', ['filter' => 'auth'], function ($routes) {
     $routes->GET('acciones/nueva', 'Coche::nuevaAccion');
     $routes->POST('acciones/guardar', 'Coche::guardarAccion');
     $routes->GET('acciones/editar/(:num)', 'Coche::editarAccion/$1');
-    $routes->GET('acciones/borrar/(:num)', 'Coche::borrarAccion/$1');
+    $routes->POST('acciones/borrar/(:num)', 'Coche::borrarAccion/$1');
 
-    $routes->GET('acciones/rapida/(:segment)', 'Coche::accionRapida/$1');
+    $routes->POST('acciones/rapida/(:segment)', 'Coche::accionRapida/$1');
 
 
     // Averías
@@ -58,14 +58,15 @@ $routes->group('coche', ['filter' => 'auth'], function ($routes) {
     $routes->GET('averias/nueva', 'Coche::nuevaAveria');
     $routes->POST('averias/guardar', 'Coche::guardarAveria');
     $routes->GET('averias/editar/(:num)', 'Coche::editarAveria/$1');
-    $routes->GET('averias/borrar/(:num)', 'Coche::borrarAveria/$1');
+    $routes->POST('averias/borrar/(:num)', 'Coche::borrarAveria/$1');
 
     // Recordatorios
     $routes->GET('recordatorios', 'Coche::recordatorios');
     $routes->GET('recordatorios/nuevo', 'Coche::nuevoRecordatorio');
     $routes->POST('recordatorios/guardar', 'Coche::guardarRecordatorio');
     $routes->GET('recordatorios/editar/(:num)', 'Coche::editarRecordatorio/$1');
-    $routes->GET('recordatorios/borrar/(:num)', 'Coche::borrarRecordatorio/$1');
+    $routes->POST('recordatorios/borrar/(:num)', 'Coche::borrarRecordatorio/$1');
+    $routes->POST('recordatorios/(:num)/renovar', 'Coche::renovarRecordatorio/$1');
 });
 
 // Compras
@@ -426,4 +427,10 @@ $routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) 
     $routes->POST('actualizar/(:num)', 'Recordatorios::actualizar/$1');
     $routes->POST('borrar/(:num)', 'Recordatorios::borrar/$1');
     $routes->POST('(:num)/renovar', 'Recordatorios::renovar/$1');
+});
+
+// ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
+$routes->group('cuenta', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'AuthController::account', ['as' => 'account']);
+    $routes->POST('password', 'AuthController::updatePassword');
 });
