@@ -162,6 +162,37 @@ foreach ($categories as $category) {
 }
 ?>
 
+<style>
+    .journal-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: .5rem;
+    }
+    @media (min-width: 768px) {
+        .journal-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 992px) {
+        .journal-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1400px) {
+        .journal-grid {
+            grid-template-columns: repeat(7, 1fr);
+            /* Se escapa del .container (limitado a ~1320px) para aprovechar
+               pantallas panorámicas, solo a partir de este breakpoint. */
+            width: 100vw;
+            position: relative;
+            left: 50%;
+            right: 50%;
+            margin-left: -50vw;
+            margin-right: -50vw;
+            padding-left: 2rem;
+            padding-right: 2rem;
+            box-sizing: border-box;
+        }
+    }
+</style>
+
+<div class="journal-grid">
 <?php foreach ($categories as $category): ?>
     <?php
     $catId = $category['id'];
@@ -190,7 +221,7 @@ foreach ($categories as $category) {
     <?php
     $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
     ?>
-    <div class="card mb-1">
+    <div class="card mb-1 h-100">
         <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
             <?php
             $current = $counts['current'];
@@ -413,6 +444,7 @@ foreach ($categories as $category) {
         </div>
     </div>
 <?php endforeach; ?>
+</div>
 
 <!-- MODAL TIEMPO Y FECHA -->
 <div class="modal fade" id="timeModal" tabindex="-1">
