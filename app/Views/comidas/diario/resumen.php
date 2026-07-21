@@ -181,11 +181,18 @@ $iconTipo = function (string $tipo) {
 
 
 <!-- Botón nuevo: copiar resumen del día -->
-<div class="d-flex justify-content-between align-items-center">
-    <!-- Botón copiar día -->
-    <button type="button" id="btnCopiarDia" class="btn btn-sm btn-outline-success">
-        Copiar día
-    </button>
+<div class="d-flex justify-content-between align-items-center gap-2">
+    <div class="d-flex gap-2">
+        <!-- Botón copiar día -->
+        <button type="button" id="btnCopiarDia" class="btn btn-sm btn-outline-success">
+            Copiar día
+        </button>
+
+        <!-- Botón ranking top -->
+        <a href="<?= site_url('comidas/diario/top-dias') ?>" class="btn btn-sm btn-outline-warning">
+            Ranking top
+        </a>
+    </div>
 
     <!-- Botón añadir -->
     <a href="<?= site_url('comidas/diario/' . $fechaSel->format('Y-m-d') . '/' . $tipoSugerido) ?>"

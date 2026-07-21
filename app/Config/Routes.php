@@ -188,6 +188,7 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
     // --- Diario ---
     $routes->group('diario', static function ($r) {
         $r->GET('hoy', 'Diario::hoy');
+        $r->GET('top-dias', 'Diario::topDias'); // Top 28 mejores días
         $r->GET('porciones/(:num)', 'Diario::porciones/$1'); // AJAX porciones
         $r->GET('(:segment)/nutrientes', 'Diario::nutrientes/$1');
 

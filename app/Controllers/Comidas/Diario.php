@@ -244,6 +244,135 @@ class Diario extends BaseController
         return redirect()->to(site_url('comidas/diario/' . $this->currentFechaShifted()));
     }
 
+    // Top 28 días históricos más cercanos al objetivo, agrupados en 4 semanas
+    // para poder replicar un mes completo.
+    public function topDias()
+    {
+        helper('comidas');
+        $limites = comidas_limites();
+
+        $db = \Config\Database::connect();
+        $dias = $db->table('comidas_dias cd')
+            ->select("cd.id AS dia_id, cd.fecha,
+                SUM(ci.cantidad_gramos * ca.kcal / 100) AS kcal,
+                SUM(ci.cantidad_gramos * ca.proteina_g / 100) AS proteina_g,
+                SUM(ci.cantidad_gramos * ca.carbohidratos_g / 100) AS carbohidratos_g,
+                SUM(ci.cantidad_gramos * ca.grasas_g / 100) AS grasas_g,
+                SUM(ci.cantidad_gramos * ca.azucares_g / 100) AS azucares_g", false)
+            ->join('comidas_ingestas ci', 'ci.dia_id = cd.id', 'inner')
+            ->join('comidas_alimentos ca', "ca.id = ci.item_id AND ci.item_tipo = 'alimento'", 'left')
+            ->groupBy('cd.id')
+            ->having('kcal >', 0)
+            ->get()->getResultArray();
+
+        $ranking = [];
+        foreach ($dias as $d) {
+            $totales = [
+                'kcal'            => (float) $d['kcal'],
+                'proteina_g'      => (float) $d['proteina_g'],
+                'carbohidratos_g' => (float) $d['carbohidratos_g'],
+                'grasas_g'        => (float) $d['grasas_g'],
+                'azucares_g'      => (float) $d['azucares_g'],
+            ];
+
+            $ranking[] = [
+                'fecha'   => $d['fecha'],
+                'totales' => $totales,
+                'score'   => $this->scoreDia($totales, $limites),
+            ];
+        }
+
+        usort($ranking, static fn($a, $b) => $a['score'] <=> $b['score']);
+        $top = array_slice($ranking, 0, 28);
+
+        // Se agrupan de 7 en 7 para sugerir un mes de 4 semanas a replicar
+        $semanas = array_chunk($top, 7);
+
+        return view('comidas/diario/top_dias', [
+            'title'   => 'Top 28 · Mejores días',
+            'semanas' => $semanas,
+        ]);
+    }
+
+    /**
+     * Puntuación de un día (0 = ideal). Refleja que:
+     * - kcal: quedarse corto no penaliza, pasarse penaliza el doble.
+     * - proteína: quedarse corto penaliza, pasarse no penaliza.
+     * - carbohidratos/grasas: lo ideal es el punto medio, pasarse pesa más (x1.5) que quedarse corto (x0.7).
+     * - azúcares: no tiene mínimo (cuanto menos, mejor), y al superar el umbral crítico
+     *   la penalización se agrava (x3), reflejando que es un límite "critical" y no "warning".
+     */
+    private function scoreDia(array $t, array $limites): float
+    {
+        return $this->scoreKcal($t['kcal'] ?? 0, $limites)
+            + $this->scoreMinimo($t['proteina_g'] ?? 0, $limites, 'proteina_g')
+            + $this->scoreBanda($t['carbohidratos_g'] ?? 0, $limites, 'carbohidratos_g', 0.7, 1.5)
+            + $this->scoreBanda($t['grasas_g'] ?? 0, $limites, 'grasas_g', 0.7, 1.5)
+            + $this->scoreSoloTope($t['azucares_g'] ?? 0, $limites, 'azucares_g', 3.0);
+    }
+
+    /** Devuelve [falta, exceso, medio, tolerancia] de un nutriente, o null si no está configurado */
+    private function limiteRango(array $limites, string $clave): ?array
+    {
+        $falta  = $limites[$clave]['falta']['umbral']  ?? null;
+        $exceso = $limites[$clave]['exceso']['umbral'] ?? null;
+        if ($falta === null || $exceso === null) return null;
+
+        $falta  = (float) $falta;
+        $exceso = (float) $exceso;
+        $tol    = ($exceso - $falta) / 2;
+        if ($tol <= 0) return null;
+
+        return [$falta, $exceso, ($falta + $exceso) / 2, $tol];
+    }
+
+    private function scoreKcal(float $valor, array $limites): float
+    {
+        $r = $this->limiteRango($limites, 'kcal');
+        if (!$r) return 0.0;
+        [$falta, $exceso, , $tol] = $r;
+
+        if ($valor <= $falta)  return 0.0;
+        if ($valor <= $exceso) return ($valor - $falta) / $tol;
+
+        return 1.0 + ($valor - $exceso) / $tol * 2;
+    }
+
+    private function scoreMinimo(float $valor, array $limites, string $clave): float
+    {
+        $r = $this->limiteRango($limites, $clave);
+        if (!$r) return 0.0;
+        [$falta, , , $tol] = $r;
+
+        return $valor >= $falta ? 0.0 : ($falta - $valor) / $tol;
+    }
+
+    /**
+     * Para nutrientes que en comidas_limites solo tienen "exceso" (sin "falta"), p.ej. azúcares:
+     * cuanto menos, mejor, de forma continua (no hay zona "gratis"), y al pasar el umbral
+     * la pendiente se multiplica por $penalizacionExtra.
+     */
+    private function scoreSoloTope(float $valor, array $limites, string $clave, float $penalizacionExtra): float
+    {
+        $umbral = $limites[$clave]['exceso']['umbral'] ?? null;
+        if ($umbral === null || (float) $umbral <= 0) return 0.0;
+        $umbral = (float) $umbral;
+
+        if ($valor <= $umbral) return $valor / $umbral;
+
+        return 1.0 + ($valor - $umbral) / $umbral * $penalizacionExtra;
+    }
+
+    private function scoreBanda(float $valor, array $limites, string $clave, float $pesoBajo, float $pesoAlto): float
+    {
+        $r = $this->limiteRango($limites, $clave);
+        if (!$r) return 0.0;
+        [, , $medio, $tol] = $r;
+
+        return $valor <= $medio
+            ? ($medio - $valor) / $tol * $pesoBajo
+            : ($valor - $medio) / $tol * $pesoAlto;
+    }
 
     public function ver($fecha = null)
     {
