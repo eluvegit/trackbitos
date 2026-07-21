@@ -145,6 +145,83 @@ class Alimentos extends BaseController
     }
 
 
+    // =================== Rankings ===================
+
+    public function ranking($tipo)
+    {
+        $nutrientes = [
+            'proteinas'      => ['titulo' => 'Top 100 · Más proteínas',      'campo' => 'proteina_g',      'orden' => 'DESC', 'unidad' => 'g',    'limite' => 100, 'incluirRecetas' => true],
+            'carbohidratos'  => ['titulo' => 'Top 100 · Menos carbohidratos', 'campo' => 'carbohidratos_g', 'orden' => 'ASC',  'unidad' => 'g',    'limite' => 100, 'incluirRecetas' => true],
+            'grasas'         => ['titulo' => 'Top 100 · Menos grasas',       'campo' => 'grasas_g',        'orden' => 'ASC',  'unidad' => 'g',    'limite' => 100, 'incluirRecetas' => true],
+            'kcal'           => ['titulo' => 'Top 100 · Menos calorías',     'campo' => 'kcal',            'orden' => 'ASC',  'unidad' => 'kcal', 'limite' => 100, 'incluirRecetas' => true],
+        ];
+
+        if (isset($nutrientes[$tipo])) {
+            $cfg = $nutrientes[$tipo];
+            $m   = new ComidasAlimentosModel();
+
+            if (!$cfg['incluirRecetas']) {
+                $m->where('es_receta', 0);
+            }
+
+            $rows = $m->where('kcal >', 0)
+                ->orderBy($cfg['campo'], $cfg['orden'])
+                ->findAll($cfg['limite']);
+
+            return view('comidas/alimentos/ranking', [
+                'title'  => $cfg['titulo'],
+                'rows'   => $rows,
+                'campo'  => $cfg['campo'],
+                'unidad' => $cfg['unidad'],
+            ]);
+        }
+
+        if ($tipo === 'mas-consumidos' || $tipo === 'menos-consumidos') {
+            $masConsumidos = $tipo === 'mas-consumidos';
+            $db = \Config\Database::connect();
+
+            // Cada registro del diario apunta siempre a comidas_alimentos con item_tipo='alimento'
+            // (las recetas también viven ahí como "alimento virtual" es_receta=1, receta_id=X).
+            // Por eso "directo" ya cubre tanto alimentos sueltos como recetas comidas enteras.
+            // Además, si un ingrediente forma parte de una receta, cada vez que esa receta
+            // (su alimento virtual) se ha comido directamente, también cuenta para el ingrediente.
+            $selectDirecto = "(SELECT COUNT(*) FROM comidas_ingestas ci_a WHERE ci_a.item_tipo = 'alimento' AND ci_a.item_id = ca.id)";
+            $selectViaRecetas = "(SELECT COALESCE(SUM(
+                    (SELECT COUNT(*) FROM comidas_ingestas ci2 WHERE ci2.item_tipo = 'alimento' AND ci2.item_id = rv.id)
+                ), 0)
+                FROM comidas_receta_ingredientes cri
+                JOIN comidas_alimentos rv ON rv.receta_id = cri.receta_id AND rv.es_receta = 1
+                WHERE cri.alimento_id = ca.id
+            )";
+
+            $select = "ca.id, ca.nombre, ca.kcal, ca.es_receta,
+                $selectDirecto AS directo,
+                $selectViaRecetas AS via_recetas,
+                ($selectDirecto + $selectViaRecetas) AS veces";
+
+            $builder = $db->table('comidas_alimentos ca')
+                ->select($select, false)
+                ->orderBy('veces', $masConsumidos ? 'DESC' : 'ASC')
+                ->orderBy('ca.nombre', 'ASC')
+                ->limit(100);
+
+            if ($masConsumidos) {
+                $builder->having('veces >', 0);
+            }
+
+            $rows = $builder->get()->getResultArray();
+
+            return view('comidas/alimentos/ranking', [
+                'title'  => $masConsumidos ? 'Top 100 · Más consumidos' : 'Top 100 · Menos consumidos',
+                'rows'   => $rows,
+                'campo'  => 'veces',
+                'unidad' => 'veces',
+            ]);
+        }
+
+        throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Ranking no válido');
+    }
+
     // =================== Crear ===================
 
     public function create()

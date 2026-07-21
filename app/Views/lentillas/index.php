@@ -54,6 +54,61 @@ $items = [
     <?php endforeach; ?>
 </div>
 
+<?php if (!empty($stockItems)):
+    $stockBajoCount = 0;
+    foreach ($stockItems as $si) {
+        if ((int) $si['cantidad'] <= 2) {
+            $stockBajoCount++;
+        }
+    }
+?>
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-box-seam text-primary"></i>
+                    <h6 class="mb-0">Estado del stock</h6>
+                    <?php if ($stockBajoCount > 0): ?>
+                        <span class="badge rounded-pill text-bg-warning"><?= $stockBajoCount ?> bajo<?= $stockBajoCount > 1 ? 's' : '' ?></span>
+                    <?php else: ?>
+                        <span class="badge rounded-pill text-bg-success">Todo OK</span>
+                    <?php endif; ?>
+                </div>
+                <a href="<?= site_url('lentillas/stock') ?>" class="small text-decoration-none">
+                    Ver todo <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+            <div class="row g-2">
+                <?php foreach ($stockItems as $item):
+                    $cantidad = (int) $item['cantidad'];
+                    $stockBajo = $cantidad <= 2;
+                    $nombre = strtolower($item['item']);
+                    $icono = match (true) {
+                        str_contains($nombre, 'izquierda') => 'bi-eye',
+                        str_contains($nombre, 'derecha')   => 'bi-eye',
+                        str_contains($nombre, 'líquido')   => 'bi-droplet',
+                        str_contains($nombre, 'estuche')   => 'bi-briefcase',
+                        default                             => 'bi-box-seam',
+                    };
+                ?>
+                    <div class="col-6 col-md-3">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded <?= $stockBajo ? 'bg-warning bg-opacity-10' : 'bg-body-tertiary' ?>">
+                            <i class="bi <?= $icono ?> <?= $stockBajo ? 'text-warning' : 'text-muted' ?>"></i>
+                            <div class="flex-grow-1 min-w-0">
+                                <div class="small text-truncate"><?= esc($item['item']) ?></div>
+                                <div class="fw-bold <?= $stockBajo ? 'text-warning' : '' ?>"><?= $cantidad ?></div>
+                            </div>
+                            <?php if ($stockBajo): ?>
+                                <i class="bi bi-exclamation-triangle-fill text-warning small" title="Stock bajo"></i>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <hr class="my-5">
 <div class="d-flex align-items-center gap-2 mb-4">
     <h3 class="mb-0">Tus Datos Médicos</h3>

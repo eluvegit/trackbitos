@@ -263,7 +263,11 @@ $iconTipo = function (string $tipo) {
                     $c = $fmt($i['macros']['carbohidratos_g'] ?? 0, 1);
                     $g = $fmt($i['macros']['grasas_g']        ?? 0, 1);
                     ?>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li class="list-group-item d-flex justify-content-between align-items-center ingesta-item"
+                        role="button"
+                        data-id="<?= $i['id'] ?>"
+                        data-nombre="<?= esc($i['nombre']) ?>"
+                        data-cantidad="<?= $fmt($i['cantidad_gramos'] ?? 0, 2) ?>">
                         <div>
                             <strong><?= esc($i['nombre']) ?></strong>
                             <br><small class="text-muted"><?= esc($i['cantidad_label']) ?></small>
@@ -400,6 +404,116 @@ $iconTipo = function (string $tipo) {
         btn.addEventListener('click', () => {
             const texto = buildTexto();
             copiar(texto);
+        });
+    });
+</script>
+
+<!-- Modal editar/eliminar registro -->
+<div class="modal fade" id="modalEditarIngesta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarNombre">Editar registro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small mb-1">Cantidad (g)</label>
+                <input type="number" step="0.1" min="0" id="modalEditarCantidad" class="form-control">
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-danger" id="btnEliminarIngesta">
+                    <i class="bi bi-trash"></i> Eliminar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnGuardarIngesta">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ingesta-item {
+        cursor: pointer;
+    }
+
+    .ingesta-item:hover {
+        background-color: var(--bs-tertiary-bg);
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modalEl = document.getElementById('modalEditarIngesta');
+        const modal = new bootstrap.Modal(modalEl);
+        const modalNombre = document.getElementById('modalEditarNombre');
+        const modalCantidad = document.getElementById('modalEditarCantidad');
+        const btnGuardar = document.getElementById('btnGuardarIngesta');
+        const btnEliminar = document.getElementById('btnEliminarIngesta');
+
+        let ingestaActualId = null;
+
+        const CSRF_NAME = '<?= csrf_token() ?>';
+        const CSRF_HASH = '<?= csrf_hash() ?>';
+        const API_EDIT  = '<?= site_url('api/edit') ?>';
+        const API_DEL   = '<?= site_url('api/delete') ?>';
+
+        const postForm = async (url, data) => {
+            data[CSRF_NAME] = CSRF_HASH;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams(data).toString()
+            });
+            return res.json();
+        };
+
+        document.querySelectorAll('.ingesta-item').forEach(li => {
+            li.addEventListener('click', () => {
+                ingestaActualId = li.dataset.id;
+                modalNombre.textContent = li.dataset.nombre;
+                modalCantidad.value = li.dataset.cantidad;
+                modal.show();
+            });
+        });
+
+        btnGuardar.addEventListener('click', async () => {
+            if (!ingestaActualId) return;
+            const cantidad = parseFloat((modalCantidad.value || '').toString().replace(',', '.'));
+            if (!cantidad || cantidad <= 0) {
+                alert('Introduce una cantidad válida.');
+                return;
+            }
+            try {
+                const r = await postForm(`${API_EDIT}/${ingestaActualId}`, {
+                    cantidad_gramos: String(cantidad)
+                });
+                if (r.ok) {
+                    window.location.reload();
+                } else {
+                    alert('No se pudo actualizar: ' + (r.error || 'Error desconocido'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de red al actualizar.');
+            }
+        });
+
+        btnEliminar.addEventListener('click', async () => {
+            if (!ingestaActualId) return;
+            if (!confirm('¿Eliminar este registro?')) return;
+            try {
+                const r = await postForm(`${API_DEL}/${ingestaActualId}`, {});
+                if (r.ok) {
+                    window.location.reload();
+                } else {
+                    alert('No se pudo eliminar.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de red al eliminar.');
+            }
         });
     });
 </script>

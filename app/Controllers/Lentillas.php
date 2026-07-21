@@ -15,9 +15,12 @@ class Lentillas extends BaseController
     {
         $avisoModel = new \App\Models\LentillasAvisosModel();
         $sustModel = new \App\Models\LentillasSustitucionesModel();
+        $stockModel = new LentillasStockModel();
 
         // Buscar el aviso configurado para "lentillas"
         $aviso = $avisoModel->where('item', 'lentillas')->first();
+
+        $stockItems = $stockModel->findAll();
 
         $dias = null;
         $mostrarAlerta = false;
@@ -48,6 +51,7 @@ class Lentillas extends BaseController
             'dias' => $dias,
             'mostrarAlerta' => $mostrarAlerta,
             'ultimoCambio' => $ultimoCambio,
+            'stockItems' => $stockItems,
         ]);
     }
 

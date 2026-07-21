@@ -179,6 +179,37 @@ class Diario extends BaseController
         return $this->response->setJSON(['ok' => true]);
     }
 
+    public function editAjax($id)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $existe = $this->ingM->find($id);
+        if (!$existe) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Registro no encontrado']);
+        }
+
+        $toFloat = static function ($v): float {
+            if ($v === null) return 0.0;
+            if (is_string($v)) $v = str_replace(',', '.', $v);
+            return (float) $v;
+        };
+
+        $cantidad = $toFloat($this->request->getPost('cantidad_gramos'));
+        if ($cantidad <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Cantidad no válida']);
+        }
+
+        $this->ingM->update($id, [
+            'cantidad_gramos' => $cantidad,
+            'porcion_id'      => null,
+            'porciones'       => null,
+        ]);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
     // app/Controllers/Comidas/Diario.php
 
     public function alimento($id)

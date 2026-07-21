@@ -103,6 +103,28 @@
         <div id="listaIngestas" class=""></div>
     </div>
 
+    <!-- Modal editar/eliminar registro -->
+    <div class="modal fade" id="modalEditarIngesta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarNombre">Editar registro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small mb-1">Cantidad (g)</label>
+                    <input type="number" step="0.1" min="0" id="modalEditarCantidad" class="form-control">
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-danger" id="btnEliminarIngesta">
+                        <i class="bi bi-trash"></i> Eliminar
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnGuardarIngesta">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <style>
     /* Ajustes compactos para móvil */
     @media (max-width: 576px) {
@@ -124,6 +146,12 @@
     table tr{
         font-size:0.8em;
     }
+    .ingesta-row {
+        cursor: pointer;
+    }
+    .ingesta-row:hover {
+        background-color: var(--bs-tertiary-bg);
+    }
 </style>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -135,6 +163,7 @@
             ingestasBase: '<?= site_url('api/ingestas') ?>', // /{fecha}/{tipo}
             add: '<?= site_url('api/add') ?>',
             delBase: '<?= site_url('api/delete') ?>', // /{id}
+            editBase: '<?= site_url('api/edit') ?>', // /{id}
         };
 
         // === Elements ===
@@ -158,6 +187,15 @@
         const clearSelected = document.getElementById('clearSelected');
 
         const listaIngestas = document.getElementById('listaIngestas');
+
+        // Modal editar/eliminar
+        const modalEditarEl = document.getElementById('modalEditarIngesta');
+        const modalEditar = new bootstrap.Modal(modalEditarEl);
+        const modalEditarNombre = document.getElementById('modalEditarNombre');
+        const modalEditarCantidad = document.getElementById('modalEditarCantidad');
+        const btnGuardarIngesta = document.getElementById('btnGuardarIngesta');
+        const btnEliminarIngesta = document.getElementById('btnEliminarIngesta');
+        let ingestaActualId = null;
 
         // CSRF (desde el hidden de <?= csrf_field() ?>)
         const csrfInput = formAdd.querySelector('input[name="<?= csrf_token() ?>"]') || formAdd.querySelector('input[type="hidden"]');
@@ -284,17 +322,14 @@
                 tot.c += ch;
                 tot.g += gr;
                 return `
-                <tr>
+                <tr class="ingesta-row" role="button" data-id="${r.id}" data-nombre="${(r.nombre || '—').replace(/"/g, '&quot;')}" data-cantidad="${g}">
                     <td>${r.nombre || '—'}</td>
                     <td class="text-end">${fmt1(g)} g</td>
                     <td class="text-end">${fmt1(kcal)}</td>
                     <td class="text-end">${fmt1(pr)}</td>
                     <td class="text-end">${fmt1(ch)}</td>
                     <td class="text-end">${fmt1(gr)}</td>
-                   <td class="text-end">
-    <a href="#" class="text-danger text-decoration-none btn-del" data-id="${r.id}">×</a>
-</td>
-
+                    <td class="text-end"><i class="bi bi-pencil text-muted"></i></td>
                 </tr>`;
             }).join('');
             listaIngestas.innerHTML = `
@@ -553,16 +588,52 @@
             }
         });
 
-        // Borrar registro
-        listaIngestas.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.btn-del');
-            if (!btn) return;
-            const id = btn.dataset.id;
+        // Abrir modal de edición/eliminación al pulsar una fila
+        listaIngestas.addEventListener('click', (e) => {
+            const row = e.target.closest('.ingesta-row');
+            if (!row) return;
+            ingestaActualId = row.dataset.id;
+            modalEditarNombre.textContent = row.dataset.nombre;
+            modalEditarCantidad.value = row.dataset.cantidad;
+            modalEditar.show();
+        });
+
+        // Guardar cantidad editada
+        btnGuardarIngesta.addEventListener('click', async () => {
+            if (!ingestaActualId) return;
+            const cantidad = parseFloat((modalEditarCantidad.value || '').toString().replace(',', '.'));
+            if (!cantidad || cantidad <= 0) {
+                alert('Introduce una cantidad válida.');
+                return;
+            }
+            try {
+                const r = await postForm(`${API.editBase}/${ingestaActualId}`, {
+                    cantidad_gramos: String(cantidad)
+                });
+                if (r.ok) {
+                    modalEditar.hide();
+                    await cargarIngestas();
+                } else {
+                    alert('No se pudo actualizar: ' + (r.error || 'Error desconocido'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error de red al actualizar.');
+            }
+        });
+
+        // Eliminar registro
+        btnEliminarIngesta.addEventListener('click', async () => {
+            if (!ingestaActualId) return;
             if (!confirm('¿Eliminar este registro?')) return;
             try {
-                const r = await postForm(`${API.delBase}/${id}`, {});
-                if (r.ok) await cargarIngestas();
-                else alert('No se pudo eliminar.');
+                const r = await postForm(`${API.delBase}/${ingestaActualId}`, {});
+                if (r.ok) {
+                    modalEditar.hide();
+                    await cargarIngestas();
+                } else {
+                    alert('No se pudo eliminar.');
+                }
             } catch (err) {
                 console.error(err);
                 alert('Error de red al eliminar.');

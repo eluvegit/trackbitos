@@ -178,6 +178,7 @@ $routes->group('api', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comid
     $r->GET('ingestas/(:segment)/(:segment)', 'Diario::ingestasAjax/$1/$2'); // /api/ingestas/{fecha}/{tipo}
     $r->POST('add', 'Diario::addAjax');                     // /api/add
     $r->POST('delete/(:num)', 'Diario::deleteAjax/$1');     // /api/delete/{id}
+    $r->POST('edit/(:num)', 'Diario::editAjax/$1');         // /api/edit/{id}
 });
 
 
@@ -215,6 +216,7 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
     // --- Alimentos ---
     $routes->group('alimentos', static function ($r) {
         $r->GET('/', 'Alimentos::index');
+        $r->GET('ranking/(:segment)', 'Alimentos::ranking/$1');
         $r->GET('create', 'Alimentos::create');
         $r->POST('store', 'Alimentos::store');
         $r->GET('edit/(:num)', 'Alimentos::edit/$1');
