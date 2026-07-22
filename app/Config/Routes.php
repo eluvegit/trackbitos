@@ -140,6 +140,9 @@ $routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
     $routes->POST('entrenamientos/guardar-serie', 'GimnasioEntrenamientos::guardarSerie');
     $routes->GET('entrenamientos/eliminar-serie/(:num)', 'GimnasioEntrenamientos::eliminarSerie/$1');
     $routes->POST('entrenamientos/actualizar-serie/(:num)', 'GimnasioEntrenamientos::actualizarSerie/$1');
+    $routes->GET('entrenamientos/ultimo-valor/(:num)', 'GimnasioEntrenamientos::ultimoValor/$1');
+    $routes->POST('entrenamientos/reordenar-ejercicio', 'GimnasioEntrenamientos::reordenarEjercicio');
+    $routes->POST('entrenamientos/reutilizar/(:num)', 'GimnasioEntrenamientos::reutilizar/$1');
 
 
     $routes->GET('entrenamientos/resumen/(:num)', 'GimnasioEntrenamientos::resumen/$1');

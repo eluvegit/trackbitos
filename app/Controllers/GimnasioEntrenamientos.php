@@ -15,12 +15,33 @@ class GimnasioEntrenamientos extends BaseController
     protected $entrenamientoEjerciciosModel;
     protected $seriesModel;
 
+    private const GRUPOS = [
+        'biceps' => 'Bíceps',
+        'triceps' => 'Tríceps',
+        'hombros' => 'Hombros',
+        'espalda' => 'Espalda',
+        'pecho' => 'Pecho',
+        'abdominales' => 'Abdominales',
+        'piernas' => 'Piernas',
+        'maquinas' => 'Máquinas',
+        'calentamientos' => 'Calentamientos',
+        'movilidad' => 'Movilidad',
+        'cardio' => 'Cardio',
+        'especificos' => 'Específicos',
+        'recuperacion' => 'Recuperación',
+    ];
+
     public function __construct()
     {
         $this->entrenamientosModel           = new GimnasioEntrenamientosModel();
         $this->ejerciciosModel               = new GimnasioEjerciciosModel();
         $this->entrenamientoEjerciciosModel  = new GimnasioEntrenamientoEjerciciosModel();
         $this->seriesModel                   = new GimnasioSeriesModel();
+    }
+
+    private function grupoNombre(?string $clave): string
+    {
+        return self::GRUPOS[$clave] ?? ($clave ?? '');
     }
 
     public function index()
@@ -112,66 +133,92 @@ class GimnasioEntrenamientos extends BaseController
 
     public function registro($id)
     {
-        $entrenamientoModel = new \App\Models\GimnasioEntrenamientosModel();
-        $entrenamiento = $entrenamientoModel->find($id);
+        $entrenamiento = $this->entrenamientosModel->find($id);
         if (!$entrenamiento) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
         $db = \Config\Database::connect();
 
-        // ⚠️ Si tu tabla de ejercicios se llama distinto, cámbiala aquí:
-        $tablaEjercicios = 'gimnasio_ejercicios'; // columnas esperadas: id, nombre, grupo
-
-        // Query: series + orden de ejercicio y nombres
-        $builder = $db->table('gimnasio_series s')
-            ->select('
-        s.id, s.series, s.repeticiones, s.peso, s.orden,
-        s.rpe, s.nota,                   
-        ee.orden AS orden_ejercicio,
-        ee.ejercicio_id,
-        ge.nombre AS ejercicio_nombre,
-        ge.grupo_muscular AS grupo_key
-    ')
-            ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.id = s.entrenamiento_ejercicio_id')
-            ->join($tablaEjercicios . ' ge', 'ge.id = ee.ejercicio_id', 'left')
+        // Ejercicios del entrenamiento (aunque todavía no tengan series), en orden
+        $ejerciciosEntreno = $db->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ee.id AS ee_id, ee.ejercicio_id, ee.orden, ge.nombre AS ejercicio_nombre, ge.grupo_muscular AS grupo_key')
+            ->join('gimnasio_ejercicios ge', 'ge.id = ee.ejercicio_id', 'left')
             ->where('ee.entrenamiento_id', $id)
             ->orderBy('ee.orden', 'ASC')
-            ->orderBy('s.orden', 'ASC');
+            ->get()->getResultArray();
 
+        // Todas las series de este entrenamiento
+        $todasLasSeries = $db->table('gimnasio_series s')
+            ->select('s.id, s.entrenamiento_ejercicio_id AS ee_id, s.series, s.repeticiones, s.peso, s.rpe, s.nota, s.orden')
+            ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.id = s.entrenamiento_ejercicio_id')
+            ->where('ee.entrenamiento_id', $id)
+            ->orderBy('s.orden', 'ASC')
+            ->get()->getResultArray();
 
-        $seriesGuardadas = $builder->get()->getResultArray();
+        $seriesPorEe = [];
+        foreach ($todasLasSeries as $s) {
+            $seriesPorEe[$s['ee_id']][] = $s;
+        }
 
-        // Mapa rápido de nombres de grupo (por si no quieres otro join)
-        $mapGrupos = [
-            'biceps' => 'Bíceps',
-            'triceps' => 'Tríceps',
-            'hombros' => 'Hombros',
-            'espalda' => 'Espalda',
-            'pecho' => 'Pecho',
-            'abdominales' => 'Abdominales',
-            'piernas' => 'Piernas',
-            'maquinas' => 'Máquinas',
-            'calentamientos' => 'Calentamientos',
-            'movilidad' => 'Movilidad',
-            'cardio' => 'Cardio',
-            'especificos' => 'Específicos',
-            'recuperacion' => 'Recuperación'
-        ];
+        $ejerciciosAgrupados = [];
+        foreach ($ejerciciosEntreno as $e) {
+            $ejerciciosAgrupados[] = [
+                'ee_id'            => (int) $e['ee_id'],
+                'ejercicio_id'     => (int) $e['ejercicio_id'],
+                'ejercicio_nombre' => $e['ejercicio_nombre'] ?: ('Ejercicio #' . $e['ejercicio_id']),
+                'grupo_nombre'     => $this->grupoNombre($e['grupo_key']),
+                'series'           => $seriesPorEe[$e['ee_id']] ?? [],
+            ];
+        }
 
-        // Dar forma a los campos esperados por la vista
-        foreach ($seriesGuardadas as &$s) {
-            $s['grupo_nombre']     = $mapGrupos[$s['grupo_key'] ?? ''] ?? ($s['grupo_key'] ?? '');
-            $s['ejercicio_nombre'] = $s['ejercicio_nombre'] ?: ('Ejercicio #' . $s['ejercicio_id']);
-            // opcional: si quieres mostrar orden de serie:
-            $s['orden'] = (int)($s['orden'] ?? 0);
+        // Ejercicios usados recientemente (en cualquier entrenamiento), para el picker rápido
+        $recientes = $db->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ge.id, ge.nombre, ge.grupo_muscular, MAX(ee.created_at) AS ultima_vez')
+            ->join('gimnasio_ejercicios ge', 'ge.id = ee.ejercicio_id')
+            ->groupBy('ge.id, ge.nombre, ge.grupo_muscular')
+            ->orderBy('ultima_vez', 'DESC')
+            ->limit(10)
+            ->get()->getResultArray();
+
+        // Entrenamientos anteriores con ejercicios, para "reutilizar rutina"
+        $candidatos = $db->table('gimnasio_entrenamientos')
+            ->select('id, fecha, tipo_sesion')
+            ->where('id !=', $id)
+            ->orderBy('fecha', 'DESC')
+            ->limit(20)
+            ->get()->getResultArray();
+
+        $anteriores = [];
+        foreach ($candidatos as $c) {
+            $ejs = $db->table('gimnasio_entrenamiento_ejercicios ee')
+                ->select('ge.nombre')
+                ->join('gimnasio_ejercicios ge', 'ge.id = ee.ejercicio_id')
+                ->where('ee.entrenamiento_id', $c['id'])
+                ->orderBy('ee.orden', 'ASC')
+                ->get()->getResultArray();
+
+            if (empty($ejs)) {
+                continue;
+            }
+
+            $c['ejercicios_resumen'] = implode(', ', array_column($ejs, 'nombre'));
+            $c['num_ejercicios']     = count($ejs);
+            $anteriores[]            = $c;
+
+            if (count($anteriores) >= 8) {
+                break;
+            }
         }
 
         return view('gimnasio/entrenamientos/registro', [
-            'entrenamiento'    => $entrenamiento,
-            'fecha'            => $entrenamiento['fecha'],
-            'entrenamiento_id' => $id,
-            'seriesGuardadas'  => $seriesGuardadas,
+            'entrenamiento'       => $entrenamiento,
+            'fecha'               => $entrenamiento['fecha'],
+            'entrenamiento_id'    => $id,
+            'ejerciciosAgrupados' => $ejerciciosAgrupados,
+            'recientes'           => $recientes,
+            'anteriores'          => $anteriores,
+            'grupos'              => self::GRUPOS,
         ]);
     }
 
@@ -180,64 +227,220 @@ class GimnasioEntrenamientos extends BaseController
     {
         $req = service('request');
 
-        $entrenamientoId = $req->getPost('entrenamiento_id');
-        $ejercicioId     = $req->getPost('ejercicio_id');
+        $entrenamientoId = (int) $req->getPost('entrenamiento_id');
+        $ejercicioId     = (int) $req->getPost('ejercicio_id');
 
-        $ejercicioModel = new \App\Models\GimnasioEntrenamientoEjerciciosModel();
+        $ejercicioModel = $this->entrenamientoEjerciciosModel;
 
-        // Buscar o crear ejercicio dentro del entrenamiento (sin rpe/nota aquí)
+        // Buscar o crear ejercicio dentro del entrenamiento
         $ejercicio = $ejercicioModel
             ->where('entrenamiento_id', $entrenamientoId)
             ->where('ejercicio_id', $ejercicioId)
             ->first();
 
         if (!$ejercicio) {
-            // orden de ejercicio
             $maxOrden = $ejercicioModel->selectMax('orden')
                 ->where('entrenamiento_id', $entrenamientoId)->first();
-            $ordenEj = (int)($maxOrden['orden'] ?? 0) + 1;
+            $ordenEj = (int) ($maxOrden['orden'] ?? 0) + 1;
 
             $entrenamientoEjercicioId = $ejercicioModel->insert([
                 'entrenamiento_id' => $entrenamientoId,
                 'ejercicio_id'     => $ejercicioId,
                 'orden'            => $ordenEj,
-                // opcional: guarda última rpe/nota resumen del ejercicio si quieres
-                // 'rpe' => $req->getPost('rpe'),
-                // 'nota_ejercicio' => $req->getPost('nota'),
             ]);
         } else {
             $entrenamientoEjercicioId = $ejercicio['id'];
         }
 
+        $eeRow = $ejercicioModel->find($entrenamientoEjercicioId);
+
         // orden de serie
-        $serieModel = new \App\Models\GimnasioSeriesModel();
+        $serieModel = $this->seriesModel;
         $maxSerie = $serieModel->selectMax('orden')
             ->where('entrenamiento_ejercicio_id', $entrenamientoEjercicioId)->first();
-        $ordenSerie = (int)($maxSerie['orden'] ?? 0) + 1;
+        $ordenSerie = (int) ($maxSerie['orden'] ?? 0) + 1;
 
-        // insertar serie con rpe/nota por serie
-        $serieModel->insert([
+        $rpe  = $req->getPost('rpe');
+        $nota = $req->getPost('nota');
+        $rpeLimpio = ($rpe !== '' && $rpe !== null) ? (int) $rpe : null;
+
+        $serieId = $serieModel->insert([
             'entrenamiento_ejercicio_id' => $entrenamientoEjercicioId,
-            'series'        => $req->getPost('series'),
-            'repeticiones'  => $req->getPost('repeticiones'),
-            'peso'          => $req->getPost('peso'),
-            'rpe'           => $req->getPost('rpe') ?: null,
-            'nota'          => $req->getPost('nota') ?: null,
+            'series'        => (int) $req->getPost('series'),
+            'repeticiones'  => (int) $req->getPost('repeticiones'),
+            'peso'          => (float) $req->getPost('peso'),
+            'rpe'           => $rpeLimpio,
+            'nota'          => $nota ?: null,
             'orden'         => $ordenSerie,
         ]);
 
-        return redirect()->back()->with('mensaje', 'Serie registrada correctamente');
+        $ejercicioInfo = $this->ejerciciosModel->find($ejercicioId);
+
+        return $this->response->setJSON([
+            'ok'    => true,
+            'serie' => [
+                'id'           => $serieId,
+                'series'       => (int) $req->getPost('series'),
+                'repeticiones' => (int) $req->getPost('repeticiones'),
+                'peso'         => (float) $req->getPost('peso'),
+                'rpe'          => $rpeLimpio,
+                'nota'         => $nota ?: null,
+            ],
+            'ejercicio' => [
+                'ee_id'        => (int) $entrenamientoEjercicioId,
+                'id'           => $ejercicioId,
+                'nombre'       => $ejercicioInfo['nombre'] ?? ('Ejercicio #' . $ejercicioId),
+                'grupo_nombre' => $this->grupoNombre($ejercicioInfo['grupo_muscular'] ?? null),
+                'orden'        => (int) $eeRow['orden'],
+            ],
+        ]);
+    }
+
+    /**
+     * Último peso/reps/series registrados para un ejercicio (de cualquier
+     * entrenamiento), usado para pre-rellenar el registro rápido.
+     */
+    public function ultimoValor($ejercicioId)
+    {
+        $db = \Config\Database::connect();
+
+        $row = $db->table('gimnasio_series s')
+            ->select('s.series, s.repeticiones, s.peso, s.rpe')
+            ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.id = s.entrenamiento_ejercicio_id')
+            ->where('ee.ejercicio_id', $ejercicioId)
+            ->orderBy('s.id', 'DESC')
+            ->limit(1)
+            ->get()->getRowArray();
+
+        return $this->response->setJSON($row ?: new \stdClass());
+    }
+
+    /**
+     * Intercambia el orden de un ejercicio dentro del entrenamiento con su
+     * vecino inmediato (arriba o abajo), para poder corregir el orden en
+     * el que se anotaron los ejercicios.
+     */
+    public function reordenarEjercicio()
+    {
+        $req = service('request');
+        $eeId      = (int) $req->getPost('entrenamiento_ejercicio_id');
+        $direction = $req->getPost('direction');
+
+        $eeModel = $this->entrenamientoEjerciciosModel;
+        $actual  = $eeModel->find($eeId);
+        if (!$actual) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        $lista = $eeModel->where('entrenamiento_id', $actual['entrenamiento_id'])
+            ->orderBy('orden', 'ASC')->findAll();
+
+        $index = null;
+        foreach ($lista as $i => $row) {
+            if ((int) $row['id'] === $eeId) {
+                $index = $i;
+                break;
+            }
+        }
+
+        $targetIndex = $index === null ? null : $index + ($direction === 'up' ? -1 : 1);
+        if ($index === null || $targetIndex < 0 || $targetIndex >= count($lista)) {
+            return $this->response->setJSON(['ok' => false]);
+        }
+
+        $a = $lista[$index];
+        $b = $lista[$targetIndex];
+        $eeModel->update($a['id'], ['orden' => $b['orden']]);
+        $eeModel->update($b['id'], ['orden' => $a['orden']]);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Copia la lista de ejercicios de un entrenamiento anterior al actual,
+     * junto con sus series (peso, repeticiones, rpe, nota), respetando el
+     * orden. Así, como gran parte de la rutina se repite igual, el usuario
+     * solo tiene que ajustar o borrar lo que cambie en vez de anotarlo todo
+     * desde cero.
+     */
+    public function reutilizar($origenId)
+    {
+        $destinoId = (int) $this->request->getPost('entrenamiento_id');
+        $origenId  = (int) $origenId;
+
+        $destino = $this->entrenamientosModel->find($destinoId);
+        $origen  = $this->entrenamientosModel->find($origenId);
+        if (!$destino || !$origen) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $eeModel    = $this->entrenamientoEjerciciosModel;
+        $serieModel = $this->seriesModel;
+
+        $existentes = array_column(
+            $eeModel->select('ejercicio_id')->where('entrenamiento_id', $destinoId)->findAll(),
+            'ejercicio_id'
+        );
+
+        $origenEjercicios = $eeModel->where('entrenamiento_id', $origenId)
+            ->orderBy('orden', 'ASC')->findAll();
+
+        $maxOrden = $eeModel->selectMax('orden')->where('entrenamiento_id', $destinoId)->first();
+        $siguienteOrden = (int) ($maxOrden['orden'] ?? 0) + 1;
+
+        $añadidos = 0;
+        $seriesCopiadas = 0;
+        foreach ($origenEjercicios as $oe) {
+            if (in_array($oe['ejercicio_id'], $existentes, true)) {
+                continue;
+            }
+
+            $nuevoEeId = $eeModel->insert([
+                'entrenamiento_id' => $destinoId,
+                'ejercicio_id'     => $oe['ejercicio_id'],
+                'orden'            => $siguienteOrden++,
+            ]);
+            $añadidos++;
+
+            $seriesOrigen = $serieModel->where('entrenamiento_ejercicio_id', $oe['id'])
+                ->orderBy('orden', 'ASC')->findAll();
+
+            foreach ($seriesOrigen as $so) {
+                $serieModel->insert([
+                    'entrenamiento_ejercicio_id' => $nuevoEeId,
+                    'series'        => $so['series'],
+                    'repeticiones'  => $so['repeticiones'],
+                    'peso'          => $so['peso'],
+                    'rpe'           => $so['rpe'],
+                    'nota'          => $so['nota'],
+                    'orden'         => $so['orden'],
+                ]);
+                $seriesCopiadas++;
+            }
+        }
+
+        $mensaje = $añadidos > 0
+            ? "Se han añadido {$añadidos} ejercicios con {$seriesCopiadas} series de la rutina anterior. Ajusta o borra lo que cambie."
+            : 'Esos ejercicios ya estaban en el entrenamiento de hoy.';
+
+        return redirect()->to(site_url("gimnasio/entrenamientos/registro/{$destinoId}"))
+            ->with('mensaje', $mensaje);
     }
 
     public function eliminarSerie($id)
     {
         $serie = $this->seriesModel->find($id);
-        if (!$serie) return redirect()->back()->with('error', 'Serie no encontrada');
+        if (!$serie) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            }
+            return redirect()->back()->with('error', 'Serie no encontrada');
+        }
 
         $db = \Config\Database::connect();
         $db->transStart();
 
-        $eeId = (int)$serie['entrenamiento_ejercicio_id'];
+        $eeId = (int) $serie['entrenamiento_ejercicio_id'];
 
         // 1) Borrar
         $this->seriesModel->delete($id);
@@ -250,26 +453,28 @@ class GimnasioEntrenamientos extends BaseController
 
         $i = 1;
         foreach ($resto as $row) {
-            if ((int)$row['orden'] !== $i) {
+            if ((int) $row['orden'] !== $i) {
                 $this->seriesModel->update($row['id'], ['orden' => $i]);
             }
             $i++;
         }
 
-        // 3) (Opcional) si ya no quedan series, borrar el ejercicio y reordenar ejercicios
+        // 3) Si ya no quedan series, borrar el ejercicio y reordenar ejercicios
+        $ejercicioEliminado = false;
         if (empty($resto)) {
             $eeModel = $this->entrenamientoEjerciciosModel;
             $ee     = $eeModel->find($eeId);
             if ($ee) {
-                $entrenamientoId = (int)$ee['entrenamiento_id'];
+                $entrenamientoId = (int) $ee['entrenamiento_id'];
                 $eeModel->delete($eeId);
+                $ejercicioEliminado = true;
 
                 // Reordenar ejercicios 1..n
                 $ejercicios = $eeModel->where('entrenamiento_id', $entrenamientoId)
                     ->orderBy('orden', 'ASC')->findAll();
                 $j = 1;
                 foreach ($ejercicios as $e) {
-                    if ((int)$e['orden'] !== $j) {
+                    if ((int) $e['orden'] !== $j) {
                         $eeModel->update($e['id'], ['orden' => $j]);
                     }
                     $j++;
@@ -279,6 +484,10 @@ class GimnasioEntrenamientos extends BaseController
 
         $db->transComplete();
 
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'ejercicio_eliminado' => $ejercicioEliminado]);
+        }
+
         return redirect()->back()->with('mensaje', 'Serie eliminada y orden actualizado');
     }
 
@@ -286,17 +495,29 @@ class GimnasioEntrenamientos extends BaseController
     public function actualizarSerie($id)
     {
         $serie = $this->seriesModel->find($id);
-        if (!$serie) return redirect()->back()->with('error', 'Serie no encontrada');
+        if (!$serie) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            }
+            return redirect()->back()->with('error', 'Serie no encontrada');
+        }
+
+        $rpe = $this->request->getPost('rpe');
 
         $data = [
-            'series'       => (int)$this->request->getPost('series'),
-            'repeticiones' => (int)$this->request->getPost('repeticiones'),
-            'peso'         => (float)$this->request->getPost('peso'),
-            'rpe'          => $this->request->getPost('rpe') !== '' ? (int)$this->request->getPost('rpe') : null,
+            'series'       => (int) $this->request->getPost('series'),
+            'repeticiones' => (int) $this->request->getPost('repeticiones'),
+            'peso'         => (float) $this->request->getPost('peso'),
+            'rpe'          => $rpe !== '' && $rpe !== null ? (int) $rpe : null,
             'nota'         => $this->request->getPost('nota') ?: null,
         ];
 
         $this->seriesModel->update($id, $data);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'serie' => array_merge(['id' => (int) $id], $data)]);
+        }
+
         return redirect()->back()->with('mensaje', 'Serie actualizada');
     }
 
