@@ -67,6 +67,9 @@ $secciones = [
     border: 1px solid var(--bs-border-color);
     background: var(--bs-tertiary-bg);
     transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 .gim-card-link:hover .gim-card {
     transform: translateY(-2px);
@@ -74,11 +77,14 @@ $secciones = [
     border-color: #7c3aed;
 }
 
-.gim-card-icon { font-size: 1.8rem; line-height: 1; }
+.gim-card-icon { font-size: 1.8rem; line-height: 1; flex-shrink: 0; }
 .gim-card-title {
     font-size: .85rem;
     font-weight: 700;
     color: var(--bs-emphasis-color);
+    line-height: 1.15;
+    word-break: break-word;
+    hyphens: auto;
 }
 .gim-card-text {
     font-size: .72rem;
@@ -100,6 +106,9 @@ $secciones = [
     background: transparent;
     opacity: .6;
     cursor: not-allowed;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 .gim-card-badge {
     margin-top: 4px;

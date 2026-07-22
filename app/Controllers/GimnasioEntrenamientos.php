@@ -371,10 +371,66 @@ class GimnasioEntrenamientos extends BaseController
             $detallePorEj[$row['ejercicio_id']][] = $row;
         }
 
+        // Los 3 básicos hechos (o no) en esta sesión, para destacarlos arriba del todo
+        $nombresBuscados = [
+            'press banca' => ['press banca', 'press de banca'],
+            'peso muerto' => ['peso muerto', 'deadlift'],
+            'sentadillas' => ['sentadilla', 'sentadillas', 'back squat', 'squat'],
+        ];
+        $titulosBonitos = ['press banca' => 'Press banca', 'peso muerto' => 'Peso muerto', 'sentadillas' => 'Sentadillas'];
+
+        $grandes = [];
+        foreach ($nombresBuscados as $clave => $patrones) {
+            $builder = $db->table('gimnasio_ejercicios');
+            $builder->groupStart();
+            foreach ($patrones as $p) {
+                $builder->orLike('LOWER(nombre)', mb_strtolower($p, 'UTF-8'));
+            }
+            $builder->groupEnd();
+            $ejRow = $builder->orderBy('id', 'ASC')->get()->getRowArray();
+
+            $detalleSesion = $ejRow ? ($detallePorEj[$ejRow['id']] ?? []) : [];
+
+            $mejor = null;
+            foreach ($detalleSesion as $d) {
+                $peso = (float) $d['peso'];
+                $reps = (int) $d['repeticiones'];
+                if ($peso <= 0 || $reps <= 0) {
+                    continue;
+                }
+                $e1rm = $peso * (1 + $reps / 30);
+                if (!$mejor || $e1rm > $mejor['e1rm']) {
+                    $mejor = ['peso' => $peso, 'reps' => $reps, 'e1rm' => round($e1rm, 1)];
+                }
+            }
+
+            $grandes[$clave] = [
+                'titulo'   => $titulosBonitos[$clave],
+                'hecho'    => $mejor !== null,
+                'mejor'    => $mejor,
+                'series'   => count($detalleSesion),
+            ];
+        }
+
         // Render HTML para el modal
         ob_start();
 ?>
         <div class="p-2">
+            <div class="rs-grandes mb-3">
+                <?php foreach ($grandes as $g): ?>
+                    <div class="rs-grande <?= $g['hecho'] ? 'is-hecho' : '' ?>">
+                        <span class="rs-grande-titulo"><?= esc($g['titulo']) ?></span>
+                        <?php if ($g['hecho']): ?>
+                            <span class="rs-grande-valor"><?= $g['mejor']['peso'] ?>kg × <?= $g['mejor']['reps'] ?></span>
+                            <span class="rs-grande-sub">1RM est. <?= $g['mejor']['e1rm'] ?>kg<?= $g['series'] > 1 ? ' · ' . $g['series'] . ' series' : '' ?></span>
+                        <?php else: ?>
+                            <span class="rs-grande-valor rs-grande-vacio">—</span>
+                            <span class="rs-grande-sub">No entrenado</span>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
             <div class="mb-2">
                 <span class="badge bg-primary"><?= date('d/m/Y', strtotime($ent['fecha'])) ?></span>
                 <?php if (!empty($ent['tipo_sesion'])): ?>
