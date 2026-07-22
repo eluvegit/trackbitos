@@ -33,7 +33,7 @@ foreach ($ejercicios as $e) {
 <div class="ej-chips mb-3">
     <?php foreach ($grupos as $grupo => $lista): ?>
         <a href="#grupo-<?= esc($grupo) ?>" class="ej-chip" data-target="grupo-<?= esc($grupo) ?>">
-            <?= ucfirst($grupo) ?> <span class="ej-chip-count"><?= count($lista) ?></span>
+            <?= esc($grupoNombres[$grupo] ?? ucfirst($grupo)) ?> <span class="ej-chip-count"><?= count($lista) ?></span>
         </a>
     <?php endforeach; ?>
     <button type="button" class="ej-chip ej-chip-toggle" id="btnToggleTodos">Mostrar todo</button>
@@ -41,14 +41,15 @@ foreach ($ejercicios as $e) {
 
 <div id="ejLista">
     <?php foreach ($grupos as $grupo => $ejerciciosDelGrupo): ?>
+        <?php $grupoNombre = $grupoNombres[$grupo] ?? ucfirst($grupo); ?>
         <div class="ej-group" id="grupo-<?= esc($grupo) ?>">
             <div class="ej-group-header" data-bs-toggle="collapse" data-bs-target="#coll-<?= esc($grupo) ?>"
                  aria-expanded="false" aria-controls="coll-<?= esc($grupo) ?>">
                 <i class="bi bi-chevron-right ej-group-chevron"></i>
-                <span class="ej-group-title"><?= ucfirst($grupo) ?></span>
+                <span class="ej-group-title"><?= esc($grupoNombre) ?></span>
                 <span class="ej-group-count"><?= count($ejerciciosDelGrupo) ?></span>
                 <a href="<?= site_url('gimnasio/ejercicios/create?grupo=' . urlencode($grupo)) ?>"
-                   class="ej-group-add" title="Añadir a <?= ucfirst($grupo) ?>" onclick="event.stopPropagation();">
+                   class="ej-group-add" title="Añadir a <?= esc($grupoNombre) ?>" onclick="event.stopPropagation();">
                     <i class="bi bi-plus-lg"></i>
                 </a>
             </div>

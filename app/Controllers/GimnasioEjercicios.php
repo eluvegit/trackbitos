@@ -69,6 +69,7 @@ class GimnasioEjercicios extends BaseController
     public function index()
     {
         $data['ejercicios'] = $this->model->orderBy('grupo_muscular')->orderBy('nombre')->findAll();
+        $data['grupoNombres'] = gim_grupos();
         return view('gimnasio/ejercicios/index', $data);
     }
 
@@ -77,12 +78,23 @@ class GimnasioEjercicios extends BaseController
         return view('gimnasio/ejercicios/create');
     }
 
+    /**
+     * Ejercicios de un grupo muscular, ordenados por frecuencia de uso
+     * (los más usados primero) para no tener que buscar entre decenas de
+     * ejercicios poco usados a la hora de registrar una serie.
+     */
     public function porGrupo($grupo)
     {
-        $ejercicios = $this->model
-            ->where('grupo_muscular', $grupo)
-            ->orderBy('nombre')
-            ->findAll();
+        $db = \Config\Database::connect();
+
+        $ejercicios = $db->table('gimnasio_ejercicios ge')
+            ->select('ge.id, ge.nombre, ge.grupo_muscular, COUNT(ee.id) AS usos')
+            ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.ejercicio_id = ge.id', 'left')
+            ->where('ge.grupo_muscular', $grupo)
+            ->groupBy('ge.id, ge.nombre, ge.grupo_muscular')
+            ->orderBy('usos', 'DESC')
+            ->orderBy('ge.nombre', 'ASC')
+            ->get()->getResultArray();
 
         return $this->response->setJSON($ejercicios);
     }

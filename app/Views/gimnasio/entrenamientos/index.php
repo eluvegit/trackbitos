@@ -172,7 +172,7 @@ function renderCalendario($dt, $mapFechaId, $mapFechaNota, $etiqueta = '')
 
             }
         } else {
-            echo '<span class="text-muted btn btn-sm">' . $dia . '</span>';
+            echo '<button type="button" class="btn btn-sm text-muted cal-dia-vacio" data-fecha="' . $fecha . '" title="Usar esta fecha para crear un entrenamiento">' . $dia . '</button>';
             // MISMA ESTRUCTURA con espaciadores invisibles para mantener alturas
             echo '<div class="cal-actions">';
             //echo   '<button class="btn btn-sm cal-spacer">' . $dia . '</button>';
@@ -210,12 +210,12 @@ $anterior = (clone $actual)->modify('-1 month');
 
 <!-- Nuevo entrenamiento + volver (juntos, a mano para el pulgar derecho en móvil) -->
 <div class="gym-ent-actions mb-3">
-    <form action="<?= site_url('gimnasio/entrenamientos/crear') ?>" method="post" class="gym-ent-nuevo">
+    <form action="<?= site_url('gimnasio/entrenamientos/crear') ?>" method="post" class="gym-ent-nuevo" id="formNuevoEntrenamiento">
         <?php
         use CodeIgniter\I18n\Time;
         $hoyMadrid = Time::now('Europe/Madrid')->toDateString(); // YYYY-MM-DD
         ?>
-        <input type="date" name="fecha" value="<?= $hoyMadrid ?>" class="form-control form-control-sm">
+        <input type="date" name="fecha" id="inputFechaNuevo" value="<?= $hoyMadrid ?>" class="form-control form-control-sm">
         <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-plus-lg"></i></button>
     </form>
     <a href="<?= site_url('gimnasio') ?>" class="gym-ent-back-icon" title="Volver a Gimnasio">
@@ -412,7 +412,31 @@ foreach ($entrenamientos as $e) {
 }
 .ent-icon-btn:hover { background: var(--bs-body-bg); color: var(--bs-emphasis-color); }
 .ent-icon-btn-danger:hover { color: #dc3545; }
+
+.cal-dia-vacio.cal-dia-elegido { background: rgba(124, 58, 237, .18); color: var(--bs-emphasis-color) !important; border-radius: 6px; }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Click en un día vacío del calendario: lo usa como fecha para crear el entrenamiento
+    const inputFecha = document.getElementById('inputFechaNuevo');
+    const formNuevo = document.getElementById('formNuevoEntrenamiento');
+
+    document.querySelectorAll('.cal-dia-vacio').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!inputFecha) return;
+            inputFecha.value = btn.dataset.fecha;
+
+            document.querySelectorAll('.cal-dia-vacio.cal-dia-elegido').forEach(function (b) {
+                b.classList.remove('cal-dia-elegido');
+            });
+            btn.classList.add('cal-dia-elegido');
+
+            formNuevo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+});
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

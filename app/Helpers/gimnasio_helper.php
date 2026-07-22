@@ -1,6 +1,41 @@
 <?php
 // app/Helpers/gimnasio_helper.php
 
+if (!function_exists('gim_grupos')) {
+    /**
+     * Fuente única de los grupos musculares / categorías de ejercicio y su
+     * nombre bonito. Usada por los selectores de crear/editar ejercicio, el
+     * picker de grupo al registrar una serie y el listado de ejercicios.
+     */
+    function gim_grupos(): array
+    {
+        return [
+            'biceps' => 'Bíceps',
+            'triceps' => 'Tríceps',
+            'hombros' => 'Hombros',
+            'espalda' => 'Espalda',
+            'pecho' => 'Pecho',
+            'abdominales' => 'Abdominales',
+            'piernas' => 'Piernas',
+            'maquinas' => 'Máquinas',
+            'calentamientos' => 'Calentamientos',
+            'movilidad' => 'Movilidad',
+            'cardio' => 'Cardio',
+            'especificos' => 'Específicos',
+            'recuperacion' => 'Recuperación',
+            'pliometria' => 'Pliometría',
+            'test' => 'Test',
+        ];
+    }
+}
+
+if (!function_exists('gim_grupo_nombre')) {
+    function gim_grupo_nombre(?string $clave): string
+    {
+        return gim_grupos()[$clave] ?? ($clave ?? '');
+    }
+}
+
 if (!function_exists('gim_svg_chart')) {
     /**
      * Genera un gráfico de línea en SVG (sin librerías externas) a partir de

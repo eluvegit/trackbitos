@@ -15,24 +15,9 @@ class GimnasioEntrenamientos extends BaseController
     protected $entrenamientoEjerciciosModel;
     protected $seriesModel;
 
-    private const GRUPOS = [
-        'biceps' => 'Bíceps',
-        'triceps' => 'Tríceps',
-        'hombros' => 'Hombros',
-        'espalda' => 'Espalda',
-        'pecho' => 'Pecho',
-        'abdominales' => 'Abdominales',
-        'piernas' => 'Piernas',
-        'maquinas' => 'Máquinas',
-        'calentamientos' => 'Calentamientos',
-        'movilidad' => 'Movilidad',
-        'cardio' => 'Cardio',
-        'especificos' => 'Específicos',
-        'recuperacion' => 'Recuperación',
-    ];
-
     public function __construct()
     {
+        helper('gimnasio');
         $this->entrenamientosModel           = new GimnasioEntrenamientosModel();
         $this->ejerciciosModel               = new GimnasioEjerciciosModel();
         $this->entrenamientoEjerciciosModel  = new GimnasioEntrenamientoEjerciciosModel();
@@ -41,7 +26,7 @@ class GimnasioEntrenamientos extends BaseController
 
     private function grupoNombre(?string $clave): string
     {
-        return self::GRUPOS[$clave] ?? ($clave ?? '');
+        return gim_grupo_nombre($clave);
     }
 
     public function index()
@@ -172,14 +157,34 @@ class GimnasioEntrenamientos extends BaseController
             ];
         }
 
-        // Ejercicios usados recientemente (en cualquier entrenamiento), para el picker rápido
-        $recientes = $db->table('gimnasio_entrenamiento_ejercicios ee')
-            ->select('ge.id, ge.nombre, ge.grupo_muscular, MAX(ee.created_at) AS ultima_vez')
+        // Sugerencias del picker rápido: mezcla de los más usados y los más
+        // recientes (en cualquier entrenamiento), hasta 20 en total. Así no
+        // solo salen los "clásicos" de siempre, también lo último que hayas
+        // empezado a hacer aunque todavía no acumule muchos usos.
+        $baseRecientes = $db->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ge.id, ge.nombre, ge.grupo_muscular, COUNT(ee.id) AS usos, MAX(ee.created_at) AS ultima_vez')
             ->join('gimnasio_ejercicios ge', 'ge.id = ee.ejercicio_id')
-            ->groupBy('ge.id, ge.nombre, ge.grupo_muscular')
+            ->groupBy('ge.id, ge.nombre, ge.grupo_muscular');
+
+        $masUsados = (clone $baseRecientes)
+            ->orderBy('usos', 'DESC')->orderBy('ultima_vez', 'DESC')
+            ->limit(20)->get()->getResultArray();
+
+        $masRecientes = (clone $baseRecientes)
             ->orderBy('ultima_vez', 'DESC')
-            ->limit(10)
-            ->get()->getResultArray();
+            ->limit(20)->get()->getResultArray();
+
+        $recientes = [];
+        foreach (array_merge($masUsados, $masRecientes) as $r) {
+            if (isset($recientes[$r['id']])) {
+                continue;
+            }
+            $recientes[$r['id']] = $r;
+            if (count($recientes) >= 20) {
+                break;
+            }
+        }
+        $recientes = array_values($recientes);
 
         // Entrenamientos anteriores con ejercicios, para "reutilizar rutina"
         $candidatos = $db->table('gimnasio_entrenamientos')
@@ -218,7 +223,7 @@ class GimnasioEntrenamientos extends BaseController
             'ejerciciosAgrupados' => $ejerciciosAgrupados,
             'recientes'           => $recientes,
             'anteriores'          => $anteriores,
-            'grupos'              => self::GRUPOS,
+            'grupos'              => gim_grupos(),
         ]);
     }
 

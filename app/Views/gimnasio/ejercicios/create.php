@@ -22,23 +22,7 @@
                 <label for="grupo_muscular" class="form-label">Grupo muscular</label>
                 <select name="grupo_muscular" id="grupo_muscular" class="form-select" required>
                     <option value="">Selecciona uno...</option>
-                    <?php
-                    $grupos = [
-                        'biceps' => 'Bíceps',
-                        'triceps' => 'Tríceps',
-                        'hombros' => 'Hombros',
-                        'espalda' => 'Espalda',
-                        'pecho' => 'Pecho',
-                        'abdominales' => 'Abdominales',
-                        'piernas' => 'Piernas',
-                        'maquinas' => 'Máquinas',
-                        'calentamientos' => 'Calentamientos',
-                        'movilidad' => 'Movilidad',
-                        'cardio' => 'Cardio',
-                        'especificos' => 'Específicos',
-                        'recuperacion' => 'Recuperación'
-                    ];
-                    foreach ($grupos as $valor => $etiqueta): ?>
+                    <?php foreach (gim_grupos() as $valor => $etiqueta): ?>
                         <option value="<?= $valor ?>" <?= $grupoSeleccionado === $valor ? 'selected' : '' ?>>
                             <?= $etiqueta ?>
                         </option>
