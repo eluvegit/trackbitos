@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\BraintogramMensajeModel;
 use App\Models\CompraCompradoModel;
 use App\Models\CompraFaltanteModel;
+use App\Models\RecordatorioModel;
 
 class Braintogram extends BaseController
 {
@@ -103,17 +104,290 @@ class Braintogram extends BaseController
 
     /**
      * Genera la respuesta a devolver por Telegram según el texto recibido.
-     * Punto de entrada temporal a falta de la IA: hoy solo reconoce el
-     * comando "lista de la compra" (case-insensitive); cualquier otro texto
-     * recibe el "Recibido" de confirmación.
+     * Orden: primero el atajo fijo "lista de la compra" (no necesita IA);
+     * si no, se manda a Claude para ver qué herramienta pide (crear o
+     * consultar eventos); si no encaja con ninguna, el "Recibido" por
+     * defecto. Añadir una capacidad nueva es: definirla en
+     * ClaudeService::herramientas() y añadir su caso aquí.
      */
     private function generarRespuesta(?string $texto): string
     {
-        if ($texto !== null && preg_match('/lista\s+de\s+la\s+compra/i', $texto) === 1) {
+        if ($texto === null || trim($texto) === '') {
+            return 'Recibido ✅';
+        }
+
+        if (preg_match('/lista\s+de\s+la\s+compra/i', $texto) === 1) {
             return $this->textoListaCompra('Mercadona');
         }
 
-        return 'Recibido ✅';
+        $accion = (new \App\Services\ClaudeService())->interpretar($texto);
+        if ($accion === null) {
+            return 'Recibido ✅';
+        }
+
+        return match ($accion['tool']) {
+            'crear_evento'            => $this->crearEventoYResponder($accion['input']),
+            'consultar_eventos'       => $this->consultarEventosYResponder($accion['input']),
+            'modificar_evento'        => $this->modificarEventoYResponder($accion['input']),
+            'borrar_evento'           => $this->borrarEventoYResponder($accion['input']),
+            'consultar_recordatorios' => $this->consultarRecordatoriosYResponder($accion['input']),
+            default                   => 'Recibido ✅',
+        };
+    }
+
+    /**
+     * Crea el evento en Google Calendar a partir de los datos que extrajo
+     * Claude y devuelve el texto de confirmación (o de error) para Telegram.
+     * Antes de crear, avisa (sin bloquear) si ya había algo a esa hora.
+     *
+     * @param array{titulo: string, fecha: string, hora_inicio: string, duracion_minutos: int, descripcion: ?string} $evento
+     */
+    private function crearEventoYResponder(array $evento): string
+    {
+        try {
+            $inicio = new \DateTimeImmutable(
+                $evento['fecha'] . ' ' . $evento['hora_inicio'],
+                new \DateTimeZone('Europe/Madrid')
+            );
+        } catch (\Throwable $e) {
+            return '⚠️ No entendí bien la fecha/hora del evento, ¿puedes reformularlo?';
+        }
+
+        $duracion = (int) ($evento['duracion_minutos'] ?? 60);
+        $fin      = $inicio->modify("+{$duracion} minutes");
+
+        $servicio = new \App\Services\GoogleCalendarService();
+
+        $solapados = $servicio->listarEventos($inicio, $fin);
+        $aviso     = '';
+        if (!empty($solapados)) {
+            $nombres = implode(', ', array_map(static fn (array $e) => $e['titulo'], $solapados));
+            $aviso   = "\n⚠️ Ya tenías: {$nombres} a esa hora";
+        }
+
+        $resultado = $servicio->crearEvento(
+            $evento['titulo'],
+            $inicio,
+            $fin,
+            $evento['descripcion'] ?? null
+        );
+
+        if ($resultado === null) {
+            return '⚠️ No pude crear el evento en el calendario. Inténtalo de nuevo en un momento.';
+        }
+
+        return sprintf(
+            "✅ Evento creado: %s\n📅 %s a las %s (%d min)%s",
+            $evento['titulo'],
+            $inicio->format('d/m/Y'),
+            $evento['hora_inicio'],
+            $duracion,
+            $aviso
+        );
+    }
+
+    /**
+     * Consulta los eventos del rango que extrajo Claude y redacta la
+     * respuesta a partir de los datos reales del calendario (no se inventa
+     * nada: si Calendar no devuelve eventos, se dice explícitamente).
+     *
+     * @param array{fecha_desde: string, fecha_hasta: string} $params
+     */
+    private function consultarEventosYResponder(array $params): string
+    {
+        try {
+            $desde = new \DateTimeImmutable($params['fecha_desde'] . ' 00:00:00', new \DateTimeZone('Europe/Madrid'));
+            $hasta = new \DateTimeImmutable($params['fecha_hasta'] . ' 23:59:59', new \DateTimeZone('Europe/Madrid'));
+        } catch (\Throwable $e) {
+            return '⚠️ No entendí bien el rango de fechas, ¿puedes reformularlo?';
+        }
+
+        $eventos = (new \App\Services\GoogleCalendarService())->listarEventos($desde, $hasta);
+
+        if ($eventos === null) {
+            return '⚠️ No pude consultar el calendario. Inténtalo de nuevo en un momento.';
+        }
+
+        if (empty($eventos)) {
+            return '📅 No tienes nada en esas fechas.';
+        }
+
+        $lineas = array_map(static function (array $e) {
+            $hora = $e['todo_el_dia'] ? 'todo el día' : (new \DateTimeImmutable($e['inicio']))->format('d/m H:i');
+
+            return "- {$e['titulo']} ({$hora})";
+        }, $eventos);
+
+        return "📅 Tienes:\n" . implode("\n", $lineas);
+    }
+
+    /**
+     * Busca el evento existente por texto y le cambia la fecha/hora,
+     * conservando la duración original si no se especifica una nueva.
+     *
+     * @param array{busqueda: string, nueva_fecha: string, nueva_hora_inicio: ?string, nueva_duracion_minutos: ?int} $params
+     */
+    private function modificarEventoYResponder(array $params): string
+    {
+        ['evento' => $evento, 'error' => $error] = $this->buscarEventoUnico($params['busqueda']);
+        if ($error !== null) {
+            return $error;
+        }
+
+        try {
+            $inicioOriginal = new \DateTimeImmutable($evento['inicio']);
+            $finOriginal    = new \DateTimeImmutable($evento['fin']);
+        } catch (\Throwable $e) {
+            return '⚠️ No pude leer las fechas del evento encontrado.';
+        }
+
+        $duracionOriginal = $inicioOriginal->diff($finOriginal);
+
+        try {
+            $horaNueva   = $params['nueva_hora_inicio'] ?? $inicioOriginal->format('H:i');
+            $nuevoInicio = new \DateTimeImmutable(
+                $params['nueva_fecha'] . ' ' . $horaNueva,
+                new \DateTimeZone('Europe/Madrid')
+            );
+        } catch (\Throwable $e) {
+            return '⚠️ No entendí bien la nueva fecha/hora, ¿puedes reformularlo?';
+        }
+
+        $nuevoFin = isset($params['nueva_duracion_minutos'])
+            ? $nuevoInicio->modify('+' . (int) $params['nueva_duracion_minutos'] . ' minutes')
+            : $nuevoInicio->add($duracionOriginal);
+
+        $resultado = (new \App\Services\GoogleCalendarService())->actualizarEvento($evento['id'], $nuevoInicio, $nuevoFin);
+
+        if ($resultado === null) {
+            return '⚠️ No pude actualizar el evento. Inténtalo de nuevo en un momento.';
+        }
+
+        return sprintf(
+            "✅ Evento actualizado: %s\n📅 %s a las %s",
+            $evento['titulo'],
+            $nuevoInicio->format('d/m/Y'),
+            $nuevoInicio->format('H:i')
+        );
+    }
+
+    /**
+     * Busca el evento existente por texto y lo borra.
+     *
+     * @param array{busqueda: string} $params
+     */
+    private function borrarEventoYResponder(array $params): string
+    {
+        ['evento' => $evento, 'error' => $error] = $this->buscarEventoUnico($params['busqueda']);
+        if ($error !== null) {
+            return $error;
+        }
+
+        $ok = (new \App\Services\GoogleCalendarService())->borrarEvento($evento['id']);
+
+        if (!$ok) {
+            return '⚠️ No pude borrar el evento. Inténtalo de nuevo en un momento.';
+        }
+
+        return "🗑️ Evento borrado: {$evento['titulo']}";
+    }
+
+    /**
+     * Consulta los recordatorios propios de Trackbitos (ITV, DNI, vacunas...)
+     * — no tiene nada que ver con Google Calendar. Reutiliza la misma lógica
+     * de fecha efectiva/urgencia que ya usa Recordatorios::index() y el cron
+     * de resumen diario, para no duplicar el cálculo en un tercer sitio.
+     *
+     * @param array{filtro: ?string} $params
+     */
+    private function consultarRecordatoriosYResponder(array $params): string
+    {
+        helper('recordatorio');
+
+        $recordatorios = (new RecordatorioModel())->findAll();
+
+        $filtro = trim((string) ($params['filtro'] ?? ''));
+        if ($filtro !== '') {
+            $filtroNormalizado = $this->normalizarTexto($filtro);
+            $recordatorios      = array_values(array_filter(
+                $recordatorios,
+                fn (array $r) => str_contains($this->normalizarTexto($r['titulo']), $filtroNormalizado)
+                    || str_contains($this->normalizarTexto(Recordatorios::CATEGORIAS[$r['categoria']][0] ?? ''), $filtroNormalizado)
+            ));
+        }
+
+        if (empty($recordatorios)) {
+            return $filtro !== ''
+                ? sprintf('🔍 No tienes recordatorios que coincidan con "%s".', $filtro)
+                : '📋 No tienes recordatorios guardados.';
+        }
+
+        foreach ($recordatorios as &$r) {
+            $periodo            = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
+            $fechaEfectiva       = recordatorio_fecha_efectiva($r['fecha_evento'], $periodo);
+            $estado              = recordatorio_estado($fechaEfectiva);
+            $r['dias']           = $estado['dias'];
+            $r['texto']          = $estado['texto'];
+            $r['categoria_label'] = Recordatorios::CATEGORIAS[$r['categoria']][0] ?? 'Otro';
+        }
+        unset($r);
+
+        usort($recordatorios, static fn (array $a, array $b) => $a['dias'] <=> $b['dias']);
+
+        $lineas = array_map(
+            static fn (array $r) => "- {$r['titulo']} ({$r['categoria_label']}) — {$r['texto']}",
+            $recordatorios
+        );
+
+        return "📋 Recordatorios:\n" . implode("\n", $lineas);
+    }
+
+    /**
+     * Minúsculas y sin tildes, para comparar texto libre sin que "vehiculo"
+     * (sin tilde, como suele escribir Claude o el usuario) falle contra
+     * "Vehículo" en base de datos.
+     */
+    private function normalizarTexto(string $texto): string
+    {
+        $normalizado = \Normalizer::normalize($texto, \Normalizer::FORM_D) ?: $texto;
+
+        return mb_strtolower(preg_replace('/\p{Mn}/u', '', $normalizado));
+    }
+
+    /**
+     * Busca un evento por texto libre en una ventana razonable (-1 día a
+     * +180 días) y exige exactamente una coincidencia: si hay 0 o varias, no
+     * adivina — devuelve un mensaje de error/aclaración listo para Telegram
+     * en vez de un evento, para no arriesgarse a tocar el equivocado.
+     *
+     * @return array{evento: ?array, error: ?string}
+     */
+    private function buscarEventoUnico(string $busqueda): array
+    {
+        $ventanaDesde = new \DateTimeImmutable('-1 day', new \DateTimeZone('Europe/Madrid'));
+        $ventanaHasta = new \DateTimeImmutable('+180 days', new \DateTimeZone('Europe/Madrid'));
+
+        $coincidencias = (new \App\Services\GoogleCalendarService())->buscarEvento($busqueda, $ventanaDesde, $ventanaHasta);
+
+        if ($coincidencias === null) {
+            return ['evento' => null, 'error' => '⚠️ No pude consultar el calendario. Inténtalo de nuevo en un momento.'];
+        }
+
+        if (empty($coincidencias)) {
+            return ['evento' => null, 'error' => sprintf('🔍 No encontré ningún evento que coincida con "%s".', $busqueda)];
+        }
+
+        if (count($coincidencias) > 1) {
+            $lineas = array_map(static function (array $e) {
+                $hora = $e['todo_el_dia'] ? 'todo el día' : (new \DateTimeImmutable($e['inicio']))->format('d/m H:i');
+
+                return "- {$e['titulo']} ({$hora})";
+            }, $coincidencias);
+
+            return ['evento' => null, 'error' => "🔍 Encontré varios que coinciden, sé más concreto:\n" . implode("\n", $lineas)];
+        }
+
+        return ['evento' => $coincidencias[0], 'error' => null];
     }
 
     /**
@@ -168,32 +442,14 @@ class Braintogram extends BaseController
     }
 
     /**
-     * Envía un mensaje de texto al chat de Telegram indicado, vía la API
-     * sendMessage del bot. Sin braintogram.botToken configurado no hace nada
-     * (mismo criterio que el resto de config opcional de este controlador:
-     * permite seguir probando el webhook antes de tener el bot real).
-     * Cualquier fallo de red/API queda solo logueado: nunca debe romper la
-     * respuesta 200 que se le da a Telegram.
+     * Envía la respuesta por Telegram. Delega en TelegramService (compartido
+     * con el comando spark de recordatorios) para no duplicar la llamada a
+     * sendMessage; cualquier fallo queda solo logueado ahí, nunca debe romper
+     * la respuesta 200 que se le da a Telegram.
      */
     private function enviarMensajeTelegram(int $chatId, string $texto): void
     {
-        $token = env('braintogram.botToken');
-        if (!$token) {
-            return;
-        }
-
-        try {
-            $client = \Config\Services::curlrequest();
-            $client->post("https://api.telegram.org/bot{$token}/sendMessage", [
-                'json'    => [
-                    'chat_id' => $chatId,
-                    'text'    => $texto,
-                ],
-                'timeout' => 5,
-            ]);
-        } catch (\Throwable $e) {
-            log_message('error', 'Braintogram: fallo al enviar mensaje a Telegram: {msg}', ['msg' => $e->getMessage()]);
-        }
+        (new \App\Services\TelegramService())->enviarMensaje($chatId, $texto);
     }
 
     /**
