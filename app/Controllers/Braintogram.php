@@ -3,6 +3,8 @@
 namespace App\Controllers;
 
 use App\Models\BraintogramMensajeModel;
+use App\Models\CompraCompradoModel;
+use App\Models\CompraFaltanteModel;
 
 class Braintogram extends BaseController
 {
@@ -88,9 +90,110 @@ class Braintogram extends BaseController
         }
 
         // A partir de aquí: secret válido + chat autorizado + dentro del rate
-        // limit. Es el punto donde iría la llamada a la IA (todavía no existe).
+        // limit. Aquí es donde más adelante se llamará a la IA para generar
+        // la respuesta real; de momento solo hay una regla fija ("lista de
+        // la compra" -> faltantes de Mercadona) y un "Recibido" por defecto,
+        // para validar que el ida-y-vuelta con Telegram funciona.
+        if ($chatId !== null) {
+            $this->enviarMensajeTelegram((int) $chatId, $this->generarRespuesta($parsed['texto']));
+        }
 
         return $this->response->setStatusCode(200)->setBody('OK');
+    }
+
+    /**
+     * Genera la respuesta a devolver por Telegram según el texto recibido.
+     * Punto de entrada temporal a falta de la IA: hoy solo reconoce el
+     * comando "lista de la compra" (case-insensitive); cualquier otro texto
+     * recibe el "Recibido" de confirmación.
+     */
+    private function generarRespuesta(?string $texto): string
+    {
+        if ($texto !== null && preg_match('/lista\s+de\s+la\s+compra/i', $texto) === 1) {
+            return $this->textoListaCompra('Mercadona');
+        }
+
+        return 'Recibido ✅';
+    }
+
+    /**
+     * Productos marcados como faltantes de un supermercado (por nombre) que
+     * todavía no están marcados como comprados, formateados como texto listo
+     * para enviar por Telegram.
+     */
+    private function textoListaCompra(string $nombreSupermercado): string
+    {
+        $productos = $this->faltantesPorSupermercado($nombreSupermercado);
+
+        if (empty($productos)) {
+            return "No falta nada de {$nombreSupermercado} 🛒";
+        }
+
+        $lineas = array_map(static fn (array $p) => '- ' . $p['nombre'], $productos);
+
+        return "Lista de la compra ({$nombreSupermercado}):\n" . implode("\n", $lineas);
+    }
+
+    /**
+     * @return array<int, array{producto_id: int, nombre: string}>
+     */
+    private function faltantesPorSupermercado(string $nombreSupermercado): array
+    {
+        $faltanteModel = new CompraFaltanteModel();
+
+        $faltantes = $faltanteModel
+            ->select('compra_faltantes.producto_id, compra_productos.nombre')
+            ->join('compra_productos', 'compra_productos.id = compra_faltantes.producto_id')
+            ->join('compra_supermercados', 'compra_supermercados.id = compra_productos.supermercado_id')
+            ->where('compra_supermercados.nombre', $nombreSupermercado)
+            ->orderBy('compra_productos.nombre', 'ASC')
+            ->findAll();
+
+        if (empty($faltantes)) {
+            return [];
+        }
+
+        $ids = array_column($faltantes, 'producto_id');
+
+        $compradoModel = new CompraCompradoModel();
+        $idsComprados  = array_column(
+            $compradoModel->select('producto_id')->whereIn('producto_id', $ids)->findAll(),
+            'producto_id'
+        );
+
+        return array_values(array_filter(
+            $faltantes,
+            static fn (array $p) => !in_array($p['producto_id'], $idsComprados, true)
+        ));
+    }
+
+    /**
+     * Envía un mensaje de texto al chat de Telegram indicado, vía la API
+     * sendMessage del bot. Sin braintogram.botToken configurado no hace nada
+     * (mismo criterio que el resto de config opcional de este controlador:
+     * permite seguir probando el webhook antes de tener el bot real).
+     * Cualquier fallo de red/API queda solo logueado: nunca debe romper la
+     * respuesta 200 que se le da a Telegram.
+     */
+    private function enviarMensajeTelegram(int $chatId, string $texto): void
+    {
+        $token = env('braintogram.botToken');
+        if (!$token) {
+            return;
+        }
+
+        try {
+            $client = \Config\Services::curlrequest();
+            $client->post("https://api.telegram.org/bot{$token}/sendMessage", [
+                'json'    => [
+                    'chat_id' => $chatId,
+                    'text'    => $texto,
+                ],
+                'timeout' => 5,
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Braintogram: fallo al enviar mensaje a Telegram: {msg}', ['msg' => $e->getMessage()]);
+        }
     }
 
     /**
