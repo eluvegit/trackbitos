@@ -1,73 +1,52 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-3">📅 Entrenamiento del <?= date('d/m/Y', strtotime($fecha)) ?></h2>
+<h2 class="mb-3">🗂️ <?= esc($plantilla['nombre']) ?></h2>
 <div class="mb-3 d-flex flex-wrap gap-2">
-    <a href="<?= site_url('gimnasio/entrenamientos') ?>" class="btn btn-sm btn-outline-secondary">← Volver a entrenamientos</a>
-    <a href="<?= site_url('gimnasio/mesociclos') ?>" class="btn btn-sm btn-outline-secondary">← Mesociclos</a>
-    <?php if (!empty($anteriores) || !empty($plantillas)): ?>
-        <button type="button" class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="modal" data-bs-target="#modalReutilizar">
-            🔁 Reutilizar / Plantillas
-        </button>
-    <?php endif; ?>
-    <?php if (!empty($ejerciciosAgrupados)): ?>
-        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalGuardarPlantilla">
-            💾 Guardar como plantilla
-        </button>
-    <?php endif; ?>
+    <a href="<?= site_url('gimnasio/plantillas') ?>" class="btn btn-sm btn-outline-secondary">← Volver a plantillas</a>
 </div>
 
-<!-- Datos del entrenamiento (colapsado) -->
+<?php if (session()->getFlashdata('mensaje')): ?>
+    <div class="alert alert-success py-2"><?= esc(session()->getFlashdata('mensaje')) ?></div>
+<?php endif; ?>
+
+<!-- Renombrar / notas (colapsado) -->
 <div class="text-center mb-2">
-    <a href="#" id="toggle-datos-entrenamiento">📋 Mostrar datos del entrenamiento</a>
+    <a href="#" id="toggle-datos-plantilla">📋 Renombrar / notas</a>
 </div>
-<div id="bloque-datos-entrenamiento" class="card mb-4 d-none">
-    <div class="card-header">📝 Datos del entrenamiento</div>
-    <form method="post" action="<?= site_url('gimnasio/entrenamientos/actualizar-datos/' . $entrenamiento_id) ?>">
+<div id="bloque-datos-plantilla" class="card mb-4 d-none">
+    <div class="card-header">📝 Datos de la plantilla</div>
+    <form method="post" action="<?= site_url('gimnasio/plantillas/renombrar/' . $plantilla_id) ?>">
         <div class="card-body">
             <?= csrf_field() ?>
             <div class="mb-3">
-                <label for="tipo_sesion" class="form-label">Tipo de sesión</label>
-                <select name="tipo_sesion" id="tipo_sesion" class="form-control">
-                    <option value="">-- Seleccionar --</option>
-                    <?php foreach (['Cardio', 'Escalada', 'HIIT', 'Hipertrofia', 'Fuerza', 'Movilidad', 'Recuperación'] as $opt): ?>
-                        <option value="<?= $opt ?>" <?= old('tipo_sesion', $entrenamiento['tipo_sesion'] ?? '') === $opt ? 'selected' : '' ?>><?= $opt ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <label class="form-label">Nombre</label>
+                <input type="text" name="nombre" class="form-control" value="<?= esc($plantilla['nombre']) ?>" required>
             </div>
             <div class="mb-3">
-                <label class="form-label">Notas generales</label>
-                <textarea name="notas_generales" class="form-control" rows="2"><?= esc($entrenamiento['notas_generales'] ?? '') ?></textarea>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Lesiones / molestias</label>
-                <textarea name="lesiones" class="form-control" rows="2"><?= esc($entrenamiento['lesiones'] ?? '') ?></textarea>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="sin_molestias" name="sin_molestias"
-                    <?= !empty($entrenamiento['sin_molestias']) ? 'checked' : '' ?>>
-                <label class="form-check-label" for="sin_molestias">Sin molestias</label>
+                <label class="form-label">Notas</label>
+                <textarea name="notas" class="form-control" rows="2"><?= esc($plantilla['notas'] ?? '') ?></textarea>
             </div>
         </div>
         <div class="card-footer text-end">
-            <button class="btn btn-primary btn-sm">Guardar datos</button>
+            <button class="btn btn-primary btn-sm">Guardar</button>
         </div>
     </form>
 </div>
 <script>
-document.getElementById('toggle-datos-entrenamiento').addEventListener('click', function(e) {
+document.getElementById('toggle-datos-plantilla').addEventListener('click', function(e) {
     e.preventDefault();
-    let bloque = document.getElementById('bloque-datos-entrenamiento');
+    let bloque = document.getElementById('bloque-datos-plantilla');
     bloque.classList.toggle('d-none');
-    this.textContent = bloque.classList.contains('d-none') ? '📋 Mostrar datos del entrenamiento' : '📋 Ocultar datos del entrenamiento';
+    this.textContent = bloque.classList.contains('d-none') ? '📋 Renombrar / notas' : '📋 Ocultar';
 });
 </script>
 
 <!-- Lista de ejercicios / series -->
-<h4 class="mb-3">🏋️ Ejercicios de hoy</h4>
+<h4 class="mb-3">🏋️ Ejercicios de la plantilla</h4>
 <div id="listaEjercicios">
     <?php foreach ($ejerciciosAgrupados as $idx => $g): ?>
-        <div class="ej-block" data-ee-id="<?= $g['ee_id'] ?>">
+        <div class="ej-block" data-pe-id="<?= $g['pe_id'] ?>">
             <div class="ej-block-header">
                 <div class="ej-block-titulo">
                     <div class="fw-bold"><?= esc($g['ejercicio_nombre']) ?></div>
@@ -75,8 +54,8 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
                 </div>
                 <div class="ej-block-actions">
                     <a href="<?= site_url('gimnasio/ejercicios/estadisticas/' . $g['ejercicio_id']) ?>" class="ej-orden-btn" title="Ver estadísticas">📈</a>
-                    <button type="button" class="ej-orden-btn ej-orden-up" data-ee="<?= $g['ee_id'] ?>" title="Subir" <?= $idx === 0 ? 'disabled' : '' ?>>⬆️</button>
-                    <button type="button" class="ej-orden-btn ej-orden-down" data-ee="<?= $g['ee_id'] ?>" title="Bajar" <?= $idx === count($ejerciciosAgrupados) - 1 ? 'disabled' : '' ?>>⬇️</button>
+                    <button type="button" class="ej-orden-btn ej-orden-up" data-pe="<?= $g['pe_id'] ?>" title="Subir" <?= $idx === 0 ? 'disabled' : '' ?>>⬆️</button>
+                    <button type="button" class="ej-orden-btn ej-orden-down" data-pe="<?= $g['pe_id'] ?>" title="Bajar" <?= $idx === count($ejerciciosAgrupados) - 1 ? 'disabled' : '' ?>>⬇️</button>
                 </div>
             </div>
             <ul class="list-group ej-series-list">
@@ -120,7 +99,7 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
     <?php endforeach; ?>
 </div>
 <?php if (empty($ejerciciosAgrupados)): ?>
-    <div class="alert alert-light border" id="listaVacia">Aún no hay ejercicios en este entrenamiento. Usa el botón "+" para empezar.</div>
+    <div class="alert alert-light border" id="listaVacia">Esta plantilla todavía no tiene ejercicios. Usa el botón "+" para empezar.</div>
 <?php endif; ?>
 
 <div style="height:90px;"></div> <!-- espacio para que el FAB no tape el último elemento -->
@@ -222,85 +201,6 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
 
     </div>
 </div>
-
-<!-- Modal reutilizar rutina anterior / plantillas -->
-<?php if (!empty($anteriores) || !empty($plantillas)): ?>
-<div class="modal fade" id="modalReutilizar" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Reutilizar / Plantillas</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small">Se copiarán los ejercicios con sus series (peso, repeticiones…) al de hoy, en el mismo orden. Luego solo tienes que ajustar o borrar lo que cambie.</p>
-
-                <?php if (!empty($plantillas)): ?>
-                    <div class="reutilizar-seccion-titulo">📋 Plantillas</div>
-                    <?php foreach ($plantillas as $p): ?>
-                        <form method="post" action="<?= site_url('gimnasio/plantillas/aplicar/' . $p['id']) ?>" class="reutilizar-item mb-2">
-                            <input type="hidden" name="entrenamiento_id" value="<?= $entrenamiento_id ?>">
-                            <div class="d-flex justify-content-between align-items-center border rounded p-2 reutilizar-fila-plantilla">
-                                <div class="me-2">
-                                    <div class="fw-semibold"><?= esc($p['nombre']) ?></div>
-                                    <div class="text-muted small"><?= (int) $p['num_ejercicios'] ?> ejercicio<?= (int) $p['num_ejercicios'] === 1 ? '' : 's' ?></div>
-                                </div>
-                                <button type="submit" class="btn btn-sm btn-success flex-shrink-0">Usar</button>
-                            </div>
-                        </form>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-
-                <?php if (!empty($anteriores)): ?>
-                    <div class="reutilizar-seccion-titulo mt-3">📅 Entrenamientos anteriores</div>
-                    <?php foreach ($anteriores as $a): ?>
-                        <form method="post" action="<?= site_url('gimnasio/entrenamientos/reutilizar/' . $a['id']) ?>" class="reutilizar-item mb-2">
-                            <input type="hidden" name="entrenamiento_id" value="<?= $entrenamiento_id ?>">
-                            <div class="d-flex justify-content-between align-items-center border rounded p-2">
-                                <div class="me-2">
-                                    <div class="fw-semibold"><?= date('d/m/Y', strtotime($a['fecha'])) ?> <?= !empty($a['tipo_sesion']) ? '· ' . esc($a['tipo_sesion']) : '' ?></div>
-                                    <div class="text-muted small"><?= esc($a['ejercicios_resumen']) ?></div>
-                                </div>
-                                <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">Usar</button>
-                            </div>
-                        </form>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- Modal guardar entrenamiento actual como plantilla -->
-<?php if (!empty($ejerciciosAgrupados)): ?>
-<div class="modal fade" id="modalGuardarPlantilla" tabindex="-1">
-    <div class="modal-dialog">
-        <form method="post" action="<?= site_url('gimnasio/plantillas/guardar-desde-entrenamiento/' . $entrenamiento_id) ?>">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Guardar como plantilla</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small">Se guardarán los ejercicios y series de hoy como una plantilla nueva y reutilizable.</p>
-                    <label class="form-label">Nombre de la plantilla</label>
-                    <input type="text" name="nombre" class="form-control" placeholder="ej. Empuje A, Full body..." required>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Guardar plantilla</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
-<?php endif; ?>
-
-<style>
-.reutilizar-seccion-titulo { font-weight: 700; font-size: .85rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
-.reutilizar-fila-plantilla { border-color: rgba(25, 135, 84, .35) !important; background: rgba(25, 135, 84, .06); }
-</style>
 
 <!-- Modal editar serie -->
 <div class="modal fade" id="modalEditarSerie" tabindex="-1">
@@ -427,14 +327,14 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const grupos = <?= json_encode($grupos) ?>;
-    const entrenamientoId = <?= (int) $entrenamiento_id ?>;
+    const plantillaId = <?= (int) $plantilla_id ?>;
 
     const urlUltimoValor    = "<?= site_url('gimnasio/entrenamientos/ultimo-valor') ?>/";
     const urlPorGrupo       = "<?= site_url('gimnasio/ejercicios/por-grupo') ?>/";
-    const urlGuardarSerie   = "<?= site_url('gimnasio/entrenamientos/guardar-serie') ?>";
-    const urlActualizarSerie = "<?= site_url('gimnasio/entrenamientos/actualizar-serie') ?>/";
-    const urlEliminarSerie  = "<?= site_url('gimnasio/entrenamientos/eliminar-serie') ?>/";
-    const urlReordenar      = "<?= site_url('gimnasio/entrenamientos/reordenar-ejercicio') ?>";
+    const urlGuardarSerie   = "<?= site_url('gimnasio/plantillas/guardar-serie') ?>";
+    const urlActualizarSerie = "<?= site_url('gimnasio/plantillas/actualizar-serie') ?>/";
+    const urlEliminarSerie  = "<?= site_url('gimnasio/plantillas/eliminar-serie') ?>/";
+    const urlReordenar      = "<?= site_url('gimnasio/plantillas/reordenar-ejercicio') ?>";
     const urlEstadisticas   = "<?= site_url('gimnasio/ejercicios/estadisticas') ?>/";
 
     function normaliza(s) { return s.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase(); }
@@ -507,8 +407,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ---------------- Steppers reutilizables (+/- series, reps, peso, rpe) ----------------
-    // Se usan tanto en la tarjeta de "añadir serie" como en el modal de "editar serie",
-    // para que ambas se vean y funcionen igual.
     function initStepperGroup(root, inicial) {
         const estado = Object.assign({}, inicial);
         let pasoPeso = 2.5;
@@ -605,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const v = addStepper.estado;
         const fd = new FormData();
-        fd.append('entrenamiento_id', entrenamientoId);
+        fd.append('plantilla_id', plantillaId);
         fd.append('ejercicio_id', ejercicioActual.id);
         fd.append('series', v.series);
         fd.append('repeticiones', v.reps);
@@ -654,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function crearBloqueEjercicio(ejercicio) {
         const div = document.createElement('div');
         div.className = 'ej-block';
-        div.dataset.eeId = ejercicio.ee_id;
+        div.dataset.peId = ejercicio.pe_id;
         div.innerHTML = `
             <div class="ej-block-header">
                 <div class="ej-block-titulo">
@@ -663,8 +561,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="ej-block-actions">
                     <a href="${urlEstadisticas}${ejercicio.id}" class="ej-orden-btn" title="Ver estadísticas">📈</a>
-                    <button type="button" class="ej-orden-btn ej-orden-up" data-ee="${ejercicio.ee_id}" title="Subir">⬆️</button>
-                    <button type="button" class="ej-orden-btn ej-orden-down" data-ee="${ejercicio.ee_id}" title="Bajar">⬇️</button>
+                    <button type="button" class="ej-orden-btn ej-orden-up" data-pe="${ejercicio.pe_id}" title="Subir">⬆️</button>
+                    <button type="button" class="ej-orden-btn ej-orden-down" data-pe="${ejercicio.pe_id}" title="Bajar">⬇️</button>
                 </div>
             </div>
             <ul class="list-group ej-series-list"></ul>
@@ -702,7 +600,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function insertarSerieEnDOM(serie, ejercicio) {
-        let bloque = document.querySelector(`.ej-block[data-ee-id="${ejercicio.ee_id}"]`);
+        let bloque = document.querySelector(`.ej-block[data-pe-id="${ejercicio.pe_id}"]`);
         if (!bloque) {
             bloque = crearBloqueEjercicio(ejercicio);
             document.getElementById('listaEjercicios').appendChild(bloque);
@@ -752,7 +650,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         bloque.remove();
                         actualizarBotonesOrden();
                         if (!document.querySelector('#listaEjercicios .ej-block')) {
-                            document.getElementById('listaEjercicios').insertAdjacentHTML('afterend', '<div class="alert alert-light border" id="listaVacia">Aún no hay ejercicios en este entrenamiento. Usa el botón "+" para empezar.</div>');
+                            document.getElementById('listaEjercicios').insertAdjacentHTML('afterend', '<div class="alert alert-light border" id="listaVacia">Esta plantilla todavía no tiene ejercicios. Usa el botón "+" para empezar.</div>');
                         }
                     }
                 });
@@ -766,15 +664,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const btn = upBtn || downBtn;
             if (btn.disabled) return;
             const direction = upBtn ? 'up' : 'down';
-            const eeId = btn.dataset.ee;
-            const bloque = document.querySelector(`.ej-block[data-ee-id="${eeId}"]`);
+            const peId = btn.dataset.pe;
+            const bloque = document.querySelector(`.ej-block[data-pe-id="${peId}"]`);
             const vecino = direction === 'up' ? bloque.previousElementSibling : bloque.nextElementSibling;
             if (!vecino) return;
 
             fetch(urlReordenar, {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `entrenamiento_ejercicio_id=${encodeURIComponent(eeId)}&direction=${direction}`
+                body: `plantilla_ejercicio_id=${encodeURIComponent(peId)}&direction=${direction}`
             })
                 .then(r => r.json())
                 .then(data => {

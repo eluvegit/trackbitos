@@ -216,6 +216,14 @@ class GimnasioEntrenamientos extends BaseController
             }
         }
 
+        // Plantillas guardadas, para aplicarlas a este entrenamiento
+        $plantillas = $db->table('gimnasio_plantillas p')
+            ->select('p.id, p.nombre, COUNT(pe.id) AS num_ejercicios')
+            ->join('gimnasio_plantilla_ejercicios pe', 'pe.plantilla_id = p.id', 'left')
+            ->groupBy('p.id, p.nombre')
+            ->orderBy('p.nombre', 'ASC')
+            ->get()->getResultArray();
+
         return view('gimnasio/entrenamientos/registro', [
             'entrenamiento'       => $entrenamiento,
             'fecha'               => $entrenamiento['fecha'],
@@ -223,6 +231,7 @@ class GimnasioEntrenamientos extends BaseController
             'ejerciciosAgrupados' => $ejerciciosAgrupados,
             'recientes'           => $recientes,
             'anteriores'          => $anteriores,
+            'plantillas'          => $plantillas,
             'grupos'              => gim_grupos(),
         ]);
     }
