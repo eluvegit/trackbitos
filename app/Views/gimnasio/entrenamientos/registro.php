@@ -5,9 +5,14 @@
 <div class="mb-3 d-flex flex-wrap gap-2">
     <a href="<?= site_url('gimnasio/entrenamientos') ?>" class="btn btn-sm btn-outline-secondary">← Volver a entrenamientos</a>
     <a href="<?= site_url('gimnasio/mesociclos') ?>" class="btn btn-sm btn-outline-secondary">← Mesociclos</a>
-    <?php if (!empty($anteriores)): ?>
+    <?php if (!empty($anteriores) || !empty($plantillas)): ?>
         <button type="button" class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="modal" data-bs-target="#modalReutilizar">
-            🔁 Reutilizar rutina anterior
+            🔁 Reutilizar / Plantillas
+        </button>
+    <?php endif; ?>
+    <?php if (!empty($ejerciciosAgrupados)): ?>
+        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalGuardarPlantilla">
+            💾 Guardar como plantilla
         </button>
     <?php endif; ?>
 </div>
@@ -218,34 +223,84 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
     </div>
 </div>
 
-<!-- Modal reutilizar rutina anterior -->
-<?php if (!empty($anteriores)): ?>
+<!-- Modal reutilizar rutina anterior / plantillas -->
+<?php if (!empty($anteriores) || !empty($plantillas)): ?>
 <div class="modal fade" id="modalReutilizar" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Reutilizar rutina anterior</h5>
+                <h5 class="modal-title">Reutilizar / Plantillas</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small">Se copiarán los ejercicios de ese entrenamiento al de hoy con sus series (peso, repeticiones…), en el mismo orden. Luego solo tienes que ajustar o borrar lo que cambie.</p>
-                <?php foreach ($anteriores as $a): ?>
-                    <form method="post" action="<?= site_url('gimnasio/entrenamientos/reutilizar/' . $a['id']) ?>" class="reutilizar-item mb-2">
-                        <input type="hidden" name="entrenamiento_id" value="<?= $entrenamiento_id ?>">
-                        <div class="d-flex justify-content-between align-items-center border rounded p-2">
-                            <div class="me-2">
-                                <div class="fw-semibold"><?= date('d/m/Y', strtotime($a['fecha'])) ?> <?= !empty($a['tipo_sesion']) ? '· ' . esc($a['tipo_sesion']) : '' ?></div>
-                                <div class="text-muted small"><?= esc($a['ejercicios_resumen']) ?></div>
+                <p class="text-muted small">Se copiarán los ejercicios con sus series (peso, repeticiones…) al de hoy, en el mismo orden. Luego solo tienes que ajustar o borrar lo que cambie.</p>
+
+                <?php if (!empty($plantillas)): ?>
+                    <div class="reutilizar-seccion-titulo">📋 Plantillas</div>
+                    <?php foreach ($plantillas as $p): ?>
+                        <form method="post" action="<?= site_url('gimnasio/plantillas/aplicar/' . $p['id']) ?>" class="reutilizar-item mb-2">
+                            <input type="hidden" name="entrenamiento_id" value="<?= $entrenamiento_id ?>">
+                            <div class="d-flex justify-content-between align-items-center border rounded p-2 reutilizar-fila-plantilla">
+                                <div class="me-2">
+                                    <div class="fw-semibold"><?= esc($p['nombre']) ?></div>
+                                    <div class="text-muted small"><?= (int) $p['num_ejercicios'] ?> ejercicio<?= (int) $p['num_ejercicios'] === 1 ? '' : 's' ?></div>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-success flex-shrink-0">Usar</button>
                             </div>
-                            <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">Usar</button>
-                        </div>
-                    </form>
-                <?php endforeach; ?>
+                        </form>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <?php if (!empty($anteriores)): ?>
+                    <div class="reutilizar-seccion-titulo mt-3">📅 Entrenamientos anteriores</div>
+                    <?php foreach ($anteriores as $a): ?>
+                        <form method="post" action="<?= site_url('gimnasio/entrenamientos/reutilizar/' . $a['id']) ?>" class="reutilizar-item mb-2">
+                            <input type="hidden" name="entrenamiento_id" value="<?= $entrenamiento_id ?>">
+                            <div class="d-flex justify-content-between align-items-center border rounded p-2">
+                                <div class="me-2">
+                                    <div class="fw-semibold"><?= date('d/m/Y', strtotime($a['fecha'])) ?> <?= !empty($a['tipo_sesion']) ? '· ' . esc($a['tipo_sesion']) : '' ?></div>
+                                    <div class="text-muted small"><?= esc($a['ejercicios_resumen']) ?></div>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">Usar</button>
+                            </div>
+                        </form>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Modal guardar entrenamiento actual como plantilla -->
+<?php if (!empty($ejerciciosAgrupados)): ?>
+<div class="modal fade" id="modalGuardarPlantilla" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" action="<?= site_url('gimnasio/plantillas/guardar-desde-entrenamiento/' . $entrenamiento_id) ?>">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Guardar como plantilla</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Se guardarán los ejercicios y series de hoy como una plantilla nueva y reutilizable.</p>
+                    <label class="form-label">Nombre de la plantilla</label>
+                    <input type="text" name="nombre" class="form-control" placeholder="ej. Empuje A, Full body..." required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar plantilla</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<style>
+.reutilizar-seccion-titulo { font-weight: 700; font-size: .85rem; color: var(--bs-secondary-color); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 6px; }
+.reutilizar-fila-plantilla { border-color: rgba(25, 135, 84, .35) !important; background: rgba(25, 135, 84, .06); }
+</style>
 
 <!-- Modal editar serie -->
 <div class="modal fade" id="modalEditarSerie" tabindex="-1">

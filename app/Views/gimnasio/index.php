@@ -14,7 +14,7 @@ $secciones = [
     ['ruta' => 'gimnasio/ejercicios/principales',  'icono' => '📊', 'titulo' => 'Estadísticas',    'texto' => 'Progreso de tus 3 ejercicios principales.'],
     ['ruta' => 'gimnasio/mesociclos',              'icono' => '🧩', 'titulo' => 'Mesociclos',      'texto' => 'Rutinas de progresión por mesociclos.'],
     ['ruta' => 'gimnasio/ejercicios',              'icono' => '📋', 'titulo' => 'Ejercicios',      'texto' => 'Gestiona y clasifica los ejercicios disponibles.'],
-    ['ruta' => null,                               'icono' => '🗂️', 'titulo' => 'Plantillas',      'texto' => 'Guarda tus rutinas frecuentes.', 'disabled' => true],
+    ['ruta' => 'gimnasio/plantillas',              'icono' => '🗂️', 'titulo' => 'Plantillas',      'texto' => 'Guarda tus rutinas frecuentes.'],
 ];
 ?>
 
