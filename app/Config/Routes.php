@@ -435,6 +435,17 @@ $routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) 
     $routes->POST('(:num)/renovar', 'Recordatorios::renovar/$1');
 });
 
+// ---- Braintogram: ingesta y log de mensajes de un bot de Telegram ----
+// Webhook público: Telegram no puede autenticarse, así que esta ruta va SIN
+// filtro auth. Se protege en su lugar con el secret token de setWebhook
+// (ver Braintogram::webhook / braintogram.webhookSecret en .env).
+$routes->POST('braintogram/webhook', 'Braintogram::webhook');
+
+$routes->group('braintogram', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'Braintogram::index');
+    $routes->GET('(:num)', 'Braintogram::ver/$1');
+});
+
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
 $routes->group('cuenta', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'AuthController::account', ['as' => 'account']);

@@ -38,6 +38,7 @@ $secciones = [
     ['ruta' => 'journal', 'icono' => '📨', 'titulo' => 'Journal', 'texto' => 'Permite hacer y seguir tareas y bullet journal.'],
     ['ruta' => 'hogar', 'icono' => '🏠', 'titulo' => 'Hogar', 'texto' => 'Checklist rutinario de limpieza y tareas del hogar por habitación.'],
     ['ruta' => 'recordatorios', 'icono' => '📅', 'titulo' => 'Recordatorios', 'texto' => 'ITV, revisiones médicas, vacunas, DNI, carnet... y cuándo tocan.'],
+    ['ruta' => 'braintogram', 'icono' => '🧠', 'titulo' => 'Braintogram', 'texto' => 'Log de ingesta del bot de Telegram: segundo cerebro en construcción.'],
     ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
     ['ruta' => 'workflow', 'icono' => '🗂️', 'titulo' => 'Sesiones', 'texto' => 'PROXIMAMAMENTE<br>Gestión de flujo de trabajo en la edición de fotos.', 'disabled' => true],
 ];
