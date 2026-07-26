@@ -58,8 +58,13 @@
     </div>
     <!-- Gráfico -->
     <div class="col-md-8">
-        <div class="card shadow-sm">
-            <div class="card-header">📈 Últimos 60 días</div>
+        <div class="card shadow-sm" id="chartCard">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>📈 Últimos 60 días</span>
+                <button type="button" id="btnAmpliarChart" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrows-fullscreen"></i> Ampliar
+                </button>
+            </div>
             <div class="card-body chart-body">
                 <div class="chart-wrap">
                     <canvas id="pesoChart"></canvas>
@@ -85,9 +90,14 @@ function fmt($n, $dec = 1)
 ?>
 <!-- Últimos registros -->
 <div class="card shadow-sm mt-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>🗂️ Últimos 60 registros</span>
-        <small class="text-muted">Ordenados por fecha desc.</small>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" id="btnExportarClaude" class="btn btn-sm btn-outline-primary">
+                📋 Exportar 60 días (Claude)
+            </button>
+            <small class="text-muted">Ordenados por fecha desc.</small>
+        </div>
     </div>
     <div class="card-body p-0">
         <table class="table table-sm table-striped mb-0">
@@ -154,6 +164,8 @@ function fmt($n, $dec = 1)
         </table>
     </div>
 </div>
+
+<textarea id="exportPeso60d" class="d-none"><?= esc($exportTexto60d ?? '') ?></textarea>
 
 <!-- Modal detalle Tanita -->
 <div class="modal fade" id="modalDetallePeso" tabindex="-1" aria-hidden="true">
@@ -225,6 +237,26 @@ function fmt($n, $dec = 1)
         width: 100% !important;
         height: 100% !important;
     }
+
+    /* Gráfico a pantalla completa */
+    #chartCard.chart-fullscreen {
+        position: fixed;
+        inset: 0;
+        z-index: 1080;
+        border-radius: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    #chartCard.chart-fullscreen .chart-body {
+        flex: 1 1 auto;
+    }
+    #chartCard.chart-fullscreen .chart-wrap {
+        height: 100% !important;
+    }
+    body.overflow-hidden {
+        overflow: hidden;
+    }
 </style>
 
 <!-- Chart.js CDN -->
@@ -233,6 +265,8 @@ function fmt($n, $dec = 1)
     (() => {
         const labels = <?= json_encode($labels ?? []) ?>;
         const values = <?= json_encode($values ?? []) ?>;
+        const grasaValues = <?= json_encode($grasaValues ?? []) ?>;
+        const aguaValues = <?= json_encode($aguaValues ?? []) ?>;
         // <- nuevo: flags (true si hubo entreno ese día)
         const flags = <?= json_encode($flagsEntreno ?? []) ?>;
 
@@ -277,7 +311,7 @@ function fmt($n, $dec = 1)
         const pad = Math.max(0.5, span * 0.05);
 
         const ctx = document.getElementById('pesoChart').getContext('2d');
-        new Chart(ctx, {
+        const pesoChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels,
@@ -327,6 +361,31 @@ function fmt($n, $dec = 1)
                         pointBackgroundColor: '#ffc107',
                         pointBorderColor: '#ffc107',
                         order: 4
+                    },
+                    // === Grasa y agua corporal (báscula), en el eje derecho, para cruzar datos ===
+                    {
+                        label: '% Grasa corporal',
+                        data: grasaValues,
+                        yAxisID: 'y1',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 2,
+                        spanGaps: true,
+                        fill: false,
+                        borderColor: '#fd7e14',
+                        order: 5
+                    },
+                    {
+                        label: '% Agua corporal',
+                        data: aguaValues,
+                        yAxisID: 'y1',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 2,
+                        spanGaps: true,
+                        fill: false,
+                        borderColor: '#0dcaf0',
+                        order: 6
                     }
                 ]
             },
@@ -349,6 +408,17 @@ function fmt($n, $dec = 1)
                         max: vmax + pad,
                         ticks: {
                             padding: 6
+                        }
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: false,
+                        ticks: {
+                            padding: 6,
+                            callback: (v) => v + '%'
+                        },
+                        grid: {
+                            drawOnChartArea: false
                         }
                     },
                     x: {
@@ -374,6 +444,32 @@ function fmt($n, $dec = 1)
                 }
             }
         });
+
+        // === Ampliar / cerrar gráfico a pantalla completa ===
+        const chartCard = document.getElementById('chartCard');
+        const btnAmpliar = document.getElementById('btnAmpliarChart');
+        if (chartCard && btnAmpliar) {
+            const salir = () => {
+                chartCard.classList.remove('chart-fullscreen');
+                document.body.classList.remove('overflow-hidden');
+                btnAmpliar.innerHTML = '<i class="bi bi-arrows-fullscreen"></i> Ampliar';
+                pesoChart.resize();
+            };
+            const entrar = () => {
+                chartCard.classList.add('chart-fullscreen');
+                document.body.classList.add('overflow-hidden');
+                btnAmpliar.innerHTML = '<i class="bi bi-fullscreen-exit"></i> Volver';
+                pesoChart.resize();
+            };
+
+            btnAmpliar.addEventListener('click', () => {
+                chartCard.classList.contains('chart-fullscreen') ? salir() : entrar();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && chartCard.classList.contains('chart-fullscreen')) salir();
+            });
+        }
     })();
 </script>
 
@@ -440,6 +536,40 @@ function fmt($n, $dec = 1)
 
                 modal.show();
             });
+        });
+    })();
+</script>
+
+<script>
+    (() => {
+        const btn = document.getElementById('btnExportarClaude');
+        const textarea = document.getElementById('exportPeso60d');
+        if (!btn || !textarea) return;
+
+        const textoOriginal = btn.innerHTML;
+
+        const marcarCopiado = () => {
+            btn.innerHTML = '✅ ¡Copiado!';
+            setTimeout(() => { btn.innerHTML = textoOriginal; }, 1800);
+        };
+
+        btn.addEventListener('click', async () => {
+            const texto = textarea.value;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(texto);
+                } else {
+                    // Fallback para contextos sin Clipboard API (http sin TLS, navegadores antiguos)
+                    textarea.classList.remove('d-none');
+                    textarea.select();
+                    document.execCommand('copy');
+                    textarea.classList.add('d-none');
+                }
+                marcarCopiado();
+            } catch (e) {
+                console.error(e);
+                alert('No se pudo copiar automáticamente. Abre la consola o copia manualmente.');
+            }
         });
     })();
 </script>

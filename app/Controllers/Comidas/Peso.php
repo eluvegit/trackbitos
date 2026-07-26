@@ -92,11 +92,15 @@ class Peso extends BaseController
         // ===== Preparar arrays para el gráfico de peso =====
         $labels = [];
         $values = [];
+        $grasaValues = [];
+        $aguaValues  = [];
         $flagsEntreno = []; // true/false para cada punto del gráfico
         foreach ($ultimoMes as $row) {
             $dia = $row['fecha']; // YYYY-MM-DD
             $labels[] = date('d/m', strtotime($dia));
             $values[] = (float) $row['peso'];
+            $grasaValues[] = $row['grasa_corporal_pct'] !== null ? (float) $row['grasa_corporal_pct'] : null;
+            $aguaValues[]  = $row['agua_corporal_pct']  !== null ? (float) $row['agua_corporal_pct']  : null;
             $flagsEntreno[] = isset($mapEntrenos[$dia]); // marca si hubo entreno ese día
         }
 
@@ -131,6 +135,8 @@ class Peso extends BaseController
             'ultimos'       => $ultimos,
             'labels'        => $labels,
             'values'        => $values,
+            'grasaValues'   => $grasaValues,
+            'aguaValues'    => $aguaValues,
             'flagsEntreno'  => $flagsEntreno,   // para pintar el gráfico (p.ej. color/marker distinto)
             'diasConEntreno' => $diasConEntreno, // para un calendario/listado
             'mapEntrenos'   => $mapEntrenos,    // si quieres mostrar conteos por día
@@ -139,12 +145,52 @@ class Peso extends BaseController
             'tiposEntreno'  => $tiposEntreno,
             'huboEntreno'   => $huboEntreno,
             'macrosPorDia' => $macrosExtendidos,
+            'exportTexto60d' => $this->buildExportTexto($ultimos, $macrosExtendidos, $entrenosTiposPorDia, 60),
 
             // Por si venimos de un duplicado:
             'dup_fecha'     => session()->getFlashdata('dup_fecha'),
             'dup_peso'      => session()->getFlashdata('dup_peso'),
             'dup_id'        => session()->getFlashdata('dup_id'),
         ]);
+    }
+
+    /**
+     * Texto plano (tabla con separador " | ") con el histórico de peso y composición
+     * corporal de los últimos $dias días, pensado para copiar y pegar en un chat de IA.
+     */
+    private function buildExportTexto(array $ultimos, array $macrosPorDia, array $entrenosTiposPorDia, int $dias): string
+    {
+        $corte = date('Y-m-d', strtotime("-{$dias} days"));
+
+        // $ultimos viene ordenado DESC; nos quedamos con los últimos $dias días y
+        // lo invertimos para que quede en orden cronológico (más fácil de leer/analizar).
+        $filas = array_values(array_filter($ultimos, static fn($r) => $r['fecha'] >= $corte));
+        $filas = array_reverse($filas);
+
+        $lineas   = [];
+        $lineas[] = "Registro de peso y composición corporal — últimos {$dias} días";
+        $lineas[] = 'Fecha | Peso(kg) | Kcal | Proteina(g) | Carbohidratos(g) | Grasas(g) | Entrenamiento | IMC | %GrasaCorporal | %AguaCorporal';
+
+        foreach ($filas as $r) {
+            $dia   = $r['fecha'];
+            $m     = $macrosPorDia[$dia] ?? null;
+            $tipos = $entrenosTiposPorDia[$dia] ?? [];
+
+            $lineas[] = implode(' | ', [
+                $dia,
+                number_format((float) $r['peso'], 2, '.', ''),
+                $m ? (int) $m['kcal'] : '',
+                $m ? number_format($m['proteina_g'], 1, '.', '') : '',
+                $m ? number_format($m['carbohidratos_g'], 1, '.', '') : '',
+                $m ? number_format($m['grasas_g'], 1, '.', '') : '',
+                $tipos ? implode('/', $tipos) : '',
+                $r['imc'] !== null ? number_format((float) $r['imc'], 2, '.', '') : '',
+                $r['grasa_corporal_pct'] !== null ? number_format((float) $r['grasa_corporal_pct'], 1, '.', '') : '',
+                $r['agua_corporal_pct'] !== null ? number_format((float) $r['agua_corporal_pct'], 1, '.', '') : '',
+            ]);
+        }
+
+        return implode("\n", $lineas);
     }
 
 
