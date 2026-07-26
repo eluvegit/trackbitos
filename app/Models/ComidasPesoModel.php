@@ -8,7 +8,12 @@ class ComidasPesoModel extends Model
     protected $primaryKey = 'id';
     protected $returnType = 'array';
 
-    protected $allowedFields = ['fecha', 'peso'];
+    protected $allowedFields = [
+        'fecha', 'peso',
+        'imc', 'grasa_corporal_pct', 'grasa_visceral', 'masa_muscular_kg',
+        'masa_osea_kg', 'metabolismo_basal_kcal', 'edad_metabolica',
+        'agua_corporal_pct', 'valoracion_fisica',
+    ];
 
     // timestamps DB (created_at/updated_at) los maneja MySQL
     protected $useTimestamps = false;

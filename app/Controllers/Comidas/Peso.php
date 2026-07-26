@@ -5,6 +5,7 @@ namespace App\Controllers\Comidas;
 use App\Controllers\BaseController;
 use App\Models\ComidasPesoModel;
 use App\Models\GimnasioEntrenamientosModel;
+use App\Services\TanitaImportService;
 use CodeIgniter\I18n\Time;
 
 class Peso extends BaseController
@@ -204,6 +205,40 @@ class Peso extends BaseController
         }
 
         return redirect()->to(site_url('comidas/peso'))->with('success', 'Registro eliminado.');
+    }
+
+    public function importarForm()
+    {
+        return view('comidas/peso/importar', [
+            'title' => 'Importar CSV de báscula',
+        ]);
+    }
+
+    public function importar()
+    {
+        $file = $this->request->getFile('csv');
+
+        if (!$file || !$file->isValid()) {
+            return redirect()->back()->with('error', 'Sube un archivo CSV válido.');
+        }
+        if (strtolower($file->getClientExtension()) !== 'csv') {
+            return redirect()->back()->with('error', 'El archivo debe ser un .csv');
+        }
+
+        try {
+            $resumen = (new TanitaImportService())->importFromCsv($file->getTempName());
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', 'No se pudo importar: ' . $e->getMessage());
+        }
+
+        $msg = "Importación completa: {$resumen['dias']} días procesados, "
+             . "{$resumen['insertadas']} nuevos, {$resumen['actualizadas']} actualizados.";
+        if (!empty($resumen['errores'])) {
+            $msg .= ' Con ' . count($resumen['errores']) . ' error(es): ' . implode(' | ', $resumen['errores']);
+            return redirect()->to(site_url('comidas/peso'))->with('warning', $msg);
+        }
+
+        return redirect()->to(site_url('comidas/peso'))->with('success', $msg);
     }
 
     // Opcional: JSON del último mes (por si quieres cargar el gráfico vía fetch)

@@ -27,13 +27,8 @@ class Recetas extends BaseController
 
     public function create()
     {
-        $alimentos = (new ComidasAlimentosModel())
-            ->orderBy('nombre','ASC')->findAll(200);
-
         return view('comidas/recetas/form', [
-            'alimentos'   => $alimentos,
-            'ingredientes'=> [],
-            'title'       => 'Nueva receta'
+            'title' => 'Nueva receta'
         ]);
     }
 
@@ -66,7 +61,6 @@ class Recetas extends BaseController
     public function edit($id)
     {
         $m    = new ComidasRecetasModel();
-        $ingM = new ComidasRecetaIngredientesModel();
         $aliM = new ComidasAlimentosModel();
 
         $row = $m->find($id);
@@ -75,51 +69,19 @@ class Recetas extends BaseController
                    ->with('errors',['Receta no encontrada.']);
         }
 
-        $alimentos = $aliM->orderBy('nombre','ASC')->findAll(400);
-
-        $ingredientes = $ingM->where('receta_id',$id)->findAll();
-        foreach ($ingredientes as &$ing) {
-            $a = $aliM->find($ing['alimento_id']);
-            $ing['alimento_nombre'] = $a['nombre'] ?? ('#'.$ing['alimento_id']);
-        }
+        $aliVirt   = $aliM->where('es_receta', 1)->where('receta_id', $id)->first();
+        $aliVirtId = $aliVirt['id'] ?? null;
 
         return view('comidas/recetas/form', [
-            'row'          => $row,
-            'alimentos'    => $alimentos,
-            'ingredientes' => $ingredientes,
-            'title'        => 'Editar receta'
+            'row'       => $row,
+            'aliVirtId' => $aliVirtId,
+            'title'     => 'Editar receta'
         ]);
     }
 
     public function update($id)
     {
         $m = new ComidasRecetasModel();
-
-        // Añadir ingrediente inline
-        if ($this->request->getPost('action') === 'add_ingrediente') {
-            $alimId = (int) $this->request->getPost('alimento_id');
-            $g      = (float) $this->request->getPost('gramos');
-
-            $errs = [];
-            if ($alimId <= 0) $errs[] = 'Selecciona un alimento.';
-            if ($g <= 0)      $errs[] = 'Los gramos deben ser > 0.';
-            if ($errs) {
-                return redirect()->back()->withInput()->with('errors', $errs);
-            }
-
-            $ingM = new ComidasRecetaIngredientesModel();
-            $ingM->insert([
-                'receta_id'   => (int)$id,
-                'alimento_id' => $alimId,
-                'gramos'      => $g,
-                'notas'       => $this->request->getPost('notas') ?: null,
-            ]);
-
-            (new RecipeService())->rebuildAlimentoFromReceta((int)$id);
-
-            return redirect()->to(site_url('comidas/recetas/edit/'.$id))
-                             ->with('msg','Ingrediente añadido.');
-        }
 
         // Actualizar metadatos
         $payload = [
@@ -147,22 +109,97 @@ class Recetas extends BaseController
                          ->with('msg','Receta actualizada.');
     }
 
-    public function removeIngrediente($ingId)
+    // =================== AJAX ingredientes ======================
+
+    public function ingredientesAjax($recetaId)
     {
         $ingM = new ComidasRecetaIngredientesModel();
-        $row  = $ingM->find($ingId);
 
-        if ($row) {
-            $recetaId = (int) $row['receta_id'];
-            $ingM->delete($ingId);
+        $rows = $ingM
+            ->select('comidas_receta_ingredientes.id, comidas_receta_ingredientes.alimento_id, comidas_receta_ingredientes.gramos,
+                      a.nombre, a.kcal, a.proteina_g, a.carbohidratos_g, a.grasas_g')
+            ->join('comidas_alimentos a', 'a.id = comidas_receta_ingredientes.alimento_id', 'left')
+            ->where('comidas_receta_ingredientes.receta_id', (int) $recetaId)
+            ->orderBy('comidas_receta_ingredientes.id', 'ASC')
+            ->findAll();
 
-            (new RecipeService())->rebuildAlimentoFromReceta($recetaId);
+        return $this->response->setJSON($rows);
+    }
 
-            return redirect()->to(site_url('comidas/recetas/edit/'.$recetaId))
-                             ->with('msg','Ingrediente eliminado.');
+    public function addIngredienteAjax($recetaId)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
         }
 
-        return redirect()->back()->with('errors', ['Ingrediente no encontrado.']);
+        $recetaId = (int) $recetaId;
+        $alimId   = (int) $this->request->getPost('alimento_id');
+        $g        = (float) str_replace(',', '.', (string) $this->request->getPost('gramos'));
+
+        if (!(new ComidasRecetasModel())->find($recetaId)) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Receta no encontrada']);
+        }
+        if ($alimId <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Selecciona un alimento']);
+        }
+        if ($g <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Los gramos deben ser mayores que 0']);
+        }
+
+        $ingM = new ComidasRecetaIngredientesModel();
+        $ingM->insert([
+            'receta_id'   => $recetaId,
+            'alimento_id' => $alimId,
+            'gramos'      => $g,
+        ]);
+
+        (new RecipeService())->rebuildAlimentoFromReceta($recetaId);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function editIngredienteAjax($ingId)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $ingM = new ComidasRecetaIngredientesModel();
+        $row  = $ingM->find($ingId);
+        if (!$row) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Ingrediente no encontrado']);
+        }
+
+        $g = (float) str_replace(',', '.', (string) $this->request->getPost('gramos'));
+        if ($g <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Los gramos deben ser mayores que 0']);
+        }
+
+        $ingM->update($ingId, ['gramos' => $g]);
+
+        (new RecipeService())->rebuildAlimentoFromReceta((int) $row['receta_id']);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function deleteIngredienteAjax($ingId)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $ingM = new ComidasRecetaIngredientesModel();
+        $row  = $ingM->find($ingId);
+        if (!$row) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Ingrediente no encontrado']);
+        }
+
+        $recetaId = (int) $row['receta_id'];
+        $ingM->delete($ingId);
+
+        (new RecipeService())->rebuildAlimentoFromReceta($recetaId);
+
+        return $this->response->setJSON(['ok' => true]);
     }
 
     public function delete($id)

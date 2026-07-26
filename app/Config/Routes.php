@@ -252,8 +252,13 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->POST('store', 'Recetas::store');
         $r->GET('edit/(:num)', 'Recetas::edit/$1');
         $r->POST('update/(:num)', 'Recetas::update/$1');
-        $r->GET('removeIngrediente/(:num)', 'Recetas::removeIngrediente/$1');
         $r->POST('delete/(:num)',   'Recetas::delete/$1');
+
+        // AJAX ingredientes (mismo patrón que /api del diario)
+        $r->GET('ingredientes/(:num)', 'Recetas::ingredientesAjax/$1');           // listar
+        $r->POST('ingredientes/(:num)/add', 'Recetas::addIngredienteAjax/$1');    // añadir
+        $r->POST('ingrediente/(:num)/edit', 'Recetas::editIngredienteAjax/$1');   // editar gramos
+        $r->POST('ingrediente/(:num)/delete', 'Recetas::deleteIngredienteAjax/$1'); // eliminar
     });
 
     // --- Objetivos ---
@@ -281,6 +286,8 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $routes->POST('guardar',       'Peso::store');
         $routes->GET('eliminar/(:num)', 'Peso::delete/$1');
         $routes->GET('ultimo-mes',     'Peso::ultimoMesJson'); // opcional
+        $routes->GET('importar',       'Peso::importarForm');
+        $routes->POST('importar',      'Peso::importar');
     });
 });
 

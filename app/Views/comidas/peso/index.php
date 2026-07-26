@@ -50,6 +50,9 @@
                     </div>
                     <button class="btn btn-primary w-100 mt-2">Guardar</button>
                 </form>
+                <a href="<?= site_url('comidas/peso/importar') ?>" class="btn btn-outline-secondary w-100 mt-2">
+                    📤 Importar CSV de báscula
+                </a>
             </div>
         </div>
     </div>
@@ -90,16 +93,12 @@ function fmt($n, $dec = 1)
         <table class="table table-sm table-striped mb-0">
             <thead class="table-light">
                 <tr>
-                    <th style="width: 140px;">Fecha</th>
-                    <th style="width: 140px;">Peso (kg)</th>
-                    <th style="width: 140px;">Kcal</th>
-                    <th style="width: 140px;">Proteina</th>
-                    <th style="width: 140px;">Carbohidratos</th>
-                    <th style="width: 140px;">Grasas</th>
-                    <th style="width: 140px;">kcal (kg)</th>
-                    <th style="width: 140px;">prot (kg)</th>
-                    <th style="width: 140px;">Entrenamiento</th>
-                    <th class="text-end" style=""></th>
+                    <th>Fecha</th>
+                    <th class="text-center">Peso (kg)</th>
+                    <th class="text-center">Kcal</th>
+                    <th class="d-none d-md-table-cell text-center">% Grasa</th>
+                    <th class="d-none d-md-table-cell text-center">% Agua</th>
+                    <th class="text-center">Entrenamiento</th>
                 </tr>
             </thead>
             <tbody>
@@ -129,43 +128,81 @@ function fmt($n, $dec = 1)
                             $tiposDia = array_map(fn($e) => $e['tipo_sesion'], $entrenosGlobal[$dia]);
                         }
                         ?>
-                        <tr>
-                            <td><?= date('d/m/Y', strtotime($dia)) ?></td>
-                            <td><?= esc(number_format((float)$r['peso'], 2, '.', '')) ?></td>
-                            <td><?= $m ? (int)$m['kcal'] : '—' ?></td>
-                            <td><?= $m ? number_format($m['proteina_g'], 1, ',', '') : '—' ?> g</td>
-                            <td><?= $m ? number_format($m['carbohidratos_g'], 1, ',', '') : '—' ?> g</td>
-                            <td><?= $m ? number_format($m['grasas_g'], 1, ',', '') : '—' ?> g</td>
-
-                            <td><?= ($m && $m['kcal_por_kg'] !== null) ? number_format($m['kcal_por_kg'], 1, ',', '') : '—' ?></td>
-                            <td><?= ($m && $m['prot_por_kg'] !== null) ? number_format($m['prot_por_kg'], 2, ',', '') : '—' ?></td>
-                            <td>
+                        <tr data-id="<?= (int)$r['id'] ?>">
+                            <td class="peso-cell" role="button"><?= date('d/m/Y', strtotime($dia)) ?></td>
+                            <td class="peso-cell text-center" role="button"><?= esc(number_format((float)$r['peso'], 2, '.', '')) ?></td>
+                            <td class="text-center"><?= $m ? (int)$m['kcal'] : '' ?></td>
+                            <td class="d-none d-md-table-cell text-center"><?= $r['grasa_corporal_pct'] !== null ? number_format((float)$r['grasa_corporal_pct'], 1, ',', '') . '%' : '' ?></td>
+                            <td class="d-none d-md-table-cell text-center"><?= $r['agua_corporal_pct'] !== null ? number_format((float)$r['agua_corporal_pct'], 1, ',', '') . '%' : '' ?></td>
+                            <td class="text-center">
                                 <?php
                                 $tipos = $entrenosTiposPorDia[$dia] ?? [];
-                                if (!empty($tipos)):
+                                foreach ($tipos as $tipo):
                                 ?>
-                                    ✅ <?= esc(implode(', ', $tipos)) ?>
-                                <?php else: ?>
-                                    <span class="text-muted">—</span>
-                                <?php endif; ?>
-                            </td>
-
-
-                            <td class="text-end">
-                                <a href="<?= site_url('comidas/peso/eliminar/' . $r['id']) ?>"
-                                    class="btn btn-sm btn-outline-danger"
-                                    onclick="return confirm('¿Eliminar registro?')">X</a>
+                                    <span class="badge rounded-pill text-bg-success me-1">💪 <?= esc($tipo) ?></span>
+                                <?php endforeach; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="5" class="text-center text-muted p-3">Sin registros todavía.</td>
+                        <td colspan="6" class="text-center text-muted p-3">Sin registros todavía.</td>
                     </tr>
                 <?php endif; ?>
 
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Modal detalle Tanita -->
+<div class="modal fade" id="modalDetallePeso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetallePesoTitulo">Detalle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 text-center mb-2">
+                    <div class="col-4">
+                        <div class="p-2 rounded-3 bg-body-secondary">
+                            <div class="fs-5 fw-semibold" id="dpPeso">—</div>
+                            <div class="small text-muted">⚖️ kg</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded-3 bg-body-secondary">
+                            <div class="fs-5 fw-semibold" id="dpImc">—</div>
+                            <div class="small text-muted">📐 IMC</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded-3 bg-body-secondary">
+                            <div class="fs-5 fw-semibold" id="dpGrasa">—</div>
+                            <div class="small text-muted">🩸 % grasa</div>
+                        </div>
+                    </div>
+                </div>
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><th>Grasa visceral</th><td class="text-end" id="dpViscFat">—</td></tr>
+                        <tr><th>Masa muscular</th><td class="text-end" id="dpMasaMuscular">—</td></tr>
+                        <tr><th>Masa ósea</th><td class="text-end" id="dpMasaOsea">—</td></tr>
+                        <tr><th>Metabolismo basal</th><td class="text-end" id="dpBmr">—</td></tr>
+                        <tr><th>Edad metabólica</th><td class="text-end" id="dpEdadMetab">—</td></tr>
+                        <tr><th>Agua corporal</th><td class="text-end" id="dpAgua">—</td></tr>
+                        <tr><th>Valoración física</th><td class="text-end" id="dpFisica">—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <a id="dpEliminar" href="#" class="btn btn-outline-danger"
+                    onclick="return confirm('¿Eliminar este registro?')">
+                    <i class="bi bi-trash"></i> Eliminar
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -340,5 +377,70 @@ function fmt($n, $dec = 1)
     })();
 </script>
 
+<style>
+    .peso-cell {
+        cursor: pointer;
+    }
+    .peso-cell:hover {
+        text-decoration: underline;
+    }
+</style>
 
+<?= $this->endSection() ?>
+
+<?php /* Sección aparte: se renderiza DESPUÉS del bundle de Bootstrap JS en el layout,
+         por eso bootstrap.Modal solo está disponible aquí, no dentro de 'content'. */ ?>
+<?= $this->section('scripts') ?>
+<script>
+    (() => {
+        const DATOS_PESO = <?= json_encode(array_column(array_map(static function ($r) {
+            return [
+                'id'                     => (int) $r['id'],
+                'fecha'                  => $r['fecha'],
+                'peso'                   => $r['peso'],
+                'imc'                    => $r['imc'] ?? null,
+                'grasa_corporal_pct'     => $r['grasa_corporal_pct'] ?? null,
+                'grasa_visceral'         => $r['grasa_visceral'] ?? null,
+                'masa_muscular_kg'       => $r['masa_muscular_kg'] ?? null,
+                'masa_osea_kg'           => $r['masa_osea_kg'] ?? null,
+                'metabolismo_basal_kcal' => $r['metabolismo_basal_kcal'] ?? null,
+                'edad_metabolica'        => $r['edad_metabolica'] ?? null,
+                'agua_corporal_pct'      => $r['agua_corporal_pct'] ?? null,
+                'valoracion_fisica'      => $r['valoracion_fisica'] ?? null,
+            ];
+        }, $ultimos ?? []), null, 'id')) ?>;
+
+        const modalEl = document.getElementById('modalDetallePeso');
+        if (!modalEl) return;
+        const modal = new bootstrap.Modal(modalEl);
+        const titulo = document.getElementById('modalDetallePesoTitulo');
+        const btnEliminar = document.getElementById('dpEliminar');
+        const urlEliminarBase = '<?= site_url('comidas/peso/eliminar') ?>/';
+
+        const val = (v, suf = '') => (v === null || v === undefined || v === '') ? '—' : `${v}${suf}`;
+
+        document.querySelectorAll('td.peso-cell').forEach(td => {
+            td.addEventListener('click', () => {
+                const tr = td.closest('tr[data-id]');
+                const d = tr ? DATOS_PESO[tr.dataset.id] : null;
+                if (!d) return;
+
+                btnEliminar.href = urlEliminarBase + d.id;
+                titulo.textContent = 'Detalle · ' + new Date(d.fecha + 'T00:00:00').toLocaleDateString('es-ES');
+                document.getElementById('dpPeso').textContent = val(d.peso);
+                document.getElementById('dpImc').textContent = val(d.imc);
+                document.getElementById('dpGrasa').textContent = val(d.grasa_corporal_pct, '%');
+                document.getElementById('dpViscFat').textContent = val(d.grasa_visceral);
+                document.getElementById('dpMasaMuscular').textContent = val(d.masa_muscular_kg, ' kg');
+                document.getElementById('dpMasaOsea').textContent = val(d.masa_osea_kg, ' kg');
+                document.getElementById('dpBmr').textContent = val(d.metabolismo_basal_kcal, ' kcal');
+                document.getElementById('dpEdadMetab').textContent = val(d.edad_metabolica, ' años');
+                document.getElementById('dpAgua').textContent = val(d.agua_corporal_pct, '%');
+                document.getElementById('dpFisica').textContent = val(d.valoracion_fisica);
+
+                modal.show();
+            });
+        });
+    })();
+</script>
 <?= $this->endSection() ?>

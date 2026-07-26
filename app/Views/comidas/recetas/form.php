@@ -1,226 +1,505 @@
 <?php $this->extend('comidas/layout');
 $this->section('content'); ?>
-<h1 class="h4 mb-3"><?= isset($row) ? 'Editar' : 'Nueva' ?> receta</h1>
+<h1 class="h4 mb-1">🍳 <?= isset($row) ? 'Editar receta' : 'Nueva receta' ?></h1>
+<p class="text-muted mb-3">
+  <?= isset($row)
+      ? 'Ajusta los datos, añade ingredientes y mira cómo cambian las calorías al momento.'
+      : 'Ponle un nombre para empezar. Después podrás añadir los ingredientes uno a uno.' ?>
+</p>
 
-<form method="post" action="<?= isset($row) ? site_url('comidas/recetas/update/' . $row['id']) : site_url('comidas/recetas/store') ?>">
-  <?= csrf_field() ?>
+<?php if (session('errors')): ?>
+  <div class="alert alert-danger">
+    <ul class="mb-0"><?php foreach (session('errors') as $e): ?><li><?= esc($e) ?></li><?php endforeach; ?></ul>
+  </div>
+<?php endif; ?>
+<?php if (session('msg')): ?>
+  <div class="alert alert-success py-2"><?= esc(session('msg')) ?></div>
+<?php endif; ?>
 
-  <style>
-    /* Texto de descripción en 2 líneas con puntos suspensivos (mobile-friendly) */
-    .clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
+<style>
+  #resultados .list-group-item {
+    cursor: pointer;
+  }
+  .ingrediente-row {
+    cursor: pointer;
+  }
+  .ingrediente-row:hover {
+    background-color: var(--bs-tertiary-bg);
+  }
+  .nutri-tile {
+    background: var(--bs-tertiary-bg);
+    border-radius: .75rem;
+    padding: .6rem .25rem;
+  }
+  .nutri-tile .valor {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .nutri-tile .etiqueta {
+    font-size: .72rem;
+  }
+</style>
 
-    .touch-target {
-      padding: .5rem 0;
-    }
-
-    /* área táctil cómoda */
-  </style>
-
-  <!-- Resumen compacto + toggle de edición -->
-  <div class="card border-0 mb-2">
-    <button type="button"
-      class="btn text-start w-100 p-0 touch-target"
-      data-bs-toggle="collapse"
-      data-bs-target="#metaCollapse"
-      aria-expanded="false"
-      aria-controls="metaCollapse">
-      <div class="d-flex align-items-start justify-content-between gap-2">
-        <div class="flex-grow-1">
-          <div class="fw-semibold text-body">
-            <?= esc(($row['nombre'] ?? '') !== '' ? $row['nombre'] : '— Toca para poner nombre —') ?>
-          </div>
-          <div class="text-muted small clamp-2">
-            <?= esc(($row['descripcion'] ?? '') !== '' ? $row['descripcion'] : '— Toca para añadir una breve descripción —') ?>
-          </div>
-        </div>
-        <div class="text-nowrap ms-2">
-          <span class="badge rounded-pill text-bg-light d-inline-flex align-items-center">
-            <i class="bi bi-pencil me-1"></i> Editar
-          </span>
-        </div>
-      </div>
-    </button>
-
-    <!-- Formulario oculto que se despliega al tocar -->
-    <div id="metaCollapse" class="collapse mt-2">
-      <div class="row g-2">
+<!-- Paso 1: datos básicos -->
+<div class="card mb-3">
+  <div class="card-header">📝 Nombre y descripción</div>
+  <div class="card-body">
+    <form method="post" action="<?= isset($row) ? site_url('comidas/recetas/update/' . $row['id']) : site_url('comidas/recetas/store') ?>">
+      <?= csrf_field() ?>
+      <div class="row g-3">
         <div class="col-12">
-          <label class="form-label mb-1">Nombre</label>
-          <input class="form-control" name="nombre" value="<?= esc($row['nombre'] ?? '') ?>" required>
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="nombre" required placeholder="Ej. Tortitas de avena"
+                 value="<?= esc(old('nombre', $row['nombre'] ?? '')) ?>">
         </div>
         <div class="col-12">
-          <label class="form-label mb-1">Descripción</label>
-          <textarea class="form-control" name="descripcion" rows="2"><?= esc($row['descripcion'] ?? '') ?></textarea>
+          <label class="form-label">Descripción <span class="text-muted small">(opcional)</span></label>
+          <textarea class="form-control" name="descripcion" rows="2"
+                    placeholder="Notas, modo de preparación…"><?= esc(old('descripcion', $row['descripcion'] ?? '')) ?></textarea>
         </div>
-        <div class="mt-3 d-flex gap-2">
+        <div class="col-12 d-flex gap-2 flex-wrap">
           <button class="btn btn-primary">Guardar</button>
           <a class="btn btn-outline-secondary" href="<?= site_url('comidas/recetas') ?>">Volver</a>
         </div>
       </div>
-    </div>
+    </form>
   </div>
+</div>
 
-  <hr class="my-3">
-
-  <h2 class="h5">Ingredientes</h2>
-  <?php $suma = 0; ?>
-  <div class="row g-2 align-items-end">
-    <div class="col-md-6">
-      <div class="form-floating">
-        <input class="form-control" list="alimentos-list" name="alimento_nombre" id="alimento_nombre" placeholder="Alimento">
-        <label for="alimento_nombre">Alimento</label>
-        <datalist id="alimentos-list">
-          <?php foreach (($alimentos ?? []) as $a): ?>
-            <option value="<?= esc($a['nombre']) ?>" data-id="<?= $a['id'] ?>"></option>
-          <?php endforeach; ?>
-        </datalist>
-      </div>
-      <input type="hidden" name="alimento_id" id="alimento_id">
-    </div>
-
-    <!-- Gramos y botones en la misma fila -->
-    <div class="col-md-6">
-      <div class="row g-2">
-        <div class="col-4">
-          <div class="form-floating">
-            <input type="number" step="0.1" class="form-control" name="gramos" id="gramos" placeholder="Gramos">
-            <label for="gramos">Gramos</label>
-          </div>
-        </div>
-        <div class="col-4 d-grid">
-          <!-- Botón Clear -->
-          <button type="button" id="btn-clear-alimento" class="btn btn-outline-secondary">Clear</button>
-        </div>
-        <div class="col-4 d-grid">
-          <button name="action" value="add_ingrediente" class="btn btn-outline-primary">Añadir</button>
-        </div>
-      </div>
-    </div>
-
-    <?php
-  // Indexamos alimentos por id
-  $alimentosIndex = [];
-  foreach (($alimentos ?? []) as $a) {
-      $alimentosIndex[$a['id']] = $a;
-  }
-
-  // Totales
-  $totalGr = 0;
-  $totKcal = 0; $totProt = 0; $totCarb = 0; $totFat = 0;
-?>
-
-<?php if (!empty($ingredientes)): ?>
-  <div class="list-group mt-3">
-    <?php foreach ($ingredientes as $ing): ?>
-      <?php
-        $gr = (float)($ing['gramos'] ?? 0);
-        $totalGr += $gr;
-
-        $a = $alimentosIndex[$ing['alimento_id']] ?? [];
-
-        // Macros por 100 g
-        $kcal100 = (float)($a['kcal'] ?? 0);
-        $p100    = (float)($a['proteina_g'] ?? 0);
-        $c100    = (float)($a['carbohidratos_g'] ?? 0);
-        $g100    = (float)($a['grasas_g'] ?? 0);
-
-        // Escalar a gramos
-        $kcal = $kcal100 * $gr / 100.0;
-        $prot = $p100    * $gr / 100.0;
-        $carb = $c100    * $gr / 100.0;
-        $fat  = $g100    * $gr / 100.0;
-
-        $totKcal += $kcal;
-        $totProt += $prot;
-        $totCarb += $carb;
-        $totFat  += $fat;
-      ?>
-      <div class="list-group-item d-flex justify-content-between align-items-start">
-        <div>
-          <div class="fw-semibold"><?= esc($ing['alimento_nombre']) ?> — <?= number_format($gr, 1, ',', '.') ?> g</div>
-          <div class="text-muted small">
-            <?= number_format($kcal, 0, ',', '.') ?> kcal ·
-            <?= number_format($prot, 1, ',', '.') ?> g proteína ·
-            <?= number_format($carb, 1, ',', '.') ?> g carbohidratos ·
-            <?= number_format($fat, 1, ',', '.') ?> g grasas
-          </div>
-        </div>
-        <div>
-          <a class="btn btn-sm btn-outline-danger"
-             href="<?= site_url('comidas/recetas/removeIngrediente/' . $ing['id']) ?>">Eliminar</a>
-        </div>
-      </div>
-    <?php endforeach; ?>
-  </div>
-
-  <!-- Totales -->
-  <div class="card mt-3">
+<?php if (isset($row)): ?>
+  <!-- Paso 2: ingredientes -->
+  <div class="card mb-3">
+    <div class="card-header">🧺 Ingredientes</div>
     <div class="card-body">
-      <strong>Totales receta:</strong><br>
-      <?= number_format($totalGr, 1, ',', '.') ?> g ·
-      <?= number_format($totKcal, 0, ',', '.') ?> kcal ·
-      <?= number_format($totProt, 1, ',', '.') ?> g proteína ·
-      <?= number_format($totCarb, 1, ',', '.') ?> g carbohidratos ·
-      <?= number_format($totFat, 1, ',', '.') ?> g grasas
+      <p class="text-muted small">
+        Busca un alimento, indica los gramos y pulsa añadir. Las calorías y macros de abajo se
+        actualizan al momento con cada ingrediente.
+      </p>
+
+      <?= csrf_field() ?>
+
+      <div class="input-group mb-1">
+        <input type="text" id="buscador" class="form-control" placeholder="Escribe para buscar un alimento…" autocomplete="off">
+        <button type="button" class="btn btn-outline-secondary" id="btnClr">CLR</button>
+      </div>
+      <ul id="resultados" class="list-group mb-3"></ul>
+
+      <div class="alert alert-info py-2 px-3 mb-2 d-flex justify-content-between align-items-start" id="selectedInfo" style="display:none;">
+        <div class="me-2">
+          <div class="fw-semibold" id="selectedName"></div>
+          <div class="small text-muted" id="selectedMacros"></div>
+        </div>
+        <button type="button" class="btn-close" id="clearSelected" aria-label="Borrar"></button>
+      </div>
+
+      <div class="row g-2 mb-3 align-items-end" id="addRow" style="display:none;">
+        <div class="col-6">
+          <label class="form-label small mb-1">Gramos</label>
+          <input type="number" step="0.1" id="inputGramos" class="form-control form-control-sm" placeholder="Ej. 100">
+        </div>
+        <div class="col-6 d-flex">
+          <button type="button" id="btnAgregar" class="btn btn-primary flex-fill btn-sm">
+            <i class="bi bi-plus-lg"></i> Añadir
+          </button>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Resumen nutricional en vivo -->
+      <div class="row row-cols-5 g-2 text-center mb-3">
+        <div class="col">
+          <div class="nutri-tile">
+            <div class="valor" id="totGramos">0</div>
+            <div class="etiqueta text-muted">⚖️ g total</div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="nutri-tile">
+            <div class="valor" id="totKcal">0</div>
+            <div class="etiqueta text-muted">🔥 kcal</div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="nutri-tile">
+            <div class="valor" id="totProt">0</div>
+            <div class="etiqueta text-muted">🥩 prot. g</div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="nutri-tile">
+            <div class="valor" id="totCarb">0</div>
+            <div class="etiqueta text-muted">🍞 carb. g</div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="nutri-tile">
+            <div class="valor" id="totGrasa">0</div>
+            <div class="etiqueta text-muted">🥑 gras. g</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="listaIngredientes"></div>
+
+      <div class="mt-2 small text-muted">
+        *Se calcula a partir de la información por 100&nbsp;g de cada alimento. Toca un ingrediente
+        de la lista para cambiar su cantidad o eliminarlo.
+      </div>
     </div>
+  </div>
+
+  <!-- Paso 3: proporciones / unidades (opcional) -->
+  <?php if (!empty($aliVirtId)): ?>
+    <div class="card mb-3">
+      <div class="card-header">📐 Proporciones / unidades <span class="text-muted small">(opcional)</span></div>
+      <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="text-muted small pe-2">
+          Peso total de la receta: <strong id="propTotalGramos">0</strong>&nbsp;g.
+          ¿Se sirve por raciones, tazas u otra unidad? Defínelo aquí para poder
+          registrarla así en el diario, además de por gramos.
+        </div>
+        <a class="btn btn-outline-primary text-nowrap" href="<?= site_url('comidas/porciones/alimento/' . $aliVirtId) ?>">
+          <i class="bi bi-rulers"></i> Definir proporciones
+        </a>
+      </div>
+    </div>
+  <?php endif; ?>
+
+  <!-- Modal editar/eliminar ingrediente -->
+  <div class="modal fade" id="modalEditarIngrediente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalEditarNombre">Editar ingrediente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label small mb-1">Gramos</label>
+          <input type="number" step="0.1" min="0" id="modalEditarGramos" class="form-control">
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-outline-danger" id="btnEliminarIngrediente">
+            <i class="bi bi-trash"></i> Eliminar
+          </button>
+          <button type="button" class="btn btn-primary" id="btnGuardarIngrediente">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<?php else: ?>
+  <div class="alert alert-light border">
+    ✨ En cuanto guardes el nombre podrás buscar y añadir ingredientes aquí mismo, viendo las
+    calorías totales en vivo.
   </div>
 <?php endif; ?>
 
-
-<div class="mt-2 small text-muted">
-  *Los valores se calculan a partir de la información por 100&nbsp;g del alimento. Si el alimento no
-  tiene macros cargados, se consideran 0.
-</div>
-
-    <div>Gramos de la receta completa: <?= esc($suma) ?> g</div>
-
-    <div class="mt-3 d-flex gap-2">
-      <button class="btn btn-primary">Guardar</button>
-      <a class="btn btn-outline-secondary" href="<?= site_url('comidas/recetas') ?>">Volver</a>
-    </div>
-</form>
 <?php $this->endSection(); ?>
 
 <?php $this->section('scripts'); ?>
 <script>
+  <?php if (isset($row)): ?>
   document.addEventListener('DOMContentLoaded', () => {
-    // Enfocar al abrir el colapso para editar más rápido en móvil
-    const meta = document.getElementById('metaCollapse');
-    if (!meta) return;
-    meta.addEventListener('shown.bs.collapse', () => {
-      const nombre = meta.querySelector('input[name="nombre"]');
-      if (nombre) nombre.focus();
-    });
-  });
+    const RECETA_ID = <?= (int) $row['id'] ?>;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const input = document.getElementById('alimento_nombre');
-    const hidden = document.getElementById('alimento_id');
-    const datalist = document.getElementById('alimentos-list');
+    const API = {
+      buscar: '<?= site_url('api/alimentos') ?>',            // GET ?q=
+      alimentoBase: '<?= site_url('api/alimentos') ?>',      // GET /{id}
+      listar: '<?= site_url('comidas/recetas/ingredientes') ?>/' + RECETA_ID,
+      add: '<?= site_url('comidas/recetas/ingredientes') ?>/' + RECETA_ID + '/add',
+      editBase: '<?= site_url('comidas/recetas/ingrediente') ?>',   // /{id}/edit
+      delBase: '<?= site_url('comidas/recetas/ingrediente') ?>',    // /{id}/delete
+    };
 
-    input.addEventListener('change', () => {
-      const option = [...datalist.options].find(o => o.value === input.value);
-      hidden.value = option ? option.dataset.id : '';
-    });
-  });
+    const buscador = document.getElementById('buscador');
+    const btnClr = document.getElementById('btnClr');
+    const resultados = document.getElementById('resultados');
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const btnClear = document.getElementById('btn-clear-alimento');
-    const input = document.getElementById('alimento_nombre');
-    const hidden = document.getElementById('alimento_id');
+    const selectedInfo = document.getElementById('selectedInfo');
+    const selectedName = document.getElementById('selectedName');
+    const selectedMacros = document.getElementById('selectedMacros');
+    const clearSelected = document.getElementById('clearSelected');
 
-    if (btnClear && input && hidden) {
-      btnClear.addEventListener('click', () => {
-        input.value = '';
-        hidden.value = '';
-        input.focus();
+    const addRow = document.getElementById('addRow');
+    const inputGramos = document.getElementById('inputGramos');
+    const btnAgregar = document.getElementById('btnAgregar');
+
+    const listaIngredientes = document.getElementById('listaIngredientes');
+    const totGramos = document.getElementById('totGramos');
+    const totKcal = document.getElementById('totKcal');
+    const totProt = document.getElementById('totProt');
+    const totCarb = document.getElementById('totCarb');
+    const totGrasa = document.getElementById('totGrasa');
+    const propTotalGramos = document.getElementById('propTotalGramos');
+
+    const modalEl = document.getElementById('modalEditarIngrediente');
+    const modal = new bootstrap.Modal(modalEl);
+    const modalNombre = document.getElementById('modalEditarNombre');
+    const modalGramos = document.getElementById('modalEditarGramos');
+    const btnGuardarIng = document.getElementById('btnGuardarIngrediente');
+    const btnEliminarIng = document.getElementById('btnEliminarIngrediente');
+    let ingredienteActualId = null;
+
+    const csrfInput = document.querySelector('input[name="<?= csrf_token() ?>"]');
+
+    let alimentoSeleccionado = null; // { id, nombre, macros:{kcal,p,c,g} }
+
+    const fmt1 = n => (Math.round((+n || 0) * 10) / 10).toFixed(1);
+    const fmt0 = n => (Math.round(+n || 0)).toString();
+    const toQuery = params => new URLSearchParams(params).toString();
+
+    const postForm = async (url, data) => {
+      if (csrfInput && csrfInput.name && csrfInput.value) data[csrfInput.name] = csrfInput.value;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams(data).toString()
       });
+      return res.json();
+    };
+    const getJson = async (url) => (await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })).json();
+
+    const debounce = (fn, ms = 250) => {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    };
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str ?? '';
+      return div.innerHTML;
     }
+
+    const resetSeleccion = () => {
+      alimentoSeleccionado = null;
+      selectedInfo.style.display = 'none';
+      selectedName.textContent = '';
+      selectedMacros.innerHTML = '';
+      addRow.style.display = 'none';
+      inputGramos.value = '';
+    };
+
+    function renderMacrosPreview() {
+      if (!alimentoSeleccionado) {
+        selectedMacros.innerHTML = '';
+        return;
+      }
+      const { kcal, p, c, g } = alimentoSeleccionado.macros;
+      let html = `<div><strong>Por 100 g:</strong> ${fmt0(kcal)} kcal · ${fmt1(p)} g P · ${fmt1(c)} g C · ${fmt1(g)} g G</div>`;
+
+      const gramosInput = parseFloat((inputGramos.value || '').toString().replace(',', '.')) || 0;
+      if (gramosInput > 0) {
+        const factor = gramosInput / 100;
+        html += `<div><strong>Para ${fmt1(gramosInput)} g:</strong> ${fmt0(kcal * factor)} kcal · ${fmt1(p * factor)} g P · ${fmt1(c * factor)} g C · ${fmt1(g * factor)} g G</div>`;
+      }
+      selectedMacros.innerHTML = html;
+    }
+
+    const pintarResultados = (rows) => {
+      if (!rows || rows.length === 0) {
+        resultados.innerHTML = `<li class="list-group-item">Sin resultados…</li>`;
+        return;
+      }
+      resultados.innerHTML = rows.map(r =>
+        `<li class="list-group-item" role="button" data-id="${r.id}" data-name="${escapeHtml(r.nombre)}">${escapeHtml(r.nombre)}</li>`
+      ).join('');
+    };
+
+    const buscar = async (q) => {
+      q = (q || '').trim();
+      if (q.length < 1) {
+        resultados.innerHTML = '';
+        return;
+      }
+      try {
+        const rows = await getJson(`${API.buscar}?${toQuery({ q })}`);
+        pintarResultados(rows);
+      } catch (e) {
+        console.error(e);
+        resultados.innerHTML = `<li class="list-group-item text-danger">Error buscando…</li>`;
+      }
+    };
+    const buscarDebounced = debounce(buscar, 200);
+
+    buscador.addEventListener('input', (e) => buscarDebounced(e.target.value));
+
+    btnClr.addEventListener('click', () => {
+      buscador.value = '';
+      resultados.innerHTML = '';
+      resetSeleccion();
+      buscador.focus();
+    });
+
+    resultados.addEventListener('click', async (e) => {
+      const li = e.target.closest('li[data-id]');
+      if (!li) return;
+
+      const id = parseInt(li.dataset.id, 10);
+      let detalle = null;
+      try {
+        detalle = await getJson(`${API.alimentoBase}/${id}`);
+      } catch (err) {
+        console.error(err);
+      }
+
+      alimentoSeleccionado = {
+        id,
+        nombre: li.dataset.name || (detalle?.nombre ?? `#${id}`),
+        macros: {
+          kcal: parseFloat(detalle?.kcal ?? 0) || 0,
+          p: parseFloat(detalle?.proteina_g ?? 0) || 0,
+          c: parseFloat(detalle?.carbohidratos_g ?? 0) || 0,
+          g: parseFloat(detalle?.grasas_g ?? 0) || 0,
+        }
+      };
+
+      selectedName.textContent = alimentoSeleccionado.nombre;
+      selectedInfo.style.display = 'flex';
+      addRow.style.display = 'flex';
+      renderMacrosPreview();
+
+      resultados.innerHTML = '';
+      buscador.value = '';
+      inputGramos.focus();
+    });
+
+    clearSelected.addEventListener('click', resetSeleccion);
+    inputGramos.addEventListener('input', renderMacrosPreview);
+
+    const renderIngredientes = (rows) => {
+      let tot = { g: 0, kcal: 0, p: 0, c: 0, gr: 0 };
+
+      if (!rows || rows.length === 0) {
+        listaIngredientes.innerHTML = `<div class="alert alert-light border">🍽️ Aún no has añadido ningún ingrediente. Búscalo arriba para empezar.</div>`;
+      } else {
+        const filas = rows.map(r => {
+          const g = parseFloat(r.gramos || 0) || 0;
+          const factor = g / 100;
+          const kcal = (parseFloat(r.kcal || 0) * factor) || 0;
+          const pr = (parseFloat(r.proteina_g || 0) * factor) || 0;
+          const ch = (parseFloat(r.carbohidratos_g || 0) * factor) || 0;
+          const gr = (parseFloat(r.grasas_g || 0) * factor) || 0;
+          tot.g += g;
+          tot.kcal += kcal;
+          tot.p += pr;
+          tot.c += ch;
+          tot.gr += gr;
+
+          const nombre = escapeHtml(r.nombre || '—');
+          return `
+            <div class="list-group-item ingrediente-row d-flex justify-content-between align-items-center"
+                 role="button" data-id="${r.id}" data-nombre="${nombre}" data-gramos="${g}">
+              <div>
+                <div class="fw-semibold">${nombre}</div>
+                <div class="small text-muted">${fmt1(g)} g · ${fmt1(pr)} g P · ${fmt1(ch)} g C · ${fmt1(gr)} g G</div>
+              </div>
+              <div class="text-end text-nowrap">
+                <span class="badge text-bg-secondary">${fmt0(kcal)} kcal</span>
+                <i class="bi bi-chevron-right text-muted ms-1"></i>
+              </div>
+            </div>`;
+        }).join('');
+        listaIngredientes.innerHTML = `<div class="list-group">${filas}</div>`;
+      }
+
+      totGramos.textContent = fmt1(tot.g);
+      totKcal.textContent = fmt0(tot.kcal);
+      totProt.textContent = fmt1(tot.p);
+      totCarb.textContent = fmt1(tot.c);
+      totGrasa.textContent = fmt1(tot.gr);
+      if (propTotalGramos) propTotalGramos.textContent = fmt1(tot.g);
+    };
+
+    const cargarIngredientes = async () => {
+      try {
+        const rows = await getJson(API.listar);
+        renderIngredientes(rows);
+      } catch (e) {
+        console.error(e);
+        listaIngredientes.innerHTML = `<div class="alert alert-danger">Error al cargar ingredientes.</div>`;
+      }
+    };
+
+    btnAgregar.addEventListener('click', async () => {
+      if (!alimentoSeleccionado) return alert('Selecciona un alimento.');
+
+      const gramosNum = (() => {
+        const v = (inputGramos.value || '').toString().replace(',', '.').trim();
+        const n = parseFloat(v);
+        return isNaN(n) ? 0 : n;
+      })();
+      if (gramosNum <= 0) return alert('Indica los gramos.');
+
+      try {
+        const r = await postForm(API.add, {
+          alimento_id: String(alimentoSeleccionado.id),
+          gramos: String(gramosNum)
+        });
+        if (!r.ok) {
+          alert('No se pudo añadir: ' + (r.error || 'Error desconocido'));
+          return;
+        }
+        resetSeleccion();
+        await cargarIngredientes();
+      } catch (err) {
+        console.error(err);
+        alert('Error de red al añadir.');
+      }
+    });
+
+    listaIngredientes.addEventListener('click', (e) => {
+      const row = e.target.closest('.ingrediente-row');
+      if (!row) return;
+      ingredienteActualId = row.dataset.id;
+      modalNombre.textContent = row.dataset.nombre;
+      modalGramos.value = row.dataset.gramos;
+      modal.show();
+    });
+
+    btnGuardarIng.addEventListener('click', async () => {
+      if (!ingredienteActualId) return;
+      const gramos = parseFloat((modalGramos.value || '').toString().replace(',', '.'));
+      if (!gramos || gramos <= 0) return alert('Introduce una cantidad válida.');
+      try {
+        const r = await postForm(`${API.editBase}/${ingredienteActualId}/edit`, { gramos: String(gramos) });
+        if (r.ok) {
+          modal.hide();
+          await cargarIngredientes();
+        } else {
+          alert('No se pudo actualizar: ' + (r.error || 'Error desconocido'));
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error de red al actualizar.');
+      }
+    });
+
+    btnEliminarIng.addEventListener('click', async () => {
+      if (!ingredienteActualId) return;
+      if (!confirm('¿Eliminar este ingrediente?')) return;
+      try {
+        const r = await postForm(`${API.delBase}/${ingredienteActualId}/delete`, {});
+        if (r.ok) {
+          modal.hide();
+          await cargarIngredientes();
+        } else {
+          alert('No se pudo eliminar.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error de red al eliminar.');
+      }
+    });
+
+    cargarIngredientes();
   });
+  <?php endif; ?>
 </script>
 <?php $this->endSection(); ?>
