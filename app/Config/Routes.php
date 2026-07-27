@@ -445,6 +445,57 @@ $routes->group('hogar', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('(:num)', 'Hogar::habitacion/$1');
 });
 
+// ---- Ideas: apuntes de futuras sesiones sin forma aún, promocionables a
+// sesiones reales (y viceversa, ver Sesiones::convertirEnIdea). Grupo propio
+// declarado antes que 'sesiones/(:num)' seguido su convención de rutas.
+$routes->group('sesiones/ideas', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'SesionIdeas::index');
+    $routes->GET('crear', 'SesionIdeas::create');
+    $routes->POST('guardar', 'SesionIdeas::store');
+    $routes->GET('(:num)', 'SesionIdeas::show/$1');
+    $routes->GET('(:num)/editar', 'SesionIdeas::edit/$1');
+    $routes->POST('(:num)/actualizar', 'SesionIdeas::update/$1');
+    $routes->POST('(:num)/borrar', 'SesionIdeas::delete/$1');
+    $routes->POST('(:num)/promover', 'SesionIdeas::promover/$1');
+
+    $routes->POST('(:num)/moodboard/subir', 'SesionIdeas::moodboardSubir/$1');
+    $routes->POST('(:num)/moodboard/enlace', 'SesionIdeas::moodboardAgregarEnlace/$1');
+    $routes->POST('(:num)/moodboard/(:num)/borrar', 'SesionIdeas::moodboardBorrar/$1/$2');
+});
+
+// ---- Sesiones: seguimiento de sesiones de fotografía/vídeo tipo stock ----
+$routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
+    $routes->GET('/', 'Sesiones::index');
+    $routes->GET('crear', 'Sesiones::create');
+    $routes->POST('guardar', 'Sesiones::store');
+    $routes->GET('(:num)', 'Sesiones::show/$1');
+    $routes->GET('(:num)/editar', 'Sesiones::edit/$1');
+    $routes->POST('(:num)/actualizar', 'Sesiones::update/$1');
+    $routes->POST('(:num)/borrar', 'Sesiones::delete/$1');
+    $routes->POST('(:num)/estado', 'Sesiones::estado/$1');
+    $routes->POST('(:num)/toggle-pausada', 'Sesiones::togglePausada/$1');
+    $routes->POST('(:num)/entrega-modelos', 'Sesiones::entregaModelos/$1');
+    $routes->POST('(:num)/convertir-en-idea', 'Sesiones::convertirEnIdea/$1');
+
+    $routes->POST('(:num)/situaciones/crear', 'Sesiones::situacionCrear/$1');
+    $routes->POST('(:num)/situaciones/reordenar', 'Sesiones::situacionReordenar/$1');
+    $routes->POST('(:num)/situaciones/(:num)/borrar', 'Sesiones::situacionBorrar/$1/$2');
+    $routes->GET('(:num)/situaciones/(:num)/exportar', 'Sesiones::exportarSituacion/$1/$2');
+
+    $routes->POST('(:num)/equipo/agregar', 'Sesiones::equipoAgregar/$1');
+    $routes->POST('(:num)/equipo/(:num)/toggle', 'Sesiones::equipoToggle/$1/$2');
+    $routes->POST('(:num)/equipo/(:num)/borrar', 'Sesiones::equipoBorrar/$1/$2');
+
+    $routes->POST('(:num)/moodboard/subir', 'Sesiones::moodboardSubir/$1');
+    $routes->POST('(:num)/moodboard/enlace', 'Sesiones::moodboardAgregarEnlace/$1');
+    $routes->POST('(:num)/moodboard/(:num)/borrar', 'Sesiones::moodboardBorrar/$1/$2');
+
+    $routes->POST('(:num)/releases/subir', 'Sesiones::releaseSubir/$1');
+    $routes->POST('(:num)/releases/(:num)/borrar', 'Sesiones::releaseBorrar/$1/$2');
+
+    $routes->GET('(:num)/exportar', 'Sesiones::exportar/$1');
+});
+
 // ---- Recordatorios: fechas de eventos recurrentes (ITV, DNI, vacunas, etc.) ----
 $routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'Recordatorios::index');
