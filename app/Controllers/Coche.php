@@ -87,6 +87,7 @@ class Coche extends BaseController
     public function accionRapida($tituloCodificado)
     {
         $title = ucwords(str_replace('-', ' ', urldecode($tituloCodificado)));
+        $fecha = $this->request->getPost('fecha') ?: date('Y-m-d');
 
         // Busca si hay un recordatorio con ese título
         $reminderModel = new CarReminderModel();
@@ -96,13 +97,13 @@ class Coche extends BaseController
         $accionModel = new CarActionModel();
         $accionModel->save([
             'title'        => $title,
-            'date'         => date('Y-m-d'),
+            'date'         => $fecha,
             'reminder_id'  => $reminder['id'] ?? null,
             'kilometers'   => null,
             'notes'        => '',
         ]);
 
-        return redirect()->to('/coche/acciones')->with('success', 'Acción "' . esc($title) . '" registrada para hoy.');
+        return redirect()->to('/coche/acciones')->with('success', 'Acción "' . esc($title) . '" registrada correctamente.');
     }
 
 

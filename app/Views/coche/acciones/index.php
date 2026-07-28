@@ -63,42 +63,68 @@
     <p class="text-muted text-center">No hay acciones registradas aún.</p>
 <?php endif; ?>
 
+<div class="coche-acciones-lista">
 <?php foreach ($acciones as $accion): ?>
     <?php
     $fecha = \CodeIgniter\I18n\Time::parse($accion['date']);
     $formateada = $fecha->toLocalizedString('d MMMM y');
     $hace = $fecha->humanize();
+    $tituloLower = strtolower($accion['title']);
+    $icono = match (true) {
+        str_contains($tituloLower, 'aceite')  => 'bi-gear-fill',
+        str_contains($tituloLower, 'fuera')   => 'bi-stars',
+        str_contains($tituloLower, 'dentro')  => 'bi-wind',
+        default                                => 'bi-gear',
+    };
     ?>
-    <div class="row justify-content-center">
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h5 class="card-title mb-1"><?= esc($accion['title']) ?></h5>
-                            <p class="mb-1">
-                                <?= esc($formateada) ?> (<?= esc($hace) ?>)
-                                <br>Km: <?= esc($accion['kilometers']) ?>
-                            </p>
-                            <p class="text-muted small mb-0"><?= esc($accion['notes']) ?></p>
-                        </div>
-                        <div class="d-flex">
-                            <a href="<?= site_url('coche/acciones/editar/' . $accion['id']) ?>" class="coche-btn" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <form action="<?= site_url('coche/acciones/borrar/' . $accion['id']) ?>" method="post" class="m-0"
-                                  onsubmit="return confirm('¿Borrar esta acción?')">
-                                <?= csrf_field() ?>
-                                <button type="submit" class="coche-btn coche-btn-danger" title="Eliminar">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+    <div class="coche-rec-card js-detalle-accion" role="button" tabindex="0"
+         data-titulo="<?= esc($accion['title']) ?>"
+         data-icono="<?= $icono ?>"
+         data-fecha="<?= esc($formateada) ?>"
+         data-hace="<?= esc($hace) ?>"
+         data-km="<?= esc($accion['kilometers'] ?? '') ?>"
+         data-notas="<?= esc($accion['notes'] ?? '') ?>"
+         data-editar="<?= site_url('coche/acciones/editar/' . $accion['id']) ?>">
+        <div class="coche-rec-icono">
+            <i class="bi <?= $icono ?>"></i>
+        </div>
+
+        <div class="coche-rec-main">
+            <div class="coche-rec-row-top">
+                <div class="coche-rec-titulo"><?= esc($accion['title']) ?></div>
+                <span class="coche-badge coche-badge-neutro"><?= esc($hace) ?></span>
+            </div>
+
+            <div class="coche-rec-row-bottom">
+                <div class="coche-rec-meta">
+                    <?= esc($formateada) ?>
+                    <?php if (!empty($accion['kilometers'])): ?>
+                        · <?= esc($accion['kilometers']) ?> km
+                    <?php endif; ?>
+                </div>
+
+                <div class="coche-rec-actions">
+                    <a href="<?= site_url('coche/acciones/editar/' . $accion['id']) ?>" class="coche-btn" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <form action="<?= site_url('coche/acciones/borrar/' . $accion['id']) ?>" method="post" class="m-0"
+                          onsubmit="return confirm('¿Borrar esta acción?')">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="coche-btn coche-btn-danger" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
+
+            <?php if (!empty($accion['notes'])): ?>
+                <div class="coche-rec-meta"><?= esc($accion['notes']) ?></div>
+            <?php endif; ?>
         </div>
     </div>
 <?php endforeach; ?>
+</div>
+
+<?= $this->include('coche/_modal_detalle') ?>
 
 <?= $this->endSection() ?>

@@ -221,7 +221,10 @@ $etiquetasGrupo = [
 <script>
 (() => {
     const modalEl = document.getElementById('modalRenovar');
-    const modal = new bootstrap.Modal(modalEl);
+    // bootstrap.bundle.min.js se carga al final del layout, después de este
+    // script, así que la instancia del modal se crea perezosamente (en el
+    // primer clic) en vez de al cargar la página, para no depender del orden.
+    let modal = null;
     const inputFecha = document.getElementById('modalRenovarFecha');
     const tituloEl = document.getElementById('modalRenovarTitulo');
     const ayudaEl = document.getElementById('modalRenovarAyuda');
@@ -247,6 +250,7 @@ $etiquetasGrupo = [
 
     document.querySelectorAll('.js-renovar').forEach(btn => {
         btn.addEventListener('click', () => {
+            modal ??= new bootstrap.Modal(modalEl);
             idActual = btn.dataset.id;
             periodoActual = parseInt(btn.dataset.periodo, 10);
             tituloEl.textContent = btn.dataset.titulo;

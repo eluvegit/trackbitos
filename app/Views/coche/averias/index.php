@@ -31,39 +31,60 @@
     <p class="text-muted text-center">No hay averías registradas aún.</p>
 <?php endif; ?>
 
-<div class="row">
-    <?php foreach ($averias as $a): ?>
-        <?php
-            $fecha = \CodeIgniter\I18n\Time::parse($a['date']);
-            $formateada = $fecha->toLocalizedString('d MMMM y');
-            $hace = $fecha->humanize();
-        ?>
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h5 class="card-title mb-1"><?= esc($formateada) ?> (<?= esc($hace) ?>)</h5>
-                            <p class="mb-1">Km: <?= esc($a['kilometers']) ?></p>
-                            <p class="text-muted small mb-0"><?= esc($a['notes']) ?></p>
-                        </div>
-                        <div class="d-flex">
-                            <a href="<?= site_url('coche/averias/editar/' . $a['id']) ?>" class="coche-btn" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <form action="<?= site_url('coche/averias/borrar/' . $a['id']) ?>" method="post" class="m-0"
-                                  onsubmit="return confirm('¿Borrar esta avería?')">
-                                <?= csrf_field() ?>
-                                <button type="submit" class="coche-btn coche-btn-danger" title="Eliminar">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+<div class="coche-acciones-lista">
+<?php foreach ($averias as $a): ?>
+    <?php
+        $fecha = \CodeIgniter\I18n\Time::parse($a['date']);
+        $formateada = $fecha->toLocalizedString('d MMMM y');
+        $hace = $fecha->humanize();
+        $notas = trim((string) ($a['notes'] ?? ''));
+        $tituloCorto = $notas !== '' ? mb_strimwidth($notas, 0, 48, '…') : 'Avería sin detalle';
+    ?>
+    <div class="coche-rec-card coche-rec-card-danger js-detalle-accion" role="button" tabindex="0"
+         data-titulo="<?= esc($tituloCorto) ?>"
+         data-icono="bi-exclamation-triangle-fill"
+         data-color="danger"
+         data-fecha="<?= esc($formateada) ?>"
+         data-hace="<?= esc($hace) ?>"
+         data-km="<?= esc($a['kilometers'] ?? '') ?>"
+         data-notas="<?= esc($notas) ?>"
+         data-editar="<?= site_url('coche/averias/editar/' . $a['id']) ?>">
+        <div class="coche-rec-icono coche-rec-icono-danger">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+
+        <div class="coche-rec-main">
+            <div class="coche-rec-row-top">
+                <div class="coche-rec-titulo"><?= esc($tituloCorto) ?></div>
+                <span class="coche-badge coche-badge-neutro"><?= esc($hace) ?></span>
+            </div>
+
+            <div class="coche-rec-row-bottom">
+                <div class="coche-rec-meta">
+                    <?= esc($formateada) ?>
+                    <?php if (!empty($a['kilometers'])): ?>
+                        · <?= esc($a['kilometers']) ?> km
+                    <?php endif; ?>
+                </div>
+
+                <div class="coche-rec-actions">
+                    <a href="<?= site_url('coche/averias/editar/' . $a['id']) ?>" class="coche-btn" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <form action="<?= site_url('coche/averias/borrar/' . $a['id']) ?>" method="post" class="m-0"
+                          onsubmit="return confirm('¿Borrar esta avería?')">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="coche-btn coche-btn-danger" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
-    <?php endforeach; ?>
+    </div>
+<?php endforeach; ?>
 </div>
+
+<?= $this->include('coche/_modal_detalle') ?>
 
 <?= $this->endSection() ?>

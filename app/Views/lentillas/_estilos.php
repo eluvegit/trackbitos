@@ -55,22 +55,81 @@
         color: #6edff6;
     }
 
-    /* ==== Menú tipo lista (usado en index) ==== */
-    .lentillas-menu {
-        border-radius: 10px;
-        overflow: hidden;
+    /* ==== Menú de tarjetas (usado en index), mismo patrón que coche/gimnasio ==== */
+    .lentillas-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    @media (min-width: 576px)  { .lentillas-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 768px)  { .lentillas-grid { grid-template-columns: repeat(6, 1fr); } }
+    @media (min-width: 1200px) { .lentillas-grid { grid-template-columns: repeat(8, 1fr); } }
+
+    .lentillas-tile-link {
+        text-decoration: none;
+        display: block;
+        position: relative;
+    }
+    button.lentillas-tile-link {
+        border: 0;
+        background: none;
+        padding: 0;
+        width: 100%;
+        font: inherit;
     }
 
-    .lentillas-menu .list-group-item {
-        border-left: 0;
-        border-right: 0;
+    .lentillas-tile {
+        aspect-ratio: 1 / 1;
+        max-width: 130px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 4px;
+        padding: 8px;
+        border-radius: 14px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-tertiary-bg);
+        transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
+    }
+    .lentillas-tile-link:hover .lentillas-tile {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, .18);
+        border-color: #0d6efd;
     }
 
-    .lentillas-menu .list-group-item:first-child {
-        border-top: 0;
+    .lentillas-tile-icon {
+        font-size: 1.3rem;
+        line-height: 1;
+        color: var(--bs-emphasis-color);
+    }
+    .lentillas-tile-title {
+        font-size: .72rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        line-height: 1.15;
+    }
+    .lentillas-tile-text {
+        font-size: .62rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.15;
     }
 
-    .lentillas-menu .list-group-item:last-child {
-        border-bottom: 0;
+    .lentillas-tile-count {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: #dc3545;
+        color: #fff;
+        font-size: .68rem;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+        padding: 0 4px;
     }
 </style>

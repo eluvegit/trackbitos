@@ -31,37 +31,78 @@
 <?php endif; ?>
 
 <?php
+$stockBajoCount = 0;
+foreach ($stockItems ?? [] as $si) {
+    if ((int) $si['cantidad'] <= 2) {
+        $stockBajoCount++;
+    }
+}
+
 $items = [
-    ['ruta' => 'sustituciones', 'icono' => 'bi-arrow-repeat', 'titulo' => 'Cambios y revisiones', 'desc' => 'Lentillas, estuche, líquidos y presión del ojo.'],
-    ['ruta' => 'stock', 'icono' => 'bi-box-seam', 'titulo' => 'Stock', 'desc' => 'Pares de lentillas, líquidos y materiales.'],
-    ['ruta' => 'compras', 'icono' => 'bi-cart3', 'titulo' => 'Compras', 'desc' => 'Registro de lentillas, gafas y líquidos.'],
-    ['ruta' => 'avisos', 'icono' => 'bi-bell', 'titulo' => 'Avisos', 'desc' => 'Notificaciones para reemplazos.'],
+    ['ruta' => 'sustituciones', 'icono' => 'bi-arrow-repeat', 'titulo' => 'Cambios y revisiones', 'texto' => 'Lentillas, estuche, líquidos y presión del ojo.', 'count' => !empty($mostrarAlerta) ? 1 : 0],
+    ['ruta' => 'stock', 'icono' => 'bi-box-seam', 'titulo' => 'Stock', 'texto' => 'Pares de lentillas, líquidos y materiales.', 'count' => $stockBajoCount],
+    ['ruta' => 'compras', 'icono' => 'bi-cart3', 'titulo' => 'Compras', 'texto' => 'Registro de lentillas, gafas y líquidos.'],
+    ['ruta' => 'avisos', 'icono' => 'bi-bell', 'titulo' => 'Avisos', 'texto' => 'Notificaciones para reemplazos.'],
 ];
 ?>
 
-<div class="list-group shadow-sm lentillas-menu mt-4">
+<?php
+$accionesRapidas = [
+    ['elemento' => 'lentillas', 'texto' => 'Hoy cambié las Lentillas', 'icono' => 'bi-eye', 'color' => 'primary'],
+    ['elemento' => 'líquido', 'texto' => 'Hoy cambié el Líquido', 'icono' => 'bi-droplet', 'color' => 'info'],
+    ['elemento' => 'estuche', 'texto' => 'Hoy cambié el Estuche', 'icono' => 'bi-briefcase', 'color' => 'warning'],
+];
+?>
+
+<div class="lentillas-grid mt-4">
+    <?php foreach ($accionesRapidas as $accion): ?>
+        <button type="button" class="lentillas-tile-link js-sustitucion-rapida"
+                data-elemento="<?= esc($accion['elemento']) ?>" data-texto="<?= esc($accion['texto']) ?>">
+            <div class="lentillas-tile">
+                <div class="lentillas-tile-icon text-<?= $accion['color'] ?>"><i class="bi <?= $accion['icono'] ?>"></i></div>
+                <div class="lentillas-tile-title"><?= esc($accion['texto']) ?></div>
+            </div>
+        </button>
+    <?php endforeach; ?>
     <?php foreach ($items as $item): ?>
-        <a href="<?= site_url('lentillas/' . $item['ruta']) ?>" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-2">
-            <div class="d-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 text-primary flex-shrink-0" style="width:40px;height:40px;">
-                <i class="bi <?= $item['icono'] ?>"></i>
+        <a href="<?= site_url('lentillas/' . $item['ruta']) ?>" class="lentillas-tile-link">
+            <div class="lentillas-tile">
+                <?php if (!empty($item['count'])): ?>
+                    <span class="lentillas-tile-count"><?= (int) $item['count'] ?></span>
+                <?php endif; ?>
+                <div class="lentillas-tile-icon"><i class="bi <?= $item['icono'] ?>"></i></div>
+                <div class="lentillas-tile-title"><?= esc($item['titulo']) ?></div>
+                <div class="lentillas-tile-text d-none d-md-block"><?= esc($item['texto']) ?></div>
             </div>
-            <div class="flex-grow-1 min-w-0">
-                <div class="fw-semibold"><?= esc($item['titulo']) ?></div>
-                <div class="small text-muted text-truncate"><?= esc($item['desc']) ?></div>
-            </div>
-            <i class="bi bi-chevron-right text-muted"></i>
         </a>
     <?php endforeach; ?>
 </div>
 
-<?php if (!empty($stockItems)):
-    $stockBajoCount = 0;
-    foreach ($stockItems as $si) {
-        if ((int) $si['cantidad'] <= 2) {
-            $stockBajoCount++;
-        }
-    }
-?>
+<!-- Modal de confirmación para las acciones rápidas -->
+<div class="modal fade" id="modalSustitucionRapida" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="<?= site_url('lentillas/sustituciones') ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="elemento" id="rapidaElemento">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rapidaTitulo">Confirmar cambio</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="rapidaFecha" class="form-label">¿Qué día se hizo?</label>
+                    <input type="date" name="fecha" id="rapidaFecha" class="form-control" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php if (!empty($stockItems)): ?>
     <div class="card border-0 shadow-sm mt-4">
         <div class="card-body p-4">
             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -218,5 +259,34 @@ $items = [
         padding-bottom: .5rem;
     }
 </style>
+
+<script>
+(() => {
+    const modalEl = document.getElementById('modalSustitucionRapida');
+    // bootstrap.bundle.min.js se carga al final del layout, después de este
+    // script, así que la instancia del modal se crea perezosamente (en el
+    // primer clic) en vez de al cargar la página, para no depender del orden.
+    let modal = null;
+    const inputElemento = document.getElementById('rapidaElemento');
+    const inputFecha = document.getElementById('rapidaFecha');
+    const tituloEl = document.getElementById('rapidaTitulo');
+
+    function hoyISO() {
+        const d = new Date();
+        const tz = d.getTimezoneOffset() * 60000;
+        return new Date(d - tz).toISOString().slice(0, 10);
+    }
+
+    document.querySelectorAll('.js-sustitucion-rapida').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal ??= new bootstrap.Modal(modalEl);
+            inputElemento.value = btn.dataset.elemento;
+            inputFecha.value = hoyISO();
+            tituloEl.textContent = 'Confirmar: ' + btn.dataset.texto;
+            modal.show();
+        });
+    });
+})();
+</script>
 
 <?= $this->endSection() ?>

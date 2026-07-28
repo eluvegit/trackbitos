@@ -8,27 +8,33 @@
     .coche-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
+        gap: 8px;
     }
-    @media (min-width: 576px) {
-        .coche-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-    @media (min-width: 768px) {
-        .coche-grid { grid-template-columns: repeat(5, 1fr); }
-    }
+    @media (min-width: 576px)  { .coche-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 768px)  { .coche-grid { grid-template-columns: repeat(6, 1fr); } }
+    @media (min-width: 1200px) { .coche-grid { grid-template-columns: repeat(8, 1fr); } }
 
     .coche-card-link { text-decoration: none; display: block; position: relative; }
+    button.coche-card-link {
+        border: 0;
+        background: none;
+        padding: 0;
+        width: 100%;
+        font: inherit;
+    }
 
     .coche-card {
         aspect-ratio: 1 / 1;
+        max-width: 130px;
+        margin: 0 auto;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         text-align: center;
         gap: 4px;
-        padding: 10px;
-        border-radius: 16px;
+        padding: 8px;
+        border-radius: 14px;
         border: 1px solid var(--bs-border-color);
         background: var(--bs-tertiary-bg);
         transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
@@ -39,16 +45,17 @@
         border-color: #0d6efd;
     }
 
-    .coche-card-icon { font-size: 1.8rem; line-height: 1; color: var(--bs-emphasis-color); }
+    .coche-card-icon { font-size: 1.3rem; line-height: 1; color: var(--bs-emphasis-color); }
     .coche-card-title {
-        font-size: .85rem;
+        font-size: .72rem;
         font-weight: 700;
         color: var(--bs-emphasis-color);
+        line-height: 1.15;
     }
     .coche-card-text {
-        font-size: .72rem;
+        font-size: .62rem;
         color: var(--bs-secondary-color);
-        line-height: 1.2;
+        line-height: 1.15;
     }
 
     .coche-card-count {
@@ -67,6 +74,14 @@
         padding: 0 4px;
     }
 
+    /* ==== Lista de acciones: menos contenido por fila que recordatorios,
+       así que se limita el ancho para que no quede rara estirada a lo
+       ancho de toda la pantalla ==== */
+    .coche-acciones-lista {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+
     /* ==== Tarjetas de listado (acciones / averías / recordatorios) ==== */
     .coche-rec-card {
         display: flex;
@@ -80,6 +95,14 @@
         transition: background-color .15s ease;
     }
     .coche-rec-card:hover { background: var(--bs-tertiary-bg); }
+    .coche-rec-card.js-detalle-accion { cursor: pointer; }
+    .coche-rec-card.js-detalle-accion:focus-visible {
+        outline: 2px solid #0d6efd;
+        outline-offset: 1px;
+    }
+
+    .coche-detalle-dl dt { color: var(--bs-secondary-color); font-weight: 600; }
+    .coche-detalle-dl dd { color: var(--bs-emphasis-color); }
 
     .coche-nivel-caducado { border-color: rgba(220,53,69,.4); background: rgba(220,53,69,.06); }
     .coche-nivel-urgente  { border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.06); }
@@ -95,6 +118,13 @@
         color: var(--bs-emphasis-color);
         font-size: .95rem;
         line-height: 1;
+    }
+    .coche-rec-icono-danger {
+        background: rgba(220, 53, 69, .12);
+        color: #dc3545;
+    }
+    .coche-rec-card-danger {
+        border-color: rgba(220, 53, 69, .25);
     }
 
     .coche-rec-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
