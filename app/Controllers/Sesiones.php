@@ -2,8 +2,6 @@
 
 namespace App\Controllers;
 
-use App\Models\IdeaModel;
-use App\Models\IdeaMoodboardItemModel;
 use App\Models\MoodboardItemModel;
 use App\Models\ModelReleaseModel;
 use App\Models\SesionEquipoModel;
@@ -22,19 +20,17 @@ class Sesiones extends BaseController
     {
         // Una fila por sesión; la vista coloca el chip de cada parte (foto/vídeo)
         // en la columna de SU estado real, así ambas quedan a la misma altura
-        // y no se pueden perder entre sesiones distintas.
+        // y no se pueden perder entre sesiones distintas. Las que están en
+        // estado 'idea' vienen incluidas: la vista las oculta por defecto y
+        // el filtro "Ideas" las muestra.
         $sesiones = (new SesionModel())->orderBy('actualizada_at', 'DESC')->findAll();
 
-        // Las ideas se muestran en el mismo listado tras el filtro "Ideas"
-        // (no tienen estado_foto/estado_video, solo tiene_foto/tiene_video).
-        $ideas = (new IdeaModel())->orderBy('actualizada_at', 'DESC')->findAll();
-
-        return view('sesiones/index', ['sesiones' => $sesiones, 'ideas' => $ideas]);
+        return view('sesiones/index', ['sesiones' => $sesiones]);
     }
 
     public function create()
     {
-        return view('sesiones/form', ['sesion' => null]);
+        return view('sesiones/form', ['sesion' => null, 'defaultIdea' => (bool) $this->request->getGet('idea')]);
     }
 
     public function store()
@@ -46,14 +42,16 @@ class Sesiones extends BaseController
             return redirect()->back()->withInput()->with('errors', ['Selecciona al menos una parte: fotografía o vídeo.']);
         }
 
+        $estadoInicial = !empty($post['es_idea']) ? 'idea' : 'planificacion';
+
         $model = new SesionModel();
         $data  = [
             'titulo'       => $post['titulo'] ?? '',
             'fecha_sesion' => ($post['fecha_sesion'] ?? '') ?: null,
             'notas'        => $post['notas'] ?? null,
             'briefing'     => $post['briefing'] ?? null,
-            'estado_foto'  => in_array('foto', $partes, true) ? 'planificacion' : null,
-            'estado_video' => in_array('video', $partes, true) ? 'planificacion' : null,
+            'estado_foto'  => in_array('foto', $partes, true) ? $estadoInicial : null,
+            'estado_video' => in_array('video', $partes, true) ? $estadoInicial : null,
         ];
 
         if (!$model->save($data)) {
@@ -119,67 +117,6 @@ class Sesiones extends BaseController
         return redirect()->to(site_url('sesiones'))->with('success', 'Sesión eliminada correctamente.');
     }
 
-    /**
-     * Vuelve a convertir una sesión en idea: crea la idea con su moodboard
-     * (aplanado, sin situaciones) y borra la sesión. El briefing se anexa a
-     * las notas (la idea no tiene ese campo); el equipo y los model releases
-     * no tienen equivalente en una idea y se pierden al hacerlo. Solo se
-     * permite si ninguna parte ha avanzado más allá de planificación —
-     * si no, ya hay trabajo real hecho y degradarla perdería demasiado.
-     */
-    public function convertirEnIdea(int $id)
-    {
-        $sesionModel = new SesionModel();
-        $sesion      = $sesionModel->find($id);
-        if (!$sesion) {
-            return redirect()->to(site_url('sesiones'))->with('error', 'Sesión no encontrada.');
-        }
-
-        foreach (SesionModel::PARTES as $parte) {
-            $estado = $sesion['estado_' . $parte];
-            if ($estado !== null && $estado !== 'planificacion') {
-                return redirect()->to(site_url('sesiones/' . $id))
-                    ->with('error', 'Solo se puede convertir en idea una sesión cuyas partes sigan en planificación.');
-            }
-        }
-
-        // La idea no tiene campo de briefing propio: se anexa a las notas
-        // para no perderlo silenciosamente.
-        $notas = trim((string) ($sesion['notas'] ?? ''));
-        if (!empty($sesion['briefing'])) {
-            $notas = trim($notas . "\n\nBriefing:\n" . $sesion['briefing']);
-        }
-
-        $ideaModel = new IdeaModel();
-        $ideaModel->insert([
-            'titulo'      => $sesion['titulo'],
-            'notas'       => $notas ?: null,
-            'tiene_foto'  => $sesion['estado_foto'] !== null ? 1 : 0,
-            'tiene_video' => $sesion['estado_video'] !== null ? 1 : 0,
-        ]);
-        $ideaId = $ideaModel->getInsertID();
-
-        $ideaMoodboardModel = new IdeaMoodboardItemModel();
-        $moodboard          = (new MoodboardItemModel())->where('sesion_id', $id)->orderBy('orden', 'ASC')->findAll();
-
-        foreach ($moodboard as $item) {
-            $ideaMoodboardModel->insert([
-                'idea_id'      => $ideaId,
-                'origen'       => $item['origen'],
-                'ruta_archivo' => $item['ruta_archivo'],
-                'url_externa'  => $item['url_externa'],
-                'nota'         => $item['nota'],
-                'orden'        => $item['orden'],
-            ]);
-        }
-
-        // Cascada: borra situaciones, moodboard_items, equipo, model
-        // releases e historial de esta sesión.
-        $sesionModel->delete($id);
-
-        return redirect()->to(site_url('sesiones/ideas/' . $ideaId))->with('success', 'Sesión convertida en idea.');
-    }
-
     public function estado(int $id)
     {
         $input       = $this->request->getJSON(true) ?: $this->request->getPost();
@@ -195,7 +132,6 @@ class Sesiones extends BaseController
             'ok'     => true,
             'parte'  => $parte,
             'estado' => $nuevoEstado,
-            'fecha'  => date('d/m/Y'),
         ]);
     }
 

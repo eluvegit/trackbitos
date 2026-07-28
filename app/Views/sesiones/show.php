@@ -9,6 +9,7 @@ $sesionId = (int) $s['id'];
 $general = $moodboard_por_situacion['general'] ?? [];
 
 $labelEstado = [
+    'idea'          => 'Idea',
     'planificacion' => 'Planificación',
     'edicion'       => 'Edición',
     'subiendo'      => 'Subiendo',
@@ -31,17 +32,6 @@ $labelEntrega = [
 
 $partes = ['foto' => ['icono' => 'bi-camera', 'nombre' => 'Fotografía'], 'video' => ['icono' => 'bi-camera-video', 'nombre' => 'Vídeo']];
 $pausada = (int) $s['pausada'] === 1;
-
-// Solo tiene sentido volver a "idea" si de verdad no ha empezado nada
-// todavía: si alguna parte ya avanzó, degradarla perdería equipo/releases
-// reales, así que el botón se desactiva.
-$puedeConvertirEnIdea = true;
-foreach (['foto', 'video'] as $parte) {
-    $valor = $s['estado_' . $parte];
-    if ($valor !== null && $valor !== 'planificacion') {
-        $puedeConvertirEnIdea = false;
-    }
-}
 
 // Un color y un icono distintos por sección, para que la ficha se pueda
 // escanear de un vistazo en vez de ser una columna de tarjetas idénticas.
@@ -84,17 +74,6 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
         <a href="<?= site_url('sesiones/' . $sesionId . '/editar') ?>" class="btn btn-outline-secondary rounded-pill">
             <i class="bi bi-pencil"></i> Editar
         </a>
-        <?php if ($puedeConvertirEnIdea): ?>
-            <form method="post" action="<?= site_url('sesiones/' . $sesionId . '/convertir-en-idea') ?>"
-                  onsubmit="return confirm('¿Volver a convertir esta sesión en idea? Se perderán el equipo y los model releases asociados, y el moodboard se quedará como un único bloque sin situaciones.');">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-lightbulb"></i> Convertir en idea</button>
-            </form>
-        <?php else: ?>
-            <button type="button" class="btn btn-outline-secondary rounded-pill" disabled title="Solo se puede convertir en idea si ninguna parte ha salido de planificación">
-                <i class="bi bi-lightbulb"></i> Convertir en idea
-            </button>
-        <?php endif; ?>
         <form method="post" action="<?= site_url('sesiones/' . $sesionId . '/borrar') ?>"
               onsubmit="return confirm('¿Borrar esta sesión? Se perderá todo su contenido (moodboard, equipo, model releases, historial). No se puede deshacer.');">
             <?= csrf_field() ?>
@@ -160,9 +139,6 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
                             </div>
                             <div>
                                 <div class="admin-timeline-label"><?= $labelEstado[$estado] ?></div>
-                                <?php if ($i === $indiceActual && !empty($ultimo_cambio[$parte])): ?>
-                                    <div class="admin-timeline-date"><?= esc(date('d/m/Y', strtotime($ultimo_cambio[$parte]))) ?></div>
-                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -504,13 +480,9 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
 .admin-timeline-step:not(.is-done):not(.is-current) .admin-timeline-label {
     color: var(--bs-secondary-color);
 }
-.admin-timeline-date {
-    font-size: 10px;
-    color: var(--bs-secondary-color);
-}
 @media (max-width: 640px) {
     /* En vertical: puntos alineados a la izquierda con una línea que los
-       conecta, etiqueta y fecha a la derecha de cada uno — un stepper
+       conecta y la etiqueta a la derecha de cada uno — un stepper
        vertical normal, en vez de una columna de círculos sueltos sin
        nada que los conecte. */
     .admin-timeline {
@@ -533,8 +505,7 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
         gap: 12px;
         padding: 10px 0;
     }
-    .admin-timeline-label,
-    .admin-timeline-date {
+    .admin-timeline-label {
         text-align: left;
     }
 }
@@ -683,30 +654,20 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
     }
 
     // ---- Cambiar etapa (foto / vídeo, independientes) ----
-    function actualizarTimeline(timeline, nuevoEstado, fecha) {
+    function actualizarTimeline(timeline, nuevoEstado) {
         const pasos = Array.from(timeline.querySelectorAll('.admin-timeline-step'));
         const nuevoIndex = pasos.findIndex(p => p.dataset.estado === nuevoEstado);
 
         pasos.forEach((paso, i) => {
             const dot = paso.querySelector('.admin-timeline-dot');
-            const info = paso.querySelector('.admin-timeline-label').parentElement;
-            let fechaEl = info.querySelector('.admin-timeline-date');
 
             paso.classList.remove('is-done', 'is-current');
 
             if (i === nuevoIndex) {
                 paso.classList.add('is-current');
                 dot.textContent = String(i + 1);
-                if (!fechaEl) {
-                    fechaEl = document.createElement('div');
-                    fechaEl.className = 'admin-timeline-date';
-                    info.appendChild(fechaEl);
-                }
-                fechaEl.textContent = fecha;
                 return;
             }
-
-            if (fechaEl) fechaEl.remove();
 
             if (i < nuevoIndex) {
                 paso.classList.add('is-done');
@@ -726,7 +687,7 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
                 const res = await post(`${base}/estado`, { parte, estado: opt.dataset.estado });
                 if (!res.ok) { console.error('No se pudo cambiar el estado'); return; }
                 const data = await res.json();
-                actualizarTimeline(timeline, data.estado, data.fecha);
+                actualizarTimeline(timeline, data.estado);
             });
         });
     });

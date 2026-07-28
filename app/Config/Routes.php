@@ -445,25 +445,10 @@ $routes->group('hogar', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('(:num)', 'Hogar::habitacion/$1');
 });
 
-// ---- Ideas: apuntes de futuras sesiones sin forma aún, promocionables a
-// sesiones reales (y viceversa, ver Sesiones::convertirEnIdea). Grupo propio
-// declarado antes que 'sesiones/(:num)' seguido su convención de rutas.
-$routes->group('sesiones/ideas', ['filter' => 'auth'], static function ($routes) {
-    $routes->GET('/', 'SesionIdeas::index');
-    $routes->GET('crear', 'SesionIdeas::create');
-    $routes->POST('guardar', 'SesionIdeas::store');
-    $routes->GET('(:num)', 'SesionIdeas::show/$1');
-    $routes->GET('(:num)/editar', 'SesionIdeas::edit/$1');
-    $routes->POST('(:num)/actualizar', 'SesionIdeas::update/$1');
-    $routes->POST('(:num)/borrar', 'SesionIdeas::delete/$1');
-    $routes->POST('(:num)/promover', 'SesionIdeas::promover/$1');
-
-    $routes->POST('(:num)/moodboard/subir', 'SesionIdeas::moodboardSubir/$1');
-    $routes->POST('(:num)/moodboard/enlace', 'SesionIdeas::moodboardAgregarEnlace/$1');
-    $routes->POST('(:num)/moodboard/(:num)/borrar', 'SesionIdeas::moodboardBorrar/$1/$2');
-});
-
 // ---- Sesiones: seguimiento de sesiones de fotografía/vídeo tipo stock ----
+// 'idea' es un estado más del pipeline (idea -> planificacion -> ... ->
+// completado): no hay rutas ni controlador aparte para ideas, se crean y
+// gestionan igual que cualquier sesión.
 $routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'Sesiones::index');
     $routes->GET('crear', 'Sesiones::create');
@@ -475,7 +460,6 @@ $routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('(:num)/estado', 'Sesiones::estado/$1');
     $routes->POST('(:num)/toggle-pausada', 'Sesiones::togglePausada/$1');
     $routes->POST('(:num)/entrega-modelos', 'Sesiones::entregaModelos/$1');
-    $routes->POST('(:num)/convertir-en-idea', 'Sesiones::convertirEnIdea/$1');
 
     $routes->POST('(:num)/situaciones/crear', 'Sesiones::situacionCrear/$1');
     $routes->POST('(:num)/situaciones/reordenar', 'Sesiones::situacionReordenar/$1');

@@ -27,12 +27,16 @@ class SesionModel extends Model
     protected $validationRules = [
         'titulo'          => 'required|max_length[150]',
         'fecha_sesion'    => 'permit_empty|valid_date',
-        'estado_foto'     => 'permit_empty|in_list[planificacion,edicion,subiendo,completado]',
-        'estado_video'    => 'permit_empty|in_list[planificacion,edicion,subiendo,completado]',
+        'estado_foto'     => 'permit_empty|in_list[idea,planificacion,edicion,subiendo,completado]',
+        'estado_video'    => 'permit_empty|in_list[idea,planificacion,edicion,subiendo,completado]',
         'entrega_modelos' => 'permit_empty|in_list[no_aplica,pendiente,entregado]',
     ];
 
-    public const ESTADOS          = ['planificacion', 'edicion', 'subiendo', 'completado'];
+    // 'idea' es el estado inicial, anterior a planificación: misma
+    // funcionalidad y datos que cualquier otro estado (moodboard,
+    // situaciones, equipo, model releases...), solo que no aparece por
+    // defecto en el listado de sesiones.
+    public const ESTADOS          = ['idea', 'planificacion', 'edicion', 'subiendo', 'completado'];
     public const PARTES           = ['foto', 'video'];
     public const ENTREGA_MODELOS  = ['no_aplica', 'pendiente', 'entregado'];
 
@@ -143,22 +147,6 @@ class SesionModel extends Model
             ->orderBy('id', 'DESC')
             ->findAll();
 
-        // Fecha en la que cada parte entró en su etapa actual (última fila
-        // de historial de esa parte), para mostrarla bajo el paso activo
-        // de la línea de vida. Null si esa parte nunca ha cambiado de
-        // estado por cambiarEstado() (p. ej. recién creada).
-        $historialModel = new SesionHistorialEstadoModel();
-        $ultimoCambio    = [];
-        foreach (self::PARTES as $parte) {
-            $fila = $historialModel
-                ->where('sesion_id', $id)
-                ->where('parte', $parte)
-                ->orderBy('cambiado_at', 'DESC')
-                ->orderBy('id', 'DESC')
-                ->first();
-            $ultimoCambio[$parte] = $fila['cambiado_at'] ?? null;
-        }
-
         return [
             'sesion'                  => $sesion,
             'situaciones'             => $situaciones,
@@ -166,7 +154,6 @@ class SesionModel extends Model
             'equipo'                  => $equipo,
             'model_releases'          => $modelReleases,
             'mensajes_modelo'         => $mensajesModelo,
-            'ultimo_cambio'           => $ultimoCambio,
         ];
     }
 }

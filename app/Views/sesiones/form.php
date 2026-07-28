@@ -45,7 +45,15 @@
                                 <input type="checkbox" class="btn-check" name="partes[]" value="video" id="parteVideo" autocomplete="off">
                                 <label class="btn btn-outline-primary" for="parteVideo"><i class="bi bi-camera-video"></i> Vídeo</label>
                             </div>
-                            <div class="form-text">Cada parte lleva su propio flujo de trabajo independiente (planificación → edición → subiendo → completado). ¿Todavía no tiene forma? Apúntala como <a href="<?= site_url('sesiones/ideas/crear') ?>">idea</a> en vez de crear la sesión.</div>
+                            <div class="form-text">Cada parte lleva su propio flujo de trabajo independiente (idea → planificación → edición → subiendo → completado).</div>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="es_idea" value="1" id="esIdea" <?= (old('es_idea') || !empty($defaultIdea)) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="esIdea">
+                                <i class="bi bi-lightbulb"></i> Es solo una idea todavía (sin planificar)
+                            </label>
+                            <div class="form-text">No aparecerá por defecto en el listado hasta que actives el filtro "Ideas". El resto de la ficha (moodboard, notas, briefing...) funciona igual.</div>
                         </div>
                     <?php else: ?>
                         <div class="mb-3">

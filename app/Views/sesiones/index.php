@@ -12,15 +12,6 @@ $datosSesiones = array_map(static function ($s) {
         'estado_video' => $s['estado_video'],
     ];
 }, $sesiones);
-
-$datosIdeas = array_map(static function ($i) {
-    return [
-        'id'          => (int) $i['id'],
-        'titulo'      => $i['titulo'],
-        'tiene_foto'  => (int) $i['tiene_foto'] === 1,
-        'tiene_video' => (int) $i['tiene_video'] === 1,
-    ];
-}, $ideas);
 ?>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -28,7 +19,7 @@ $datosIdeas = array_map(static function ($i) {
         <i class="bi bi-camera text-primary"></i> Sesiones
     </h5>
     <div class="d-flex flex-wrap align-items-center gap-2">
-        <a href="<?= site_url('sesiones/ideas/crear') ?>" class="btn btn-sm btn-outline-secondary rounded-pill">
+        <a href="<?= site_url('sesiones/crear') ?>?idea=1" class="btn btn-sm btn-outline-secondary rounded-pill">
             <i class="bi bi-lightbulb"></i> + Idea
         </a>
         <a href="<?= site_url('sesiones/crear') ?>" class="btn btn-sm btn-primary rounded-pill btn-nueva-desktop">
@@ -48,7 +39,7 @@ $datosIdeas = array_map(static function ($i) {
     <div class="alert alert-danger py-2"><?= esc(session('error')) ?></div>
 <?php endif; ?>
 
-<?php if (empty($sesiones) && empty($ideas)): ?>
+<?php if (empty($sesiones)): ?>
     <p class="text-muted">Todavía no hay sesiones. <a href="<?= site_url('sesiones/crear') ?>">Crea la primera</a>.</p>
 <?php else: ?>
 
@@ -211,13 +202,6 @@ $datosIdeas = array_map(static function ($i) {
 .progreso-seg:hover {
     filter: brightness(1.3);
 }
-.progreso-seg.inactivo {
-    cursor: default;
-    opacity: .45;
-}
-.progreso-seg.inactivo:hover {
-    filter: none;
-}
 .progreso-label {
     font-size: .8rem;
     color: var(--bs-secondary-color);
@@ -315,8 +299,8 @@ $datosIdeas = array_map(static function ($i) {
 (() => {
     const base = '<?= site_url('sesiones') ?>';
     const csrf = '<?= csrf_hash() ?>';
-    const colorBarra   = { planificacion: 'bg-secondary', edicion: 'bg-warning', subiendo: 'bg-info', completado: 'bg-success' };
-    const labelEstado  = { planificacion: 'Planificación', edicion: 'Edición', subiendo: 'Subiendo', completado: 'Completado' };
+    const colorBarra   = { idea: 'bg-primary', planificacion: 'bg-secondary', edicion: 'bg-warning', subiendo: 'bg-info', completado: 'bg-success' };
+    const labelEstado  = { idea: 'Idea', planificacion: 'Planificación', edicion: 'Edición', subiendo: 'Subiendo', completado: 'Completado' };
     const ordenEstados = Object.keys(labelEstado);
     const iconoParte   = { foto: 'bi-camera', video: 'bi-camera-video' };
     const entregaInfo  = {
@@ -326,7 +310,6 @@ $datosIdeas = array_map(static function ($i) {
     };
 
     const sesiones = <?= json_encode($datosSesiones, JSON_UNESCAPED_UNICODE) ?>;
-    const ideas    = <?= json_encode($datosIdeas, JSON_UNESCAPED_UNICODE) ?>;
 
     const tbody = document.getElementById('kanbanBody');
     if (!tbody) return;
@@ -407,47 +390,18 @@ $datosIdeas = array_map(static function ($i) {
         return wrap;
     }
 
-    function crearBarraIdea(parte) {
-        const fila = document.createElement('div');
-        fila.className = 'progreso-fila';
-        fila.dataset.parte = parte;
-
-        const icono = document.createElement('i');
-        icono.className = `bi ${iconoParte[parte]}`;
-        icono.title = parte === 'foto' ? 'Fotografía' : 'Vídeo';
-        fila.appendChild(icono);
-
-        const bar = document.createElement('div');
-        bar.className = 'progreso-bar';
-        ordenEstados.forEach(() => {
-            const seg = document.createElement('div');
-            seg.className = 'progreso-seg inactivo';
-            seg.title = 'Idea: sin etapa todavía';
-            bar.appendChild(seg);
-        });
-        fila.appendChild(bar);
-
-        const label = document.createElement('span');
-        label.className = 'progreso-label';
-        label.textContent = 'Idea';
-        fila.appendChild(label);
-
-        return fila;
-    }
-
     function partesDe(s) {
         return ['foto', 'video']
             .filter(p => s['estado_' + p] !== null)
             .map(p => ({ parte: p, estado: s['estado_' + p] }));
     }
 
-    function partesDeIdea(idea) {
-        return ['foto', 'video'].filter(p => idea['tiene_' + p]);
-    }
-
     function estadosVisibles() {
         if (filtros.size > 0) return filtros;
         const set = new Set(ordenEstados);
+        // 'idea' es un estado más, pero no se muestra por defecto: hace
+        // falta activar el filtro "Ideas" a propósito para verlas.
+        set.delete('idea');
         if (ocultarCompletadas) set.delete('completado');
         return set;
     }
@@ -461,32 +415,19 @@ $datosIdeas = array_map(static function ($i) {
             filas = [];
             sesiones.forEach(s => {
                 partesDe(s).forEach(({ parte, estado }) => {
-                    filas.push({ tipo: 'sesion', s, parte, estado, idx: ordenEstados.indexOf(estado) });
+                    filas.push({ s, parte, estado, idx: ordenEstados.indexOf(estado) });
                 });
             });
         } else {
             filas = sesiones.map(s => {
                 const partes = partesDe(s);
                 const idx = Math.min(...partes.map(p => ordenEstados.indexOf(p.estado)));
-                return { tipo: 'sesion', s, partes, idx };
+                return { s, partes, idx };
             });
         }
 
         filas = filas.filter(f => (dividir ? visibles.has(f.estado) : f.partes.some(p => visibles.has(p.estado))));
-
-        if (visibles.has('idea')) {
-            if (dividir) {
-                ideas.forEach(idea => {
-                    partesDeIdea(idea).forEach(parte => {
-                        filas.push({ tipo: 'idea', idea, parte, idx: -1 });
-                    });
-                });
-            } else {
-                ideas.forEach(idea => filas.push({ tipo: 'idea', idea, partes: partesDeIdea(idea), idx: -1 }));
-            }
-        }
-
-        filas.sort((a, b) => a.idx - b.idx || (a.s ? a.s.titulo : a.idea.titulo).localeCompare(b.s ? b.s.titulo : b.idea.titulo));
+        filas.sort((a, b) => a.idx - b.idx || a.s.titulo.localeCompare(b.s.titulo));
 
         if (filas.length === 0) {
             const tr = document.createElement('tr');
@@ -505,33 +446,21 @@ $datosIdeas = array_map(static function ($i) {
             const tdSesion = document.createElement('td');
             tdSesion.className = 'kanban-col-sesion';
             const a = document.createElement('a');
-            const tdProgreso = document.createElement('td');
-
-            if (f.tipo === 'idea') {
-                a.href = `${base}/ideas/${f.idea.id}`;
-                a.className = 'fw-semibold text-decoration-none';
-                a.textContent = f.idea.titulo;
-                tdSesion.appendChild(a);
-                if (dividir) {
-                    tdProgreso.appendChild(crearBarraIdea(f.parte));
-                } else {
-                    f.partes.forEach(p => tdProgreso.appendChild(crearBarraIdea(p)));
-                }
-            } else {
-                a.href = `${base}/${f.s.id}`;
-                a.className = 'fw-semibold text-decoration-none';
-                a.textContent = f.s.titulo;
-                tdSesion.appendChild(a);
-                tdSesion.appendChild(crearBadges(f.s));
-                if (dividir) {
-                    tdProgreso.appendChild(crearBarra(f.parte, f.estado, f.s.id));
-                } else {
-                    f.partes.forEach(p => tdProgreso.appendChild(crearBarra(p.parte, p.estado, f.s.id)));
-                }
-            }
-
+            a.href = `${base}/${f.s.id}`;
+            a.className = 'fw-semibold text-decoration-none';
+            a.textContent = f.s.titulo;
+            tdSesion.appendChild(a);
+            tdSesion.appendChild(crearBadges(f.s));
             tr.appendChild(tdSesion);
+
+            const tdProgreso = document.createElement('td');
+            if (dividir) {
+                tdProgreso.appendChild(crearBarra(f.parte, f.estado, f.s.id));
+            } else {
+                f.partes.forEach(p => tdProgreso.appendChild(crearBarra(p.parte, p.estado, f.s.id)));
+            }
             tr.appendChild(tdProgreso);
+
             tbody.appendChild(tr);
         });
     }
