@@ -3,7 +3,7 @@
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-lightbulb text-primary"></i>
-    <a href="<?= site_url('sesiones/ideas') ?>" class="text-decoration-none text-muted fw-normal">Ideas</a>
+    <a href="<?= site_url('sesiones') ?>" class="text-decoration-none text-muted fw-normal">Sesiones</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= isset($idea) ? 'Editar' : 'Nueva' ?> idea</strong>
 </h5>
@@ -62,7 +62,7 @@
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
-                        <a href="<?= isset($idea) ? site_url('sesiones/ideas/' . $idea['id']) : site_url('sesiones/ideas') ?>" class="btn btn-outline-secondary">Cancelar</a>
+                        <a href="<?= isset($idea) ? site_url('sesiones/ideas/' . $idea['id']) : site_url('sesiones') ?>" class="btn btn-outline-secondary">Cancelar</a>
                     </div>
                 </form>
             </div>

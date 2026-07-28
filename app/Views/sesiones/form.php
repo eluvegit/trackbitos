@@ -20,8 +20,8 @@
 
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
+        <div class="ses-card">
+            <div class="ses-card-body">
                 <form action="<?= isset($sesion) ? site_url('sesiones/' . $sesion['id'] . '/actualizar') : site_url('sesiones/guardar') ?>" method="post">
                     <?= csrf_field() ?>
 
@@ -72,13 +72,25 @@
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
-                        <a href="<?= isset($sesion) ? site_url('sesiones/' . $sesion['id']) : site_url('sesiones') ?>" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary rounded-pill"><i class="bi bi-check-lg me-1"></i>Guardar</button>
+                        <a href="<?= isset($sesion) ? site_url('sesiones/' . $sesion['id']) : site_url('sesiones') ?>" class="btn btn-outline-secondary rounded-pill">Cancelar</a>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+.ses-card {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .45);
+}
+.ses-card-body {
+    padding: 1.5rem;
+}
+</style>
 
 <?= $this->endSection() ?>

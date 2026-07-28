@@ -5,7 +5,7 @@
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-lightbulb text-primary"></i>
-    <a href="<?= site_url('sesiones/ideas') ?>" class="text-decoration-none text-muted fw-normal">Ideas</a>
+    <a href="<?= site_url('sesiones') ?>" class="text-decoration-none text-muted fw-normal">Sesiones</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= esc($idea['titulo']) ?></strong>
 </h5>

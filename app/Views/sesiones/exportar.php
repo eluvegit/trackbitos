@@ -74,7 +74,7 @@
     <h1 class="mb-4"><?= esc($sesion['titulo']) ?></h1>
 
     <?php if (!empty($sesion['briefing'])): ?>
-        <div class="export-briefing"><?= esc($sesion['briefing']) ?></div>
+        <div class="export-briefing"><?= $sesion['briefing'] ?></div>
     <?php endif; ?>
 
     <?php if (empty($grupos)): ?>

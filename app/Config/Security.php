@@ -70,8 +70,14 @@ class Security extends BaseConfig
      * --------------------------------------------------------------------------
      *
      * Regenerate CSRF Token on every submission.
+     *
+     * false porque las vistas de Sesiones hacen varias llamadas AJAX
+     * seguidas sin recargar la página (equipo, situaciones, moodboard,
+     * estado...); con el token regenerándose en cada petición, la 2ª
+     * llamada en adelante fallaba porque el JS seguía usando el token
+     * capturado al cargar la página.
      */
-    public bool $regenerate = true;
+    public bool $regenerate = false;
 
     /**
      * --------------------------------------------------------------------------

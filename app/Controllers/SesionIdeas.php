@@ -14,9 +14,9 @@ class SesionIdeas extends BaseController
 
     public function index()
     {
-        $ideas = (new IdeaModel())->orderBy('actualizada_at', 'DESC')->findAll();
-
-        return view('sesiones/ideas/index', ['ideas' => $ideas]);
+        // Las ideas ya se listan integradas en Sesiones::index (filtro "Ideas");
+        // este listado separado queda obsoleto, se redirige al unificado.
+        return redirect()->to(site_url('sesiones'));
     }
 
     public function create()
@@ -52,7 +52,7 @@ class SesionIdeas extends BaseController
     {
         $idea = (new IdeaModel())->find($id);
         if (!$idea) {
-            return redirect()->to(site_url('sesiones/ideas'))->with('error', 'Idea no encontrada.');
+            return redirect()->to(site_url('sesiones'))->with('error', 'Idea no encontrada.');
         }
 
         $moodboard = (new IdeaMoodboardItemModel())
@@ -67,7 +67,7 @@ class SesionIdeas extends BaseController
     {
         $idea = (new IdeaModel())->find($id);
         if (!$idea) {
-            return redirect()->to(site_url('sesiones/ideas'))->with('error', 'Idea no encontrada.');
+            return redirect()->to(site_url('sesiones'))->with('error', 'Idea no encontrada.');
         }
 
         return view('sesiones/ideas/form', ['idea' => $idea]);
@@ -102,7 +102,7 @@ class SesionIdeas extends BaseController
 
         (new IdeaModel())->delete($id);
 
-        return redirect()->to(site_url('sesiones/ideas'))->with('success', 'Idea eliminada.');
+        return redirect()->to(site_url('sesiones'))->with('success', 'Idea eliminada.');
     }
 
     /**
@@ -115,7 +115,7 @@ class SesionIdeas extends BaseController
         $ideaModel = new IdeaModel();
         $idea      = $ideaModel->find($id);
         if (!$idea) {
-            return redirect()->to(site_url('sesiones/ideas'))->with('error', 'Idea no encontrada.');
+            return redirect()->to(site_url('sesiones'))->with('error', 'Idea no encontrada.');
         }
 
         $sesionModel = new SesionModel();

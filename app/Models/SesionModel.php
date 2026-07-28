@@ -19,7 +19,6 @@ class SesionModel extends Model
         'estado_video',
         'pausada',
         'entrega_modelos',
-        'mensaje_modelos',
         'fecha_sesion',
         'notas',
         'briefing',
@@ -139,12 +138,35 @@ class SesionModel extends Model
             ->orderBy('id', 'ASC')
             ->findAll();
 
+        $mensajesModelo = (new SesionMensajeModeloModel())
+            ->where('sesion_id', $id)
+            ->orderBy('id', 'DESC')
+            ->findAll();
+
+        // Fecha en la que cada parte entró en su etapa actual (última fila
+        // de historial de esa parte), para mostrarla bajo el paso activo
+        // de la línea de vida. Null si esa parte nunca ha cambiado de
+        // estado por cambiarEstado() (p. ej. recién creada).
+        $historialModel = new SesionHistorialEstadoModel();
+        $ultimoCambio    = [];
+        foreach (self::PARTES as $parte) {
+            $fila = $historialModel
+                ->where('sesion_id', $id)
+                ->where('parte', $parte)
+                ->orderBy('cambiado_at', 'DESC')
+                ->orderBy('id', 'DESC')
+                ->first();
+            $ultimoCambio[$parte] = $fila['cambiado_at'] ?? null;
+        }
+
         return [
             'sesion'                  => $sesion,
             'situaciones'             => $situaciones,
             'moodboard_por_situacion' => $moodboardPorSituacion,
             'equipo'                  => $equipo,
             'model_releases'          => $modelReleases,
+            'mensajes_modelo'         => $mensajesModelo,
+            'ultimo_cambio'           => $ultimoCambio,
         ];
     }
 }

@@ -7,6 +7,7 @@ use App\Models\IdeaMoodboardItemModel;
 use App\Models\MoodboardItemModel;
 use App\Models\ModelReleaseModel;
 use App\Models\SesionEquipoModel;
+use App\Models\SesionMensajeModeloModel;
 use App\Models\SesionModel;
 use App\Models\SituacionModel;
 
@@ -24,7 +25,11 @@ class Sesiones extends BaseController
         // y no se pueden perder entre sesiones distintas.
         $sesiones = (new SesionModel())->orderBy('actualizada_at', 'DESC')->findAll();
 
-        return view('sesiones/index', ['sesiones' => $sesiones]);
+        // Las ideas se muestran en el mismo listado tras el filtro "Ideas"
+        // (no tienen estado_foto/estado_video, solo tiene_foto/tiene_video).
+        $ideas = (new IdeaModel())->orderBy('actualizada_at', 'DESC')->findAll();
+
+        return view('sesiones/index', ['sesiones' => $sesiones, 'ideas' => $ideas]);
     }
 
     public function create()
@@ -94,7 +99,7 @@ class Sesiones extends BaseController
             'fecha_sesion' => ($post['fecha_sesion'] ?? '') ?: null,
         ];
 
-        foreach (['notas', 'briefing', 'mensaje_modelos'] as $campo) {
+        foreach (['notas', 'briefing'] as $campo) {
             if (array_key_exists($campo, $post)) {
                 $data[$campo] = $post[$campo] !== '' ? $post[$campo] : null;
             }
@@ -118,7 +123,9 @@ class Sesiones extends BaseController
      * Vuelve a convertir una sesión en idea: crea la idea con su moodboard
      * (aplanado, sin situaciones) y borra la sesión. El briefing se anexa a
      * las notas (la idea no tiene ese campo); el equipo y los model releases
-     * no tienen equivalente en una idea y se pierden al hacerlo.
+     * no tienen equivalente en una idea y se pierden al hacerlo. Solo se
+     * permite si ninguna parte ha avanzado más allá de planificación —
+     * si no, ya hay trabajo real hecho y degradarla perdería demasiado.
      */
     public function convertirEnIdea(int $id)
     {
@@ -126,6 +133,14 @@ class Sesiones extends BaseController
         $sesion      = $sesionModel->find($id);
         if (!$sesion) {
             return redirect()->to(site_url('sesiones'))->with('error', 'Sesión no encontrada.');
+        }
+
+        foreach (SesionModel::PARTES as $parte) {
+            $estado = $sesion['estado_' . $parte];
+            if ($estado !== null && $estado !== 'planificacion') {
+                return redirect()->to(site_url('sesiones/' . $id))
+                    ->with('error', 'Solo se puede convertir en idea una sesión cuyas partes sigan en planificación.');
+            }
         }
 
         // La idea no tiene campo de briefing propio: se anexa a las notas
@@ -176,7 +191,12 @@ class Sesiones extends BaseController
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         }
 
-        return $this->response->setJSON(['ok' => true, 'parte' => $parte, 'estado' => $nuevoEstado]);
+        return $this->response->setJSON([
+            'ok'     => true,
+            'parte'  => $parte,
+            'estado' => $nuevoEstado,
+            'fecha'  => date('d/m/Y'),
+        ]);
     }
 
     public function togglePausada(int $id)
@@ -206,8 +226,9 @@ class Sesiones extends BaseController
 
     public function situacionCrear(int $sesionId)
     {
+        $input  = $this->request->getJSON(true) ?: $this->request->getPost();
         $model  = new SituacionModel();
-        $nombre = trim((string) $this->request->getPost('nombre'));
+        $nombre = trim((string) ($input['nombre'] ?? ''));
 
         if ($nombre === '') {
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
@@ -247,8 +268,9 @@ class Sesiones extends BaseController
 
     public function equipoAgregar(int $sesionId)
     {
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
         $model = new SesionEquipoModel();
-        $item  = trim((string) $this->request->getPost('item'));
+        $item  = trim((string) ($input['item'] ?? ''));
 
         if ($item === '') {
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
@@ -347,10 +369,11 @@ class Sesiones extends BaseController
 
     public function moodboardAgregarEnlace(int $sesionId)
     {
-        $situacionId = $this->request->getPost('situacion_id');
+        $input       = $this->request->getJSON(true) ?: $this->request->getPost();
+        $situacionId = $input['situacion_id'] ?? null;
         $situacionId = ($situacionId !== null && $situacionId !== '') ? (int) $situacionId : null;
-        $url         = trim((string) $this->request->getPost('url_externa'));
-        $nota        = trim((string) $this->request->getPost('nota')) ?: null;
+        $url         = trim((string) ($input['url_externa'] ?? ''));
+        $nota        = trim((string) ($input['nota'] ?? '')) ?: null;
 
         if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
             return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'URL inválida.']);
@@ -386,6 +409,32 @@ class Sesiones extends BaseController
         return $this->response->setJSON(['ok' => true]);
     }
 
+    /**
+     * Vincula (o desvincula, con situacion_id vacío) un item de moodboard
+     * ya subido a una situación concreta, sin tener que borrarlo y
+     * resubirlo dentro de esa situación.
+     */
+    public function moodboardVincular(int $sesionId, int $itemId)
+    {
+        $input       = $this->request->getJSON(true) ?: $this->request->getPost();
+        $situacionId = $input['situacion_id'] ?? null;
+        $situacionId = ($situacionId !== null && $situacionId !== '') ? (int) $situacionId : null;
+
+        $model = new MoodboardItemModel();
+        $item  = $model->where('sesion_id', $sesionId)->find($itemId);
+        if (!$item) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        if ($situacionId !== null && !(new SituacionModel())->where('sesion_id', $sesionId)->find($situacionId)) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Situación no válida.']);
+        }
+
+        $model->update($itemId, ['situacion_id' => $situacionId]);
+
+        return $this->response->setJSON(['ok' => true, 'situacion_id' => $situacionId]);
+    }
+
     // ========== MODEL RELEASES ==========
 
     public function releaseSubir(int $sesionId)
@@ -396,7 +445,6 @@ class Sesiones extends BaseController
         }
 
         $nombreModelo = trim((string) $this->request->getPost('nombre_modelo'));
-        $fecha        = trim((string) $this->request->getPost('fecha')) ?: null;
         $file         = $this->request->getFile('archivo');
 
         if ($nombreModelo === '' || !$file || !$file->isValid() || $file->hasMoved()) {
@@ -417,7 +465,6 @@ class Sesiones extends BaseController
             'sesion_id'     => $sesionId,
             'nombre_modelo' => $nombreModelo,
             'ruta_archivo'  => $targetDir . '/' . $newName,
-            'fecha'         => $fecha,
         ]);
 
         return $this->response->setJSON(['ok' => true, 'release' => $model->find($model->getInsertID())]);
@@ -432,6 +479,44 @@ class Sesiones extends BaseController
             $this->borrarArchivoFisico($release['ruta_archivo']);
             $model->delete($releaseId);
         }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    // ========== MENSAJES A MODELOS ==========
+    // Un registro por mensaje enviado; puede haber varios modelos/dueños
+    // en la misma sesión y cada uno puede tener o no un model release.
+
+    public function mensajeModeloCrear(int $sesionId)
+    {
+        $input        = $this->request->getJSON(true) ?: $this->request->getPost();
+        $nombreModelo = trim((string) ($input['nombre_modelo'] ?? ''));
+        $mensaje      = trim((string) ($input['mensaje'] ?? ''));
+        $releaseId    = $input['model_release_id'] ?? null;
+        $releaseId    = ($releaseId !== null && $releaseId !== '') ? (int) $releaseId : null;
+
+        if ($nombreModelo === '' || $mensaje === '') {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Faltan datos.']);
+        }
+
+        if ($releaseId !== null && !(new ModelReleaseModel())->where('sesion_id', $sesionId)->find($releaseId)) {
+            $releaseId = null;
+        }
+
+        $model = new SesionMensajeModeloModel();
+        $model->insert([
+            'sesion_id'        => $sesionId,
+            'model_release_id' => $releaseId,
+            'nombre_modelo'    => $nombreModelo,
+            'mensaje'          => $mensaje,
+        ]);
+
+        return $this->response->setJSON(['ok' => true, 'item' => $model->find($model->getInsertID())]);
+    }
+
+    public function mensajeModeloBorrar(int $sesionId, int $mensajeId)
+    {
+        (new SesionMensajeModeloModel())->where('sesion_id', $sesionId)->delete($mensajeId);
 
         return $this->response->setJSON(['ok' => true]);
     }

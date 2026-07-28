@@ -489,9 +489,13 @@ $routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('(:num)/moodboard/subir', 'Sesiones::moodboardSubir/$1');
     $routes->POST('(:num)/moodboard/enlace', 'Sesiones::moodboardAgregarEnlace/$1');
     $routes->POST('(:num)/moodboard/(:num)/borrar', 'Sesiones::moodboardBorrar/$1/$2');
+    $routes->POST('(:num)/moodboard/(:num)/vincular', 'Sesiones::moodboardVincular/$1/$2');
 
     $routes->POST('(:num)/releases/subir', 'Sesiones::releaseSubir/$1');
     $routes->POST('(:num)/releases/(:num)/borrar', 'Sesiones::releaseBorrar/$1/$2');
+
+    $routes->POST('(:num)/mensajes/crear', 'Sesiones::mensajeModeloCrear/$1');
+    $routes->POST('(:num)/mensajes/(:num)/borrar', 'Sesiones::mensajeModeloBorrar/$1/$2');
 
     $routes->GET('(:num)/exportar', 'Sesiones::exportar/$1');
 });
