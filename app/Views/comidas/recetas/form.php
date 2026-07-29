@@ -154,15 +154,70 @@ $this->section('content'); ?>
   <?php if (!empty($aliVirtId)): ?>
     <div class="card mb-3">
       <div class="card-header">📐 Proporciones / unidades <span class="text-muted small">(opcional)</span></div>
-      <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="text-muted small pe-2">
+      <div class="card-body">
+        <p class="text-muted small">
           Peso total de la receta: <strong id="propTotalGramos">0</strong>&nbsp;g.
-          ¿Se sirve por raciones, tazas u otra unidad? Defínelo aquí para poder
+          ¿Se sirve por raciones, tazas u otra unidad? Añádelo aquí para poder
           registrarla así en el diario, además de por gramos.
+        </p>
+
+        <div class="row g-2 mb-3 align-items-end">
+          <div class="col-12 col-md-5">
+            <label class="form-label small mb-1">Nombre</label>
+            <input type="text" id="propDescripcion" class="form-control form-control-sm" placeholder="Ej. ración, taza…">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Gramos</label>
+            <input type="number" step="1" min="1" id="propGramos" class="form-control form-control-sm" placeholder="Ej. 250">
+          </div>
+          <div class="col-6 col-md-2 form-check pb-1">
+            <input class="form-check-input" type="checkbox" id="propPredeterminada">
+            <label class="form-check-label small" for="propPredeterminada">Predet.</label>
+          </div>
+          <div class="col-12 col-md-2 d-flex">
+            <button type="button" id="btnAgregarProp" class="btn btn-primary btn-sm flex-fill">
+              <i class="bi bi-plus-lg"></i> Añadir
+            </button>
+          </div>
         </div>
-        <a class="btn btn-outline-primary text-nowrap" href="<?= site_url('comidas/porciones/alimento/' . $aliVirtId) ?>">
-          <i class="bi bi-rulers"></i> Definir proporciones
-        </a>
+
+        <div id="listaProporciones"></div>
+
+        <div class="mt-2 small text-muted">
+          Toca una proporción de la lista para cambiar su nombre, sus gramos o eliminarla.
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal editar/eliminar proporción -->
+    <div class="modal fade" id="modalEditarProporcion" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar proporción</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-2">
+              <label class="form-label small mb-1">Nombre</label>
+              <input type="text" id="modalPropDescripcion" class="form-control">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">Gramos</label>
+              <input type="number" step="1" min="1" id="modalPropGramos" class="form-control">
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="modalPropPredeterminada">
+              <label class="form-check-label small" for="modalPropPredeterminada">Porción predeterminada</label>
+            </div>
+          </div>
+          <div class="modal-footer justify-content-between">
+            <button type="button" class="btn btn-outline-danger" id="btnEliminarProp">
+              <i class="bi bi-trash"></i> Eliminar
+            </button>
+            <button type="button" class="btn btn-primary" id="btnGuardarProp">Guardar</button>
+          </div>
+        </div>
       </div>
     </div>
   <?php endif; ?>
@@ -202,6 +257,7 @@ $this->section('content'); ?>
   <?php if (isset($row)): ?>
   document.addEventListener('DOMContentLoaded', () => {
     const RECETA_ID = <?= (int) $row['id'] ?>;
+    const ALIVIRT_ID = <?= (int) ($aliVirtId ?? 0) ?>;
 
     const API = {
       buscar: '<?= site_url('api/alimentos') ?>',            // GET ?q=
@@ -210,6 +266,10 @@ $this->section('content'); ?>
       add: '<?= site_url('comidas/recetas/ingredientes') ?>/' + RECETA_ID + '/add',
       editBase: '<?= site_url('comidas/recetas/ingrediente') ?>',   // /{id}/edit
       delBase: '<?= site_url('comidas/recetas/ingrediente') ?>',    // /{id}/delete
+      propsListar: '<?= site_url('comidas/porciones/ajax') ?>/' + ALIVIRT_ID,
+      propsAdd: '<?= site_url('comidas/porciones/ajax/store') ?>',
+      propsEditBase: '<?= site_url('comidas/porciones/ajax') ?>',   // /{id}/update
+      propsDelBase: '<?= site_url('comidas/porciones/ajax') ?>',    // /{id}/delete
     };
 
     const buscador = document.getElementById('buscador');
@@ -499,6 +559,136 @@ $this->section('content'); ?>
     });
 
     cargarIngredientes();
+
+    // ---- Proporciones / unidades (inline, sin salir de la pantalla) ----
+    if (ALIVIRT_ID > 0) {
+      const propDescripcion = document.getElementById('propDescripcion');
+      const propGramos = document.getElementById('propGramos');
+      const propPredeterminada = document.getElementById('propPredeterminada');
+      const btnAgregarProp = document.getElementById('btnAgregarProp');
+      const listaProporciones = document.getElementById('listaProporciones');
+
+      const modalPropEl = document.getElementById('modalEditarProporcion');
+      const modalProp = new bootstrap.Modal(modalPropEl);
+      const modalPropDescripcion = document.getElementById('modalPropDescripcion');
+      const modalPropGramos = document.getElementById('modalPropGramos');
+      const modalPropPredeterminada = document.getElementById('modalPropPredeterminada');
+      const btnGuardarProp = document.getElementById('btnGuardarProp');
+      const btnEliminarProp = document.getElementById('btnEliminarProp');
+      let proporcionActualId = null;
+
+      const renderProporciones = (rows) => {
+        if (!rows || rows.length === 0) {
+          listaProporciones.innerHTML = `<div class="alert alert-light border py-2 mb-0">Aún no hay proporciones definidas para esta receta.</div>`;
+          return;
+        }
+        const filas = rows.map(r => {
+          const desc = escapeHtml(r.descripcion || '—');
+          const predet = +r.es_predeterminada === 1;
+          return `
+            <div class="list-group-item proporcion-row d-flex justify-content-between align-items-center"
+                 role="button" data-id="${r.id}" data-descripcion="${desc}"
+                 data-gramos="${r.gramos_equivalentes}" data-predeterminada="${predet ? 1 : 0}">
+              <div>
+                <div class="fw-semibold">${desc} ${predet ? '<span class="badge text-bg-primary ms-1">Predet.</span>' : ''}</div>
+                <div class="small text-muted">${fmt0(r.gramos_equivalentes)} g</div>
+              </div>
+              <i class="bi bi-chevron-right text-muted"></i>
+            </div>`;
+        }).join('');
+        listaProporciones.innerHTML = `<div class="list-group">${filas}</div>`;
+      };
+
+      const cargarProporciones = async () => {
+        try {
+          const rows = await getJson(API.propsListar);
+          renderProporciones(rows);
+        } catch (e) {
+          console.error(e);
+          listaProporciones.innerHTML = `<div class="alert alert-danger py-2 mb-0">Error al cargar las proporciones.</div>`;
+        }
+      };
+
+      btnAgregarProp.addEventListener('click', async () => {
+        const descripcion = (propDescripcion.value || '').trim();
+        const gramos = parseFloat((propGramos.value || '').toString().replace(',', '.'));
+        if (!descripcion) return alert('Indica un nombre para la proporción.');
+        if (!gramos || gramos <= 0) return alert('Indica los gramos.');
+
+        try {
+          const r = await postForm(API.propsAdd, {
+            alimento_id: String(ALIVIRT_ID),
+            descripcion,
+            gramos_equivalentes: String(gramos),
+            es_predeterminada: propPredeterminada.checked ? '1' : '',
+          });
+          if (!r.ok) {
+            alert('No se pudo añadir: ' + (r.error || 'Error desconocido'));
+            return;
+          }
+          propDescripcion.value = '';
+          propGramos.value = '';
+          propPredeterminada.checked = false;
+          await cargarProporciones();
+        } catch (err) {
+          console.error(err);
+          alert('Error de red al añadir.');
+        }
+      });
+
+      listaProporciones.addEventListener('click', (e) => {
+        const row = e.target.closest('.proporcion-row');
+        if (!row) return;
+        proporcionActualId = row.dataset.id;
+        modalPropDescripcion.value = row.dataset.descripcion;
+        modalPropGramos.value = row.dataset.gramos;
+        modalPropPredeterminada.checked = row.dataset.predeterminada === '1';
+        modalProp.show();
+      });
+
+      btnGuardarProp.addEventListener('click', async () => {
+        if (!proporcionActualId) return;
+        const descripcion = (modalPropDescripcion.value || '').trim();
+        const gramos = parseFloat((modalPropGramos.value || '').toString().replace(',', '.'));
+        if (!descripcion) return alert('Indica un nombre para la proporción.');
+        if (!gramos || gramos <= 0) return alert('Introduce una cantidad válida.');
+        try {
+          const r = await postForm(`${API.propsEditBase}/${proporcionActualId}/update`, {
+            descripcion,
+            gramos_equivalentes: String(gramos),
+            es_predeterminada: modalPropPredeterminada.checked ? '1' : '',
+          });
+          if (r.ok) {
+            modalProp.hide();
+            await cargarProporciones();
+          } else {
+            alert('No se pudo actualizar: ' + (r.error || 'Error desconocido'));
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error de red al actualizar.');
+        }
+      });
+
+      btnEliminarProp.addEventListener('click', async () => {
+        if (!proporcionActualId) return;
+        if (!confirm('¿Eliminar esta proporción?')) return;
+        try {
+          const r = await postForm(`${API.propsDelBase}/${proporcionActualId}/delete`, {});
+          if (r.ok) {
+            modalProp.hide();
+            await cargarProporciones();
+          } else {
+            alert('No se pudo eliminar.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error de red al eliminar.');
+        }
+      });
+
+      cargarProporciones();
+    }
   });
   <?php endif; ?>
 </script>

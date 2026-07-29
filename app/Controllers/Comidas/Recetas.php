@@ -10,19 +10,29 @@ class Recetas extends BaseController
 {
     public function index()
     {
-        // Ejemplo dentro de Recetas::index()
+        $q = trim((string) $this->request->getGet('q'));
+
         $m = new \App\Models\ComidasRecetasModel();
 
-        $rows = $m->select('comidas_recetas.*, a.kcal, a.proteina_g, a.carbohidratos_g, a.grasas_g')
-            ->join('comidas_alimentos a', 'a.receta_id = comidas_recetas.id', 'left')
-            ->orderBy('comidas_recetas.nombre', 'ASC')
-            ->findAll();
+        $m->select('comidas_recetas.*, a.kcal, a.proteina_g, a.carbohidratos_g, a.grasas_g')
+            ->join('comidas_alimentos a', 'a.receta_id = comidas_recetas.id', 'left');
+
+        if ($q !== '') {
+            $m->like('comidas_recetas.nombre', $q);
+        }
+
+        $rows = $m->orderBy('comidas_recetas.nombre', 'ASC')->findAll();
+
+        // Petición parcial (AJAX o ?partial=1): solo las filas, para el buscador.
+        if ($this->request->isAJAX() || $this->request->getGet('partial') === '1') {
+            return view('comidas/recetas/_rows', ['rows' => $rows]);
+        }
 
         return view('comidas/recetas/index', [
-            'rows' => $rows,
+            'rows'  => $rows,
+            'q'     => $q,
             'title' => 'Recetas',
-]);
-
+        ]);
     }
 
     public function create()

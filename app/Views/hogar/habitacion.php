@@ -227,6 +227,16 @@
         const tiempo = item.querySelector('.tarea-tiempo');
         if (tiempo) tiempo.textContent = data.tiempo_relativo;
 
+        let atrasadaTag = item.querySelector('.tarea-atrasada-tag');
+        if (data.atrasada && !atrasadaTag) {
+            atrasadaTag = document.createElement('span');
+            atrasadaTag.className = 'tarea-atrasada-tag';
+            atrasadaTag.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Toca hacerla';
+            item.querySelector('.tarea-meta').appendChild(atrasadaTag);
+        } else if (!data.atrasada && atrasadaTag) {
+            atrasadaTag.remove();
+        }
+
         let renovarBtn = item.querySelector('.js-renovar');
         if (esHecha && !renovarBtn) {
             renovarBtn = document.createElement('button');
@@ -269,9 +279,10 @@
 
             const res = await post('<?= site_url('hogar') ?>/' + habitacionId + '/renovar-todo');
             if (!res.ok) return;
+            const data = await res.json();
 
             list.querySelectorAll('.tarea-item.is-hecha').forEach(item => {
-                aplicarEstado(item, { estado: 0, tiempo_relativo: item.querySelector('.tarea-tiempo').textContent, atrasada: item.classList.contains('is-atrasada') });
+                aplicarEstado(item, { estado: 0, tiempo_relativo: data.tiempo_relativo, atrasada: false });
             });
             btnRenovarTodo.remove();
         });

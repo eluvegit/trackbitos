@@ -8,20 +8,16 @@
 
 <style>
   /* Botones plegables uniformes */
-  #toggleAccesoRapido.btn-outline-secondary,
-  #toggleIdentidad.btn-outline-secondary {
+  .btn-toggle-seccion.btn-outline-secondary {
     background-color: transparent !important;
     color: var(--bs-secondary-color) !important;
     border-color: rgba(0, 0, 0, 0.1);
     transition: none;
   }
 
-  #toggleAccesoRapido.btn-outline-secondary:hover,
-  #toggleAccesoRapido.btn-outline-secondary:focus,
-  #toggleAccesoRapido.btn-outline-secondary:active,
-  #toggleIdentidad.btn-outline-secondary:hover,
-  #toggleIdentidad.btn-outline-secondary:focus,
-  #toggleIdentidad.btn-outline-secondary:active {
+  .btn-toggle-seccion.btn-outline-secondary:hover,
+  .btn-toggle-seccion.btn-outline-secondary:focus,
+  .btn-toggle-seccion.btn-outline-secondary:active {
     background-color: transparent !important;
     color: var(--bs-secondary-color) !important;
     border-color: rgba(0, 0, 0, 0.1) !important;
@@ -29,41 +25,47 @@
   }
 
   /* Modo oscuro */
-  .text-bg-dark #toggleAccesoRapido.btn-outline-secondary,
-  .bg-dark #toggleAccesoRapido.btn-outline-secondary,
-  .text-bg-dark #toggleIdentidad.btn-outline-secondary,
-  .bg-dark #toggleIdentidad.btn-outline-secondary {
+  .text-bg-dark .btn-toggle-seccion.btn-outline-secondary,
+  .bg-dark .btn-toggle-seccion.btn-outline-secondary {
     color: rgba(255, 255, 255, .75) !important;
     border-color: rgba(255, 255, 255, .15) !important;
   }
 
-  .text-bg-dark #toggleAccesoRapido.btn-outline-secondary:hover,
-  .bg-dark #toggleAccesoRapido.btn-outline-secondary:hover,
-  .text-bg-dark #toggleIdentidad.btn-outline-secondary:hover,
-  .bg-dark #toggleIdentidad.btn-outline-secondary:hover {
+  .text-bg-dark .btn-toggle-seccion.btn-outline-secondary:hover,
+  .bg-dark .btn-toggle-seccion.btn-outline-secondary:hover {
     color: rgba(255, 255, 255, .75) !important;
     border-color: rgba(255, 255, 255, .15) !important;
+  }
+
+  /* Campos numéricos: 2 por fila en móvil, 4 en escritorio */
+  .campo-num .form-label {
+    font-size: .8rem;
+    margin-bottom: .2rem;
+  }
+  .campo-num .form-control {
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+  }
+
+  .macro-principal .form-label {
+    font-weight: 600;
   }
 </style>
 
-
-
 <div class="row g-3">
 
-  <?php if (!empty($row['id'])): // ⬅️ Solo mostrar en modo editar 
+  <?php if (!empty($row['id'])): // ⬅️ Solo mostrar en modo editar
   ?>
     <div class="mb-3">
       <!-- Botón de despliegue -->
-      <button type="button" id="toggleAccesoRapido"
-        class="btn btn-outline-secondary w-100 text-start mb-2 d-flex justify-content-between align-items-center">
+      <button type="button" class="btn btn-outline-secondary w-100 text-start mb-2 d-flex justify-content-between align-items-center btn-toggle-seccion"
+        data-target="accesoRapidoBox">
         <span>Pegado rápido</span>
         <span class="d-flex align-items-center gap-1">
-          <span id="toggleAccesoRapidoLabel" class="small text-muted">Mostrar</span>
-          <span id="toggleAccesoRapidoIcon">▸</span>
+          <span class="small text-muted toggle-label">Mostrar</span>
+          <span class="toggle-icon">▸</span>
         </span>
       </button>
-
-
 
       <div id="accesoRapidoBox" class="d-none">
         <textarea name="bulk" rows="5" class="form-control mb-2"
@@ -105,13 +107,12 @@
     <!-- Identidad -->
     <div class="col-12 mb-2">
       <div class="card">
-        <!-- Botón de despliegue con el mismo estilo -->
-        <button type="button" id="toggleIdentidad"
-          class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center">
+        <button type="button" class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center btn-toggle-seccion"
+          data-target="identidadBox">
           <span>Identidad</span>
           <span class="d-flex align-items-center gap-1">
-            <span id="toggleIdentidadLabel" class="small text-muted">Mostrar</span>
-            <span id="toggleIdentidadIcon">▸</span>
+            <span class="small text-muted toggle-label">Mostrar</span>
+            <span class="toggle-icon">▸</span>
           </span>
         </button>
 
@@ -130,40 +131,24 @@
             <label class="form-label">Descripción</label>
             <textarea name="descripcion" class="form-control" rows="2"><?= esc(old('descripcion', $row['descripcion'] ?? '')) ?></textarea>
           </div>
-          <div class="col-12 d-flex gap-2">
-            <button class="btn btn-primary">Guardar</button>
-            <a href="<?= site_url('comidas/alimentos') ?>" class="btn btn-outline-secondary">Cancelar</a>
-            <?php if (!empty($row['id'])): ?>
-              <a href="<?= site_url('comidas/porciones/alimento/' . $row['id']) ?>" class="btn btn-outline-primary">Proporciones</a>
-            <?php endif; ?>
-
-          </div>
         </div>
       </div>
     </div>
 
-
-
-    <!-- Macros -->
+    <!-- Macros principales (siempre visibles) -->
     <div class="col-12">
       <div class="card">
-        <div class="card-header">Macros (por 100 g)</div>
+        <div class="card-header">Macros principales (por 100 g)</div>
         <div class="card-body row g-3">
           <?php
-          $macros = [
+          $macrosPrincipales = [
             ['kcal', 'kcal', 0.01],
             ['proteina_g', 'Proteína (g)', 0.01],
             ['carbohidratos_g', 'Carbohidratos (g)', 0.01],
             ['grasas_g', 'Grasas (g)', 0.01],
-            ['azucares_g', 'Azúcares (g)', 0.01],
-            ['fibra_g', 'Fibra (g)', 0.01],
-            ['grasas_saturadas_g', 'Saturadas (g)', 0.01],
-            ['omega3_mg', 'Omega-3 (mg)', 0.01],
-            ['omega6_mg', 'Omega-6 (mg)', 0.01],
-            ['sodio_mg', 'Sodio (mg)', 0.01],
           ];
-          foreach ($macros as [$name, $label, $step]): ?>
-            <div class="col-md-3">
+          foreach ($macrosPrincipales as [$name, $label, $step]): ?>
+            <div class="col-6 col-md-3 campo-num macro-principal">
               <label class="form-label"><?= esc($label) ?></label>
               <input type="number" step="<?= $step ?>" name="<?= $name ?>" class="form-control"
                 value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
@@ -173,11 +158,50 @@
       </div>
     </div>
 
-    <!-- Minerales -->
+    <!-- Más macros (opcional, plegado) -->
     <div class="col-12">
       <div class="card">
-        <div class="card-header">Minerales (por 100 g)</div>
-        <div class="card-body row g-3">
+        <button type="button" class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center btn-toggle-seccion"
+          data-target="masMacrosBox">
+          <span>Más macros <span class="text-muted small">(azúcares, fibra, saturadas…)</span></span>
+          <span class="d-flex align-items-center gap-1">
+            <span class="small text-muted toggle-label">Mostrar</span>
+            <span class="toggle-icon">▸</span>
+          </span>
+        </button>
+        <div class="card-body row g-3 d-none" id="masMacrosBox">
+          <?php
+          $macrosSecundarios = [
+            ['azucares_g', 'Azúcares (g)', 0.01],
+            ['fibra_g', 'Fibra (g)', 0.01],
+            ['grasas_saturadas_g', 'Saturadas (g)', 0.01],
+            ['omega3_mg', 'Omega-3 (mg)', 0.01],
+            ['omega6_mg', 'Omega-6 (mg)', 0.01],
+            ['sodio_mg', 'Sodio (mg)', 0.01],
+          ];
+          foreach ($macrosSecundarios as [$name, $label, $step]): ?>
+            <div class="col-6 col-md-3 campo-num">
+              <label class="form-label"><?= esc($label) ?></label>
+              <input type="number" step="<?= $step ?>" name="<?= $name ?>" class="form-control"
+                value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    </div>
+
+    <!-- Minerales (opcional, plegado) -->
+    <div class="col-12">
+      <div class="card">
+        <button type="button" class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center btn-toggle-seccion"
+          data-target="mineralesBox">
+          <span>Minerales <span class="text-muted small">(opcional)</span></span>
+          <span class="d-flex align-items-center gap-1">
+            <span class="small text-muted toggle-label">Mostrar</span>
+            <span class="toggle-icon">▸</span>
+          </span>
+        </button>
+        <div class="card-body row g-3 d-none" id="mineralesBox">
           <?php
           $mins = [
             ['calcio_mg', 'Calcio (mg)'],
@@ -192,7 +216,7 @@
             ['yodo_ug', 'Yodo (µg)'],
           ];
           foreach ($mins as [$name, $label]): ?>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3 campo-num">
               <label class="form-label"><?= esc($label) ?></label>
               <input type="number" step="0.01" name="<?= $name ?>" class="form-control"
                 value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
@@ -202,11 +226,18 @@
       </div>
     </div>
 
-    <!-- Vitaminas -->
+    <!-- Vitaminas (opcional, plegado) -->
     <div class="col-12">
       <div class="card">
-        <div class="card-header">Vitaminas (por 100 g)</div>
-        <div class="card-body row g-3">
+        <button type="button" class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center btn-toggle-seccion"
+          data-target="vitaminasBox">
+          <span>Vitaminas <span class="text-muted small">(opcional)</span></span>
+          <span class="d-flex align-items-center gap-1">
+            <span class="small text-muted toggle-label">Mostrar</span>
+            <span class="toggle-icon">▸</span>
+          </span>
+        </button>
+        <div class="card-body row g-3 d-none" id="vitaminasBox">
           <?php
           $vits = [
             ['vitamina_a_rae_ug', 'Vit. A (µg RAE)'],
@@ -216,7 +247,7 @@
             ['vitamina_k_ug', 'Vit. K (µg)'],
           ];
           foreach ($vits as [$name, $label]): ?>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3 campo-num">
               <label class="form-label"><?= esc($label) ?></label>
               <input type="number" step="0.01" name="<?= $name ?>" class="form-control"
                 value="<?= esc(old($name, $row[$name] ?? '0')) ?>">
@@ -226,7 +257,87 @@
       </div>
     </div>
 
-    <div class="col-12 d-flex gap-2">
+    <!-- Proporciones / unidades (opcional, plegado; solo si el alimento ya existe) -->
+    <?php if (!empty($row['id'])): ?>
+      <div class="col-12">
+        <div class="card">
+          <button type="button" class="btn btn-outline-secondary w-100 text-start mb-0 d-flex justify-content-between align-items-center btn-toggle-seccion"
+            data-target="proporcionesBox">
+            <span>📐 Proporciones / unidades <span class="text-muted small">(opcional)</span></span>
+            <span class="d-flex align-items-center gap-1">
+              <span class="small text-muted toggle-label">Mostrar</span>
+              <span class="toggle-icon">▸</span>
+            </span>
+          </button>
+          <div class="card-body d-none" id="proporcionesBox">
+            <p class="text-muted small">
+              ¿Se sirve por lonchas, tazas u otra unidad? Añádelo aquí para poder
+              registrarla así en el diario, además de por gramos.
+            </p>
+
+            <div class="row g-2 mb-3 align-items-end">
+              <div class="col-12 col-md-5">
+                <label class="form-label small mb-1">Nombre</label>
+                <input type="text" id="propDescripcion" class="form-control form-control-sm" placeholder="Ej. loncha, taza…">
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small mb-1">Gramos</label>
+                <input type="number" step="1" min="1" id="propGramos" class="form-control form-control-sm" placeholder="Ej. 25">
+              </div>
+              <div class="col-6 col-md-2 form-check pb-1">
+                <input class="form-check-input" type="checkbox" id="propPredeterminada">
+                <label class="form-check-label small" for="propPredeterminada">Predet.</label>
+              </div>
+              <div class="col-12 col-md-2 d-flex">
+                <button type="button" id="btnAgregarProp" class="btn btn-primary btn-sm flex-fill">
+                  <i class="bi bi-plus-lg"></i> Añadir
+                </button>
+              </div>
+            </div>
+
+            <div id="listaProporciones"></div>
+
+            <div class="mt-2 small text-muted">
+              Toca una proporción de la lista para cambiar su nombre, sus gramos o eliminarla.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal editar/eliminar proporción -->
+      <div class="modal fade" id="modalEditarProporcion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Editar proporción</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-2">
+                <label class="form-label small mb-1">Nombre</label>
+                <input type="text" id="modalPropDescripcion" class="form-control">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small mb-1">Gramos</label>
+                <input type="number" step="1" min="1" id="modalPropGramos" class="form-control">
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="modalPropPredeterminada">
+                <label class="form-check-label small" for="modalPropPredeterminada">Porción predeterminada</label>
+              </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+              <button type="button" class="btn btn-outline-danger" id="btnEliminarProp">
+                <i class="bi bi-trash"></i> Eliminar
+              </button>
+              <button type="button" class="btn btn-primary" id="btnGuardarProp">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <div class="col-12 d-flex gap-2 flex-wrap mt-3 mb-5 pb-3">
       <button class="btn btn-primary">Guardar</button>
       <a href="<?= site_url('comidas/alimentos') ?>" class="btn btn-outline-secondary">Cancelar</a>
     </div>
@@ -359,36 +470,193 @@
         }
       });
 
-      // Botón de identidad
-      const toggleIdentidadBtn = document.getElementById('toggleIdentidad');
-      if (toggleIdentidadBtn) {
-        const box = document.getElementById('identidadBox');
-        const label = document.getElementById('toggleIdentidadLabel');
-        const icon = document.getElementById('toggleIdentidadIcon');
-        toggleIdentidadBtn.addEventListener('click', (e) => {
+      // Botones plegables (Identidad, Pegado rápido, Más macros, Minerales, Vitaminas...)
+      document.querySelectorAll('.btn-toggle-seccion').forEach((btn) => {
+        const box = document.getElementById(btn.dataset.target);
+        const label = btn.querySelector('.toggle-label');
+        const icon = btn.querySelector('.toggle-icon');
+        if (!box) return;
+
+        // Estado inicial del texto/icono según si arranca visible u oculto
+        const startsHidden = box.classList.contains('d-none');
+        label.textContent = startsHidden ? 'Mostrar' : 'Ocultar';
+        icon.textContent = startsHidden ? '▸' : '▾';
+
+        btn.addEventListener('click', (e) => {
           e.preventDefault();
           const isHidden = box.classList.contains('d-none');
           box.classList.toggle('d-none');
           label.textContent = isHidden ? 'Ocultar' : 'Mostrar';
           icon.textContent = isHidden ? '▾' : '▸';
         });
-      }
+      });
 
-      // Botón de acceso rápido (toggle sin cambio de color)
-      const toggleAccesoBtn = document.getElementById('toggleAccesoRapido');
-      if (toggleAccesoBtn) {
-        const box = document.getElementById('accesoRapidoBox');
-        const label = document.getElementById('toggleAccesoRapidoLabel');
-        const icon = document.getElementById('toggleAccesoRapidoIcon');
+      <?php if (!empty($row['id'])): ?>
+      // Proporciones / unidades (inline, sin salir de la pantalla)
+      (() => {
+        const ALIMENTO_ID = <?= (int) $row['id'] ?>;
+        const API = {
+          listar: '<?= site_url('comidas/porciones/ajax') ?>/' + ALIMENTO_ID,
+          add: '<?= site_url('comidas/porciones/ajax/store') ?>',
+          editBase: '<?= site_url('comidas/porciones/ajax') ?>',   // /{id}/update
+          delBase: '<?= site_url('comidas/porciones/ajax') ?>',    // /{id}/delete
+        };
 
-        toggleAccesoBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const isHidden = box.classList.contains('d-none');
-          box.classList.toggle('d-none');
-          label.textContent = isHidden ? 'Ocultar' : 'Mostrar';
-          icon.textContent = isHidden ? '▾' : '▸';
+        const csrfInput = document.querySelector('input[name="<?= csrf_token() ?>"]');
+        const fmt0 = n => (Math.round(+n || 0)).toString();
+
+        function escapeHtml(str) {
+          const div = document.createElement('div');
+          div.textContent = str ?? '';
+          return div.innerHTML;
+        }
+
+        const postForm = async (url, data) => {
+          if (csrfInput && csrfInput.name && csrfInput.value) data[csrfInput.name] = csrfInput.value;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams(data).toString()
+          });
+          return res.json();
+        };
+        const getJson = async (url) => (await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })).json();
+
+        const propDescripcion = document.getElementById('propDescripcion');
+        const propGramos = document.getElementById('propGramos');
+        const propPredeterminada = document.getElementById('propPredeterminada');
+        const btnAgregarProp = document.getElementById('btnAgregarProp');
+        const listaProporciones = document.getElementById('listaProporciones');
+
+        const modalPropEl = document.getElementById('modalEditarProporcion');
+        // bootstrap.bundle.min.js puede no estar listo todavía en el momento
+        // en que se parsea este script, así que la instancia del modal se
+        // crea perezosamente (en el primer clic) en vez de al cargar la página.
+        let modalProp = null;
+        const modalPropDescripcion = document.getElementById('modalPropDescripcion');
+        const modalPropGramos = document.getElementById('modalPropGramos');
+        const modalPropPredeterminada = document.getElementById('modalPropPredeterminada');
+        const btnGuardarProp = document.getElementById('btnGuardarProp');
+        const btnEliminarProp = document.getElementById('btnEliminarProp');
+        let proporcionActualId = null;
+
+        const renderProporciones = (rows) => {
+          if (!rows || rows.length === 0) {
+            listaProporciones.innerHTML = `<div class="alert alert-light border py-2 mb-0">Aún no hay proporciones definidas para este alimento.</div>`;
+            return;
+          }
+          const filas = rows.map(r => {
+            const desc = escapeHtml(r.descripcion || '—');
+            const predet = +r.es_predeterminada === 1;
+            return `
+              <div class="list-group-item proporcion-row d-flex justify-content-between align-items-center"
+                   role="button" data-id="${r.id}" data-descripcion="${desc}"
+                   data-gramos="${r.gramos_equivalentes}" data-predeterminada="${predet ? 1 : 0}">
+                <div>
+                  <div class="fw-semibold">${desc} ${predet ? '<span class="badge text-bg-primary ms-1">Predet.</span>' : ''}</div>
+                  <div class="small text-muted">${fmt0(r.gramos_equivalentes)} g</div>
+                </div>
+                <i class="bi bi-chevron-right text-muted"></i>
+              </div>`;
+          }).join('');
+          listaProporciones.innerHTML = `<div class="list-group">${filas}</div>`;
+        };
+
+        const cargarProporciones = async () => {
+          try {
+            const rows = await getJson(API.listar);
+            renderProporciones(rows);
+          } catch (e) {
+            console.error(e);
+            listaProporciones.innerHTML = `<div class="alert alert-danger py-2 mb-0">Error al cargar las proporciones.</div>`;
+          }
+        };
+
+        btnAgregarProp.addEventListener('click', async () => {
+          const descripcion = (propDescripcion.value || '').trim();
+          const gramos = parseFloat((propGramos.value || '').toString().replace(',', '.'));
+          if (!descripcion) return alert('Indica un nombre para la proporción.');
+          if (!gramos || gramos <= 0) return alert('Indica los gramos.');
+
+          try {
+            const r = await postForm(API.add, {
+              alimento_id: String(ALIMENTO_ID),
+              descripcion,
+              gramos_equivalentes: String(gramos),
+              es_predeterminada: propPredeterminada.checked ? '1' : '',
+            });
+            if (!r.ok) {
+              alert('No se pudo añadir: ' + (r.error || 'Error desconocido'));
+              return;
+            }
+            propDescripcion.value = '';
+            propGramos.value = '';
+            propPredeterminada.checked = false;
+            await cargarProporciones();
+          } catch (err) {
+            console.error(err);
+            alert('Error de red al añadir.');
+          }
         });
-      }
+
+        listaProporciones.addEventListener('click', (e) => {
+          const row = e.target.closest('.proporcion-row');
+          if (!row) return;
+          modalProp ??= new bootstrap.Modal(modalPropEl);
+          proporcionActualId = row.dataset.id;
+          modalPropDescripcion.value = row.dataset.descripcion;
+          modalPropGramos.value = row.dataset.gramos;
+          modalPropPredeterminada.checked = row.dataset.predeterminada === '1';
+          modalProp.show();
+        });
+
+        btnGuardarProp.addEventListener('click', async () => {
+          if (!proporcionActualId) return;
+          const descripcion = (modalPropDescripcion.value || '').trim();
+          const gramos = parseFloat((modalPropGramos.value || '').toString().replace(',', '.'));
+          if (!descripcion) return alert('Indica un nombre para la proporción.');
+          if (!gramos || gramos <= 0) return alert('Introduce una cantidad válida.');
+          try {
+            const r = await postForm(`${API.editBase}/${proporcionActualId}/update`, {
+              descripcion,
+              gramos_equivalentes: String(gramos),
+              es_predeterminada: modalPropPredeterminada.checked ? '1' : '',
+            });
+            if (r.ok) {
+              modalProp.hide();
+              await cargarProporciones();
+            } else {
+              alert('No se pudo actualizar: ' + (r.error || 'Error desconocido'));
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Error de red al actualizar.');
+          }
+        });
+
+        btnEliminarProp.addEventListener('click', async () => {
+          if (!proporcionActualId) return;
+          if (!confirm('¿Eliminar esta proporción?')) return;
+          try {
+            const r = await postForm(`${API.delBase}/${proporcionActualId}/delete`, {});
+            if (r.ok) {
+              modalProp.hide();
+              await cargarProporciones();
+            } else {
+              alert('No se pudo eliminar.');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('Error de red al eliminar.');
+          }
+        });
+
+        cargarProporciones();
+      })();
+      <?php endif; ?>
     </script>
 
     <?= $this->endSection(); ?>

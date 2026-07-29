@@ -31,17 +31,47 @@ class FixCarTablesAutoIncrement extends Migration
             }
         }
 
-        // MySQL exige que la columna AUTO_INCREMENT sea ya una clave, así
-        // que MODIFY y ADD PRIMARY KEY van en la misma sentencia.
+        // Idempotente: cada entorno (dev, producción...) puede partir de un
+        // estado distinto -en uno de ellos esta misma migración ya se había
+        // aplicado antes-, así que se comprueba el estado real de cada tabla
+        // en vez de asumir que a todas les falta lo mismo. MySQL exige que
+        // la columna AUTO_INCREMENT sea ya una clave, así que si hace falta
+        // añadir la PRIMARY KEY, MODIFY y ADD PRIMARY KEY van juntos.
         foreach (['car_actions', 'car_reminders', 'car_faults'] as $tabla) {
-            $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (id)");
+            $info = $this->db->query(
+                'SELECT COLUMN_KEY, EXTRA FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [$tabla, 'id']
+            )->getRowArray();
+
+            $tieneAutoIncrement = $info && str_contains(strtolower($info['EXTRA'] ?? ''), 'auto_increment');
+            if ($tieneAutoIncrement) {
+                continue;
+            }
+
+            $tienePrimaryKey = $info && ($info['COLUMN_KEY'] ?? '') === 'PRI';
+            if ($tienePrimaryKey) {
+                $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL AUTO_INCREMENT");
+            } else {
+                $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (id)");
+            }
         }
     }
 
     public function down()
     {
         foreach (['car_actions', 'car_reminders', 'car_faults'] as $tabla) {
-            $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL, DROP PRIMARY KEY");
+            $info = $this->db->query(
+                'SELECT COLUMN_KEY FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [$tabla, 'id']
+            )->getRowArray();
+
+            if ($info && ($info['COLUMN_KEY'] ?? '') === 'PRI') {
+                $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL, DROP PRIMARY KEY");
+            } else {
+                $this->db->query("ALTER TABLE {$tabla} MODIFY id INT NOT NULL");
+            }
         }
     }
 }

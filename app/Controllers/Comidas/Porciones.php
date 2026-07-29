@@ -161,4 +161,126 @@ class Porciones extends BaseController
         return redirect()->to(site_url('comidas/porciones/alimento/' . $alimentoId))
             ->with('msg', 'Porción eliminada');
     }
+
+    // =================== AJAX (edición inline, p.ej. desde el formulario de receta) ===================
+
+    private function toFloatComa($v): float
+    {
+        if ($v === null || $v === '') {
+            return 0.0;
+        }
+        if (is_string($v)) {
+            $v = str_replace(',', '.', $v);
+        }
+        return (float) $v;
+    }
+
+    public function listAjax($alimentoId)
+    {
+        $rows = (new ComidasAlimentoUnidadesModel())
+            ->where('alimento_id', $alimentoId)
+            ->orderBy('id', 'ASC')
+            ->findAll();
+
+        return $this->response->setJSON($rows);
+    }
+
+    public function storeAjax()
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $data = $this->request->getPost();
+
+        $payload = [
+            'alimento_id'         => (int) ($data['alimento_id'] ?? 0),
+            'descripcion'         => trim($data['descripcion'] ?? ''),
+            'gramos_equivalentes' => $this->toFloatComa($data['gramos_equivalentes'] ?? 0),
+            'es_predeterminada'   => !empty($data['es_predeterminada']) ? 1 : 0,
+        ];
+
+        if ($payload['alimento_id'] <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Alimento requerido.']);
+        }
+        if ($payload['descripcion'] === '') {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Indica un nombre para la proporción.']);
+        }
+        if ($payload['gramos_equivalentes'] <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'La equivalencia en gramos debe ser mayor que 0.']);
+        }
+
+        $m = new ComidasAlimentoUnidadesModel();
+        if (!$m->insert($payload)) {
+            return $this->response->setJSON(['ok' => false, 'error' => implode(' ', $m->errors())]);
+        }
+
+        if ($payload['es_predeterminada'] === 1) {
+            $newId = $m->getInsertID();
+            $m->where('alimento_id', $payload['alimento_id'])
+              ->where('id !=', $newId)
+              ->set('es_predeterminada', 0)
+              ->update();
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function updateAjax($id)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $m   = new ComidasAlimentoUnidadesModel();
+        $row = $m->find($id);
+        if (!$row) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Porción no encontrada.']);
+        }
+
+        $data = $this->request->getPost();
+
+        $payload = [
+            'descripcion'         => trim($data['descripcion'] ?? ''),
+            'gramos_equivalentes' => $this->toFloatComa($data['gramos_equivalentes'] ?? 0),
+            'es_predeterminada'   => !empty($data['es_predeterminada']) ? 1 : 0,
+        ];
+
+        if ($payload['descripcion'] === '') {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Indica un nombre para la proporción.']);
+        }
+        if ($payload['gramos_equivalentes'] <= 0) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'La equivalencia en gramos debe ser mayor que 0.']);
+        }
+
+        if (!$m->update($id, $payload)) {
+            return $this->response->setJSON(['ok' => false, 'error' => implode(' ', $m->errors())]);
+        }
+
+        if ($payload['es_predeterminada'] === 1) {
+            $m->where('alimento_id', $row['alimento_id'])
+              ->where('id !=', $id)
+              ->set('es_predeterminada', 0)
+              ->update();
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function deleteAjax($id)
+    {
+        if (!$this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Método no permitido']);
+        }
+
+        $m   = new ComidasAlimentoUnidadesModel();
+        $row = $m->find($id);
+        if (!$row) {
+            return $this->response->setJSON(['ok' => false, 'error' => 'Porción no encontrada.']);
+        }
+
+        $m->delete($id);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
 }

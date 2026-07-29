@@ -433,18 +433,27 @@ class Hogar extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
         }
 
-        $this->tareaModel->skipValidation(true)->update($id, ['estado' => 0]);
+        // Renovar significa "vuelvo a empezar el ciclo desde hoy": además de
+        // desmarcar la casilla, hay que refrescar ultima_vez (y dejar
+        // constancia en el historial) o el cálculo de atrasada seguiría
+        // leyendo la fecha vieja y la tarea aparecería pendiente al momento.
+        $ahora = date('Y-m-d H:i:s');
 
-        $atrasada = hogar_esta_atrasada(
-            $tarea['frecuencia_dias'] ? (int) $tarea['frecuencia_dias'] : null,
-            $tarea['ultima_vez']
-        );
+        $this->tareaModel->skipValidation(true)->update($id, [
+            'estado'     => 0,
+            'ultima_vez' => $ahora,
+        ]);
+
+        $this->logModel->insert([
+            'tarea_id'      => $id,
+            'completada_at' => $ahora,
+        ]);
 
         return $this->response->setJSON([
             'ok'              => true,
             'estado'          => 0,
-            'tiempo_relativo' => hogar_tiempo_relativo($tarea['ultima_vez']),
-            'atrasada'        => $atrasada,
+            'tiempo_relativo' => hogar_tiempo_relativo($ahora),
+            'atrasada'        => false,
         ]);
     }
 
@@ -455,15 +464,28 @@ class Hogar extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
         }
 
+        $ahora = date('Y-m-d H:i:s');
+
         $hechas = $this->tareaModel
             ->where('habitacion_id', $habitacionId)
             ->where('estado', 1)
             ->findAll();
 
         foreach ($hechas as $t) {
-            $this->tareaModel->skipValidation(true)->update($t['id'], ['estado' => 0]);
+            $this->tareaModel->skipValidation(true)->update($t['id'], [
+                'estado'     => 0,
+                'ultima_vez' => $ahora,
+            ]);
+            $this->logModel->insert([
+                'tarea_id'      => $t['id'],
+                'completada_at' => $ahora,
+            ]);
         }
 
-        return $this->response->setJSON(['ok' => true, 'renovadas' => count($hechas)]);
+        return $this->response->setJSON([
+            'ok'              => true,
+            'renovadas'       => count($hechas),
+            'tiempo_relativo' => hogar_tiempo_relativo($ahora),
+        ]);
     }
 }

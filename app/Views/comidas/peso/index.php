@@ -363,6 +363,9 @@ function fmt($n, $dec = 1)
                         order: 4
                     },
                     // === Grasa y agua corporal (báscula), en el eje derecho, para cruzar datos ===
+                    // Ocultas por defecto: la gráfica por defecto solo debe mostrar
+                    // Peso, Tendencia, Mediana y Entrenamiento. Siguen disponibles
+                    // pulsando su nombre en la leyenda.
                     {
                         label: '% Grasa corporal',
                         data: grasaValues,
@@ -373,7 +376,8 @@ function fmt($n, $dec = 1)
                         spanGaps: true,
                         fill: false,
                         borderColor: '#fd7e14',
-                        order: 5
+                        order: 5,
+                        hidden: true
                     },
                     {
                         label: '% Agua corporal',
@@ -385,7 +389,8 @@ function fmt($n, $dec = 1)
                         spanGaps: true,
                         fill: false,
                         borderColor: '#0dcaf0',
-                        order: 6
+                        order: 6,
+                        hidden: true
                     }
                 ]
             },

@@ -279,6 +279,12 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
         $r->GET('edit/(:num)',    'Porciones::edit/$1');     // form editar
         $r->POST('update/(:num)', 'Porciones::update/$1');   // actualizar
         $r->GET('delete/(:num)',  'Porciones::delete/$1');   // eliminar
+
+        // AJAX (para editar proporciones sin salir de la pantalla de la receta)
+        $r->GET('ajax/(:num)',          'Porciones::listAjax/$1');
+        $r->POST('ajax/store',          'Porciones::storeAjax');
+        $r->POST('ajax/(:num)/update',  'Porciones::updateAjax/$1');
+        $r->POST('ajax/(:num)/delete',  'Porciones::deleteAjax/$1');
     });
     // PESO
     $routes->group('peso', ['namespace' => 'App\Controllers\Comidas'], static function ($routes) {
