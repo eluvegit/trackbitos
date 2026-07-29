@@ -21,6 +21,12 @@
         title="Editar supermercado">
         <i class="bi bi-pencil-square fs-6"></i>
     </a>
+
+    <a href="<?= site_url('compras/supermercados/' . $supermercado_id . '/zonas') ?>"
+        class="text-decoration-none ms-1 text-secondary"
+        title="Zonas y recorrido">
+        <i class="bi bi-signpost-split fs-6"></i>
+    </a>
 </h5>
 
 <!-- Accesos rápidos a listas -->
@@ -76,20 +82,30 @@
 
             <div class="row g-1 align-items-end">
 
-                <div class="col-6 col-md-4">
+                <div class="col-6 col-md-3">
                     <label for="nombre" class="form-label small mb-1">Nombre</label>
-                    <input type="text" name="nombre" id="nombre" 
+                    <input type="text" name="nombre" id="nombre"
                            class="form-control form-control-sm" required>
                 </div>
 
-                <div class="col-6 col-md-5">
+                <div class="col-6 col-md-3">
+                    <label for="zona_id" class="form-label small mb-1">Zona</label>
+                    <select name="zona_id" id="zona_id" class="form-select form-select-sm">
+                        <option value="">Sin zona</option>
+                        <?php foreach ($zonas as $z): ?>
+                            <option value="<?= (int)$z['id'] ?>"><?= esc($z['nombre']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-4">
                     <label for="imagen" class="form-label small mb-1">Imagen</label>
-                    <input type="url" name="imagen" id="imagen" 
+                    <input type="url" name="imagen" id="imagen"
                            class="form-control form-control-sm">
                 </div>
 
-                <div class="col-12 col-md-3">
-                    <button type="submit" 
+                <div class="col-6 col-md-2">
+                    <button type="submit"
                             class="btn btn-success btn-sm w-100">
                         + Añadir
                     </button>
@@ -101,46 +117,197 @@
     </div>
 </div>
 
-<!-- Lista de productos -->
-<div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
-    <?php foreach ($productos as $producto): ?>
-        <div class="col d-flex h-100">
-            <div class="card shadow-sm w-100 small d-flex flex-column h-100">
+<!-- Lista de productos, agrupada por zona. Arrastra una tarjeta a otra zona para reasignarla. -->
+<p class="text-muted small mb-2">
+    <i class="bi bi-arrows-move"></i> Arrastra un producto a otra zona para reasignarlo.
+</p>
 
-                <?php if (!empty($producto['imagen'])): ?>
-                    <img src="<?= esc($producto['imagen']) ?>"
-                         class="card-img-top"
-                         style="object-fit: cover; height: 110px;">
-                <?php endif; ?>
+<?php foreach ($grupos as $grupo): ?>
+    <h6 class="text-muted small text-uppercase mt-3 mb-2">
+        <?= $grupo['zona'] ? esc($grupo['zona']['nombre']) : 'Sin zona' ?>
+    </h6>
 
-                <div class="card-body p-2 d-flex flex-column justify-content-between">
+    <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2 mb-2 zona-dropzone"
+         data-zona-id="<?= $grupo['zona']['id'] ?? '' ?>">
+        <?php foreach ($grupo['productos'] as $producto): ?>
+            <div class="col d-flex h-100" data-producto-id="<?= (int)$producto['id'] ?>">
+                <div class="card shadow-sm w-100 small d-flex flex-column h-100 position-relative">
 
-                    <h6 class="card-title mb-1">
-                        <?= esc($producto['nombre']) ?>
-                    </h6>
+                    <button type="button"
+                            class="btn btn-sm p-0 producto-favorito-toggle position-absolute top-0 end-0 m-1"
+                            data-producto-id="<?= (int)$producto['id'] ?>"
+                            data-favorito="<?= $producto['favorito'] ? '1' : '0' ?>"
+                            title="Marcar como compra habitual">
+                        <i class="bi <?= $producto['favorito'] ? 'bi-star-fill text-warning' : 'bi-star text-secondary' ?>"></i>
+                    </button>
 
-                    <div class="mb-1">
-                        <?php if ($producto['faltante']): ?>
-                            <span class="badge bg-warning text-dark">FALTA</span>
-                        <?php endif; ?>
-                        <?php if ($producto['comprado']): ?>
-                            <span class="badge bg-success">OK</span>
-                        <?php endif; ?>
+                    <?php if (!empty($producto['imagen'])): ?>
+                        <img src="<?= esc($producto['imagen']) ?>"
+                             class="card-img-top"
+                             style="object-fit: cover; height: 110px;">
+                    <?php endif; ?>
+
+                    <div class="card-body p-2 d-flex flex-column justify-content-between">
+
+                        <h6 class="card-title mb-1">
+                            <?= esc($producto['nombre']) ?>
+                        </h6>
+
+                        <div class="mb-1">
+                            <?php if ($producto['faltante']): ?>
+                                <span class="badge bg-warning text-dark">FALTA</span>
+                            <?php endif; ?>
+                            <?php if ($producto['comprado']): ?>
+                                <span class="badge bg-success">OK</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="text-end">
+                            <a href="<?= site_url('compras/productos/editar/' . $producto['id']) ?>"
+                               class="text-decoration-none text-muted small">
+                               ✏️
+                            </a>
+                        </div>
+
                     </div>
-
-                    <div class="text-end">
-                        <a href="<?= site_url('compras/productos/editar/' . $producto['id']) ?>"
-                           class="text-decoration-none text-muted small">
-                           ✏️
-                        </a>
-                    </div>
-
                 </div>
             </div>
-        </div>
-    <?php endforeach; ?>
-</div>
+        <?php endforeach; ?>
+        <?php if (empty($grupo['productos'])): ?>
+            <div class="zona-empty-hint text-muted small">Arrastra aquí productos de esta zona</div>
+        <?php endif; ?>
+    </div>
+<?php endforeach; ?>
 
+<?php if (empty($grupos)): ?>
+    <p class="text-muted">Todavía no hay productos en este supermercado.</p>
+<?php endif; ?>
 
+<style>
+.zona-dropzone {
+    min-height: 46px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border: 1px dashed transparent;
+    border-radius: 10px;
+}
+.zona-dropzone .zona-empty-hint {
+    padding: 10px 4px;
+}
+.zona-dropzone.sortable-drag-over,
+.zona-dropzone:has(.sortable-ghost) {
+    border-color: var(--bs-primary);
+    background: var(--bs-tertiary-bg);
+}
+.producto-card-item { cursor: grab; }
+.producto-card-item:active { cursor: grabbing; }
+.producto-card-item.sortable-ghost { opacity: .35; }
+.producto-card-item.sortable-chosen .card { box-shadow: 0 0 0 2px var(--bs-primary); }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+    (() => {
+        const dropzones = document.querySelectorAll('.zona-dropzone');
+        if (!dropzones.length) return;
+
+        dropzones.forEach(zona => {
+            zona.querySelectorAll(':scope > [data-producto-id]').forEach(item => {
+                item.classList.add('producto-card-item');
+            });
+        });
+
+        async function guardarOrden(zona) {
+            const ids = [...zona.querySelectorAll(':scope > [data-producto-id]')]
+                .map(el => el.dataset.productoId);
+            if (!ids.length) return true;
+
+            const res = await fetch('<?= site_url('compras/productos/reordenar') ?>', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ zona_id: zona.dataset.zonaId || '', orden: ids }),
+            });
+            return res.ok;
+        }
+
+        function mostrarHintSiVacia(zona) {
+            const tieneProductos = [...zona.children].some(el => el.dataset && el.dataset.productoId);
+            if (tieneProductos) return;
+            if (zona.querySelector('.zona-empty-hint')) return;
+
+            const hint = document.createElement('div');
+            hint.className = 'zona-empty-hint text-muted small';
+            hint.textContent = 'Arrastra aquí productos de esta zona';
+            zona.appendChild(hint);
+        }
+
+        /* ===== Favorito (⭐ compra habitual) ===== */
+        document.querySelectorAll('.producto-favorito-toggle').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const productoId = btn.dataset.productoId;
+                const icon = btn.querySelector('i');
+
+                try {
+                    const res = await fetch('<?= site_url('compras/productos') ?>/' + productoId + '/favorito', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+                        },
+                    });
+                    if (!res.ok) return;
+
+                    const data = await res.json();
+                    btn.dataset.favorito = data.favorito ? '1' : '0';
+                    icon.classList.toggle('bi-star-fill', data.favorito);
+                    icon.classList.toggle('text-warning', data.favorito);
+                    icon.classList.toggle('bi-star', !data.favorito);
+                    icon.classList.toggle('text-secondary', !data.favorito);
+                } catch (err) {
+                    console.error(err);
+                }
+            });
+        });
+
+        dropzones.forEach(zona => {
+            Sortable.create(zona, {
+                group: 'productos-zona',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                filter: '.producto-favorito-toggle',
+                preventOnFilter: false,
+                onEnd: async (evt) => {
+                    const item = evt.item;
+                    if (!item.dataset.productoId) return;
+
+                    const cambioDeZona = evt.from !== evt.to;
+                    if (cambioDeZona) {
+                        evt.to.querySelector('.zona-empty-hint')?.remove();
+                    }
+
+                    const ok = await guardarOrden(evt.to);
+                    if (!ok) {
+                        // revertir si falla la petición
+                        evt.from.insertBefore(item, evt.from.children[evt.oldIndex] || null);
+                        mostrarHintSiVacia(evt.to);
+                        return;
+                    }
+
+                    if (cambioDeZona) {
+                        mostrarHintSiVacia(evt.from);
+                    }
+                },
+            });
+        });
+    })();
+</script>
 
 <?= $this->endSection() ?>

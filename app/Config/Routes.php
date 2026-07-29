@@ -86,9 +86,18 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
     $routes->POST('supermercados/reordenar', 'Compras::reordenarSupermercados');
     $routes->POST('supermercados/(:num)/visibilidad', 'Compras::toggleVisibleSupermercado/$1');
 
+    // Zonas / pasillos (para definir el recorrido dentro de un supermercado)
+    $routes->GET('supermercados/(:num)/zonas', 'Compras::zonas/$1');
+    $routes->POST('zonas/nuevo', 'Compras::crearZona');
+    $routes->POST('zonas/reordenar', 'Compras::reordenarZonas');
+    $routes->POST('zonas/(:num)/renombrar', 'Compras::renombrarZona/$1');
+    $routes->POST('zonas/(:num)/borrar', 'Compras::eliminarZona/$1');
+
     // Productos
     $routes->GET('productos/(:num)', 'Compras::productos/$1');
     $routes->POST('productos/nuevo', 'Compras::crearProducto');
+    $routes->POST('productos/reordenar', 'Compras::reordenarProductos');
+    $routes->POST('productos/(:num)/favorito', 'Compras::toggleFavorito/$1');
     $routes->POST('productos/(:num)/borrar', 'Compras::eliminarProducto/$1');
 
     $routes->GET('(:num)/faltantes', 'Compras::faltantes/$1');

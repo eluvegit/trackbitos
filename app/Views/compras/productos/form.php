@@ -19,6 +19,18 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="zona_id" class="form-label">Zona</label>
+                        <select name="zona_id" id="zona_id" class="form-select">
+                            <option value="">Sin zona</option>
+                            <?php foreach ($zonas as $z): ?>
+                                <option value="<?= (int)$z['id'] ?>" <?= (int)($producto['zona_id'] ?? 0) === (int)$z['id'] ? 'selected' : '' ?>>
+                                    <?= esc($z['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="imagen" class="form-label">URL de imagen</label>
                         <input type="url" name="imagen" id="imagen" value="<?= esc($producto['imagen']) ?>" class="form-control">
                     </div>
