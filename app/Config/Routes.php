@@ -98,6 +98,7 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
     $routes->POST('productos/nuevo', 'Compras::crearProducto');
     $routes->POST('productos/reordenar', 'Compras::reordenarProductos');
     $routes->POST('productos/(:num)/favorito', 'Compras::toggleFavorito/$1');
+    $routes->POST('productos/(:num)/precio', 'Compras::actualizarPrecioProducto/$1');
     $routes->POST('productos/(:num)/borrar', 'Compras::eliminarProducto/$1');
 
     $routes->GET('(:num)/faltantes', 'Compras::faltantes/$1');
@@ -184,6 +185,7 @@ $routes->group('gimnasio', ['filter' => 'auth'], static function ($r) {
 
     $r->match(['GET', 'POST'], 'mesociclos/(:num)/generar', 'GimnasioMesociclos::generar/$1');   // genera lote
     $r->POST('mesociclos/bloque/(:num)/hecho', 'GimnasioMesociclos::marcarHecho/$1');
+    $r->POST('mesociclos/(:num)/deshacer', 'GimnasioMesociclos::deshacerUltimoHecho/$1');
 
     // Paso previo: formulario de ajuste (solo se permite si no quedan pendientes)
     $r->GET('mesociclos/(:num)/ajustar', 'GimnasioMesociclos::ajustar/$1');

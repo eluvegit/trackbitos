@@ -249,6 +249,26 @@ class GimnasioMesociclos extends BaseController
         return redirect()->back()->with('message', 'Bloque marcado como hecho.');
     }
 
+    /** Deshace el último bloque marcado como hecho de un plan (por si te has equivocado al pulsar). */
+    public function deshacerUltimoHecho(int $planId)
+    {
+        $ultimo = $this->bloques
+            ->where('plan_id', $planId)
+            ->where('estado', 'hecho')
+            ->orderBy('orden', 'DESC')
+            ->first();
+
+        if (!$ultimo) {
+            return redirect()->back()->with('error', 'No hay ningún bloque marcado como hecho.');
+        }
+
+        if ($this->bloques->update($ultimo['id'], ['estado' => 'pendiente']) === false) {
+            return redirect()->back()->with('error', 'No se pudo deshacer el bloque.');
+        }
+
+        return redirect()->back()->with('message', "Se ha deshecho el bloque #{$ultimo['orden']}.");
+    }
+
 
 
     /** Generar nuevo lote */

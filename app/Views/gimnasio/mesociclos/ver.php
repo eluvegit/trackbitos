@@ -187,6 +187,18 @@
 
     <!-- Otras acciones -->
     <div class="meso-actions mb-3">
+        <?php if (!empty($hechos)): $ultimoHecho = $hechos[0]; ?>
+            <form method="post"
+                  action="<?= site_url('gimnasio/mesociclos/' . $plan['id'] . '/deshacer') ?>"
+                  class="d-inline"
+                  onsubmit="return confirm('¿Deshacer el bloque #<?= (int)$ultimoHecho['orden'] ?> (<?= esc($ultimoHecho['bloque_tipo']) ?>) marcado como hecho?')">
+                <?= csrf_field() ?>
+                <button class="meso-pill" style="border-color: rgba(220,53,69,.4); color:#f27784; background: rgba(220,53,69,.1);">
+                    <i class="bi bi-arrow-counterclockwise"></i> Deshacer último (#<?= (int)$ultimoHecho['orden'] ?>)
+                </button>
+            </form>
+        <?php endif; ?>
+
         <a class="meso-pill" href="<?= site_url('gimnasio/mesociclos/' . $plan['id'] . '/bloque/nuevo') ?>">
             <i class="bi bi-plus-lg"></i> Añadir bloque
         </a>

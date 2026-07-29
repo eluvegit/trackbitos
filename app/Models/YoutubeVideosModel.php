@@ -29,6 +29,9 @@ class YoutubeVideosModel extends Model
             case 'recientes':
                 $qb->orderBy('posicion', 'DESC');
                 break;
+            case 'antiguos':
+                $qb->orderBy('posicion', 'ASC');
+                break;
             case 'no_vistos':
                 $qb->orderBy('visto', 'ASC')->orderBy('posicion', 'ASC');
                 break;
@@ -38,9 +41,10 @@ class YoutubeVideosModel extends Model
             case 'relevantes':
                 $qb->orderBy('relevante', 'DESC')->orderBy('posicion', 'ASC');
                 break;
-            case 'antiguos':
+            case '':
             default:
-                $qb->orderBy('posicion', 'ASC');
+                // Por defecto (sin filtro elegido): no vistos primero y, entre ellos, los más recientes.
+                $qb->orderBy('visto', 'ASC')->orderBy('posicion', 'DESC');
                 break;
         }
 

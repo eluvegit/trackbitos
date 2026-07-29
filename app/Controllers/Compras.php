@@ -278,6 +278,24 @@ class Compras extends BaseController
         return $this->response->setJSON(['ok' => true, 'favorito' => (bool) $favorito]);
     }
 
+    // Actualiza el precio de un producto desde el modal de edición rápida.
+    public function actualizarPrecioProducto($id)
+    {
+        $productoModel = new CompraProductoModel();
+        $producto = $productoModel->find($id);
+
+        if (!$producto) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        $precio = $this->request->getJSON(true)['precio'] ?? null;
+        $precio = ($precio === '' || $precio === null) ? null : round((float) $precio, 2);
+
+        $productoModel->skipValidation(true)->update($id, ['precio' => $precio]);
+
+        return $this->response->setJSON(['ok' => true, 'precio' => $precio]);
+    }
+
     public function eliminarProducto($id)
     {
         $productoModel = new CompraProductoModel();

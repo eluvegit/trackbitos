@@ -11,7 +11,7 @@ $hasFilters = $orden || $nv || $rel;
 $pendientes = $stats['total'] - $stats['vistos'];
 
 $ordenOptions = [
-    ''           => 'Orden: posición',
+    ''           => 'Recientes y no vistos',
     'recientes'  => 'Más recientes',
     'antiguos'   => 'Más antiguos',
     'no_vistos'  => 'No vistos primero',
@@ -462,11 +462,12 @@ $ordenOptions = [
 
                 switch (orden) {
                     case 'recientes':   return bp - ap;
+                    case 'antiguos':    return ap - bp;
                     case 'no_vistos':   return (av !== bv) ? av - bv : ap - bp;
                     case 'vistos':      return (av !== bv) ? bv - av : ap - bp;
                     case 'relevantes':  return (ar !== br) ? br - ar : ap - bp;
-                    case 'antiguos':
-                    default:            return ap - bp;
+                    case '':
+                    default:            return (av !== bv) ? av - bv : bp - ap;
                 }
             });
 

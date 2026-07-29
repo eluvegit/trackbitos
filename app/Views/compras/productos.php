@@ -143,17 +143,21 @@
 
                     <?php if (!empty($producto['imagen'])): ?>
                         <img src="<?= esc($producto['imagen']) ?>"
-                             class="card-img-top"
-                             style="object-fit: cover; height: 110px;">
+                             class="card-img-top producto-imagen-slot"
+                             style="object-fit: cover;">
+                    <?php else: ?>
+                        <div class="card-img-top producto-imagen-slot d-flex align-items-center justify-content-center bg-body-secondary">
+                            <i class="bi bi-image text-secondary fs-3"></i>
+                        </div>
                     <?php endif; ?>
 
                     <div class="card-body p-2 d-flex flex-column justify-content-between">
 
-                        <h6 class="card-title mb-1">
+                        <h6 class="card-title mb-1 producto-nombre">
                             <?= esc($producto['nombre']) ?>
                         </h6>
 
-                        <div class="mb-1">
+                        <div class="mb-1 producto-badges">
                             <?php if ($producto['faltante']): ?>
                                 <span class="badge bg-warning text-dark">FALTA</span>
                             <?php endif; ?>
@@ -162,7 +166,16 @@
                             <?php endif; ?>
                         </div>
 
-                        <div class="text-end">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="producto-precio-toggle text-muted small"
+                                  role="button"
+                                  data-producto-id="<?= (int)$producto['id'] ?>"
+                                  data-precio="<?= $producto['precio'] !== null ? esc($producto['precio']) : '' ?>">
+                                <?= $producto['precio'] !== null
+                                    ? number_format((float) $producto['precio'], 2, ',', '.') . ' €'
+                                    : '+ precio' ?>
+                            </span>
+
                             <a href="<?= site_url('compras/productos/editar/' . $producto['id']) ?>"
                                class="text-decoration-none text-muted small">
                                ✏️
@@ -182,6 +195,28 @@
 <?php if (empty($grupos)): ?>
     <p class="text-muted">Todavía no hay productos en este supermercado.</p>
 <?php endif; ?>
+
+<!-- Modal edición rápida de precio -->
+<div class="modal fade" id="modalPrecio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formPrecio">
+                <div class="modal-header">
+                    <h6 class="modal-title mb-0">Precio</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="inputPrecio" class="form-label small">Precio (€)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="inputPrecio">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <style>
 .zona-dropzone {
@@ -203,6 +238,23 @@
 .producto-card-item:active { cursor: grabbing; }
 .producto-card-item.sortable-ghost { opacity: .35; }
 .producto-card-item.sortable-chosen .card { box-shadow: 0 0 0 2px var(--bs-primary); }
+
+/* Alturas de tarjeta consistentes: reserva el mismo espacio tenga o no imagen,
+   independientemente de si el nombre ocupa una o dos líneas o de cuántas
+   etiquetas (FALTA/OK) tenga, para que todas las filas midan igual. */
+.producto-imagen-slot {
+    height: 110px;
+}
+.producto-nombre {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.4em;
+}
+.producto-badges {
+    min-height: 1.35rem;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -276,13 +328,63 @@
             });
         });
 
+        /* ===== Precio (modal de edición rápida) ===== */
+        let modalPrecio;
+        const modalPrecioEl = document.getElementById('modalPrecio');
+        const inputPrecio = document.getElementById('inputPrecio');
+        const formPrecio = document.getElementById('formPrecio');
+        let precioTarget = null;
+
+        document.querySelectorAll('.producto-precio-toggle').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                precioTarget = el;
+                inputPrecio.value = el.dataset.precio || '';
+                modalPrecio ??= new bootstrap.Modal(modalPrecioEl);
+                modalPrecio.show();
+                setTimeout(() => inputPrecio.focus(), 300);
+            });
+        });
+
+        formPrecio.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!precioTarget) return;
+
+            const productoId = precioTarget.dataset.productoId;
+
+            try {
+                const res = await fetch('<?= site_url('compras/productos') ?>/' + productoId + '/precio', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ precio: inputPrecio.value }),
+                });
+                if (!res.ok) return;
+
+                const data = await res.json();
+                precioTarget.dataset.precio = data.precio !== null ? data.precio : '';
+                precioTarget.textContent = data.precio !== null
+                    ? Number(data.precio).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+                    : '+ precio';
+
+                modalPrecio.hide();
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
         dropzones.forEach(zona => {
             Sortable.create(zona, {
                 group: 'productos-zona',
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
-                filter: '.producto-favorito-toggle',
+                filter: '.producto-favorito-toggle, .producto-precio-toggle',
                 preventOnFilter: false,
                 onEnd: async (evt) => {
                     const item = evt.item;

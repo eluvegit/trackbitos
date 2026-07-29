@@ -99,11 +99,22 @@ function time_ago(?string $datetime): string
         // Vista
         $portadasNext = $view_mode === 'portadas' ? 'listado' : 'portadas';
         $portadasClass = $view_mode === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
+
+        // Hechos
+        $hechosNext = $filterHechos === 'ocultar' ? 'mostrar' : 'ocultar';
+        $hechosClass = $filterHechos === 'ocultar' ? 'btn-primary' : 'btn-outline-primary';
+
+        $qs = fn($overrides) => http_build_query(array_merge([
+            'filterFocus' => $filterFocus,
+            'view'        => $view_mode,
+            'priority'    => $filterPriority,
+            'hechos'      => $filterHechos,
+        ], $overrides));
         ?>
 
         <div class="btn-group btn-group-sm">
             <!-- Prioridad -->
-            <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$view_mode}&priority={$priorityNext}") ?>"
+            <a href="<?= site_url('journal') . '?' . $qs(['priority' => $priorityNext]) ?>"
                 class="btn <?= $priorityClass ?>" title="Prioridad">
                 <!-- Icono de exclamación -->
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 16 16">
@@ -113,7 +124,7 @@ function time_ago(?string $datetime): string
             </a>
 
             <!-- Focus -->
-            <a href="<?= site_url("journal?filterFocus={$focusNext}&view={$view_mode}&priority={$filterPriority}") ?>"
+            <a href="<?= site_url('journal') . '?' . $qs(['filterFocus' => $focusNext]) ?>"
                 class="btn <?= $focusClass ?>" title="Focus">
                 <?php if ($filterFocus === 'focus'): ?>
                     <!-- Estrella rellena -->
@@ -128,9 +139,27 @@ function time_ago(?string $datetime): string
                 <?php endif; ?>
             </a>
 
+            <!-- Hechos -->
+            <a href="<?= site_url('journal') . '?' . $qs(['hechos' => $hechosNext]) ?>"
+                class="btn <?= $hechosClass ?>" title="<?= $filterHechos === 'ocultar' ? 'Mostrar hechos' : 'Ocultar hechos' ?>">
+                <?php if ($filterHechos === 'ocultar'): ?>
+                    <!-- Ojo tachado: los hechos están ocultos -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye-slash" viewBox="0 0 16 16">
+                        <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A6 6 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z" />
+                        <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z" />
+                        <path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.879 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z" />
+                    </svg>
+                <?php else: ?>
+                    <!-- Ojo abierto: los hechos están visibles -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
+                        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.133 13.133 0 0 1 1.172 8z" />
+                        <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
+                    </svg>
+                <?php endif; ?>
+            </a>
 
             <!-- Vista -->
-            <a href="<?= site_url("journal?filterFocus={$filterFocus}&view={$portadasNext}&priority={$filterPriority}") ?>"
+            <a href="<?= site_url('journal') . '?' . $qs(['view' => $portadasNext]) ?>"
                 class="btn <?= $portadasClass ?>" title="Vista">
                 <?php if ($view_mode === 'portadas'): ?>
                     <!-- Icono de cuadrícula -->
@@ -374,7 +403,7 @@ foreach ($categories as $category) {
                     <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>">
                 <?php else: ?>
                     <!-- MODO PORTADAS -->
-                    <div class="row g-2">
+                    <div class="d-flex flex-column gap-2 mx-auto" style="max-width: 480px;">
                         <?php foreach ($catTasks as $task): ?>
                             <?php
                             $amplitude = (int)($task['amplitude'] ?? 0);
@@ -382,11 +411,10 @@ foreach ($categories as $category) {
                             $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
                             $filled = (int)floor($percentage / 10);
                             ?>
-                            <div class="col-6 col-md-4 col-lg-3">
-                                <div class="card h-100">
+                            <div class="card">
 
                                     <?php if (!empty($task['image'])): ?>
-                                        <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>">
+                                        <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>" style="height:150px; object-fit:cover;">
                                     <?php else: ?>
                                         <div style="height:150px; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#6c757d;">
                                             Sin imagen
@@ -433,7 +461,6 @@ foreach ($categories as $category) {
                                             </div>
                                         <?php endif; ?>
                                     </div>
-                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>

@@ -27,10 +27,12 @@ class Journal extends BaseController
         // 1. Traer todas las categorías
         $categories = $this->categoryModel->getAll();
 
-        // 2. Leer parámetros de la URL
-        $viewMode = $this->request->getGet('view') ?? 'listado';
-        $filterFocus = $this->request->getGet('filterFocus') ?? 'focus';
-        $filterPriority = $this->request->getGet('priority') ?? 1;
+        // 2. Leer parámetros de la URL; si no vienen (recarga o entrada directa),
+        // se recuperan de la cookie del último filtro elegido.
+        $viewMode = $this->stickyFilter('view', 'listado');
+        $filterFocus = $this->stickyFilter('filterFocus', 'focus');
+        $filterPriority = $this->stickyFilter('priority', '1');
+        $filterHechos = $this->stickyFilter('hechos', 'mostrar'); // 'mostrar' | 'ocultar'
 
         // 3. Traer todas las tareas agrupadas por categoría
         $allTasksByCategory = $this->taskModel->getAllGroupedByCategory();
@@ -50,6 +52,16 @@ class Journal extends BaseController
         if ($filterFocus === 'focus') {
             foreach ($tasksByCategory as $cat => &$tasks) {
                 $tasks = array_filter($tasks, fn($t) => !empty($t['is_current']));
+            }
+        }
+
+        // Ocultar tareas ya hechas (con end_time)
+        if ($filterHechos === 'ocultar') {
+            foreach ($tasksByCategory as $cat => &$tasks) {
+                $tasks = array_filter($tasks, function ($t) {
+                    $isDone = !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00';
+                    return !$isDone;
+                });
             }
         }
 
@@ -105,6 +117,7 @@ class Journal extends BaseController
             'view_mode'           => $viewMode,
             'filterFocus'         => $filterFocus,
             'filterPriority'      => $filterPriority,
+            'filterHechos'        => $filterHechos,
             'categories'          => $categories,
             'tasksByCategory'     => $tasksByCategory,
             'totalTimeByCategory' => $totalTimeByCategory, // array con tiempo total
@@ -112,6 +125,26 @@ class Journal extends BaseController
             'lastCategoryActivity' => $lastCategoryActivity,
             'progressByCategory'   => $progressByCategory // <--- aquí lo pasamos
         ]);
+    }
+
+    /**
+     * Lee un filtro de la URL y, si viene, lo recuerda en una cookie de largo
+     * plazo; si no viene (recarga o entrada directa a /journal), recupera el
+     * último valor guardado para que el filtro no se resetee solo.
+     */
+    private function stickyFilter(string $key, string $default): string
+    {
+        $value = $this->request->getGet($key);
+        if ($value !== null) {
+            $this->response->setCookie([
+                'name'   => 'journal_' . $key,
+                'value'  => (string) $value,
+                'expire' => 31536000, // 1 año
+            ]);
+            return (string) $value;
+        }
+
+        return $this->request->getCookie('journal_' . $key) ?? $default;
     }
 
     /**

@@ -8,6 +8,6 @@ class CompraProductoModel extends Model
 {
     protected $table = 'compra_productos';
     protected $primaryKey = 'id';
-    protected $allowedFields = ['supermercado_id', 'zona_id', 'nombre', 'imagen', 'favorito', 'orden'];
+    protected $allowedFields = ['supermercado_id', 'zona_id', 'nombre', 'imagen', 'favorito', 'orden', 'precio'];
     protected $useTimestamps = true;
 }
