@@ -46,34 +46,44 @@
 <!-- Productos, agrupados por zona en el orden del recorrido -->
 <div id="productos-container">
     <?php foreach ($grupos as $grupo): ?>
-        <h6 class="text-muted small text-uppercase mt-3 mb-2">
-            <?= $grupo['zona'] ? esc($grupo['zona']['nombre']) : 'Sin zona' ?>
-        </h6>
+        <div class="zona-grupo">
+            <h6 class="text-muted small text-uppercase mb-2">
+                <?= $grupo['zona'] ? esc($grupo['zona']['nombre']) : 'Sin zona' ?>
+            </h6>
 
-        <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2 mb-2">
-            <?php foreach ($grupo['productos'] as $producto): ?>
-                <div class="col d-flex">
-                    <div class="card producto-card w-100 small text-center d-flex flex-column justify-content-between"
-                        data-producto-id="<?= $producto['id'] ?>"
-                        data-faltante="<?= $producto['faltante'] ? '1' : '0' ?>">
+            <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-2">
+                <?php foreach ($grupo['productos'] as $producto): ?>
+                    <div class="col d-flex">
+                        <div class="card producto-card w-100 small text-center d-flex flex-column justify-content-between"
+                            data-producto-id="<?= $producto['id'] ?>"
+                            data-faltante="<?= $producto['faltante'] ? '1' : '0' ?>">
 
-                        <?php if (!empty($producto['imagen'])): ?>
-                            <img src="<?= esc($producto['imagen']) ?>"
-                                class="img-fluid mb-2 mx-auto producto-imagen"
-                                style="max-height:120px; object-fit:contain;">
-                        <?php endif; ?>
+                            <?php if (!empty($producto['imagen'])): ?>
+                                <img src="<?= esc($producto['imagen']) ?>"
+                                    class="img-fluid mb-2 mx-auto producto-imagen"
+                                    style="max-height:120px; object-fit:contain;">
+                            <?php endif; ?>
 
-                        <div class="card-body p-1 d-flex align-items-center justify-content-center">
-                            <div class="fw-semibold text-center">
-                                <?= esc($producto['nombre']) ?>
+                            <div class="card-body p-1 d-flex align-items-center justify-content-center">
+                                <div class="fw-semibold text-center">
+                                    <?= esc($producto['nombre']) ?>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            </div>
         </div>
     <?php endforeach; ?>
 </div>
+
+<style>
+.zona-grupo + .zona-grupo {
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--bs-border-color-translucent);
+}
+</style>
 
 <script>
     const container = document.getElementById('productos-container');
