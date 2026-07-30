@@ -119,7 +119,7 @@
 
 <!-- Lista de productos, agrupada por zona. Arrastra una tarjeta a otra zona para reasignarla. -->
 <p class="text-muted small mb-2">
-    <i class="bi bi-arrows-move"></i> Arrastra un producto a otra zona para reasignarlo.
+    <i class="bi bi-grip-vertical"></i> Usa el tirador de la tarjeta para arrastrar un producto a otra zona.
 </p>
 
 <?php foreach ($grupos as $grupo): ?>
@@ -132,6 +132,11 @@
         <?php foreach ($grupo['productos'] as $producto): ?>
             <div class="col d-flex h-100" data-producto-id="<?= (int)$producto['id'] ?>">
                 <div class="card shadow-sm w-100 small d-flex flex-column h-100 position-relative">
+
+                    <span class="producto-drag-handle position-absolute top-0 start-0 m-1"
+                          title="Arrastrar para mover">
+                        <i class="bi bi-grip-vertical"></i>
+                    </span>
 
                     <button type="button"
                             class="btn btn-sm p-0 producto-favorito-toggle position-absolute top-0 end-0 m-1"
@@ -234,10 +239,24 @@
     border-color: var(--bs-primary);
     background: var(--bs-tertiary-bg);
 }
-.producto-card-item { cursor: grab; }
-.producto-card-item:active { cursor: grabbing; }
 .producto-card-item.sortable-ghost { opacity: .35; }
 .producto-card-item.sortable-chosen .card { box-shadow: 0 0 0 2px var(--bs-primary); }
+
+/* Tirador dedicado: solo desde aquí se puede arrastrar la tarjeta, así el
+   resto de la tarjeta queda libre para hacer scroll con el dedo en móvil. */
+.producto-drag-handle {
+    z-index: 2;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #000;
+    cursor: grab;
+    touch-action: none;
+}
+.producto-drag-handle:active { cursor: grabbing; }
 
 /* Alturas de tarjeta consistentes: reserva el mismo espacio tenga o no imagen,
    independientemente de si el nombre ocupa una o dos líneas o de cuántas
@@ -382,6 +401,7 @@
             Sortable.create(zona, {
                 group: 'productos-zona',
                 animation: 150,
+                handle: '.producto-drag-handle',
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 filter: '.producto-favorito-toggle, .producto-precio-toggle',
