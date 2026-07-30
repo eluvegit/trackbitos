@@ -8,7 +8,7 @@ class RecordatorioModel extends Model
 {
     protected $table         = 'recordatorios';
     protected $primaryKey    = 'id';
-    protected $allowedFields = ['titulo', 'categoria', 'icono', 'fecha_evento', 'periodo_meses', 'notas'];
+    protected $allowedFields = ['titulo', 'categoria', 'icono', 'fecha_evento', 'periodo_meses', 'periodo_dias', 'notas'];
     protected $useTimestamps = true;
 
     protected $validationRules = [

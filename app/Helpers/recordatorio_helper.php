@@ -1,20 +1,61 @@
 <?php
 // app/Helpers/recordatorio_helper.php
 
+if (!function_exists('recordatorio_periodo_modify_string')) {
+    /**
+     * Construye el string de DateTime::modify() combinando meses y/o días
+     * del período (p. ej. "+1 months +15 days"). Devuelve '' si no hay
+     * período (ninguno de los dos definido o ambos a 0).
+     */
+    function recordatorio_periodo_modify_string(?int $periodoMeses, ?int $periodoDias): string
+    {
+        $partes = [];
+        if ($periodoMeses) {
+            $partes[] = $periodoMeses . ' months';
+        }
+        if ($periodoDias) {
+            $partes[] = $periodoDias . ' days';
+        }
+
+        return $partes ? ('+' . implode(' +', $partes)) : '';
+    }
+}
+
+if (!function_exists('recordatorio_periodo_texto')) {
+    /**
+     * Texto corto para mostrar el período combinado, p. ej. "1m 15d", "14d",
+     * "3m". Devuelve '' si no hay período.
+     */
+    function recordatorio_periodo_texto(?int $periodoMeses, ?int $periodoDias): string
+    {
+        $partes = [];
+        if ($periodoMeses) {
+            $partes[] = $periodoMeses . 'm';
+        }
+        if ($periodoDias) {
+            $partes[] = $periodoDias . 'd';
+        }
+
+        return implode(' ', $partes);
+    }
+}
+
 if (!function_exists('recordatorio_fecha_efectiva')) {
     /**
-     * Si el recordatorio tiene período (se repite cada N meses) y la fecha
-     * guardada ya pasó hace más de $mesesGracia, avanza en bucle sumando el
-     * período completo hasta quedar dentro de esa ventana de gracia.
+     * Si el recordatorio tiene período (se repite cada N meses y/o N días) y
+     * la fecha guardada ya pasó hace más de $diasGracia, avanza en bucle
+     * sumando el período completo hasta quedar dentro de esa ventana de
+     * gracia.
      *
      * Así, un recordatorio olvidado no se queda "caducado" indefinidamente:
-     * se muestra caducado como mucho $mesesGracia, y luego salta solo al
+     * se muestra caducado como mucho $diasGracia, y luego salta solo al
      * siguiente ciclo (sin escribir nada en la base de datos, es solo para
      * calcular qué mostrar).
      */
-    function recordatorio_fecha_efectiva(string $fechaEvento, ?int $periodoMeses, int $mesesGracia = 1): string
+    function recordatorio_fecha_efectiva(string $fechaEvento, ?int $periodoMeses, ?int $periodoDias = null, int $diasGracia = 30): string
     {
-        if (!$periodoMeses) {
+        $modStr = recordatorio_periodo_modify_string($periodoMeses, $periodoDias);
+        if ($modStr === '') {
             return $fechaEvento;
         }
 
@@ -23,11 +64,11 @@ if (!function_exists('recordatorio_fecha_efectiva')) {
 
         $maxIteraciones = 2000; // salvaguarda anti bucle infinito
         while ($maxIteraciones-- > 0) {
-            $finGracia = (clone $fecha)->modify('+' . $mesesGracia . ' months');
+            $finGracia = (clone $fecha)->modify('+' . $diasGracia . ' days');
             if ($finGracia >= $hoy) {
                 break;
             }
-            $fecha->modify('+' . $periodoMeses . ' months');
+            $fecha->modify($modStr);
         }
 
         return $fecha->format('Y-m-d');

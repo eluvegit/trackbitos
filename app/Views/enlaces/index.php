@@ -115,6 +115,23 @@
         }
     }
     ?>
+    <?php if (empty($enlaces)): ?>
+        <?php $hayFiltrosActivos = $q !== '' || $panelActiveCount > 0; ?>
+        <div class="enl-empty text-center text-muted py-5">
+            <?php if ($hayFiltrosActivos): ?>
+                <i class="bi bi-filter-circle fs-1 d-block mb-2"></i>
+                <p class="mb-2">Ningún enlace coincide con la búsqueda o los filtros aplicados.</p>
+                <a href="<?= site_url('enlaces') ?>" class="btn btn-sm btn-outline-secondary">Quitar filtros y ver todos</a>
+            <?php elseif (!empty($totalEnlaces)): ?>
+                <i class="bi bi-search fs-1 d-block mb-2"></i>
+                <p class="mb-2">Tienes <?= $totalEnlaces ?> enlace<?= $totalEnlaces === 1 ? '' : 's' ?> guardado<?= $totalEnlaces === 1 ? '' : 's' ?>. Busca por título, URL o notas, o usa los filtros para verlos.</p>
+            <?php else: ?>
+                <i class="bi bi-link-45deg fs-1 d-block mb-2"></i>
+                <p class="mb-2">Todavía no hay enlaces guardados.</p>
+                <a href="<?= site_url('enlaces/crear') ?>" class="btn btn-sm btn-primary">Agregar el primero</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
     <div class="enl-list">
         <?php foreach ($enlaces as $e): ?>
             <?php

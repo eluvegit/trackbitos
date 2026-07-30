@@ -30,8 +30,9 @@ class Recordatorios extends BaseController
         $recordatorios = $this->model->findAll();
 
         foreach ($recordatorios as &$r) {
-            $periodo = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
-            $fechaEfectiva = recordatorio_fecha_efectiva($r['fecha_evento'], $periodo);
+            $periodoMeses = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
+            $periodoDias  = $r['periodo_dias'] ? (int) $r['periodo_dias'] : null;
+            $fechaEfectiva = recordatorio_fecha_efectiva($r['fecha_evento'], $periodoMeses, $periodoDias);
             $estado = recordatorio_estado($fechaEfectiva);
 
             $r['fecha_mostrar']  = $fechaEfectiva;
@@ -100,7 +101,7 @@ class Recordatorios extends BaseController
     public function renovar(int $id)
     {
         $recordatorio = $this->model->find($id);
-        if (!$recordatorio || !$recordatorio['periodo_meses']) {
+        if (!$recordatorio || (!$recordatorio['periodo_meses'] && !$recordatorio['periodo_dias'])) {
             return $this->response->setStatusCode(400)->setJSON(['ok' => false]);
         }
 
@@ -113,9 +114,12 @@ class Recordatorios extends BaseController
             return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Fecha inválida']);
         }
 
-        $nuevaFecha = $fechaBase
-            ->modify('+' . (int) $recordatorio['periodo_meses'] . ' months')
-            ->format('Y-m-d');
+        $modStr = recordatorio_periodo_modify_string(
+            $recordatorio['periodo_meses'] ? (int) $recordatorio['periodo_meses'] : null,
+            $recordatorio['periodo_dias'] ? (int) $recordatorio['periodo_dias'] : null
+        );
+
+        $nuevaFecha = $fechaBase->modify($modStr)->format('Y-m-d');
 
         $this->model->skipValidation(true)->update($id, ['fecha_evento' => $nuevaFecha]);
 
@@ -137,14 +141,16 @@ class Recordatorios extends BaseController
             $categoria = 'otro';
         }
 
-        $periodo = $this->request->getPost('periodo_meses');
+        $periodoMeses = $this->request->getPost('periodo_meses');
+        $periodoDias  = $this->request->getPost('periodo_dias');
 
         return [
             'titulo'        => $this->request->getPost('titulo'),
             'categoria'     => $categoria,
             'icono'         => self::CATEGORIAS[$categoria][1],
             'fecha_evento'  => $this->request->getPost('fecha_evento'),
-            'periodo_meses' => $periodo !== '' && $periodo !== null ? (int) $periodo : null,
+            'periodo_meses' => $periodoMeses !== '' && $periodoMeses !== null ? (int) $periodoMeses : null,
+            'periodo_dias'  => $periodoDias !== '' && $periodoDias !== null ? (int) $periodoDias : null,
             'notas'         => $this->request->getPost('notas'),
         ];
     }

@@ -45,20 +45,27 @@
         </div>
     </div>
 
+    <div class="mb-3">
+        <label for="fecha_evento" class="form-label">Fecha</label>
+        <input type="date" class="form-control" name="fecha_evento" id="fecha_evento" required
+               value="<?= esc($recordatorio['fecha_evento'] ?? '') ?>">
+    </div>
+
     <div class="row">
-        <div class="col-sm-7 mb-3">
-            <label for="fecha_evento" class="form-label">Fecha</label>
-            <input type="date" class="form-control" name="fecha_evento" id="fecha_evento" required
-                   value="<?= esc($recordatorio['fecha_evento'] ?? '') ?>">
+        <div class="col-sm-6 mb-3">
+            <label for="periodo_meses" class="form-label">Se repite cada... meses</label>
+            <input type="number" min="0" class="form-control" name="periodo_meses" id="periodo_meses"
+                   placeholder="Ej. 1" value="<?= esc($recordatorio['periodo_meses'] ?? '') ?>">
         </div>
-        <div class="col-sm-5 mb-3">
-            <label for="periodo_meses" class="form-label">Se repite cada (meses)</label>
-            <input type="number" min="1" class="form-control" name="periodo_meses" id="periodo_meses"
-                   placeholder="Ej. 12" value="<?= esc($recordatorio['periodo_meses'] ?? '') ?>">
+        <div class="col-sm-6 mb-3">
+            <label for="periodo_dias" class="form-label">...y/o días</label>
+            <input type="number" min="0" class="form-control" name="periodo_dias" id="periodo_dias"
+                   placeholder="Ej. 15" value="<?= esc($recordatorio['periodo_dias'] ?? '') ?>">
         </div>
     </div>
     <div class="form-text mb-3 mt-n2">
-        Si lo rellenas, podrás usar el botón "Renovar" para poner la fecha a hoy + estos meses sin tener que editarla a mano.
+        Combínalos para cualquier plazo: 14 días, 1 mes, o 1 mes y medio (meses=1, días=15). Si rellenas
+        alguno, podrás usar el botón "Renovar" para poner la fecha a hoy + ese plazo sin tener que editarla a mano.
     </div>
 
     <div class="mb-3">

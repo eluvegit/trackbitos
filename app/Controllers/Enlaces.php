@@ -76,59 +76,72 @@ class Enlaces extends BaseController
             $tagIds = array_values(array_unique(array_merge($tagIds, array_map('intval', $tagIdsFromCb))));
         }
 
-        // --- Query base ---
-        $builder = $db->table('enlaces_items e')->select('e.*');
+        // Sin ningún filtro/búsqueda activo no se lanza la consulta: con miles
+        // de enlaces guardados, listarlos todos por defecto no es útil ni
+        // rápido — hay que buscar o filtrar por algo primero.
+        $hayFiltro = $q !== '' || $visto === '0' || $visto === '1' || !empty($cats) || !empty($tagIds);
 
-        // Texto libre
-        if ($q !== '') {
-            $builder->groupStart()
-                ->like('e.titulo', $q)
-                ->orLike('e.url', $q)
-                ->orLike('e.extra', $q)
-                ->groupEnd();
-        }
+        if (!$hayFiltro) {
+            $enlaces = [];
+            // Para distinguir en la vista "no hay ningún enlace todavía" de
+            // "hay enlaces pero no se listan sin buscar/filtrar primero".
+            $totalEnlaces = (int) $db->table('enlaces_items')->countAllResults();
+        } else {
+            $totalEnlaces = null;
+            // --- Query base ---
+            $builder = $db->table('enlaces_items e')->select('e.*');
 
-        // Visto
-        if ($visto === '0' || $visto === '1') {
-            $builder->where('e.visto', (int)$visto);
-        }
-
-        // --- Filtro CATEGORÍAS ---
-        if (!empty($cats)) {
-            $builder->join('enlaces_item_categorias eic', 'eic.item_id = e.id', 'inner');
-
-            if ($match === 'any') {
-                $builder->whereIn('eic.categoria_id', $cats);
-                $builder->groupBy('e.id');
-            } else {
-                $builder->whereIn('eic.categoria_id', $cats)
-                    ->groupBy('e.id')
-                    ->having('COUNT(DISTINCT eic.categoria_id) >=', count($cats));
+            // Texto libre
+            if ($q !== '') {
+                $builder->groupStart()
+                    ->like('e.titulo', $q)
+                    ->orLike('e.url', $q)
+                    ->orLike('e.extra', $q)
+                    ->groupEnd();
             }
-        }
 
-        // --- Filtro ETIQUETAS ---
-        if (!empty($tagIds)) {
-            $builder->join('enlaces_item_etiquetas eie', 'eie.item_id = e.id', 'inner');
-
-            if ($match === 'any') {
-                $builder->whereIn('eie.etiqueta_id', $tagIds);
-                $builder->groupBy('e.id');
-            } else {
-                $builder->whereIn('eie.etiqueta_id', $tagIds)
-                    ->groupBy('e.id')
-                    ->having('COUNT(DISTINCT eie.etiqueta_id) >=', count($tagIds));
+            // Visto
+            if ($visto === '0' || $visto === '1') {
+                $builder->where('e.visto', (int)$visto);
             }
+
+            // --- Filtro CATEGORÍAS ---
+            if (!empty($cats)) {
+                $builder->join('enlaces_item_categorias eic', 'eic.item_id = e.id', 'inner');
+
+                if ($match === 'any') {
+                    $builder->whereIn('eic.categoria_id', $cats);
+                    $builder->groupBy('e.id');
+                } else {
+                    $builder->whereIn('eic.categoria_id', $cats)
+                        ->groupBy('e.id')
+                        ->having('COUNT(DISTINCT eic.categoria_id) >=', count($cats));
+                }
+            }
+
+            // --- Filtro ETIQUETAS ---
+            if (!empty($tagIds)) {
+                $builder->join('enlaces_item_etiquetas eie', 'eie.item_id = e.id', 'inner');
+
+                if ($match === 'any') {
+                    $builder->whereIn('eie.etiqueta_id', $tagIds);
+                    $builder->groupBy('e.id');
+                } else {
+                    $builder->whereIn('eie.etiqueta_id', $tagIds)
+                        ->groupBy('e.id')
+                        ->having('COUNT(DISTINCT eie.etiqueta_id) >=', count($tagIds));
+                }
+            }
+
+            // Si no se pidió ALL en ningún filtro, aún necesitamos un groupBy al tener joins múltiples
+            if (empty($builder->QBGroupBy)) {
+                $builder->groupBy('e.id');
+            }
+
+            $builder->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
+
+            $enlaces = $builder->get()->getResultArray();
         }
-
-        // Si no se pidió ALL en ningún filtro, aún necesitamos un groupBy al tener joins múltiples
-        if (empty($builder->QBGroupBy)) {
-            $builder->groupBy('e.id');
-        }
-
-        $builder->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
-
-        $enlaces = $builder->get()->getResultArray();
 
         $pendientesRevision = (int) $db->table('enlaces_items')
             ->selectCount('id', 'c')->where('(titulo IS NULL OR titulo = "")', null, false)
@@ -267,6 +280,7 @@ class Enlaces extends BaseController
             'chipsActivos'      => $chipsActivos,
             'panelActiveCount'  => $panelActiveCount,
             'pendientesRevision' => $pendientesRevision,
+            'totalEnlaces'      => $totalEnlaces,
         ]);
     }
 

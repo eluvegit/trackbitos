@@ -56,10 +56,11 @@ $etiquetasGrupo = [
             </div>
 
             <div class="rec-row-bottom">
+                <?php $periodoTexto = recordatorio_periodo_texto($r['periodo_meses'] ? (int) $r['periodo_meses'] : null, $r['periodo_dias'] ? (int) $r['periodo_dias'] : null); ?>
                 <div class="rec-meta">
                     <?= esc($r['categoria_label']) ?> · <?= date('d/m/Y', strtotime($r['fecha_mostrar'])) ?>
-                    <?php if ($r['periodo_meses']): ?>
-                        · <?= (int)$r['periodo_meses'] ?>m
+                    <?php if ($periodoTexto !== ''): ?>
+                        · <?= esc($periodoTexto) ?>
                     <?php endif; ?>
                     <?php if ($r['recalculada']): ?>
                         <i class="bi bi-arrow-repeat rec-recalculada"
@@ -68,11 +69,12 @@ $etiquetasGrupo = [
                 </div>
 
                 <div class="rec-actions">
-                    <?php if ($r['periodo_meses']): ?>
+                    <?php if ($periodoTexto !== ''): ?>
                         <button type="button" class="rec-btn js-renovar"
                                 data-id="<?= (int)$r['id'] ?>"
                                 data-titulo="<?= esc($r['titulo']) ?>"
-                                data-periodo="<?= (int)$r['periodo_meses'] ?>"
+                                data-periodo-meses="<?= (int) ($r['periodo_meses'] ?? 0) ?>"
+                                data-periodo-dias="<?= (int) ($r['periodo_dias'] ?? 0) ?>"
                                 title="Renovar">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
@@ -231,7 +233,8 @@ $etiquetasGrupo = [
     const btnConfirmar = document.getElementById('modalRenovarConfirmar');
 
     let idActual = null;
-    let periodoActual = null;
+    let periodoMesesActual = 0;
+    let periodoDiasActual = 0;
 
     function hoyISO() {
         const d = new Date();
@@ -240,19 +243,26 @@ $etiquetasGrupo = [
     }
 
     function actualizarAyuda() {
-        if (!periodoActual) return;
+        if (!periodoMesesActual && !periodoDiasActual) return;
         const fecha = inputFecha.value ? new Date(inputFecha.value + 'T00:00:00') : new Date();
         const nueva = new Date(fecha);
-        nueva.setMonth(nueva.getMonth() + periodoActual);
+        if (periodoMesesActual) nueva.setMonth(nueva.getMonth() + periodoMesesActual);
+        if (periodoDiasActual) nueva.setDate(nueva.getDate() + periodoDiasActual);
+
+        const partes = [];
+        if (periodoMesesActual) partes.push(periodoMesesActual + ' mes' + (periodoMesesActual === 1 ? '' : 'es'));
+        if (periodoDiasActual) partes.push(periodoDiasActual + ' día' + (periodoDiasActual === 1 ? '' : 's'));
+
         ayudaEl.textContent = 'La próxima fecha quedará en ' + nueva.toLocaleDateString('es-ES') +
-            ' (ese día + ' + periodoActual + ' mes' + (periodoActual === 1 ? '' : 'es') + ').';
+            ' (ese día + ' + partes.join(' y ') + ').';
     }
 
     document.querySelectorAll('.js-renovar').forEach(btn => {
         btn.addEventListener('click', () => {
             modal ??= new bootstrap.Modal(modalEl);
             idActual = btn.dataset.id;
-            periodoActual = parseInt(btn.dataset.periodo, 10);
+            periodoMesesActual = parseInt(btn.dataset.periodoMeses, 10) || 0;
+            periodoDiasActual = parseInt(btn.dataset.periodoDias, 10) || 0;
             tituloEl.textContent = btn.dataset.titulo;
             inputFecha.value = hoyISO();
             actualizarAyuda();
