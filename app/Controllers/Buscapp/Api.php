@@ -105,6 +105,15 @@ class Api extends BaseController
             return $this->response->setJSON(['error' => 'receptor no encontrado'])->setStatusCode(404);
         }
 
+        // Sin canal alternativo (no hay bot de Telegram): sin fcm_token no hay
+        // forma de entregar el aviso, así que se corta aquí en vez de crear un
+        // telegrama "enviado" que en realidad nunca llegaría a nadie.
+        if (!$receptor['fcm_token']) {
+            return $this->response->setJSON([
+                'error' => 'El receptor todavía no tiene token FCM (no ha abierto la app o no tiene notificaciones activas).',
+            ])->setStatusCode(422);
+        }
+
         if ($this->destinos->tienePendiente($emisor['id'], $receptorId)) {
             return $this->response->setJSON([
                 'error' => 'Ya hay una solicitud pendiente para este contacto. Cancélala antes de enviar otra.',
@@ -125,24 +134,22 @@ class Api extends BaseController
         ]);
 
         if ($existente === null) {
-            $destinoId = $this->destinos->insert([
+            $this->destinos->insert([
                 'telegrama_id' => $telegramaId,
                 'receptor_id'  => $receptorId,
-                'canal'        => $receptor['fcm_token'] ? 'fcm' : 'telegram',
+                'canal'        => 'fcm',
                 'estado'       => 'enviado',
             ]);
 
-            if ($receptor['fcm_token']) {
-                (new BuscappFcmService())->enviarDatos($receptor['fcm_token'], [
-                    'telegrama_id'   => (string) $telegramaId,
-                    'tipo'           => $tipo,
-                    'emisor_nombre'  => $emisor['nombre'],
-                    'emisor_telefono' => (string) ($emisor['telefono_e164'] ?? ''),
-                    'mensaje'        => (string) ($mensaje ?? ''),
-                    'urgencia'       => $urgencia,
-                    'caduca_en'      => (string) ($caducaEn ?? ''),
-                ], $urgencia);
-            }
+            (new BuscappFcmService())->enviarDatos($receptor['fcm_token'], [
+                'telegrama_id'    => (string) $telegramaId,
+                'tipo'            => $tipo,
+                'emisor_nombre'   => $emisor['nombre'],
+                'emisor_telefono' => (string) ($emisor['telefono_e164'] ?? ''),
+                'mensaje'         => (string) ($mensaje ?? ''),
+                'urgencia'        => $urgencia,
+                'caduca_en'       => (string) ($caducaEn ?? ''),
+            ], $urgencia);
         }
 
         return $this->response->setJSON(['id' => $telegramaId])->setStatusCode(201);
