@@ -523,6 +523,26 @@ $routes->group('braintogram', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('(:num)', 'Braintogram::ver/$1');
 });
 
+// ---- Buscapp: API para la app Android + panel de gestión propio ----
+// Registro va SIN filtro (todavía no hay token que comprobar); el resto de
+// endpoints de la API llevan el filtro 'buscappApi' (token Bearer propio,
+// no Myth\Auth). El panel de gestión (buscapp/) sí usa tu login habitual.
+$routes->group('buscapp/api', ['namespace' => 'App\Controllers\Buscapp'], static function ($routes) {
+    $routes->POST('registro', 'Api::registro');
+
+    $routes->group('', ['filter' => 'buscappApi'], static function ($routes) {
+        $routes->POST('token', 'Api::token');
+        $routes->POST('telegramas', 'Api::crear');
+        $routes->POST('telegramas/(:num)/respuesta', 'Api::responder/$1');
+        $routes->GET('telegramas', 'Api::historial');
+    });
+});
+
+$routes->group('buscapp', ['filter' => 'auth', 'namespace' => 'App\Controllers\Buscapp'], static function ($routes) {
+    $routes->GET('/', 'Admin::index');
+    $routes->GET('(:num)', 'Admin::ver/$1');
+});
+
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
 $routes->group('cuenta', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'AuthController::account', ['as' => 'account']);
