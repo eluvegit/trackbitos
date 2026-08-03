@@ -133,7 +133,10 @@ class Api extends BaseController
             ])->setStatusCode(422);
         }
 
-        if ($this->destinos->tienePendiente($emisor['id'], $receptorId)) {
+        // buscapp.modoPruebas salta la regla de escasez para poder probar sin
+        // estar limpiando la BD a mano cada vez; quitar/poner a false en .env
+        // en cuanto se quiera probar el comportamiento real de producto.
+        if (!env('buscapp.modoPruebas', false) && $this->destinos->tienePendiente($emisor['id'], $receptorId)) {
             return $this->response->setJSON([
                 'error' => 'Ya hay una solicitud pendiente para este contacto. Cancélala antes de enviar otra.',
             ])->setStatusCode(409);
