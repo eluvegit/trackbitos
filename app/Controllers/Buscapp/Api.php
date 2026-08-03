@@ -79,6 +79,25 @@ class Api extends BaseController
     }
 
     /**
+     * Lista de posibles contactos (todos los demás usuarios registrados) para
+     * que la app construya sus botones "Buscar a X". Todavía no hay tabla de
+     * contactos/invitaciones (§5.2 la deja para más adelante): en el círculo
+     * cerrado familiar de la MVP, cualquiera registrado es un contacto válido.
+     */
+    public function usuarios()
+    {
+        $yo = $this->usuarioActual();
+
+        $otros = $this->usuarios
+            ->select('id, nombre')
+            ->where('id !=', $yo['id'])
+            ->orderBy('nombre', 'ASC')
+            ->findAll();
+
+        return $this->response->setJSON(['usuarios' => $otros]);
+    }
+
+    /**
      * Crea un telegrama y dispara el push. Aplica la regla de escasez §3.1
      * bis: no se puede crear uno nuevo si ya hay uno pendiente del mismo
      * emisor hacia el mismo receptor.
