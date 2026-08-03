@@ -54,17 +54,32 @@ class BuscappFcmService
 
         try {
             $client = \Config\Services::curlrequest();
-            $client->post(
+            // http_errors=false: por defecto CI4 usa CURLOPT_FAILONERROR, que
+            // en un 4xx/5xx descarta el cuerpo de la respuesta (el error que
+            // queda logueado es solo "error: 400" de curl, sin explicar el
+            // motivo). Con esto se recibe la respuesta completa siempre y se
+            // decide aquí, pudiendo loguear el JSON de error real de FCM.
+            $response = $client->post(
                 "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send",
                 [
-                    'headers' => [
+                    'headers'     => [
                         'Authorization' => 'Bearer ' . $token,
                         'Content-Type'  => 'application/json',
                     ],
-                    'json'    => $mensaje,
-                    'timeout' => 10,
+                    'json'        => $mensaje,
+                    'timeout'     => 10,
+                    'http_errors' => false,
                 ]
             );
+
+            if ($response->getStatusCode() >= 300) {
+                log_message('error', 'BuscappFcmService: FCM respondió {code}: {body}', [
+                    'code' => $response->getStatusCode(),
+                    'body' => $response->getBody(),
+                ]);
+
+                return false;
+            }
 
             return true;
         } catch (\Throwable $e) {
