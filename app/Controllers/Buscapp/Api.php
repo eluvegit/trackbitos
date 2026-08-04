@@ -199,11 +199,25 @@ class Api extends BaseController
             return $this->response->setJSON(['error' => 'telegrama no encontrado para este usuario'])->setStatusCode(404);
         }
 
+        $respuestaCorta = mb_substr($respuesta, 0, 50);
         $this->destinos->update($destino['id'], [
             'estado'        => 'respondido',
-            'respuesta'     => mb_substr($respuesta, 0, 50),
+            'respuesta'     => $respuestaCorta,
             'respondido_en' => date('Y-m-d H:i:s'),
         ]);
+
+        // Avisa al emisor de vuelta: sin esto, la única forma de enterarse de
+        // la respuesta era mirar el panel de gestión en el navegador.
+        $telegrama = $this->telegramas->find($telegramaId);
+        $emisor    = $telegrama !== null ? $this->usuarios->find($telegrama['emisor_id']) : null;
+        if ($emisor !== null && $emisor['fcm_token']) {
+            (new BuscappFcmService())->enviarDatos($emisor['fcm_token'], [
+                'evento'          => 'respuesta',
+                'telegrama_id'    => (string) $telegramaId,
+                'receptor_nombre' => $usuario['nombre'],
+                'respuesta'       => $respuestaCorta,
+            ]);
+        }
 
         return $this->response->setJSON(['ok' => true]);
     }
