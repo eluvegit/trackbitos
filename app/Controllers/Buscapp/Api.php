@@ -190,11 +190,7 @@ class Api extends BaseController
             return $this->response->setJSON(['error' => 'respuesta es obligatoria'])->setStatusCode(422);
         }
 
-        $destino = $this->destinos
-            ->where('telegrama_id', $telegramaId)
-            ->where('receptor_id', $usuario['id'])
-            ->first();
-
+        $destino = $this->buscarDestino($telegramaId, $usuario['id']);
         if ($destino === null) {
             return $this->response->setJSON(['error' => 'telegrama no encontrado para este usuario'])->setStatusCode(404);
         }
@@ -206,20 +202,82 @@ class Api extends BaseController
             'respondido_en' => date('Y-m-d H:i:s'),
         ]);
 
-        // Avisa al emisor de vuelta: sin esto, la única forma de enterarse de
-        // la respuesta era mirar el panel de gestión en el navegador.
+        $this->avisarEstadoAlEmisor($telegramaId, "{$usuario['nombre']} respondió", $respuestaCorta);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Confirmación de entrega: la app la llama en cuanto recibe el push (no
+     * hace falta que el usuario haga nada). No degrada un estado más
+     * avanzado si llega tarde o duplicada (p. ej. tras "visto").
+     */
+    public function entregado(int $telegramaId)
+    {
+        $usuario = $this->usuarioActual();
+
+        $destino = $this->buscarDestino($telegramaId, $usuario['id']);
+        if ($destino === null) {
+            return $this->response->setJSON(['error' => 'telegrama no encontrado para este usuario'])->setStatusCode(404);
+        }
+
+        if ($destino['estado'] === 'enviado') {
+            $this->destinos->update($destino['id'], [
+                'estado'       => 'entregado',
+                'entregado_en' => date('Y-m-d H:i:s'),
+            ]);
+            $this->avisarEstadoAlEmisor($telegramaId, $usuario['nombre'], 'Le ha llegado el aviso');
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Confirmación de lectura: la app la llama cuando el usuario ve de
+     * verdad la pantalla del aviso (no solo que llegó el push).
+     */
+    public function visto(int $telegramaId)
+    {
+        $usuario = $this->usuarioActual();
+
+        $destino = $this->buscarDestino($telegramaId, $usuario['id']);
+        if ($destino === null) {
+            return $this->response->setJSON(['error' => 'telegrama no encontrado para este usuario'])->setStatusCode(404);
+        }
+
+        if (in_array($destino['estado'], ['enviado', 'entregado'], true)) {
+            $this->destinos->update($destino['id'], ['estado' => 'visto']);
+            $this->avisarEstadoAlEmisor($telegramaId, $usuario['nombre'], 'Lo ha visto');
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    private function buscarDestino(int $telegramaId, int $receptorId): ?array
+    {
+        return $this->destinos
+            ->where('telegrama_id', $telegramaId)
+            ->where('receptor_id', $receptorId)
+            ->first();
+    }
+
+    /**
+     * Push de vuelta al emisor del telegrama para cualquier cambio de
+     * estado (entregado/visto/respondido) — sin esto, la única forma de
+     * enterarse era mirar el panel de gestión en el navegador.
+     */
+    private function avisarEstadoAlEmisor(int $telegramaId, string $titulo, string $texto): void
+    {
         $telegrama = $this->telegramas->find($telegramaId);
         $emisor    = $telegrama !== null ? $this->usuarios->find($telegrama['emisor_id']) : null;
         if ($emisor !== null && $emisor['fcm_token']) {
             (new BuscappFcmService())->enviarDatos($emisor['fcm_token'], [
-                'evento'          => 'respuesta',
-                'telegrama_id'    => (string) $telegramaId,
-                'receptor_nombre' => $usuario['nombre'],
-                'respuesta'       => $respuestaCorta,
+                'evento'       => 'estado',
+                'telegrama_id' => (string) $telegramaId,
+                'titulo'       => $titulo,
+                'texto'        => $texto,
             ]);
         }
-
-        return $this->response->setJSON(['ok' => true]);
     }
 
     /**

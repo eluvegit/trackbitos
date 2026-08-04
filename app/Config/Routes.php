@@ -535,6 +535,8 @@ $routes->group('buscapp/api', ['namespace' => 'App\Controllers\Buscapp'], static
         $routes->GET('usuarios', 'Api::usuarios');
         $routes->POST('telegramas', 'Api::crear');
         $routes->POST('telegramas/(:num)/respuesta', 'Api::responder/$1');
+        $routes->POST('telegramas/(:num)/entregado', 'Api::entregado/$1');
+        $routes->POST('telegramas/(:num)/visto', 'Api::visto/$1');
         $routes->GET('telegramas', 'Api::historial');
     });
 });
