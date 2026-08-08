@@ -5,18 +5,21 @@ namespace App\Controllers;
 use App\Models\TaskLogModel;
 use App\Models\TaskModel;
 use App\Models\JournalCategoryModel;
+use App\Models\SubtaskModel;
 
 class Journal extends BaseController
 {
     protected TaskLogModel $taskLogModel;
     protected TaskModel $taskModel;
     protected JournalCategoryModel $categoryModel;
+    protected SubtaskModel $subtaskModel;
 
     public function __construct()
     {
         $this->taskLogModel = new TaskLogModel();
         $this->taskModel    = new TaskModel();
         $this->categoryModel = new JournalCategoryModel();
+        $this->subtaskModel = new SubtaskModel();
     }
 
     /**
@@ -355,8 +358,9 @@ class Journal extends BaseController
         $logs = $this->taskLogModel->where('task_id', $taskId)->orderBy('log_date', 'DESC')->findAll();
 
         return view('journal/edit', [
-            'task' => $task,
-            'logs' => $logs
+            'task'      => $task,
+            'logs'      => $logs,
+            'subtasks'  => $this->subtaskModel->getForTask($taskId),
         ]);
     }
 
@@ -549,6 +553,83 @@ class Journal extends BaseController
             'minutes'  => $minutes,
             'log_date' => $date
         ]);
+
+        return $this->response->setJSON(['success' => true]);
+    }
+
+    /**
+     * Crear subtarea (checklist tachable dentro de una tarea)
+     */
+    public function subtaskCreate(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $title = trim($input['title'] ?? '');
+        if ($title === '') {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $id = $this->subtaskModel->insert([
+            'task_id' => $taskId,
+            'title'   => $title,
+            'is_done' => 0,
+            'orden'   => $this->subtaskModel->siguienteOrden($taskId),
+        ], true);
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'subtask'  => ['id' => $id, 'title' => $title, 'is_done' => 0],
+        ]);
+    }
+
+    /**
+     * Alternar tachado de una subtarea
+     */
+    public function subtaskToggle(int $id)
+    {
+        $subtask = $this->subtaskModel->find($id);
+        if (!$subtask) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $isDone = $subtask['is_done'] ? 0 : 1;
+        $this->subtaskModel->skipValidation(true)->update($id, ['is_done' => $isDone]);
+
+        return $this->response->setJSON(['success' => true, 'is_done' => $isDone]);
+    }
+
+    /**
+     * Eliminar subtarea
+     */
+    public function subtaskDelete(int $id)
+    {
+        $subtask = $this->subtaskModel->find($id);
+        if (!$subtask) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $this->subtaskModel->delete($id);
+
+        return $this->response->setJSON(['success' => true]);
+    }
+
+    /**
+     * Reordenar subtareas (drag & drop)
+     */
+    public function subtaskReorder()
+    {
+        $ids = $this->request->getJSON(true)['orden'] ?? null;
+        if (!is_array($ids) || empty($ids)) {
+            return $this->response->setStatusCode(400)->setJSON(['success' => false]);
+        }
+
+        foreach ($ids as $index => $id) {
+            $this->subtaskModel->skipValidation(true)->update((int) $id, ['orden' => $index + 1]);
+        }
 
         return $this->response->setJSON(['success' => true]);
     }

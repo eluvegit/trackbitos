@@ -103,6 +103,38 @@
     </div>
 </form>
 
+<!-- Subtareas -->
+<div class="jt-section mb-3">
+    <div class="jt-section-title">Subtareas</div>
+
+    <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
+        <?php foreach ($subtasks as $s): ?>
+            <?php $isDone = !empty($s['is_done']); ?>
+            <div class="jt-subtask-item <?= $isDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
+                <span class="jt-subtask-handle" title="Arrastrar para reordenar">
+                    <i class="bi bi-grip-vertical"></i>
+                </span>
+                <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
+                    <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
+                </button>
+                <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
+                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <p class="text-muted small mb-2 <?= empty($subtasks) ? '' : 'd-none' ?>" id="subtaskEmptyMsg">Sin subtareas todavía.</p>
+
+    <div class="jt-subtask-add">
+        <input type="text" id="subtaskInput" class="form-control form-control-sm" placeholder="Nueva subtarea..." maxlength="255">
+        <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+</div>
+
 <form action="<?= site_url('journal/delete/' . $task['id']) ?>" method="post" class="mb-4"
       onsubmit="return confirm('¿Seguro que quieres eliminar esta tarea?');">
     <?= csrf_field() ?>
@@ -269,6 +301,77 @@
     color: var(--bs-secondary-color);
 }
 
+.jt-subtask-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.jt-subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    transition: opacity .15s ease, background-color .15s ease;
+}
+.jt-subtask-item.sortable-ghost { opacity: .3; }
+.jt-subtask-item.sortable-chosen { background: var(--bs-tertiary-bg); }
+.jt-subtask-item.is-done { opacity: .6; }
+
+.jt-subtask-handle {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 32px;
+    color: var(--bs-secondary-color);
+    cursor: grab;
+    touch-action: none;
+}
+.jt-subtask-handle:active { cursor: grabbing; }
+
+.jt-subtask-check {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    font-size: 1.05rem;
+    cursor: pointer;
+}
+.jt-subtask-item.is-done .jt-subtask-check { color: #10b981; }
+
+.jt-subtask-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .9rem;
+    color: var(--bs-emphasis-color);
+    word-break: break-word;
+}
+.jt-subtask-item.is-done .jt-subtask-title {
+    text-decoration: line-through;
+    color: var(--bs-secondary-color);
+}
+
+.jt-subtask-delete {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+}
+.jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
+
+.jt-subtask-add { display: flex; gap: 6px; }
+.jt-subtask-add .form-control { flex: 1 1 auto; }
+
 .jt-log-list { display: flex; flex-direction: column; gap: 6px; }
 .jt-log-item {
     display: flex;
@@ -292,6 +395,7 @@
 }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // --- Estrella ---
@@ -388,6 +492,104 @@ document.addEventListener('DOMContentLoaded', function () {
         } finally {
             saveLogBtn.disabled = false;
         }
+    });
+
+    // --- Subtareas ---
+    const subtaskList = document.getElementById('subtaskList');
+    const subtaskEmptyMsg = document.getElementById('subtaskEmptyMsg');
+    const subtaskInput = document.getElementById('subtaskInput');
+    const subtaskAddBtn = document.getElementById('subtaskAddBtn');
+
+    async function postJSON(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+            },
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        return res.json();
+    }
+
+    function buildSubtaskItem(subtask) {
+        const item = document.createElement('div');
+        item.className = 'jt-subtask-item';
+        item.dataset.id = subtask.id;
+        item.innerHTML = `
+            <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
+            <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
+            <span class="jt-subtask-title"></span>
+            <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+        `;
+        item.querySelector('.jt-subtask-title').textContent = subtask.title;
+        return item;
+    }
+
+    async function addSubtask() {
+        const title = subtaskInput.value.trim();
+        if (!title) return;
+
+        subtaskAddBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskList.dataset.taskId + '/crear', { title });
+            if (!data.success) throw new Error();
+
+            subtaskList.appendChild(buildSubtaskItem(data.subtask));
+            subtaskInput.value = '';
+            subtaskEmptyMsg.classList.add('d-none');
+        } catch (err) {
+            alert('No se pudo añadir la subtarea.');
+        } finally {
+            subtaskAddBtn.disabled = false;
+            subtaskInput.focus();
+        }
+    }
+
+    subtaskAddBtn.addEventListener('click', addSubtask);
+    subtaskInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addSubtask();
+        }
+    });
+
+    subtaskList.addEventListener('click', async (e) => {
+        const toggleBtn = e.target.closest('.js-toggle-subtask');
+        if (toggleBtn) {
+            const item = toggleBtn.closest('.jt-subtask-item');
+            const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/toggle');
+            if (!data.success) return;
+
+            const isDone = !!data.is_done;
+            item.classList.toggle('is-done', isDone);
+            toggleBtn.querySelector('i').className = isDone ? 'bi bi-check-circle-fill' : 'bi bi-circle';
+            return;
+        }
+
+        const deleteBtn = e.target.closest('.js-delete-subtask');
+        if (deleteBtn) {
+            const item = deleteBtn.closest('.jt-subtask-item');
+            const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
+            if (!data.success) return;
+
+            item.remove();
+            if (!subtaskList.querySelector('.jt-subtask-item')) {
+                subtaskEmptyMsg.classList.remove('d-none');
+            }
+        }
+    });
+
+    Sortable.create(subtaskList, {
+        handle: '.jt-subtask-handle',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: () => {
+            const orden = [...subtaskList.querySelectorAll('.jt-subtask-item')].map(item => item.dataset.id);
+            postJSON('<?= site_url('journal/subtasks/reordenar') ?>', { orden });
+        },
     });
 });
 </script>
