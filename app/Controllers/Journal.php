@@ -6,6 +6,8 @@ use App\Models\TaskLogModel;
 use App\Models\TaskModel;
 use App\Models\JournalCategoryModel;
 use App\Models\SubtaskModel;
+use App\Models\TaskFileModel;
+use App\Services\ClaudeService;
 
 class Journal extends BaseController
 {
@@ -13,6 +15,7 @@ class Journal extends BaseController
     protected TaskModel $taskModel;
     protected JournalCategoryModel $categoryModel;
     protected SubtaskModel $subtaskModel;
+    protected TaskFileModel $taskFileModel;
 
     public function __construct()
     {
@@ -20,6 +23,7 @@ class Journal extends BaseController
         $this->taskModel    = new TaskModel();
         $this->categoryModel = new JournalCategoryModel();
         $this->subtaskModel = new SubtaskModel();
+        $this->taskFileModel = new TaskFileModel();
     }
 
     /**
@@ -307,6 +311,8 @@ class Journal extends BaseController
             'title'      => $title,
             'category'   => $category['name'],
             'color'      => $category['color'] ?? '#000000',
+            'amplitude'  => 100,
+            'completed'  => 1,
             'created_at' => date('Y-m-d H:i:s')
         ], true);
 
@@ -372,6 +378,7 @@ class Journal extends BaseController
             'task'      => $task,
             'logs'      => $logs,
             'subtasks'  => $this->subtaskModel->getForTask($taskId),
+            'files'     => $this->taskFileModel->getForTask($taskId),
         ]);
     }
 
@@ -403,6 +410,84 @@ class Journal extends BaseController
         }
 
         return redirect()->to('/journal/edit/' . $taskId)->with('success', 'Imagen eliminada correctamente.');
+    }
+
+    /**
+     * Sube uno o varios archivos como historial de materiales de una tarea
+     * (fotos de referencia, PDFs, documentos...). No sustituye a la imagen
+     * de portada, es un histórico aparte y admite cualquier tipo de archivo.
+     */
+    public function taskFileUpload(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $files = $this->request->getFileMultiple('archivo') ?? [];
+        if (empty($files) && $this->request->getFile('archivo')) {
+            $files = [$this->request->getFile('archivo')];
+        }
+
+        if (empty($files)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Ningún archivo recibido.']);
+        }
+
+        $targetDir = 'upload/journal-files/' . $taskId;
+        $absDir = FCPATH . $targetDir;
+        if (!is_dir($absDir)) {
+            mkdir($absDir, 0755, true);
+        }
+
+        $subidos = [];
+        foreach ($files as $file) {
+            if (!$file || !$file->isValid() || $file->hasMoved()) {
+                continue;
+            }
+
+            $originalName = $file->getClientName();
+            $newName      = $file->getRandomName();
+            $size         = $file->getSize();
+            $file->move($absDir, $newName);
+
+            $rutaRelativa = $targetDir . '/' . $newName;
+            $id = $this->taskFileModel->insert([
+                'task_id'         => $taskId,
+                'ruta_archivo'    => $rutaRelativa,
+                'nombre_original' => $originalName,
+                'tamano'          => $size,
+            ], true);
+
+            $row = $this->taskFileModel->find($id);
+            $row['url'] = base_url($rutaRelativa);
+            $subidos[] = $row;
+        }
+
+        if (empty($subidos)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Ningún archivo válido.']);
+        }
+
+        return $this->response->setJSON(['success' => true, 'files' => $subidos]);
+    }
+
+    /**
+     * Elimina un material adjunto a una tarea (archivo físico + registro).
+     */
+    public function taskFileDelete(int $fileId)
+    {
+        $file = $this->taskFileModel->find($fileId);
+        if (!$file) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $path = FCPATH . $file['ruta_archivo'];
+        if (is_file($path)) {
+            unlink($path);
+        }
+
+        $this->taskFileModel->delete($fileId);
+
+        return $this->response->setJSON(['success' => true]);
     }
 
     /**
@@ -592,10 +677,60 @@ class Journal extends BaseController
             'time_spent' => 0,
         ], true);
 
+        $progress = $this->syncTaskProgressFromSubtasks($taskId);
+
         return $this->response->setJSON([
             'success'  => true,
             'subtask'  => ['id' => $id, 'title' => $title, 'is_done' => 0, 'time_spent' => 0],
+            'progress' => $progress,
         ]);
+    }
+
+    /**
+     * Mientras una tarea tenga subtareas, su progreso (amplitud/completados)
+     * se deriva de ellas en vez de llevarse a mano; si se quedan a 0 no se
+     * toca nada, para no pisar un progreso manual anterior sin subtareas.
+     */
+    private function syncTaskProgressFromSubtasks(int $taskId): array
+    {
+        $subtasks = $this->subtaskModel->getForTask($taskId);
+        $total = count($subtasks);
+
+        if ($total > 0) {
+            $done = count(array_filter($subtasks, fn($s) => !empty($s['is_done'])));
+            $this->taskModel->update($taskId, [
+                'amplitude' => $total,
+                'completed' => $done,
+            ]);
+        }
+
+        $task = $this->taskModel->find($taskId);
+
+        return [
+            'amplitude' => (int) ($task['amplitude'] ?? 0),
+            'completed' => (int) ($task['completed'] ?? 0),
+        ];
+    }
+
+    /**
+     * Renombrar una subtarea
+     */
+    public function subtaskUpdate(int $id)
+    {
+        $subtask = $this->subtaskModel->find($id);
+        if (!$subtask) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $title = trim($input['title'] ?? '');
+        if ($title === '') {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $this->subtaskModel->skipValidation(true)->update($id, ['title' => $title]);
+
+        return $this->response->setJSON(['success' => true, 'title' => $title]);
     }
 
     /**
@@ -611,7 +746,15 @@ class Journal extends BaseController
         $isDone = $subtask['is_done'] ? 0 : 1;
         $this->subtaskModel->skipValidation(true)->update($id, ['is_done' => $isDone]);
 
-        return $this->response->setJSON(['success' => true, 'is_done' => $isDone]);
+        $taskId = (int) $subtask['task_id'];
+        $progress = $this->syncTaskProgressFromSubtasks($taskId);
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'is_done'  => $isDone,
+            'task_id'  => $taskId,
+            'progress' => $progress,
+        ]);
     }
 
     /**
@@ -624,9 +767,15 @@ class Journal extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['success' => false]);
         }
 
+        $taskId = (int) $subtask['task_id'];
         $this->subtaskModel->delete($id);
+        $progress = $this->syncTaskProgressFromSubtasks($taskId);
 
-        return $this->response->setJSON(['success' => true]);
+        return $this->response->setJSON([
+            'success'  => true,
+            'task_id'  => $taskId,
+            'progress' => $progress,
+        ]);
     }
 
     /**
@@ -658,6 +807,76 @@ class Journal extends BaseController
             'subtask_minutes' => $newSubtaskTime,
             'task_minutes'    => $newTaskTime,
             'task_id'         => (int) $subtask['task_id'],
+        ]);
+    }
+
+    /**
+     * Pide a Claude que sugiera subtareas concretas para una tarea (no las
+     * crea directamente: el usuario elige cuáles añadir en el modal).
+     */
+    public function suggestSubtasks(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $existentes = array_column($this->subtaskModel->getForTask($taskId), 'title');
+
+        $claude = new ClaudeService();
+        $subtareas = $claude->sugerirSubtareas(
+            $task['title'],
+            $task['category'] ?? null,
+            $task['note'] ?? null,
+            $existentes
+        );
+
+        if ($subtareas === null) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'No se pudo generar sugerencias. Revisa la API key o inténtalo de nuevo.',
+            ]);
+        }
+
+        return $this->response->setJSON(['success' => true, 'subtareas' => $subtareas]);
+    }
+
+    /**
+     * Completa (o reabre) una tarea desde el resumen rápido del listado, sin
+     * pasar por el formulario de edición completo. Permite ajustar inicio,
+     * fin, tiempo invertido y nota a la vez que se marca como terminada.
+     */
+    public function completeTask(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+
+        $data = [
+            'start_time' => trim($input['start_time'] ?? '') ?: null,
+            'time_spent' => max(0, (int) ($input['time_spent'] ?? 0)),
+            'note'       => trim($input['note'] ?? ''),
+        ];
+
+        if (!empty($input['reopen'])) {
+            $data['end_time'] = null;
+        } else {
+            $data['end_time'] = trim($input['end_time'] ?? '') ?: date('Y-m-d');
+        }
+
+        $this->taskModel->update($taskId, $data);
+        $task = $this->taskModel->find($taskId);
+
+        return $this->response->setJSON([
+            'success'    => true,
+            'is_done'    => !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00',
+            'start_time' => $task['start_time'],
+            'end_time'   => $task['end_time'],
+            'time_spent' => (int) $task['time_spent'],
+            'note'       => $task['note'],
         ]);
     }
 

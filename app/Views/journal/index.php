@@ -225,6 +225,22 @@ foreach ($categories as $category) {
     .jt-subtask-toggle[aria-expanded="true"] { color: #0d6efd; }
     .jt-subtask-count { font-weight: 600; }
 
+    .jt-task-complete-btn {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: none;
+        background: transparent;
+        color: #adb5bd;
+        border-radius: 8px;
+        font-size: .95rem;
+    }
+    .jt-task-complete-btn:hover { background: var(--bs-tertiary-bg); color: #198754; }
+    .jt-task-complete-btn.is-done { color: #198754; }
+
     .jt-inline-subtasks { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--bs-border-color); }
 
     .jt-subtask-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
@@ -290,6 +306,7 @@ foreach ($categories as $category) {
     }
     .jt-subtask-time:hover { color: var(--bs-emphasis-color); text-decoration: underline; }
 
+    .jt-subtask-edit,
     .jt-subtask-delete {
         flex: 0 0 auto;
         width: 22px;
@@ -302,6 +319,7 @@ foreach ($categories as $category) {
         color: var(--bs-secondary-color);
         cursor: pointer;
     }
+    .jt-subtask-edit:hover { background: rgba(13,110,253,.12); color: #0d6efd; }
     .jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
 
     .jt-subtask-add { display: flex; gap: 6px; }
@@ -482,6 +500,19 @@ foreach ($categories as $category) {
                                             <?php endif; ?>
                                         </button>
 
+                                        <!-- Terminar / resumen -->
+                                        <button type="button" class="jt-task-complete-btn js-task-complete <?= $isDone ? 'is-done' : '' ?>"
+                                            data-task-id="<?= $task['id'] ?>"
+                                            data-title="<?= esc($task['title'], 'attr') ?>"
+                                            data-start="<?= !empty($task['start_time']) && $task['start_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['start_time'])) : '' ?>"
+                                            data-end="<?= !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['end_time'])) : '' ?>"
+                                            data-time="<?= (int)($task['time_spent'] ?? 0) ?>"
+                                            data-note="<?= esc($task['note'] ?? '', 'attr') ?>"
+                                            data-done="<?= $isDone ? '1' : '0' ?>"
+                                            title="<?= $isDone ? 'Ver resumen / reabrir' : 'Marcar como terminada' ?>">
+                                            <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-check2-circle' ?>"></i>
+                                        </button>
+
                                         <!-- Tiempo -->
                                         <span class="text-muted small ms-auto task-time-trigger"
                                             data-task-id="<?= $task['id'] ?>">
@@ -490,13 +521,11 @@ foreach ($categories as $category) {
                                     </div>
 
                                     <!-- Barra de progreso -->
-                                    <?php if ($amplitude > 0): ?>
-                                        <div class="task-progress mt-1">
-                                            <?php for ($i = 1; $i <= 10; $i++): ?>
-                                                <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
-                                            <?php endfor; ?>
-                                        </div>
-                                    <?php endif; ?>
+                                    <div class="task-progress mt-1" data-task-id="<?= $task['id'] ?>">
+                                        <?php for ($i = 1; $i <= 10; $i++): ?>
+                                            <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
+                                        <?php endfor; ?>
+                                    </div>
 
                                     <!-- Subtareas (inline, plegable) -->
                                     <div class="collapse jt-inline-subtasks" id="subtasks-<?= $task['id'] ?>">
@@ -516,6 +545,9 @@ foreach ($categories as $category) {
                                                         data-task-id="<?= $task['id'] ?>">
                                                         <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
                                                     </span>
+                                                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
                                                     <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
@@ -527,6 +559,9 @@ foreach ($categories as $category) {
                                             <input type="text" class="form-control form-control-sm jt-subtask-input" placeholder="Nueva subtarea..." maxlength="255">
                                             <button type="button" class="btn btn-sm btn-primary jt-subtask-add-btn">
                                                 <i class="bi bi-plus-lg"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary jt-subtask-suggest-btn" title="Sugerir subtareas">
+                                                <i class="bi bi-stars"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -609,6 +644,48 @@ foreach ($categories as $category) {
 <?php endforeach; ?>
 </div>
 
+<!-- MODAL COMPLETAR TAREA -->
+<div class="modal fade" id="taskCompleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tcTitle">Completar tarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="tcBadge" class="alert alert-success py-1 px-2 small d-none">
+                    <i class="bi bi-check-circle-fill"></i> Esta tarea ya está marcada como terminada.
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-1" for="tcStart">Inicio</label>
+                        <input type="date" id="tcStart" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-1" for="tcEnd">Fin</label>
+                        <input type="date" id="tcEnd" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small text-muted mb-1" for="tcTime">Tiempo invertido (minutos)</label>
+                    <input type="number" id="tcTime" class="form-control form-control-sm" min="0">
+                    <div class="small text-muted mt-1" id="tcTimeHint">= 0.00 h</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small text-muted mb-1" for="tcNote">Nota</label>
+                    <textarea id="tcNote" class="form-control form-control-sm" rows="3"></textarea>
+                </div>
+                <input type="hidden" id="tcTaskId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger btn-sm me-auto d-none" id="tcReopenBtn">Reabrir tarea</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" id="tcSaveBtn">Marcar como terminada</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL TIEMPO Y FECHA -->
 <div class="modal fade" id="timeModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
@@ -626,6 +703,46 @@ foreach ($categories as $category) {
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                 <button class="btn btn-primary btn-sm" id="saveTimeBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL SUGERIR SUBTAREAS -->
+<div class="modal fade" id="subtaskSuggestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-stars"></i> Subtareas sugeridas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="subtaskSuggestLoading" class="text-muted small">Pensando...</div>
+                <div id="subtaskSuggestError" class="text-danger small d-none"></div>
+                <div id="subtaskSuggestList" class="d-flex flex-column gap-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="subtaskSuggestAddBtn" disabled>Añadir seleccionadas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL RENOMBRAR SUBTAREA -->
+<div class="modal fade" id="subtaskEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Renombrar subtarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="subtaskEditInput" class="form-control" maxlength="255">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="subtaskEditSaveBtn">Guardar</button>
             </div>
         </div>
     </div>
@@ -852,6 +969,99 @@ foreach ($categories as $category) {
                 btn.textContent = 'Guardar';
             }
         });
+
+        // Completar / reabrir tarea
+        const taskCompleteModal = new bootstrap.Modal(document.getElementById('taskCompleteModal'));
+        const tcBadge = document.getElementById('tcBadge');
+        const tcTitle = document.getElementById('tcTitle');
+        const tcTaskId = document.getElementById('tcTaskId');
+        const tcStart = document.getElementById('tcStart');
+        const tcEnd = document.getElementById('tcEnd');
+        const tcTime = document.getElementById('tcTime');
+        const tcTimeHint = document.getElementById('tcTimeHint');
+        const tcNote = document.getElementById('tcNote');
+        const tcSaveBtn = document.getElementById('tcSaveBtn');
+        const tcReopenBtn = document.getElementById('tcReopenBtn');
+
+        function updateTcTimeHint() {
+            tcTimeHint.textContent = '= ' + ((parseInt(tcTime.value, 10) || 0) / 60).toFixed(2) + ' h';
+        }
+        tcTime.addEventListener('input', updateTcTimeHint);
+
+        document.querySelector('.container').addEventListener('click', function(e) {
+            const btn = e.target.closest('.js-task-complete');
+            if (!btn) return;
+
+            const isDone = btn.dataset.done === '1';
+
+            tcTaskId.value = btn.dataset.taskId;
+            tcTitle.textContent = (isDone ? 'Resumen: ' : 'Completar: ') + btn.dataset.title;
+            tcStart.value = btn.dataset.start || '';
+            tcEnd.value = btn.dataset.end || (isDone ? '' : '<?= date('Y-m-d') ?>');
+            tcTime.value = btn.dataset.time || 0;
+            tcNote.value = btn.dataset.note || '';
+            updateTcTimeHint();
+
+            tcBadge.classList.toggle('d-none', !isDone);
+            tcReopenBtn.classList.toggle('d-none', !isDone);
+            tcSaveBtn.textContent = isDone ? 'Guardar cambios' : 'Marcar como terminada';
+
+            taskCompleteModal.show();
+        });
+
+        async function saveTaskComplete(reopen) {
+            const id = tcTaskId.value;
+            if (!id) return;
+
+            const payload = {
+                start_time: tcStart.value,
+                end_time: tcEnd.value,
+                time_spent: parseInt(tcTime.value, 10) || 0,
+                note: tcNote.value,
+                reopen: reopen ? 1 : 0,
+            };
+
+            try {
+                const res = await fetch('<?= site_url('journal/tasks') ?>/' + id + '/completar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error();
+
+                const btn = document.querySelector(`.js-task-complete[data-task-id="${id}"]`);
+                if (btn) {
+                    btn.dataset.done = data.is_done ? '1' : '0';
+                    btn.dataset.start = data.start_time && data.start_time !== '0000-00-00 00:00:00' ? data.start_time.substring(0, 10) : '';
+                    btn.dataset.end = data.end_time && data.end_time !== '0000-00-00 00:00:00' ? data.end_time.substring(0, 10) : '';
+                    btn.dataset.time = data.time_spent;
+                    btn.dataset.note = data.note || '';
+                    btn.classList.toggle('is-done', data.is_done);
+                    btn.title = data.is_done ? 'Ver resumen / reabrir' : 'Marcar como terminada';
+                    btn.querySelector('i').className = 'bi ' + (data.is_done ? 'bi-check-circle-fill' : 'bi-check2-circle');
+
+                    const li = btn.closest('.list-group-item');
+                    if (li) li.classList.toggle('opacity-50', data.is_done);
+
+                    const titleLink = li ? li.querySelector('.task-title-link') : null;
+                    if (titleLink) titleLink.classList.toggle('text-decoration-line-through', data.is_done);
+
+                    const timeSpan = document.querySelector(`.task-time-trigger[data-task-id="${id}"]`);
+                    if (timeSpan) timeSpan.textContent = (data.time_spent / 60).toFixed(2) + ' h';
+                }
+
+                taskCompleteModal.hide();
+            } catch (err) {
+                alert('No se pudo guardar la tarea.');
+            }
+        }
+
+        tcSaveBtn.addEventListener('click', () => saveTaskComplete(false));
+        tcReopenBtn.addEventListener('click', () => saveTaskComplete(true));
     });
 
     // Subtareas inline en el listado
@@ -868,6 +1078,126 @@ foreach ($categories as $category) {
             return res.json();
         }
 
+        // Refleja en la barra de progreso del listado el amplitude/completed
+        // que el servidor recalculó a partir de las subtareas.
+        function updateTaskProgressSegments(taskId, progress) {
+            if (!progress) return;
+            const bar = document.querySelector(`.task-progress[data-task-id="${taskId}"]`);
+            if (!bar) return;
+
+            const pct = progress.amplitude > 0 ? Math.min(100, Math.round((progress.completed / progress.amplitude) * 100)) : 0;
+            const filled = Math.floor(pct / 10);
+
+            bar.querySelectorAll('.task-progress-segment').forEach((seg, i) => {
+                seg.classList.toggle('filled', i < filled);
+            });
+        }
+
+        // Modal renombrar subtarea
+        const subtaskEditModal = new bootstrap.Modal(document.getElementById('subtaskEditModal'));
+        const subtaskEditInput = document.getElementById('subtaskEditInput');
+        const subtaskEditSaveBtn = document.getElementById('subtaskEditSaveBtn');
+        let subtaskEditItem = null;
+
+        subtaskEditSaveBtn.addEventListener('click', async () => {
+            if (!subtaskEditItem) return;
+
+            const title = subtaskEditInput.value.trim();
+            if (!title) return;
+
+            subtaskEditSaveBtn.disabled = true;
+            try {
+                const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskEditItem.dataset.id + '/editar', { title });
+                if (!data.success) throw new Error();
+
+                subtaskEditItem.querySelector('.jt-subtask-title').textContent = data.title;
+                subtaskEditModal.hide();
+            } catch (err) {
+                alert('No se pudo renombrar la subtarea.');
+            } finally {
+                subtaskEditSaveBtn.disabled = false;
+            }
+        });
+
+        subtaskEditInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                subtaskEditSaveBtn.click();
+            }
+        });
+
+        // Modal sugerir subtareas (IA) — compartido por todos los paneles;
+        // subtaskSuggestContext guarda a qué tarea/lista se refiere la sugerencia actual.
+        const subtaskSuggestModal = new bootstrap.Modal(document.getElementById('subtaskSuggestModal'));
+        const subtaskSuggestLoading = document.getElementById('subtaskSuggestLoading');
+        const subtaskSuggestError = document.getElementById('subtaskSuggestError');
+        const subtaskSuggestList = document.getElementById('subtaskSuggestList');
+        const subtaskSuggestAddBtn = document.getElementById('subtaskSuggestAddBtn');
+        let subtaskSuggestContext = null;
+
+        async function requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge) {
+            subtaskSuggestContext = { taskId, list, emptyMsg, updateToggleBadge };
+            subtaskSuggestList.innerHTML = '';
+            subtaskSuggestError.classList.add('d-none');
+            subtaskSuggestLoading.classList.remove('d-none');
+            subtaskSuggestAddBtn.disabled = true;
+            subtaskSuggestModal.show();
+
+            try {
+                const data = await postJSON('<?= site_url('journal/tasks') ?>/' + taskId + '/sugerir-subtareas');
+                if (!data.success || !data.subtareas || !data.subtareas.length) {
+                    throw new Error(data.error || 'Sin sugerencias');
+                }
+
+                data.subtareas.forEach((titulo, i) => {
+                    const label = document.createElement('label');
+                    label.className = 'd-flex align-items-center gap-2';
+                    label.innerHTML = `
+                        <input type="checkbox" class="form-check-input mt-0" checked id="sugerencia${i}">
+                        <span>${titulo.replace(/</g, '&lt;')}</span>
+                    `;
+                    subtaskSuggestList.appendChild(label);
+                });
+                subtaskSuggestAddBtn.disabled = false;
+            } catch (err) {
+                subtaskSuggestError.textContent = err.message === 'Sin sugerencias'
+                    ? 'No se generaron sugerencias. Prueba de nuevo.'
+                    : (err.message || 'No se pudo contactar con la IA.');
+                subtaskSuggestError.classList.remove('d-none');
+            } finally {
+                subtaskSuggestLoading.classList.add('d-none');
+            }
+        }
+
+        subtaskSuggestAddBtn.addEventListener('click', async () => {
+            if (!subtaskSuggestContext) return;
+            const { taskId, list, emptyMsg, updateToggleBadge } = subtaskSuggestContext;
+
+            const seleccionadas = [...subtaskSuggestList.querySelectorAll('input:checked')]
+                .map(cb => cb.nextElementSibling.textContent);
+            if (!seleccionadas.length) return;
+
+            subtaskSuggestAddBtn.disabled = true;
+            try {
+                let lastProgress = null;
+                for (const title of seleccionadas) {
+                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
+                    if (data.success) {
+                        list.appendChild(buildSubtaskItem(data.subtask, taskId));
+                        lastProgress = data.progress;
+                    }
+                }
+                emptyMsg.classList.add('d-none');
+                updateToggleBadge(taskId);
+                updateTaskProgressSegments(taskId, lastProgress);
+                subtaskSuggestModal.hide();
+            } catch (err) {
+                alert('No se pudieron añadir todas las subtareas.');
+            } finally {
+                subtaskSuggestAddBtn.disabled = false;
+            }
+        });
+
         function buildSubtaskItem(subtask, taskId) {
             const item = document.createElement('div');
             item.className = 'jt-subtask-item';
@@ -877,6 +1207,7 @@ foreach ($categories as $category) {
                 <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
                 <span class="jt-subtask-title"></span>
                 <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" data-task-id="${taskId}">0.00 h</span>
+                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
                 <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
             `;
             item.querySelector('.jt-subtask-title').textContent = subtask.title;
@@ -911,7 +1242,12 @@ foreach ($categories as $category) {
             const taskId = list.dataset.taskId;
             const input = panel.querySelector('.jt-subtask-input');
             const addBtn = panel.querySelector('.jt-subtask-add-btn');
+            const suggestBtn = panel.querySelector('.jt-subtask-suggest-btn');
             const emptyMsg = panel.querySelector('.jt-subtask-empty');
+
+            suggestBtn.addEventListener('click', () => {
+                requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge);
+            });
 
             async function addSubtask() {
                 const title = input.value.trim();
@@ -926,6 +1262,7 @@ foreach ($categories as $category) {
                     input.value = '';
                     emptyMsg.classList.add('d-none');
                     updateToggleBadge(taskId);
+                    updateTaskProgressSegments(taskId, data.progress);
                 } catch (err) {
                     alert('No se pudo añadir la subtarea.');
                 } finally {
@@ -953,6 +1290,15 @@ foreach ($categories as $category) {
                     item.classList.toggle('is-done', isDone);
                     toggleBtn.querySelector('i').className = 'bi ' + (isDone ? 'bi-check-circle-fill' : 'bi-circle');
                     updateToggleBadge(taskId);
+                    updateTaskProgressSegments(taskId, data.progress);
+                    return;
+                }
+
+                const editBtn = e.target.closest('.js-edit-subtask');
+                if (editBtn) {
+                    subtaskEditItem = editBtn.closest('.jt-subtask-item');
+                    subtaskEditInput.value = subtaskEditItem.querySelector('.jt-subtask-title').textContent;
+                    subtaskEditModal.show();
                     return;
                 }
 
@@ -967,6 +1313,7 @@ foreach ($categories as $category) {
                         emptyMsg.classList.remove('d-none');
                     }
                     updateToggleBadge(taskId);
+                    updateTaskProgressSegments(taskId, data.progress);
                 }
             });
 

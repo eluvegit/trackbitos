@@ -105,7 +105,12 @@
 
 <!-- Subtareas -->
 <div class="jt-section mb-3">
-    <div class="jt-section-title">Subtareas</div>
+    <div class="jt-section-title d-flex align-items-center justify-content-between">
+        <span>Subtareas</span>
+        <button type="button" id="subtaskSuggestBtn" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-stars"></i> Sugerir subtareas
+        </button>
+    </div>
 
     <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
         <?php foreach ($subtasks as $s): ?>
@@ -118,6 +123,9 @@
                     <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
                 </button>
                 <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
+                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
+                    <i class="bi bi-pencil"></i>
+                </button>
                 <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -132,6 +140,87 @@
         <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary">
             <i class="bi bi-plus-lg"></i>
         </button>
+    </div>
+</div>
+
+<!-- Materiales (histórico de archivos de referencia para hacer la tarea) -->
+<div class="jt-section mb-3">
+    <div class="jt-section-title">Materiales</div>
+
+    <div class="jt-materiales-list mb-2" id="materialesList">
+        <?php foreach ($files as $f):
+            $ext = strtolower(pathinfo($f['nombre_original'], PATHINFO_EXTENSION));
+            $icon = match (true) {
+                in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true) => 'bi-file-earmark-image',
+                $ext === 'pdf' => 'bi-file-earmark-pdf',
+                in_array($ext, ['doc', 'docx'], true) => 'bi-file-earmark-word',
+                in_array($ext, ['xls', 'xlsx'], true) => 'bi-file-earmark-excel',
+                in_array($ext, ['zip', 'rar', '7z'], true) => 'bi-file-earmark-zip',
+                in_array($ext, ['mp4', 'mov', 'avi', 'mkv'], true) => 'bi-file-earmark-play',
+                default => 'bi-file-earmark',
+            };
+            $sizeLabel = '';
+            if (!empty($f['tamano'])) {
+                $sizeLabel = $f['tamano'] < 1024 * 1024
+                    ? round($f['tamano'] / 1024, 1) . ' KB'
+                    : round($f['tamano'] / 1024 / 1024, 1) . ' MB';
+            }
+        ?>
+            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>">
+                <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
+                    <i class="bi <?= $icon ?>"></i>
+                    <span class="jt-material-name"><?= esc($f['nombre_original']) ?></span>
+                </a>
+                <span class="jt-material-size"><?= esc($sizeLabel) ?></span>
+                <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <p class="text-muted small mb-2 <?= empty($files) ? '' : 'd-none' ?>" id="materialesEmptyMsg">Sin materiales todavía.</p>
+
+    <input type="file" id="materialInput" class="form-control form-control-sm" multiple>
+</div>
+
+<!-- MODAL SUGERIR SUBTAREAS -->
+<div class="modal fade" id="subtaskSuggestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-stars"></i> Subtareas sugeridas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="subtaskSuggestLoading" class="text-muted small">Pensando...</div>
+                <div id="subtaskSuggestError" class="text-danger small d-none"></div>
+                <div id="subtaskSuggestList" class="d-flex flex-column gap-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="subtaskSuggestAddBtn" disabled>Añadir seleccionadas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL RENOMBRAR SUBTAREA -->
+<div class="modal fade" id="subtaskEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Renombrar subtarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="subtaskEditInput" class="form-control" maxlength="255">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="subtaskEditSaveBtn">Guardar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -355,6 +444,7 @@
     color: var(--bs-secondary-color);
 }
 
+.jt-subtask-edit,
 .jt-subtask-delete {
     flex: 0 0 auto;
     width: 30px;
@@ -367,10 +457,33 @@
     color: var(--bs-secondary-color);
     cursor: pointer;
 }
+.jt-subtask-edit:hover { background: rgba(13,110,253,.12); color: #0d6efd; }
 .jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
 
 .jt-subtask-add { display: flex; gap: 6px; }
 .jt-subtask-add .form-control { flex: 1 1 auto; }
+
+.jt-materiales-list { display: flex; flex-direction: column; gap: 6px; }
+.jt-material-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--bs-tertiary-bg);
+}
+.jt-material-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+}
+.jt-material-link:hover { text-decoration: underline; }
+.jt-material-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jt-material-size { flex: 0 0 auto; font-size: .75rem; color: var(--bs-secondary-color); }
 
 .jt-log-list { display: flex; flex-direction: column; gap: 6px; }
 .jt-log-item {
@@ -500,6 +613,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtaskInput = document.getElementById('subtaskInput');
     const subtaskAddBtn = document.getElementById('subtaskAddBtn');
 
+    const subtaskEditModal = new bootstrap.Modal(document.getElementById('subtaskEditModal'));
+    const subtaskEditInput = document.getElementById('subtaskEditInput');
+    const subtaskEditSaveBtn = document.getElementById('subtaskEditSaveBtn');
+    let subtaskEditItem = null;
+
     async function postJSON(url, body) {
         const res = await fetch(url, {
             method: 'POST',
@@ -521,6 +639,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
             <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
             <span class="jt-subtask-title"></span>
+            <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
             <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
         `;
         item.querySelector('.jt-subtask-title').textContent = subtask.title;
@@ -539,12 +658,20 @@ document.addEventListener('DOMContentLoaded', function () {
             subtaskList.appendChild(buildSubtaskItem(data.subtask));
             subtaskInput.value = '';
             subtaskEmptyMsg.classList.add('d-none');
+            applyProgress(data.progress);
         } catch (err) {
             alert('No se pudo añadir la subtarea.');
         } finally {
             subtaskAddBtn.disabled = false;
             subtaskInput.focus();
         }
+    }
+
+    function applyProgress(progress) {
+        if (!progress) return;
+        amplitudeInput.value = progress.amplitude;
+        completedInput.value = progress.completed;
+        actualizarProgreso();
     }
 
     subtaskAddBtn.addEventListener('click', addSubtask);
@@ -565,6 +692,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const isDone = !!data.is_done;
             item.classList.toggle('is-done', isDone);
             toggleBtn.querySelector('i').className = isDone ? 'bi bi-check-circle-fill' : 'bi bi-circle';
+            applyProgress(data.progress);
+            return;
+        }
+
+        const editBtn = e.target.closest('.js-edit-subtask');
+        if (editBtn) {
+            subtaskEditItem = editBtn.closest('.jt-subtask-item');
+            subtaskEditInput.value = subtaskEditItem.querySelector('.jt-subtask-title').textContent;
+            subtaskEditModal.show();
             return;
         }
 
@@ -578,6 +714,102 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!subtaskList.querySelector('.jt-subtask-item')) {
                 subtaskEmptyMsg.classList.remove('d-none');
             }
+            applyProgress(data.progress);
+        }
+    });
+
+    subtaskEditSaveBtn.addEventListener('click', async () => {
+        if (!subtaskEditItem) return;
+
+        const title = subtaskEditInput.value.trim();
+        if (!title) return;
+
+        subtaskEditSaveBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskEditItem.dataset.id + '/editar', { title });
+            if (!data.success) throw new Error();
+
+            subtaskEditItem.querySelector('.jt-subtask-title').textContent = data.title;
+            subtaskEditModal.hide();
+        } catch (err) {
+            alert('No se pudo renombrar la subtarea.');
+        } finally {
+            subtaskEditSaveBtn.disabled = false;
+        }
+    });
+
+    document.getElementById('subtaskEditInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            subtaskEditSaveBtn.click();
+        }
+    });
+
+    // --- Sugerir subtareas (IA) ---
+    const subtaskSuggestBtn = document.getElementById('subtaskSuggestBtn');
+    const subtaskSuggestModal = new bootstrap.Modal(document.getElementById('subtaskSuggestModal'));
+    const subtaskSuggestLoading = document.getElementById('subtaskSuggestLoading');
+    const subtaskSuggestError = document.getElementById('subtaskSuggestError');
+    const subtaskSuggestList = document.getElementById('subtaskSuggestList');
+    const subtaskSuggestAddBtn = document.getElementById('subtaskSuggestAddBtn');
+
+    subtaskSuggestBtn.addEventListener('click', async () => {
+        subtaskSuggestList.innerHTML = '';
+        subtaskSuggestError.classList.add('d-none');
+        subtaskSuggestLoading.classList.remove('d-none');
+        subtaskSuggestAddBtn.disabled = true;
+        subtaskSuggestBtn.disabled = true;
+        subtaskSuggestModal.show();
+
+        try {
+            const data = await postJSON('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/sugerir-subtareas');
+            if (!data.success || !data.subtareas || !data.subtareas.length) {
+                throw new Error(data.error || 'Sin sugerencias');
+            }
+
+            data.subtareas.forEach((titulo, i) => {
+                const label = document.createElement('label');
+                label.className = 'd-flex align-items-center gap-2';
+                label.innerHTML = `
+                    <input type="checkbox" class="form-check-input mt-0" checked id="sugerencia${i}">
+                    <span>${titulo.replace(/</g, '&lt;')}</span>
+                `;
+                subtaskSuggestList.appendChild(label);
+            });
+            subtaskSuggestAddBtn.disabled = false;
+        } catch (err) {
+            subtaskSuggestError.textContent = err.message === 'Sin sugerencias'
+                ? 'No se generaron sugerencias. Prueba de nuevo.'
+                : (err.message || 'No se pudo contactar con la IA.');
+            subtaskSuggestError.classList.remove('d-none');
+        } finally {
+            subtaskSuggestLoading.classList.add('d-none');
+            subtaskSuggestBtn.disabled = false;
+        }
+    });
+
+    subtaskSuggestAddBtn.addEventListener('click', async () => {
+        const seleccionadas = [...subtaskSuggestList.querySelectorAll('input:checked')]
+            .map(cb => cb.nextElementSibling.textContent);
+        if (!seleccionadas.length) return;
+
+        subtaskSuggestAddBtn.disabled = true;
+        try {
+            let lastProgress = null;
+            for (const title of seleccionadas) {
+                const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskList.dataset.taskId + '/crear', { title });
+                if (data.success) {
+                    subtaskList.appendChild(buildSubtaskItem(data.subtask));
+                    lastProgress = data.progress;
+                }
+            }
+            subtaskEmptyMsg.classList.add('d-none');
+            applyProgress(lastProgress);
+            subtaskSuggestModal.hide();
+        } catch (err) {
+            alert('No se pudieron añadir todas las subtareas.');
+        } finally {
+            subtaskSuggestAddBtn.disabled = false;
         }
     });
 
@@ -590,6 +822,91 @@ document.addEventListener('DOMContentLoaded', function () {
             const orden = [...subtaskList.querySelectorAll('.jt-subtask-item')].map(item => item.dataset.id);
             postJSON('<?= site_url('journal/subtasks/reordenar') ?>', { orden });
         },
+    });
+
+    // --- Materiales (histórico de archivos) ---
+    const materialesList = document.getElementById('materialesList');
+    const materialesEmptyMsg = document.getElementById('materialesEmptyMsg');
+    const materialInput = document.getElementById('materialInput');
+
+    function materialIcon(name) {
+        const ext = (name.split('.').pop() || '').toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) return 'bi-file-earmark-image';
+        if (ext === 'pdf') return 'bi-file-earmark-pdf';
+        if (['doc', 'docx'].includes(ext)) return 'bi-file-earmark-word';
+        if (['xls', 'xlsx'].includes(ext)) return 'bi-file-earmark-excel';
+        if (['zip', 'rar', '7z'].includes(ext)) return 'bi-file-earmark-zip';
+        if (['mp4', 'mov', 'avi', 'mkv'].includes(ext)) return 'bi-file-earmark-play';
+        return 'bi-file-earmark';
+    }
+
+    function formatSize(bytes) {
+        if (!bytes) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function buildMaterialItem(f) {
+        const div = document.createElement('div');
+        div.className = 'jt-material-item';
+        div.dataset.id = f.id;
+        div.innerHTML = `
+            <a href="${f.url}" target="_blank" class="jt-material-link">
+                <i class="bi ${materialIcon(f.nombre_original)}"></i>
+                <span class="jt-material-name"></span>
+            </a>
+            <span class="jt-material-size">${formatSize(f.tamano)}</span>
+            <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+        `;
+        div.querySelector('.jt-material-name').textContent = f.nombre_original;
+        return div;
+    }
+
+    materialInput.addEventListener('change', async () => {
+        if (!materialInput.files.length) return;
+
+        const formData = new FormData();
+        for (const file of materialInput.files) {
+            formData.append('archivo', file);
+        }
+
+        materialInput.disabled = true;
+        try {
+            const res = await fetch('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/materiales', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+                },
+                body: formData,
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'No se pudieron subir los archivos.');
+
+            data.files.forEach(f => materialesList.appendChild(buildMaterialItem(f)));
+            materialesEmptyMsg.classList.add('d-none');
+        } catch (err) {
+            alert(err.message || 'No se pudieron subir los archivos.');
+        } finally {
+            materialInput.value = '';
+            materialInput.disabled = false;
+        }
+    });
+
+    materialesList.addEventListener('click', async (e) => {
+        const delBtn = e.target.closest('.js-delete-material');
+        if (!delBtn) return;
+        if (!confirm('¿Eliminar este material?')) return;
+
+        const item = delBtn.closest('.jt-material-item');
+        const data = await postJSON('<?= site_url('journal/materiales') ?>/' + item.dataset.id + '/borrar');
+        if (!data.success) return;
+
+        item.remove();
+        if (!materialesList.querySelector('.jt-material-item')) {
+            materialesEmptyMsg.classList.remove('d-none');
+        }
     });
 });
 </script>

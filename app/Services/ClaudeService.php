@@ -84,6 +84,93 @@ class ClaudeService
     }
 
     /**
+     * Desglosa una tarea en subtareas pequeñas y accionables (pensado para
+     * ayudar a arrancar/progresar cuando la tarea se percibe como demasiado
+     * grande o difusa). Fuerza el uso de la herramienta con tool_choice para
+     * no tener que parsear texto libre.
+     *
+     * @param list<string> $existentes Títulos de subtareas que ya existen, para no repetirlas
+     * @return list<string>|null
+     */
+    public function sugerirSubtareas(string $titulo, ?string $categoria = null, ?string $notas = null, array $existentes = []): ?array
+    {
+        $apiKey = env('braintogram.anthropicApiKey');
+        if (!$apiKey) {
+            log_message('error', 'ClaudeService: braintogram.anthropicApiKey no configurado.');
+
+            return null;
+        }
+
+        $contexto = 'Tarea: ' . $titulo;
+        if ($categoria) {
+            $contexto .= "\nCategoría: " . $categoria;
+        }
+        if ($notas) {
+            $contexto .= "\nNotas: " . $notas;
+        }
+        if (!empty($existentes)) {
+            $contexto .= "\nSubtareas que ya existen (no las repitas): " . implode('; ', $existentes);
+        }
+
+        $payload = [
+            'model'      => self::MODEL,
+            'max_tokens' => 512,
+            'system'     => 'Ayudas a una persona con TDAH a desglosar una tarea en subtareas pequeñas y '
+                . 'concretas para que le resulte más fácil arrancar y progresar. Da entre 3 y 7 subtareas, '
+                . 'cada una una acción de un solo paso, breve, en español, sin numerarlas ni añadir '
+                . 'explicaciones. Responde siempre usando la herramienta listar_subtareas.',
+            'tools'       => [[
+                'name'        => 'listar_subtareas',
+                'description' => 'Devuelve la lista de subtareas sugeridas para la tarea.',
+                'input_schema' => [
+                    'type'       => 'object',
+                    'properties' => [
+                        'subtareas' => [
+                            'type'        => 'array',
+                            'items'       => ['type' => 'string'],
+                            'description' => 'Lista de subtareas concretas y accionables',
+                        ],
+                    ],
+                    'required' => ['subtareas'],
+                ],
+            ]],
+            'tool_choice' => ['type' => 'tool', 'name' => 'listar_subtareas'],
+            'messages'    => [
+                ['role' => 'user', 'content' => $contexto],
+            ],
+        ];
+
+        try {
+            $client   = \Config\Services::curlrequest();
+            $response = $client->post(self::API_URL, [
+                'headers' => [
+                    'x-api-key'         => $apiKey,
+                    'anthropic-version' => '2023-06-01',
+                    'content-type'      => 'application/json',
+                ],
+                'json'    => $payload,
+                'timeout' => 20,
+            ]);
+
+            $data = json_decode($response->getBody(), true);
+        } catch (\Throwable $e) {
+            log_message('error', 'ClaudeService: fallo al llamar a la API: {msg}', ['msg' => $e->getMessage()]);
+
+            return null;
+        }
+
+        foreach ($data['content'] ?? [] as $bloque) {
+            if (($bloque['type'] ?? null) === 'tool_use' && $bloque['name'] === 'listar_subtareas') {
+                $subtareas = $bloque['input']['subtareas'] ?? [];
+
+                return array_values(array_filter(array_map('trim', $subtareas), fn($s) => $s !== ''));
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return list<array{name: string, description: string, input_schema: array}>
      */
     private function herramientas(): array

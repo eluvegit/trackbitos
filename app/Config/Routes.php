@@ -432,10 +432,17 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
 
     // ---- Subtareas (checklist tachable dentro de una tarea) ----
     $routes->POST('subtasks/(:num)/crear', 'Journal::subtaskCreate/$1');
+    $routes->POST('subtasks/(:num)/editar', 'Journal::subtaskUpdate/$1');
     $routes->POST('subtasks/(:num)/toggle', 'Journal::subtaskToggle/$1');
     $routes->POST('subtasks/(:num)/borrar', 'Journal::subtaskDelete/$1');
     $routes->POST('subtasks/(:num)/add-time', 'Journal::subtaskAddTime/$1');
     $routes->POST('subtasks/reordenar', 'Journal::subtaskReorder');
+    $routes->POST('tasks/(:num)/sugerir-subtareas', 'Journal::suggestSubtasks/$1');
+    $routes->POST('tasks/(:num)/completar', 'Journal::completeTask/$1');
+
+    // ---- Materiales (histórico de archivos de referencia por tarea) ----
+    $routes->POST('tasks/(:num)/materiales', 'Journal::taskFileUpload/$1');
+    $routes->POST('materiales/(:num)/borrar', 'Journal::taskFileDelete/$1');
 
     // ---- ¿Qué hago ahora? ----
     $routes->GET('que-hacer', 'Journal::queHacer');
