@@ -37,6 +37,18 @@
         padding: 4px !important;
     }
 
+    .card-header[data-bs-toggle="collapse"] {
+        cursor: pointer;
+    }
+
+    .journal-toolbar .btn {
+        padding: .2rem .45rem;
+    }
+    .journal-toolbar .btn svg,
+    .journal-toolbar .btn i {
+        font-size: .8rem;
+    }
+
     .task-title-link {
         color: beige;
     }
@@ -76,17 +88,15 @@ function time_ago(?string $datetime): string
 }
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-    <div class="d-flex align-items-center">
-        <h3 class="mb-0 me-3" style="line-height: 1;">Journal</h3>
-        <a href="<?= site_url('journal/que-hacer') ?>" class="btn btn-sm btn-outline-primary me-2">
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+    <h3 class="mb-0" style="line-height: 1;">Journal</h3>
+    <div class="btn-group btn-group-sm journal-toolbar">
+        <a href="<?= site_url('journal/que-hacer') ?>" class="btn btn-outline-primary" title="¿Qué hago ahora?">
             <i class="bi bi-shuffle"></i>
         </a>
-        <button id="toggleAllBtn" class="btn btn-sm" type="button">
-            Mostrar todo
+        <button id="toggleAllBtn" class="btn btn-outline-secondary" type="button" title="Mostrar todo">
+            <i class="bi bi-arrows-expand"></i>
         </button>
-    </div>
-    <div class="btn-group btn-group-sm">
         <?php
         // Prioridad
         $priorityNext = $filterPriority ? 0 : 1; // Esto está bien, sigue funcionando
@@ -112,7 +122,6 @@ function time_ago(?string $datetime): string
         ], $overrides));
         ?>
 
-        <div class="btn-group btn-group-sm">
             <!-- Prioridad -->
             <a href="<?= site_url('journal') . '?' . $qs(['priority' => $priorityNext]) ?>"
                 class="btn <?= $priorityClass ?>" title="Prioridad">
@@ -173,7 +182,6 @@ function time_ago(?string $datetime): string
                     </svg>
                 <?php endif; ?>
             </a>
-        </div>
     </div>
 </div>
 
@@ -195,30 +203,109 @@ foreach ($categories as $category) {
     .journal-grid {
         display: grid;
         grid-template-columns: 1fr;
-        gap: .5rem;
+        gap: .2rem;
     }
-    @media (min-width: 768px) {
-        .journal-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* Subtareas inline en el listado */
+    .jt-subtask-toggle {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        border: none;
+        background: transparent;
+        color: #adb5bd;
+        padding: 2px 4px;
+        border-radius: 8px;
+        font-size: .7rem;
+        line-height: 1;
     }
-    @media (min-width: 992px) {
-        .journal-grid { grid-template-columns: repeat(3, 1fr); }
+    .jt-subtask-toggle:hover { background: var(--bs-tertiary-bg); color: var(--bs-emphasis-color); }
+    .jt-subtask-toggle.has-subtasks { color: var(--bs-emphasis-color); }
+    .jt-subtask-toggle[aria-expanded="true"] { color: #0d6efd; }
+    .jt-subtask-count { font-weight: 600; }
+
+    .jt-inline-subtasks { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--bs-border-color); }
+
+    .jt-subtask-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+    .jt-subtask-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 6px;
+        border-radius: 8px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        transition: opacity .15s ease, background-color .15s ease;
     }
-    @media (min-width: 1400px) {
-        .journal-grid {
-            grid-template-columns: repeat(7, 1fr);
-            /* Se escapa del .container (limitado a ~1320px) para aprovechar
-               pantallas panorámicas, solo a partir de este breakpoint. */
-            width: 100vw;
-            position: relative;
-            left: 50%;
-            right: 50%;
-            margin-left: -50vw;
-            margin-right: -50vw;
-            padding-left: 2rem;
-            padding-right: 2rem;
-            box-sizing: border-box;
-        }
+    .jt-subtask-item.sortable-ghost { opacity: .3; }
+    .jt-subtask-item.sortable-chosen { background: var(--bs-tertiary-bg); }
+    .jt-subtask-item.is-done { opacity: .6; }
+
+    .jt-subtask-handle {
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 24px;
+        color: var(--bs-secondary-color);
+        cursor: grab;
+        touch-action: none;
     }
+    .jt-subtask-handle:active { cursor: grabbing; }
+
+    .jt-subtask-check {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: var(--bs-secondary-color);
+        font-size: .9rem;
+        cursor: pointer;
+    }
+    .jt-subtask-item.is-done .jt-subtask-check { color: #10b981; }
+
+    .jt-subtask-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: .78rem;
+        color: var(--bs-emphasis-color);
+        word-break: break-word;
+    }
+    .jt-subtask-item.is-done .jt-subtask-title {
+        text-decoration: line-through;
+        color: var(--bs-secondary-color);
+    }
+
+    .jt-subtask-time {
+        flex: 0 0 auto;
+        font-size: .7rem;
+        color: var(--bs-secondary-color);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .jt-subtask-time:hover { color: var(--bs-emphasis-color); text-decoration: underline; }
+
+    .jt-subtask-delete {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: var(--bs-secondary-color);
+        cursor: pointer;
+    }
+    .jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
+
+    .jt-subtask-add { display: flex; gap: 6px; }
+    .jt-subtask-add .form-control { flex: 1 1 auto; }
 </style>
 
 <div class="journal-grid">
@@ -250,7 +337,7 @@ foreach ($categories as $category) {
     <?php
     $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
     ?>
-    <div class="card mb-1 h-100">
+    <div class="card h-100">
         <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
             <?php
             $current = $counts['current'];
@@ -379,6 +466,22 @@ foreach ($categories as $category) {
                                             </span>
                                         </div>
 
+                                        <?php
+                                        $subs = $subtasksByTask[$task['id']] ?? [];
+                                        $subsTotal = count($subs);
+                                        $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
+                                        ?>
+
+                                        <!-- Subtareas -->
+                                        <button type="button" class="jt-subtask-toggle <?= $subsTotal > 0 ? 'has-subtasks' : '' ?>"
+                                            data-bs-toggle="collapse" data-bs-target="#subtasks-<?= $task['id'] ?>"
+                                            title="Subtareas">
+                                            <i class="bi bi-list-check"></i>
+                                            <?php if ($subsTotal > 0): ?>
+                                                <span class="jt-subtask-count"><?= $subsDone ?>/<?= $subsTotal ?></span>
+                                            <?php endif; ?>
+                                        </button>
+
                                         <!-- Tiempo -->
                                         <span class="text-muted small ms-auto task-time-trigger"
                                             data-task-id="<?= $task['id'] ?>">
@@ -394,6 +497,39 @@ foreach ($categories as $category) {
                                             <?php endfor; ?>
                                         </div>
                                     <?php endif; ?>
+
+                                    <!-- Subtareas (inline, plegable) -->
+                                    <div class="collapse jt-inline-subtasks" id="subtasks-<?= $task['id'] ?>">
+                                        <div class="jt-subtask-list" data-task-id="<?= $task['id'] ?>">
+                                            <?php foreach ($subs as $s): ?>
+                                                <?php $sDone = !empty($s['is_done']); ?>
+                                                <div class="jt-subtask-item <?= $sDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
+                                                    <span class="jt-subtask-handle" title="Arrastrar para reordenar">
+                                                        <i class="bi bi-grip-vertical"></i>
+                                                    </span>
+                                                    <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
+                                                        <i class="bi <?= $sDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
+                                                    </button>
+                                                    <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
+                                                    <span class="jt-subtask-time subtask-time-trigger"
+                                                        data-subtask-id="<?= (int)$s['id'] ?>"
+                                                        data-task-id="<?= $task['id'] ?>">
+                                                        <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
+                                                    </span>
+                                                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <p class="text-muted small mb-2 jt-subtask-empty <?= $subsTotal > 0 ? 'd-none' : '' ?>">Sin subtareas todavía.</p>
+                                        <div class="jt-subtask-add">
+                                            <input type="text" class="form-control form-control-sm jt-subtask-input" placeholder="Nueva subtarea..." maxlength="255">
+                                            <button type="button" class="btn btn-sm btn-primary jt-subtask-add-btn">
+                                                <i class="bi bi-plus-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
 
                                 </li>
 
@@ -478,13 +614,14 @@ foreach ($categories as $category) {
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Añadir tiempo / Fecha</h5>
+                <h5 class="modal-title" id="timeModalTitle">Añadir tiempo / Fecha</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="number" id="timeMinutes" class="form-control mb-2" placeholder="Minutos" min="1">
                 <input type="date" id="taskDate" class="form-control mb-2" value="<?= date('Y-m-d') ?>">
                 <input type="hidden" id="timeTaskId">
+                <input type="hidden" id="timeMode" value="task">
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -493,6 +630,7 @@ foreach ($categories as $category) {
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
 
@@ -598,12 +736,29 @@ foreach ($categories as $category) {
 
         // Modal tiempo
         const timeModal = new bootstrap.Modal(document.getElementById('timeModal'));
+        const timeDateField = document.getElementById('taskDate');
+        const timeModalTitle = document.getElementById('timeModalTitle');
+
         document.querySelector('.container').addEventListener('click', function(e) {
-            const trigger = e.target.closest('.task-time-trigger');
+            const subtaskTrigger = e.target.closest('.subtask-time-trigger');
+            const taskTrigger = e.target.closest('.task-time-trigger');
+            const trigger = subtaskTrigger || taskTrigger;
             if (!trigger) return;
 
-            document.getElementById('timeTaskId').value = trigger.dataset.taskId;
             document.getElementById('timeMinutes').value = '';
+
+            if (subtaskTrigger) {
+                document.getElementById('timeMode').value = 'subtask';
+                document.getElementById('timeTaskId').value = subtaskTrigger.dataset.subtaskId;
+                timeModalTitle.textContent = 'Añadir tiempo a subtarea';
+                timeDateField.classList.add('d-none');
+            } else {
+                document.getElementById('timeMode').value = 'task';
+                document.getElementById('timeTaskId').value = trigger.dataset.taskId;
+                timeModalTitle.textContent = 'Añadir tiempo / Fecha';
+                timeDateField.classList.remove('d-none');
+            }
+
             timeModal.show();
         });
 
@@ -618,50 +773,72 @@ foreach ($categories as $category) {
             btn.textContent = 'Guardando...';
 
             try {
-                const taskId = document.getElementById('timeTaskId').value;
+                const mode = document.getElementById('timeMode').value;
+                const id = document.getElementById('timeTaskId').value;
                 let minutes = parseInt(document.getElementById('timeMinutes').value) || 0;
                 const date = document.getElementById('taskDate').value || '';
 
-                if (!taskId) throw new Error('TaskId vacío');
+                if (!id) throw new Error('Id vacío');
+                if (minutes <= 0 && mode === 'subtask') throw new Error('Indica los minutos');
 
-                let totalMinutes = 0;
-
-                // 1️⃣ Guardar minutos en task
-                if (minutes > 0) {
-                    const resTime = await fetch('<?= site_url('journal/add-time') ?>/' + taskId, {
+                if (mode === 'subtask') {
+                    // Sumar tiempo a la subtarea (y, en el servidor, a la tarea padre)
+                    const res = await fetch('<?= site_url('journal/subtasks') ?>/' + id + '/add-time', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest'
                         },
-                        body: JSON.stringify({
-                            minutes
-                        })
+                        body: JSON.stringify({ minutes })
                     });
-                    const timeData = await resTime.json();
-                    if (!timeData.success) throw new Error('Error guardando tiempo');
-                    totalMinutes = timeData.minutes;
+                    const data = await res.json();
+                    if (!data.success) throw new Error('Error guardando tiempo');
 
-                    // Actualizar UI
-                    const span = document.querySelector(`.task-time-trigger[data-task-id="${taskId}"]`);
-                    if (span) span.textContent = (totalMinutes / 60).toFixed(2) + ' h';
-                }
+                    const subtaskSpan = document.querySelector(`.subtask-time-trigger[data-subtask-id="${id}"]`);
+                    if (subtaskSpan) subtaskSpan.textContent = (data.subtask_minutes / 60).toFixed(2) + ' h';
 
-                // 2️⃣ Guardar log de fecha si hay
-                if (date) {
-                    const resDate = await fetch('<?= site_url('journal/add-log') ?>/' + taskId, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: JSON.stringify({
-                            date,
-                            minutes
-                        }) // enviar minutos también para acumular en log
-                    });
-                    const dateData = await resDate.json();
-                    if (!dateData.success) throw new Error(dateData.error || 'Error guardando log');
+                    const taskSpan = document.querySelector(`.task-time-trigger[data-task-id="${data.task_id}"]`);
+                    if (taskSpan) taskSpan.textContent = (data.task_minutes / 60).toFixed(2) + ' h';
+                } else {
+                    let totalMinutes = 0;
+
+                    // 1️⃣ Guardar minutos en task
+                    if (minutes > 0) {
+                        const resTime = await fetch('<?= site_url('journal/add-time') ?>/' + id, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({
+                                minutes
+                            })
+                        });
+                        const timeData = await resTime.json();
+                        if (!timeData.success) throw new Error('Error guardando tiempo');
+                        totalMinutes = timeData.minutes;
+
+                        // Actualizar UI
+                        const span = document.querySelector(`.task-time-trigger[data-task-id="${id}"]`);
+                        if (span) span.textContent = (totalMinutes / 60).toFixed(2) + ' h';
+                    }
+
+                    // 2️⃣ Guardar log de fecha si hay
+                    if (date) {
+                        const resDate = await fetch('<?= site_url('journal/add-log') ?>/' + id, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({
+                                date,
+                                minutes
+                            }) // enviar minutos también para acumular en log
+                        });
+                        const dateData = await resDate.json();
+                        if (!dateData.success) throw new Error(dateData.error || 'Error guardando log');
+                    }
                 }
 
                 timeModal.hide();
@@ -677,12 +854,141 @@ foreach ($categories as $category) {
         });
     });
 
+    // Subtareas inline en el listado
+    document.addEventListener('DOMContentLoaded', function() {
+        async function postJSON(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            return res.json();
+        }
+
+        function buildSubtaskItem(subtask, taskId) {
+            const item = document.createElement('div');
+            item.className = 'jt-subtask-item';
+            item.dataset.id = subtask.id;
+            item.innerHTML = `
+                <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
+                <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
+                <span class="jt-subtask-title"></span>
+                <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" data-task-id="${taskId}">0.00 h</span>
+                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+            `;
+            item.querySelector('.jt-subtask-title').textContent = subtask.title;
+            return item;
+        }
+
+        function updateToggleBadge(taskId) {
+            const list = document.querySelector(`.jt-subtask-list[data-task-id="${taskId}"]`);
+            const toggle = document.querySelector(`.jt-subtask-toggle[data-bs-target="#subtasks-${taskId}"]`);
+            if (!list || !toggle) return;
+
+            const total = list.querySelectorAll('.jt-subtask-item').length;
+            const done = list.querySelectorAll('.jt-subtask-item.is-done').length;
+
+            let countEl = toggle.querySelector('.jt-subtask-count');
+            if (total > 0) {
+                if (!countEl) {
+                    countEl = document.createElement('span');
+                    countEl.className = 'jt-subtask-count';
+                    toggle.appendChild(countEl);
+                }
+                countEl.textContent = `${done}/${total}`;
+                toggle.classList.add('has-subtasks');
+            } else if (countEl) {
+                countEl.remove();
+                toggle.classList.remove('has-subtasks');
+            }
+        }
+
+        document.querySelectorAll('.jt-inline-subtasks').forEach(panel => {
+            const list = panel.querySelector('.jt-subtask-list');
+            const taskId = list.dataset.taskId;
+            const input = panel.querySelector('.jt-subtask-input');
+            const addBtn = panel.querySelector('.jt-subtask-add-btn');
+            const emptyMsg = panel.querySelector('.jt-subtask-empty');
+
+            async function addSubtask() {
+                const title = input.value.trim();
+                if (!title) return;
+
+                addBtn.disabled = true;
+                try {
+                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
+                    if (!data.success) throw new Error();
+
+                    list.appendChild(buildSubtaskItem(data.subtask, taskId));
+                    input.value = '';
+                    emptyMsg.classList.add('d-none');
+                    updateToggleBadge(taskId);
+                } catch (err) {
+                    alert('No se pudo añadir la subtarea.');
+                } finally {
+                    addBtn.disabled = false;
+                    input.focus();
+                }
+            }
+
+            addBtn.addEventListener('click', addSubtask);
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSubtask();
+                }
+            });
+
+            list.addEventListener('click', async e => {
+                const toggleBtn = e.target.closest('.js-toggle-subtask');
+                if (toggleBtn) {
+                    const item = toggleBtn.closest('.jt-subtask-item');
+                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/toggle');
+                    if (!data.success) return;
+
+                    const isDone = !!data.is_done;
+                    item.classList.toggle('is-done', isDone);
+                    toggleBtn.querySelector('i').className = 'bi ' + (isDone ? 'bi-check-circle-fill' : 'bi-circle');
+                    updateToggleBadge(taskId);
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('.js-delete-subtask');
+                if (deleteBtn) {
+                    const item = deleteBtn.closest('.jt-subtask-item');
+                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
+                    if (!data.success) return;
+
+                    item.remove();
+                    if (!list.querySelector('.jt-subtask-item')) {
+                        emptyMsg.classList.remove('d-none');
+                    }
+                    updateToggleBadge(taskId);
+                }
+            });
+
+            Sortable.create(list, {
+                handle: '.jt-subtask-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: () => {
+                    const orden = [...list.querySelectorAll('.jt-subtask-item')].map(item => item.dataset.id);
+                    postJSON('<?= site_url('journal/subtasks/reordenar') ?>', { orden });
+                },
+            });
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
         const toggleAllBtn = document.getElementById('toggleAllBtn');
         let allExpanded = false;
 
         toggleAllBtn.addEventListener('click', function() {
-            document.querySelectorAll('.card .collapse').forEach(collapseEl => {
+            document.querySelectorAll('.card > .collapse').forEach(collapseEl => {
                 const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
                 if (allExpanded) {
                     bsCollapse.hide();
@@ -691,7 +997,8 @@ foreach ($categories as $category) {
                 }
             });
             allExpanded = !allExpanded;
-            toggleAllBtn.textContent = allExpanded ? 'Cerrar todo' : 'Mostrar todo';
+            toggleAllBtn.querySelector('i').className = allExpanded ? 'bi bi-arrows-collapse' : 'bi bi-arrows-expand';
+            toggleAllBtn.title = allExpanded ? 'Cerrar todo' : 'Mostrar todo';
         });
     });
 </script>

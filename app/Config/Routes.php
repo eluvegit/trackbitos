@@ -434,6 +434,7 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('subtasks/(:num)/crear', 'Journal::subtaskCreate/$1');
     $routes->POST('subtasks/(:num)/toggle', 'Journal::subtaskToggle/$1');
     $routes->POST('subtasks/(:num)/borrar', 'Journal::subtaskDelete/$1');
+    $routes->POST('subtasks/(:num)/add-time', 'Journal::subtaskAddTime/$1');
     $routes->POST('subtasks/reordenar', 'Journal::subtaskReorder');
 
     // ---- ¿Qué hago ahora? ----

@@ -115,6 +115,16 @@ class Journal extends BaseController
 
 
 
+        // 8. Subtareas de todas las tareas visibles, agrupadas por task_id
+        // (para poder desplegarlas inline en el listado sin ir tarea a tarea)
+        $visibleTaskIds = [];
+        foreach ($tasksByCategory as $tasks) {
+            foreach ($tasks as $t) {
+                $visibleTaskIds[] = $t['id'];
+            }
+        }
+        $subtasksByTask = $this->subtaskModel->getGroupedByTaskIds($visibleTaskIds);
+
         // 7. Enviar todo a la vista
         return view('journal/index', [
             'view_mode'           => $viewMode,
@@ -126,7 +136,8 @@ class Journal extends BaseController
             'totalTimeByCategory' => $totalTimeByCategory, // array con tiempo total
             'lastTaskActivity'    => $lastTaskActivity,
             'lastCategoryActivity' => $lastCategoryActivity,
-            'progressByCategory'   => $progressByCategory // <--- aquí lo pasamos
+            'progressByCategory'   => $progressByCategory, // <--- aquí lo pasamos
+            'subtasksByTask'      => $subtasksByTask,
         ]);
     }
 
@@ -574,15 +585,16 @@ class Journal extends BaseController
         }
 
         $id = $this->subtaskModel->insert([
-            'task_id' => $taskId,
-            'title'   => $title,
-            'is_done' => 0,
-            'orden'   => $this->subtaskModel->siguienteOrden($taskId),
+            'task_id'    => $taskId,
+            'title'      => $title,
+            'is_done'    => 0,
+            'orden'      => $this->subtaskModel->siguienteOrden($taskId),
+            'time_spent' => 0,
         ], true);
 
         return $this->response->setJSON([
             'success'  => true,
-            'subtask'  => ['id' => $id, 'title' => $title, 'is_done' => 0],
+            'subtask'  => ['id' => $id, 'title' => $title, 'is_done' => 0, 'time_spent' => 0],
         ]);
     }
 
@@ -615,6 +627,38 @@ class Journal extends BaseController
         $this->subtaskModel->delete($id);
 
         return $this->response->setJSON(['success' => true]);
+    }
+
+    /**
+     * Añadir tiempo a una subtarea; el mismo tiempo se suma también al
+     * time_spent de la tarea padre, para poder controlar el tiempo por partes.
+     */
+    public function subtaskAddTime(int $id)
+    {
+        $subtask = $this->subtaskModel->find($id);
+        if (!$subtask) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $minutes = (int)($input['minutes'] ?? 0);
+        if ($minutes <= 0) {
+            return $this->response->setJSON(['success' => false]);
+        }
+
+        $newSubtaskTime = ((int)($subtask['time_spent'] ?? 0)) + $minutes;
+        $this->subtaskModel->skipValidation(true)->update($id, ['time_spent' => $newSubtaskTime]);
+
+        $task = $this->taskModel->find($subtask['task_id']);
+        $newTaskTime = ((int)($task['time_spent'] ?? 0)) + $minutes;
+        $this->taskModel->update($subtask['task_id'], ['time_spent' => $newTaskTime]);
+
+        return $this->response->setJSON([
+            'success'         => true,
+            'subtask_minutes' => $newSubtaskTime,
+            'task_minutes'    => $newTaskTime,
+            'task_id'         => (int) $subtask['task_id'],
+        ]);
     }
 
     /**
