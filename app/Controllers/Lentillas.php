@@ -274,21 +274,32 @@ class Lentillas extends BaseController
                 ? ['lentilla izquierda', 'lentilla derecha']
                 : [$elemento];
 
+            $cambiosStock = [];
+
             foreach ($itemsASustituir as $item) {
                 $registro = $stockModel->where('item', $item)->first();
                 if ($registro) {
-                    $nuevaCantidad = max(0, (int) $registro['cantidad'] - 1);
+                    $cantidadAntes = (int) $registro['cantidad'];
+                    $nuevaCantidad = max(0, $cantidadAntes - 1);
                     $stockModel->update($registro['id'], [
                         'cantidad' => $nuevaCantidad,
                         'updated_at' => date('Y-m-d H:i:s'),
                     ]);
                     log_message('info', "Stock actualizado: $item -> $nuevaCantidad");
+
+                    $cambiosStock[] = [
+                        'item'    => $item,
+                        'antes'   => $cantidadAntes,
+                        'despues' => $nuevaCantidad,
+                    ];
                 } else {
                     log_message('error', "Elemento de stock no encontrado: $item");
                 }
             }
 
-            return redirect()->to(site_url('lentillas/sustituciones'))->with('message', 'Sustitución registrada correctamente.');
+            return redirect()->to(site_url('lentillas/sustituciones'))
+                ->with('message', 'Sustitución registrada correctamente.')
+                ->with('stock_cambios', $cambiosStock);
         }
 
         // Mostrar vista

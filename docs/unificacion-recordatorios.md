@@ -71,7 +71,50 @@ bot no necesita saber nada de coches ni lentillas, solo "renovar recordatorio X"
 6. Con todo esto ya unificado, construir la integración de Braintogram: listar recordatorios
    pendientes y renovarlos por Telegram, hablando solo con `recordatorios`.
 
+## Semántica de "renovar": ciclo flexible vs fecha fija (pendiente de discutir)
+
+Detectado al revisar el botón "Renovar" de Coche/Hogar (2026-08-10). Comportamiento actual
+confirmado en código:
+
+- **Coche** (`Coche::renovarRecordatorio`): un único botón, siempre visible, siempre hace lo mismo
+  — inserta una `car_action` con la fecha (hoy o la elegida) y el próximo vencimiento se recalcula
+  como `fecha_accion + interval_days`. No hay estado "hecho" ni gating por vencimiento: da igual si
+  está vencido, a punto de vencer o le quedan meses, siempre desplaza el ciclo entero desde la
+  fecha dada.
+- **Hogar** (`Hogar::marcarTarea` / `renovarTarea`): sí hay estado (`estado=1`). El botón "Renovar"
+  solo aparece tras marcar hecha y deshace la marca reiniciando `ultima_vez` a ahora — un "vuelvo a
+  hacerlo ya" sin gating por vencimiento tampoco.
+
+Problema: el botón mezcla dos acciones distintas ("cumplí el plazo" vs "lo hago antes de tiempo")
+sin restricción temporal, y no hay ningún estado que represente "ya hecho, esperando al próximo
+vencimiento" (se infiere solo del cálculo de fechas).
+
+Propuesta en discusión: separar la acción en dos según si el recordatorio está vencido o no —
+"marcar" normal si ya venció, otra acción (renombrada, no "renovar") si se adelanta antes de plazo
+— y bloquear cualquier botón mientras ya está al día (hecho y aún no vencido).
+
+Matiz importante que puede romper esa regla tal cual: hay dos tipos de periodo y no es lo mismo
+adelantarlos.
+
+- **Ciclo flexible / "mínimo"** (cambiar el aceite, limpiar un filtro): el plazo es "no antes de X
+  tiempo desde la última vez". Adelantarlo es legítimo y el próximo vencimiento SÍ debe desplazarse
+  desde la nueva fecha de ejecución — es lo que hace hoy "renovar".
+- **Fecha fija / "máximo"** (ITV, seguro): el próximo vencimiento es una fecha de calendario que no
+  depende de cuándo actúes. Adelantarlo NO debería mover el vencimiento, solo dejar constancia de
+  que ya está hecho; el próximo ciclo sigue en su fecha original.
+
+`interval_days` (y el futuro `intervalo_cantidad`/`periodo_meses`+`periodo_dias`) asume
+implícitamente que todo es tipo "ciclo flexible". Falta decidir si añadir un flag tipo `tipo_ciclo`
+('flexible' | 'fijo') a la tabla `recordatorios` ampliada (ver esquema arriba) para que "adelantar"
+sepa si debe mover el vencimiento o no — sin esto, la regla de "antes/después del plazo decide el
+botón" no basta por sí sola.
+
+Sin resolver todavía: nombre final del botón "adelantar", si aplica igual a Hogar (que hoy no tiene
+el concepto de vencimiento por delante, solo `frecuencia_dias` desde `ultima_vez`), y si merece la
+pena modelarlo ahora o esperar a la migración de esquema del resto de este documento.
+
 ## Estado
 
 Solo diseño, sin ningún cambio de código todavía. Próximo paso cuando se retome: migración de
-esquema (paso 1) + mapeo exacto de campos de Coche/Lentillas antes de tocar nada más.
+esquema (paso 1) + mapeo exacto de campos de Coche/Lentillas antes de tocar nada más, y decidir la
+semántica de "adelantar" (ver sección anterior) antes de tocar los botones de Coche/Hogar.

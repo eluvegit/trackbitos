@@ -37,6 +37,66 @@ use CodeIgniter\I18n\Time; ?>
     </div>
 <?php endif; ?>
 
+<?php $stockCambios = session()->getFlashdata('stock_cambios'); ?>
+<?php if (!empty($stockCambios)): ?>
+    <div class="modal fade" id="modalStockActualizado" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title d-flex align-items-center gap-2">
+                        <span class="stock-modal-check"><i class="bi bi-check-lg"></i></span>
+                        ¡Cambio registrado!
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <p class="text-muted mb-3">Así ha quedado el stock:</p>
+                    <div class="d-flex flex-column gap-2">
+                        <?php foreach ($stockCambios as $cambio):
+                            $nombre = strtolower($cambio['item']);
+                            $icono = match (true) {
+                                str_contains($nombre, 'izquierda') => 'bi-eye',
+                                str_contains($nombre, 'derecha')   => 'bi-eye',
+                                str_contains($nombre, 'líquido')   => 'bi-droplet',
+                                str_contains($nombre, 'estuche')   => 'bi-briefcase',
+                                default                             => 'bi-box-seam',
+                            };
+                            $stockBajo = $cambio['despues'] <= 2;
+                        ?>
+                            <div class="d-flex align-items-center gap-3 p-2 rounded <?= $stockBajo ? 'bg-warning bg-opacity-10' : 'bg-body-tertiary' ?>">
+                                <div class="datos-icon <?= $stockBajo ? 'bg-warning bg-opacity-25 text-warning' : 'bg-primary bg-opacity-10 text-primary' ?>">
+                                    <i class="bi <?= $icono ?>"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold text-capitalize"><?= esc($cambio['item']) ?></div>
+                                    <div class="small text-muted d-flex align-items-center gap-1">
+                                        Quedaban <?= (int) $cambio['antes'] ?>
+                                        <i class="bi bi-arrow-right"></i>
+                                        <span class="fw-bold <?= $stockBajo ? 'text-warning' : 'text-body' ?>">
+                                            ahora <?= (int) $cambio['despues'] ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <?php if ($stockBajo): ?>
+                                    <span class="badge rounded-pill text-bg-warning">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Queda poco
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <a href="<?= site_url('lentillas/stock') ?>" class="btn btn-outline-secondary">
+                        <i class="bi bi-box-seam me-1"></i>Ver stock
+                    </a>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <!-- Tarjetas de acción rápida -->
 <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
     <?php
@@ -202,6 +262,32 @@ use CodeIgniter\I18n\Time; ?>
         border-top-left-radius: 12px;
         border-bottom-left-radius: 12px;
     }
+
+    .stock-modal-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        background: rgba(25, 135, 84, .15);
+        color: #198754;
+        font-size: 1rem;
+    }
 </style>
+
+<?php if (!empty($stockCambios)): ?>
+    <script>
+        // bootstrap.bundle.min.js se carga al final del layout, después de este
+        // script, así que esperamos a DOMContentLoaded (para entonces ya se
+        // habrá ejecutado) en vez de instanciar el modal directamente aquí.
+        document.addEventListener('DOMContentLoaded', () => {
+            const modalEl = document.getElementById('modalStockActualizado');
+            if (modalEl) {
+                new bootstrap.Modal(modalEl).show();
+            }
+        });
+    </script>
+<?php endif; ?>
 
 <?= $this->endSection() ?>
