@@ -4,16 +4,16 @@ namespace App\Models;
 
 use CodeIgniter\Model;
 
-class TaskFileModel extends Model
+class TaskLinkModel extends Model
 {
-    protected $table         = 'journal_task_files';
+    protected $table         = 'journal_task_links';
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
     protected $createdField  = 'creado_at';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['task_id', 'ruta_archivo', 'nombre_original', 'descripcion', 'tamano'];
+    protected $allowedFields = ['task_id', 'url', 'titulo', 'descripcion'];
 
     public function getForTask(int $taskId): array
     {

@@ -7,6 +7,7 @@ use App\Models\TaskModel;
 use App\Models\JournalCategoryModel;
 use App\Models\SubtaskModel;
 use App\Models\TaskFileModel;
+use App\Models\TaskLinkModel;
 use App\Services\ClaudeService;
 
 class Journal extends BaseController
@@ -16,6 +17,7 @@ class Journal extends BaseController
     protected JournalCategoryModel $categoryModel;
     protected SubtaskModel $subtaskModel;
     protected TaskFileModel $taskFileModel;
+    protected TaskLinkModel $taskLinkModel;
 
     public function __construct()
     {
@@ -24,6 +26,7 @@ class Journal extends BaseController
         $this->categoryModel = new JournalCategoryModel();
         $this->subtaskModel = new SubtaskModel();
         $this->taskFileModel = new TaskFileModel();
+        $this->taskLinkModel = new TaskLinkModel();
     }
 
     /**
@@ -379,6 +382,7 @@ class Journal extends BaseController
             'logs'      => $logs,
             'subtasks'  => $this->subtaskModel->getForTask($taskId),
             'files'     => $this->taskFileModel->getForTask($taskId),
+            'links'     => $this->taskLinkModel->getForTask($taskId),
         ]);
     }
 
@@ -471,6 +475,36 @@ class Journal extends BaseController
     }
 
     /**
+     * Edita el nombre mostrado y/o la descripción de un material, sin tocar
+     * el archivo físico (para distinguirlos entre sí o poder buscarlos).
+     */
+    public function taskFileUpdate(int $fileId)
+    {
+        $file = $this->taskFileModel->find($fileId);
+        if (!$file) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $nombre = trim($input['nombre_original'] ?? '');
+        $descripcion = trim($input['descripcion'] ?? '');
+
+        if ($nombre === '') {
+            return $this->response->setJSON(['success' => false, 'error' => 'El nombre es obligatorio.']);
+        }
+
+        $this->taskFileModel->update($fileId, [
+            'nombre_original' => $nombre,
+            'descripcion'     => $descripcion !== '' ? $descripcion : null,
+        ]);
+
+        $row = $this->taskFileModel->find($fileId);
+        $row['url'] = base_url($row['ruta_archivo']);
+
+        return $this->response->setJSON(['success' => true, 'file' => $row]);
+    }
+
+    /**
      * Elimina un material adjunto a una tarea (archivo físico + registro).
      */
     public function taskFileDelete(int $fileId)
@@ -486,6 +520,73 @@ class Journal extends BaseController
         }
 
         $this->taskFileModel->delete($fileId);
+
+        return $this->response->setJSON(['success' => true]);
+    }
+
+    /**
+     * Añade un enlace (URL + texto libre opcional) a una tarea, como
+     * complemento a los materiales pero sin necesidad de subir un archivo.
+     */
+    public function taskLinkCreate(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $url = trim($input['url'] ?? '');
+        $titulo = trim($input['titulo'] ?? '');
+        $descripcion = trim($input['descripcion'] ?? '');
+
+        if ($url === '') {
+            return $this->response->setJSON(['success' => false, 'error' => 'La URL es obligatoria.']);
+        }
+
+        $id = $this->taskLinkModel->insert([
+            'task_id'     => $taskId,
+            'url'         => $url,
+            'titulo'      => $titulo !== '' ? $titulo : null,
+            'descripcion' => $descripcion !== '' ? $descripcion : null,
+        ], true);
+
+        return $this->response->setJSON(['success' => true, 'link' => $this->taskLinkModel->find($id)]);
+    }
+
+    /**
+     * Edita el título y/o la descripción de un enlace (la URL no se toca).
+     */
+    public function taskLinkUpdate(int $linkId)
+    {
+        $link = $this->taskLinkModel->find($linkId);
+        if (!$link) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $titulo = trim($input['titulo'] ?? '');
+        $descripcion = trim($input['descripcion'] ?? '');
+
+        $this->taskLinkModel->update($linkId, [
+            'titulo'      => $titulo !== '' ? $titulo : null,
+            'descripcion' => $descripcion !== '' ? $descripcion : null,
+        ]);
+
+        return $this->response->setJSON(['success' => true, 'link' => $this->taskLinkModel->find($linkId)]);
+    }
+
+    /**
+     * Elimina un enlace adjunto a una tarea.
+     */
+    public function taskLinkDelete(int $linkId)
+    {
+        $link = $this->taskLinkModel->find($linkId);
+        if (!$link) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $this->taskLinkModel->delete($linkId);
 
         return $this->response->setJSON(['success' => true]);
     }

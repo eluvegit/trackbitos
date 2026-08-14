@@ -166,15 +166,23 @@
                     : round($f['tamano'] / 1024 / 1024, 1) . ' MB';
             }
         ?>
-            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>">
-                <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
-                    <i class="bi <?= $icon ?>"></i>
-                    <span class="jt-material-name"><?= esc($f['nombre_original']) ?></span>
-                </a>
-                <span class="jt-material-size"><?= esc($sizeLabel) ?></span>
-                <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material">
-                    <i class="bi bi-trash"></i>
-                </button>
+            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>" data-nombre="<?= esc($f['nombre_original'], 'attr') ?>" data-descripcion="<?= esc($f['descripcion'] ?? '', 'attr') ?>">
+                <div class="jt-material-row">
+                    <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
+                        <i class="bi <?= $icon ?>"></i>
+                        <span class="jt-material-name"><?= esc($f['nombre_original']) ?></span>
+                    </a>
+                    <span class="jt-material-size"><?= esc($sizeLabel) ?></span>
+                    <button type="button" class="jt-subtask-edit js-edit-material" title="Editar material" aria-label="Editar material">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <?php if (!empty($f['descripcion'])): ?>
+                    <div class="jt-material-desc"><?= esc($f['descripcion']) ?></div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
@@ -182,6 +190,43 @@
     <p class="text-muted small mb-2 <?= empty($files) ? '' : 'd-none' ?>" id="materialesEmptyMsg">Sin materiales todavía.</p>
 
     <input type="file" id="materialInput" class="form-control form-control-sm" multiple>
+</div>
+
+<!-- Enlaces (URLs de referencia para la tarea, con texto libre opcional) -->
+<div class="jt-section mb-3">
+    <div class="jt-section-title">Enlaces</div>
+
+    <div class="jt-materiales-list mb-2" id="linksList">
+        <?php foreach ($links as $l): ?>
+            <div class="jt-material-item" data-id="<?= (int)$l['id'] ?>" data-titulo="<?= esc($l['titulo'] ?? '', 'attr') ?>" data-descripcion="<?= esc($l['descripcion'] ?? '', 'attr') ?>">
+                <div class="jt-material-row">
+                    <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-material-link">
+                        <i class="bi bi-link-45deg"></i>
+                        <span class="jt-material-name"><?= esc($l['titulo'] ?: $l['url']) ?></span>
+                    </a>
+                    <button type="button" class="jt-subtask-edit js-edit-link" title="Editar enlace" aria-label="Editar enlace">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="jt-subtask-delete js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <?php if (!empty($l['descripcion'])): ?>
+                    <div class="jt-material-desc"><?= esc($l['descripcion']) ?></div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <p class="text-muted small mb-2 <?= empty($links) ? '' : 'd-none' ?>" id="linksEmptyMsg">Sin enlaces todavía.</p>
+
+    <div class="jt-link-add">
+        <input type="url" id="linkUrlInput" class="form-control form-control-sm" placeholder="https://...">
+        <input type="text" id="linkTituloInput" class="form-control form-control-sm" placeholder="Texto (opcional)" maxlength="255">
+        <button type="button" id="linkAddBtn" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
 </div>
 
 <!-- MODAL SUGERIR SUBTAREAS -->
@@ -219,6 +264,58 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                 <button class="btn btn-primary btn-sm" id="subtaskEditSaveBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDITAR MATERIAL -->
+<div class="modal fade" id="materialEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar material</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label for="materialEditNombre" class="form-label">Nombre</label>
+                    <input type="text" id="materialEditNombre" class="form-control" maxlength="255">
+                </div>
+                <div class="mb-2">
+                    <label for="materialEditDescripcion" class="form-label">Descripción (opcional)</label>
+                    <textarea id="materialEditDescripcion" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="materialEditSaveBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDITAR ENLACE -->
+<div class="modal fade" id="linkEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar enlace</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label for="linkEditTitulo" class="form-label">Texto (opcional)</label>
+                    <input type="text" id="linkEditTitulo" class="form-control" maxlength="255">
+                </div>
+                <div class="mb-2">
+                    <label for="linkEditDescripcion" class="form-label">Descripción (opcional)</label>
+                    <textarea id="linkEditDescripcion" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="linkEditSaveBtn">Guardar</button>
             </div>
         </div>
     </div>
@@ -466,11 +563,22 @@
 .jt-materiales-list { display: flex; flex-direction: column; gap: 6px; }
 .jt-material-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 2px;
     padding: 6px 8px;
     border-radius: 8px;
     background: var(--bs-tertiary-bg);
+}
+.jt-material-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.jt-material-desc {
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    padding-left: 26px;
+    word-break: break-word;
 }
 .jt-material-link {
     display: flex;
@@ -484,6 +592,10 @@
 .jt-material-link:hover { text-decoration: underline; }
 .jt-material-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jt-material-size { flex: 0 0 auto; font-size: .75rem; color: var(--bs-secondary-color); }
+
+.jt-link-add { display: flex; gap: 6px; }
+.jt-link-add #linkUrlInput { flex: 1 1 40%; }
+.jt-link-add #linkTituloInput { flex: 1 1 40%; }
 
 .jt-log-list { display: flex; flex-direction: column; gap: 6px; }
 .jt-log-item {
@@ -706,6 +818,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const deleteBtn = e.target.closest('.js-delete-subtask');
         if (deleteBtn) {
+            if (!confirm('¿Eliminar esta subtarea?')) return;
+
             const item = deleteBtn.closest('.jt-subtask-item');
             const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
             if (!data.success) return;
@@ -851,16 +965,36 @@ document.addEventListener('DOMContentLoaded', function () {
         const div = document.createElement('div');
         div.className = 'jt-material-item';
         div.dataset.id = f.id;
+        div.dataset.nombre = f.nombre_original;
+        div.dataset.descripcion = f.descripcion || '';
         div.innerHTML = `
-            <a href="${f.url}" target="_blank" class="jt-material-link">
-                <i class="bi ${materialIcon(f.nombre_original)}"></i>
-                <span class="jt-material-name"></span>
-            </a>
-            <span class="jt-material-size">${formatSize(f.tamano)}</span>
-            <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+            <div class="jt-material-row">
+                <a href="${f.url}" target="_blank" class="jt-material-link">
+                    <i class="bi ${materialIcon(f.nombre_original)}"></i>
+                    <span class="jt-material-name"></span>
+                </a>
+                <span class="jt-material-size">${formatSize(f.tamano)}</span>
+                <button type="button" class="jt-subtask-edit js-edit-material" title="Editar material" aria-label="Editar material"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+            </div>
         `;
         div.querySelector('.jt-material-name').textContent = f.nombre_original;
         return div;
+    }
+
+    function setMaterialDesc(item, descripcion) {
+        item.dataset.descripcion = descripcion || '';
+        let descEl = item.querySelector('.jt-material-desc');
+        if (descripcion) {
+            if (!descEl) {
+                descEl = document.createElement('div');
+                descEl.className = 'jt-material-desc';
+                item.appendChild(descEl);
+            }
+            descEl.textContent = descripcion;
+        } else if (descEl) {
+            descEl.remove();
+        }
     }
 
     materialInput.addEventListener('change', async () => {
@@ -894,7 +1028,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    const materialEditModal = new bootstrap.Modal(document.getElementById('materialEditModal'));
+    const materialEditNombre = document.getElementById('materialEditNombre');
+    const materialEditDescripcion = document.getElementById('materialEditDescripcion');
+    const materialEditSaveBtn = document.getElementById('materialEditSaveBtn');
+    let materialEditItem = null;
+
     materialesList.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.js-edit-material');
+        if (editBtn) {
+            materialEditItem = editBtn.closest('.jt-material-item');
+            materialEditNombre.value = materialEditItem.dataset.nombre || '';
+            materialEditDescripcion.value = materialEditItem.dataset.descripcion || '';
+            materialEditModal.show();
+            return;
+        }
+
         const delBtn = e.target.closest('.js-delete-material');
         if (!delBtn) return;
         if (!confirm('¿Eliminar este material?')) return;
@@ -906,6 +1055,153 @@ document.addEventListener('DOMContentLoaded', function () {
         item.remove();
         if (!materialesList.querySelector('.jt-material-item')) {
             materialesEmptyMsg.classList.remove('d-none');
+        }
+    });
+
+    materialEditSaveBtn.addEventListener('click', async () => {
+        if (!materialEditItem) return;
+
+        const nombre = materialEditNombre.value.trim();
+        if (!nombre) return;
+
+        materialEditSaveBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/materiales') ?>/' + materialEditItem.dataset.id + '/editar', {
+                nombre_original: nombre,
+                descripcion: materialEditDescripcion.value.trim(),
+            });
+            if (!data.success) throw new Error(data.error || 'No se pudo editar el material.');
+
+            materialEditItem.dataset.nombre = data.file.nombre_original;
+            materialEditItem.querySelector('.jt-material-name').textContent = data.file.nombre_original;
+            setMaterialDesc(materialEditItem, data.file.descripcion);
+            materialEditModal.hide();
+        } catch (err) {
+            alert(err.message || 'No se pudo editar el material.');
+        } finally {
+            materialEditSaveBtn.disabled = false;
+        }
+    });
+
+    // --- Enlaces (URL + texto libre) ---
+    const linksList = document.getElementById('linksList');
+    const linksEmptyMsg = document.getElementById('linksEmptyMsg');
+    const linkUrlInput = document.getElementById('linkUrlInput');
+    const linkTituloInput = document.getElementById('linkTituloInput');
+    const linkAddBtn = document.getElementById('linkAddBtn');
+
+    function buildLinkItem(l) {
+        const div = document.createElement('div');
+        div.className = 'jt-material-item';
+        div.dataset.id = l.id;
+        div.dataset.titulo = l.titulo || '';
+        div.dataset.descripcion = l.descripcion || '';
+        div.innerHTML = `
+            <div class="jt-material-row">
+                <a href="${l.url}" target="_blank" rel="noopener" class="jt-material-link">
+                    <i class="bi bi-link-45deg"></i>
+                    <span class="jt-material-name"></span>
+                </a>
+                <button type="button" class="jt-subtask-edit js-edit-link" title="Editar enlace" aria-label="Editar enlace"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="jt-subtask-delete js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace"><i class="bi bi-trash"></i></button>
+            </div>
+        `;
+        div.querySelector('.jt-material-name').textContent = l.titulo || l.url;
+        div.querySelector('.jt-material-link').href = l.url;
+        return div;
+    }
+
+    function setLinkDesc(item, descripcion) {
+        item.dataset.descripcion = descripcion || '';
+        let descEl = item.querySelector('.jt-material-desc');
+        if (descripcion) {
+            if (!descEl) {
+                descEl = document.createElement('div');
+                descEl.className = 'jt-material-desc';
+                item.appendChild(descEl);
+            }
+            descEl.textContent = descripcion;
+        } else if (descEl) {
+            descEl.remove();
+        }
+    }
+
+    async function addLink() {
+        const url = linkUrlInput.value.trim();
+        if (!url) return;
+
+        linkAddBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/enlaces', {
+                url,
+                titulo: linkTituloInput.value.trim(),
+            });
+            if (!data.success) throw new Error(data.error || 'No se pudo añadir el enlace.');
+
+            linksList.appendChild(buildLinkItem(data.link));
+            linksEmptyMsg.classList.add('d-none');
+            linkUrlInput.value = '';
+            linkTituloInput.value = '';
+        } catch (err) {
+            alert(err.message || 'No se pudo añadir el enlace.');
+        } finally {
+            linkAddBtn.disabled = false;
+        }
+    }
+
+    linkAddBtn.addEventListener('click', addLink);
+    linkUrlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addLink(); });
+    linkTituloInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addLink(); });
+
+    const linkEditModal = new bootstrap.Modal(document.getElementById('linkEditModal'));
+    const linkEditTitulo = document.getElementById('linkEditTitulo');
+    const linkEditDescripcion = document.getElementById('linkEditDescripcion');
+    const linkEditSaveBtn = document.getElementById('linkEditSaveBtn');
+    let linkEditItem = null;
+
+    linksList.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.js-edit-link');
+        if (editBtn) {
+            linkEditItem = editBtn.closest('.jt-material-item');
+            linkEditTitulo.value = linkEditItem.dataset.titulo || '';
+            linkEditDescripcion.value = linkEditItem.dataset.descripcion || '';
+            linkEditModal.show();
+            return;
+        }
+
+        const delBtn = e.target.closest('.js-delete-link');
+        if (!delBtn) return;
+        if (!confirm('¿Eliminar este enlace?')) return;
+
+        const item = delBtn.closest('.jt-material-item');
+        const data = await postJSON('<?= site_url('journal/enlaces') ?>/' + item.dataset.id + '/borrar');
+        if (!data.success) return;
+
+        item.remove();
+        if (!linksList.querySelector('.jt-material-item')) {
+            linksEmptyMsg.classList.remove('d-none');
+        }
+    });
+
+    linkEditSaveBtn.addEventListener('click', async () => {
+        if (!linkEditItem) return;
+
+        linkEditSaveBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/enlaces') ?>/' + linkEditItem.dataset.id + '/editar', {
+                titulo: linkEditTitulo.value.trim(),
+                descripcion: linkEditDescripcion.value.trim(),
+            });
+            if (!data.success) throw new Error(data.error || 'No se pudo editar el enlace.');
+
+            linkEditItem.dataset.titulo = data.link.titulo || '';
+            linkEditItem.querySelector('.jt-material-name').textContent = data.link.titulo || data.link.url;
+            setLinkDesc(linkEditItem, data.link.descripcion);
+            linkEditModal.hide();
+        } catch (err) {
+            alert(err.message || 'No se pudo editar el enlace.');
+        } finally {
+            linkEditSaveBtn.disabled = false;
         }
     });
 });

@@ -1304,6 +1304,8 @@ foreach ($categories as $category) {
 
                 const deleteBtn = e.target.closest('.js-delete-subtask');
                 if (deleteBtn) {
+                    if (!confirm('¿Eliminar esta subtarea?')) return;
+
                     const item = deleteBtn.closest('.jt-subtask-item');
                     const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
                     if (!data.success) return;

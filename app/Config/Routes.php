@@ -442,7 +442,13 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
 
     // ---- Materiales (histórico de archivos de referencia por tarea) ----
     $routes->POST('tasks/(:num)/materiales', 'Journal::taskFileUpload/$1');
+    $routes->POST('materiales/(:num)/editar', 'Journal::taskFileUpdate/$1');
     $routes->POST('materiales/(:num)/borrar', 'Journal::taskFileDelete/$1');
+
+    // ---- Enlaces (URL + texto libre por tarea) ----
+    $routes->POST('tasks/(:num)/enlaces', 'Journal::taskLinkCreate/$1');
+    $routes->POST('enlaces/(:num)/editar', 'Journal::taskLinkUpdate/$1');
+    $routes->POST('enlaces/(:num)/borrar', 'Journal::taskLinkDelete/$1');
 
     // ---- ¿Qué hago ahora? ----
     $routes->GET('que-hacer', 'Journal::queHacer');
