@@ -13,7 +13,7 @@ class TaskLinkModel extends Model
     protected $createdField  = 'creado_at';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['task_id', 'url', 'titulo', 'descripcion'];
+    protected $allowedFields = ['task_id', 'subtask_id', 'url', 'titulo', 'descripcion'];
 
     public function getForTask(int $taskId): array
     {

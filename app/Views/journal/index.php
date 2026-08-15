@@ -114,12 +114,11 @@ function time_ago(?string $datetime): string
         $hechosNext = $filterHechos === 'ocultar' ? 'mostrar' : 'ocultar';
         $hechosClass = $filterHechos === 'ocultar' ? 'btn-primary' : 'btn-outline-primary';
 
-        $qs = fn($overrides) => http_build_query(array_merge([
-            'filterFocus' => $filterFocus,
-            'view'        => $view_mode,
-            'priority'    => $filterPriority,
-            'hechos'      => $filterHechos,
-        ], $overrides));
+        // Cada enlace envía solo la clave que cambia; las demás se quedan
+        // como estén guardadas en su propia cookie (stickyFilter), para que
+        // un valor "congelado" en esta renderización no pise a otro filtro
+        // que se haya cambiado después en otra pestaña/carga.
+        $qs = fn($overrides) => http_build_query($overrides);
         ?>
 
             <!-- Prioridad -->
@@ -717,12 +716,17 @@ foreach ($categories as $category) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="subtaskSuggestLoading" class="text-muted small">Pensando...</div>
+                <div class="mb-2">
+                    <label for="subtaskSuggestContexto" class="form-label small mb-1">Contexto extra (opcional)</label>
+                    <textarea id="subtaskSuggestContexto" class="form-control form-control-sm" rows="2" placeholder="Algo que ayude a generar mejores subtareas..."></textarea>
+                </div>
+                <div id="subtaskSuggestLoading" class="text-muted small d-none">Pensando...</div>
                 <div id="subtaskSuggestError" class="text-danger small d-none"></div>
                 <div id="subtaskSuggestList" class="d-flex flex-column gap-2"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-outline-primary btn-sm" id="subtaskSuggestGenerateBtn"><i class="bi bi-stars"></i> Generar</button>
                 <button class="btn btn-primary btn-sm" id="subtaskSuggestAddBtn" disabled>Añadir seleccionadas</button>
             </div>
         </div>
@@ -1129,22 +1133,39 @@ foreach ($categories as $category) {
         // Modal sugerir subtareas (IA) — compartido por todos los paneles;
         // subtaskSuggestContext guarda a qué tarea/lista se refiere la sugerencia actual.
         const subtaskSuggestModal = new bootstrap.Modal(document.getElementById('subtaskSuggestModal'));
+        const subtaskSuggestContexto = document.getElementById('subtaskSuggestContexto');
         const subtaskSuggestLoading = document.getElementById('subtaskSuggestLoading');
         const subtaskSuggestError = document.getElementById('subtaskSuggestError');
         const subtaskSuggestList = document.getElementById('subtaskSuggestList');
+        const subtaskSuggestGenerateBtn = document.getElementById('subtaskSuggestGenerateBtn');
         const subtaskSuggestAddBtn = document.getElementById('subtaskSuggestAddBtn');
         let subtaskSuggestContext = null;
 
-        async function requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge) {
+        function requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge) {
             subtaskSuggestContext = { taskId, list, emptyMsg, updateToggleBadge };
+            subtaskSuggestContexto.value = '';
+            subtaskSuggestList.innerHTML = '';
+            subtaskSuggestError.classList.add('d-none');
+            subtaskSuggestLoading.classList.add('d-none');
+            subtaskSuggestAddBtn.disabled = true;
+            subtaskSuggestModal.show();
+            subtaskSuggestContexto.focus();
+        }
+
+        subtaskSuggestGenerateBtn.addEventListener('click', async () => {
+            if (!subtaskSuggestContext) return;
+            const { taskId } = subtaskSuggestContext;
+
             subtaskSuggestList.innerHTML = '';
             subtaskSuggestError.classList.add('d-none');
             subtaskSuggestLoading.classList.remove('d-none');
             subtaskSuggestAddBtn.disabled = true;
-            subtaskSuggestModal.show();
+            subtaskSuggestGenerateBtn.disabled = true;
 
             try {
-                const data = await postJSON('<?= site_url('journal/tasks') ?>/' + taskId + '/sugerir-subtareas');
+                const data = await postJSON('<?= site_url('journal/tasks') ?>/' + taskId + '/sugerir-subtareas', {
+                    contexto: subtaskSuggestContexto.value.trim(),
+                });
                 if (!data.success || !data.subtareas || !data.subtareas.length) {
                     throw new Error(data.error || 'Sin sugerencias');
                 }
@@ -1166,8 +1187,9 @@ foreach ($categories as $category) {
                 subtaskSuggestError.classList.remove('d-none');
             } finally {
                 subtaskSuggestLoading.classList.add('d-none');
+                subtaskSuggestGenerateBtn.disabled = false;
             }
-        }
+        });
 
         subtaskSuggestAddBtn.addEventListener('click', async () => {
             if (!subtaskSuggestContext) return;

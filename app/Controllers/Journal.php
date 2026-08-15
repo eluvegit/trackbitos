@@ -9,6 +9,7 @@ use App\Models\SubtaskModel;
 use App\Models\TaskFileModel;
 use App\Models\TaskLinkModel;
 use App\Services\ClaudeService;
+use App\Services\JournalSuggestionService;
 
 class Journal extends BaseController
 {
@@ -165,7 +166,13 @@ class Journal extends BaseController
             return (string) $value;
         }
 
-        return $this->request->getCookie('journal_' . $key) ?? $default;
+        // Request::getCookie() no aplica el prefijo global de Config\Cookie
+        // automáticamente (a diferencia de Response::setCookie(), que sí lo
+        // añade al escribir), así que hay que leerlo con el mismo prefijo o
+        // nunca se encuentra la cookie que se acaba de guardar.
+        $prefix = config('Cookie')->prefix;
+
+        return $this->request->getCookie($prefix . 'journal_' . $key) ?? $default;
     }
 
     /**
@@ -178,41 +185,11 @@ class Journal extends BaseController
     public function queHacer()
     {
         $categories = $this->categoryModel->getAll();
-        $lastUpdatedByCategory = $this->taskModel->getLastUpdatedPerCategory();
         $allTasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
-        $candidatos = [];
-        foreach ($categories as $cat) {
-            $peso = (int) ($cat['peso'] ?? 3);
-            if ($peso <= 0) {
-                continue; // excluida del reparto
-            }
-
-            $catName = $cat['name'];
-            $tareas = $allTasksByCategory[$catName] ?? [];
-            if (empty($tareas)) {
-                continue; // sin tareas, no tiene sentido sugerirla
-            }
-
-            $ultima = $lastUpdatedByCategory[$catName] ?? null;
-            $dias = $ultima ? (int) floor((time() - strtotime($ultima)) / 86400) : 365;
-
-            $horas = array_sum(array_column($tareas, 'time_spent')) / 60;
-            // Cuantas más horas ya acumuladas tiene la categoría, más se
-            // amortigua su puntuación (de forma suave, con logaritmo, para
-            // no anular de golpe categorías con mucho tiempo invertido).
-            $factorHoras = 1 / (1 + log(1 + $horas));
-
-            $candidatos[] = [
-                'categoria' => $cat,
-                'tareas'    => $tareas,
-                'dias'      => $dias,
-                'horas'     => round($horas, 1),
-                'score'     => max(1, $dias) * $peso * $factorHoras,
-            ];
-        }
-
-        $sugeridos = $this->sorteoPonderado($candidatos, 4);
+        $suggestionService = new JournalSuggestionService();
+        $candidatos = $suggestionService->candidatosPonderados();
+        $sugeridos = $suggestionService->sorteoPonderado($candidatos, 4);
 
         // Para cada sugerida, elegir unas pocas tareas a mostrar: primero las
         // que tienen estrella, luego el resto por orden reciente.
@@ -240,37 +217,6 @@ class Journal extends BaseController
             'categorias'        => $categories,
             'horasPorCategoria' => $horasPorCategoria,
         ]);
-    }
-
-    /**
-     * Reparto ponderado sin reemplazo: cada candidato tiene tantas
-     * "papeletas" como su score, se sortea uno, se saca del bombo y se repite.
-     */
-    private function sorteoPonderado(array $candidatos, int $n): array
-    {
-        $pool = array_values($candidatos);
-        $elegidos = [];
-
-        while (count($elegidos) < $n && !empty($pool)) {
-            $total = array_sum(array_column($pool, 'score'));
-            if ($total <= 0) {
-                break;
-            }
-
-            $r = mt_rand(1, $total);
-            $acumulado = 0;
-            foreach ($pool as $i => $c) {
-                $acumulado += $c['score'];
-                if ($r <= $acumulado) {
-                    $elegidos[] = $c;
-                    unset($pool[$i]);
-                    $pool = array_values($pool);
-                    break;
-                }
-            }
-        }
-
-        return $elegidos;
     }
 
     /**
@@ -417,6 +363,25 @@ class Journal extends BaseController
     }
 
     /**
+     * Valida que un subtask_id recibido exista y pertenezca a la tarea dada;
+     * si no, devuelve null (sin asociar) en vez de fallar la petición entera.
+     */
+    private function resolveSubtaskId(int $taskId, $rawSubtaskId): ?int
+    {
+        $subtaskId = (int) $rawSubtaskId;
+        if ($subtaskId <= 0) {
+            return null;
+        }
+
+        $subtask = $this->subtaskModel->find($subtaskId);
+        if (!$subtask || (int) $subtask['task_id'] !== $taskId) {
+            return null;
+        }
+
+        return $subtaskId;
+    }
+
+    /**
      * Sube uno o varios archivos como historial de materiales de una tarea
      * (fotos de referencia, PDFs, documentos...). No sustituye a la imagen
      * de portada, es un histórico aparte y admite cualquier tipo de archivo.
@@ -427,6 +392,9 @@ class Journal extends BaseController
         if (!$task) {
             return $this->response->setStatusCode(404)->setJSON(['success' => false]);
         }
+
+        $subtaskId = $this->resolveSubtaskId($taskId, $this->request->getPost('subtask_id'));
+        $subtaskTitle = $subtaskId ? ($this->subtaskModel->find($subtaskId)['title'] ?? null) : null;
 
         $files = $this->request->getFileMultiple('archivo') ?? [];
         if (empty($files) && $this->request->getFile('archivo')) {
@@ -457,6 +425,7 @@ class Journal extends BaseController
             $rutaRelativa = $targetDir . '/' . $newName;
             $id = $this->taskFileModel->insert([
                 'task_id'         => $taskId,
+                'subtask_id'      => $subtaskId,
                 'ruta_archivo'    => $rutaRelativa,
                 'nombre_original' => $originalName,
                 'tamano'          => $size,
@@ -464,6 +433,7 @@ class Journal extends BaseController
 
             $row = $this->taskFileModel->find($id);
             $row['url'] = base_url($rutaRelativa);
+            $row['subtask_title'] = $subtaskTitle;
             $subidos[] = $row;
         }
 
@@ -488,6 +458,7 @@ class Journal extends BaseController
         $input = $this->request->getJSON(true) ?: $this->request->getPost();
         $nombre = trim($input['nombre_original'] ?? '');
         $descripcion = trim($input['descripcion'] ?? '');
+        $subtaskId = $this->resolveSubtaskId((int) $file['task_id'], $input['subtask_id'] ?? null);
 
         if ($nombre === '') {
             return $this->response->setJSON(['success' => false, 'error' => 'El nombre es obligatorio.']);
@@ -496,10 +467,12 @@ class Journal extends BaseController
         $this->taskFileModel->update($fileId, [
             'nombre_original' => $nombre,
             'descripcion'     => $descripcion !== '' ? $descripcion : null,
+            'subtask_id'      => $subtaskId,
         ]);
 
         $row = $this->taskFileModel->find($fileId);
         $row['url'] = base_url($row['ruta_archivo']);
+        $row['subtask_title'] = $subtaskId ? ($this->subtaskModel->find($subtaskId)['title'] ?? null) : null;
 
         return $this->response->setJSON(['success' => true, 'file' => $row]);
     }
@@ -539,6 +512,7 @@ class Journal extends BaseController
         $url = trim($input['url'] ?? '');
         $titulo = trim($input['titulo'] ?? '');
         $descripcion = trim($input['descripcion'] ?? '');
+        $subtaskId = $this->resolveSubtaskId($taskId, $input['subtask_id'] ?? null);
 
         if ($url === '') {
             return $this->response->setJSON(['success' => false, 'error' => 'La URL es obligatoria.']);
@@ -546,12 +520,16 @@ class Journal extends BaseController
 
         $id = $this->taskLinkModel->insert([
             'task_id'     => $taskId,
+            'subtask_id'  => $subtaskId,
             'url'         => $url,
             'titulo'      => $titulo !== '' ? $titulo : null,
             'descripcion' => $descripcion !== '' ? $descripcion : null,
         ], true);
 
-        return $this->response->setJSON(['success' => true, 'link' => $this->taskLinkModel->find($id)]);
+        $link = $this->taskLinkModel->find($id);
+        $link['subtask_title'] = $subtaskId ? ($this->subtaskModel->find($subtaskId)['title'] ?? null) : null;
+
+        return $this->response->setJSON(['success' => true, 'link' => $link]);
     }
 
     /**
@@ -567,13 +545,18 @@ class Journal extends BaseController
         $input = $this->request->getJSON(true) ?: $this->request->getPost();
         $titulo = trim($input['titulo'] ?? '');
         $descripcion = trim($input['descripcion'] ?? '');
+        $subtaskId = $this->resolveSubtaskId((int) $link['task_id'], $input['subtask_id'] ?? null);
 
         $this->taskLinkModel->update($linkId, [
             'titulo'      => $titulo !== '' ? $titulo : null,
             'descripcion' => $descripcion !== '' ? $descripcion : null,
+            'subtask_id'  => $subtaskId,
         ]);
 
-        return $this->response->setJSON(['success' => true, 'link' => $this->taskLinkModel->find($linkId)]);
+        $row = $this->taskLinkModel->find($linkId);
+        $row['subtask_title'] = $subtaskId ? ($this->subtaskModel->find($subtaskId)['title'] ?? null) : null;
+
+        return $this->response->setJSON(['success' => true, 'link' => $row]);
     }
 
     /**
@@ -923,13 +906,16 @@ class Journal extends BaseController
         }
 
         $existentes = array_column($this->subtaskModel->getForTask($taskId), 'title');
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $contextoExtra = trim($input['contexto'] ?? '');
 
         $claude = new ClaudeService();
         $subtareas = $claude->sugerirSubtareas(
             $task['title'],
             $task['category'] ?? null,
             $task['note'] ?? null,
-            $existentes
+            $existentes,
+            $contextoExtra !== '' ? $contextoExtra : null
         );
 
         if ($subtareas === null) {

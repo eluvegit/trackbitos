@@ -18,8 +18,8 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
         <a class="navbar-brand d-flex align-items-center gap-1" href="<?= site_url('dashboard') ?>">
-            <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="img-fluid d-inline-block" style="height:16px;">
-            <span class="fs-6">Trackbitos</span>
+            <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="img-fluid d-inline-block" style="height:13px;">
+            <span style="font-size: .85rem;">Trackbitos</span>
         </a>
 
         <!-- Botón toggle para móviles -->

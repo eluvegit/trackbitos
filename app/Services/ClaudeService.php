@@ -92,7 +92,7 @@ class ClaudeService
      * @param list<string> $existentes Títulos de subtareas que ya existen, para no repetirlas
      * @return list<string>|null
      */
-    public function sugerirSubtareas(string $titulo, ?string $categoria = null, ?string $notas = null, array $existentes = []): ?array
+    public function sugerirSubtareas(string $titulo, ?string $categoria = null, ?string $notas = null, array $existentes = [], ?string $contextoExtra = null): ?array
     {
         $apiKey = env('braintogram.anthropicApiKey');
         if (!$apiKey) {
@@ -107,6 +107,9 @@ class ClaudeService
         }
         if ($notas) {
             $contexto .= "\nNotas: " . $notas;
+        }
+        if ($contextoExtra) {
+            $contexto .= "\nContexto adicional: " . $contextoExtra;
         }
         if (!empty($existentes)) {
             $contexto .= "\nSubtareas que ya existen (no las repitas): " . implode('; ', $existentes);

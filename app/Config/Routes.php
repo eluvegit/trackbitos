@@ -38,6 +38,18 @@ $routes->GET('lentillas/avisos/editar/(:num)', 'Lentillas::editarAviso/$1', ['fi
 $routes->POST('lentillas/avisos/actualizar/(:num)', 'Lentillas::actualizarAviso/$1', ['filter' => 'auth']);
 $routes->match(['GET', 'POST'], 'lentillas/avisos/eliminar/(:num)', 'Lentillas::eliminarAviso/$1', ['filter' => 'auth']);
 
+// LECTURA
+$routes->group('reading', ['filter' => 'auth'], function ($routes) {
+    $routes->GET('/', 'Reading::library');
+    $routes->GET('nuevo', 'Reading::nuevoLibro');
+    $routes->POST('crear', 'Reading::crearLibro');
+    $routes->GET('libro/(:num)', 'Reading::libro/$1');
+    $routes->POST('libro/(:num)/actualizar', 'Reading::actualizarLibro/$1');
+    $routes->POST('libro/(:num)/borrar', 'Reading::borrarLibro/$1');
+    $routes->POST('libro/(:num)/sesion', 'Reading::registrarSesion/$1');
+    $routes->POST('libro/(:num)/hoy-no-toca', 'Reading::registrarSkip/$1');
+});
+
 // COCHE
 $routes->group('coche', ['filter' => 'auth'], function ($routes) {
 

@@ -13,7 +13,7 @@ class TaskFileModel extends Model
     protected $createdField  = 'creado_at';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['task_id', 'ruta_archivo', 'nombre_original', 'descripcion', 'tamano'];
+    protected $allowedFields = ['task_id', 'subtask_id', 'ruta_archivo', 'nombre_original', 'descripcion', 'tamano'];
 
     public function getForTask(int $taskId): array
     {

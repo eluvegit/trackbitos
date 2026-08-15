@@ -113,22 +113,47 @@
     </div>
 
     <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
-        <?php foreach ($subtasks as $s): ?>
-            <?php $isDone = !empty($s['is_done']); ?>
+        <?php foreach ($subtasks as $s):
+            $isDone = !empty($s['is_done']);
+            $subFiles = array_values(array_filter($files, fn($f) => (int)($f['subtask_id'] ?? 0) === (int)$s['id']));
+            $subLinks = array_values(array_filter($links, fn($l) => (int)($l['subtask_id'] ?? 0) === (int)$s['id']));
+            $attachCount = count($subFiles) + count($subLinks);
+        ?>
             <div class="jt-subtask-item <?= $isDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
-                <span class="jt-subtask-handle" title="Arrastrar para reordenar">
-                    <i class="bi bi-grip-vertical"></i>
-                </span>
-                <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
-                    <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
-                </button>
-                <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
-                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
-                    <i class="bi bi-trash"></i>
-                </button>
+                <div class="jt-subtask-row">
+                    <span class="jt-subtask-handle" title="Arrastrar para reordenar">
+                        <i class="bi bi-grip-vertical"></i>
+                    </span>
+                    <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
+                        <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
+                    </button>
+                    <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
+                    <?php if ($attachCount > 0): ?>
+                        <button type="button" class="jt-subtask-attach-toggle" data-bs-toggle="collapse" data-bs-target="#subAttach<?= (int)$s['id'] ?>" title="Ver materiales/enlaces asociados">
+                            <i class="bi bi-paperclip"></i> <?= $attachCount ?>
+                        </button>
+                    <?php endif; ?>
+                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <?php if ($attachCount > 0): ?>
+                    <div class="collapse jt-subtask-attachments" id="subAttach<?= (int)$s['id'] ?>">
+                        <?php foreach ($subFiles as $f): ?>
+                            <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-subtask-attachment-link">
+                                <i class="bi bi-file-earmark"></i> <span><?= esc($f['nombre_original']) ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                        <?php foreach ($subLinks as $l): ?>
+                            <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-subtask-attachment-link">
+                                <i class="bi bi-link-45deg"></i> <span><?= esc($l['titulo'] ?: $l['url']) ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
@@ -142,6 +167,8 @@
         </button>
     </div>
 </div>
+
+<?php $subtaskTitleById = array_column($subtasks, 'title', 'id'); ?>
 
 <!-- Materiales (histórico de archivos de referencia para hacer la tarea) -->
 <div class="jt-section mb-3">
@@ -166,7 +193,7 @@
                     : round($f['tamano'] / 1024 / 1024, 1) . ' MB';
             }
         ?>
-            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>" data-nombre="<?= esc($f['nombre_original'], 'attr') ?>" data-descripcion="<?= esc($f['descripcion'] ?? '', 'attr') ?>">
+            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>" data-nombre="<?= esc($f['nombre_original'], 'attr') ?>" data-descripcion="<?= esc($f['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($f['subtask_id'] ?? 0) ?>">
                 <div class="jt-material-row">
                     <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
                         <i class="bi <?= $icon ?>"></i>
@@ -183,13 +210,24 @@
                 <?php if (!empty($f['descripcion'])): ?>
                     <div class="jt-material-desc"><?= esc($f['descripcion']) ?></div>
                 <?php endif; ?>
+                <?php if (!empty($f['subtask_id']) && isset($subtaskTitleById[$f['subtask_id']])): ?>
+                    <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <?= esc($subtaskTitleById[$f['subtask_id']]) ?></div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
 
     <p class="text-muted small mb-2 <?= empty($files) ? '' : 'd-none' ?>" id="materialesEmptyMsg">Sin materiales todavía.</p>
 
-    <input type="file" id="materialInput" class="form-control form-control-sm" multiple>
+    <div class="d-flex gap-2 align-items-start">
+        <input type="file" id="materialInput" class="form-control form-control-sm" multiple style="flex: 1 1 60%;">
+        <select id="materialSubtaskSelect" class="form-select form-select-sm" style="flex: 1 1 40%;">
+            <option value="">(sin subtarea)</option>
+            <?php foreach ($subtasks as $s): ?>
+                <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
 </div>
 
 <!-- Enlaces (URLs de referencia para la tarea, con texto libre opcional) -->
@@ -198,7 +236,7 @@
 
     <div class="jt-materiales-list mb-2" id="linksList">
         <?php foreach ($links as $l): ?>
-            <div class="jt-material-item" data-id="<?= (int)$l['id'] ?>" data-titulo="<?= esc($l['titulo'] ?? '', 'attr') ?>" data-descripcion="<?= esc($l['descripcion'] ?? '', 'attr') ?>">
+            <div class="jt-material-item" data-id="<?= (int)$l['id'] ?>" data-titulo="<?= esc($l['titulo'] ?? '', 'attr') ?>" data-descripcion="<?= esc($l['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($l['subtask_id'] ?? 0) ?>">
                 <div class="jt-material-row">
                     <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-material-link">
                         <i class="bi bi-link-45deg"></i>
@@ -214,6 +252,9 @@
                 <?php if (!empty($l['descripcion'])): ?>
                     <div class="jt-material-desc"><?= esc($l['descripcion']) ?></div>
                 <?php endif; ?>
+                <?php if (!empty($l['subtask_id']) && isset($subtaskTitleById[$l['subtask_id']])): ?>
+                    <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <?= esc($subtaskTitleById[$l['subtask_id']]) ?></div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
@@ -223,6 +264,12 @@
     <div class="jt-link-add">
         <input type="url" id="linkUrlInput" class="form-control form-control-sm" placeholder="https://...">
         <input type="text" id="linkTituloInput" class="form-control form-control-sm" placeholder="Texto (opcional)" maxlength="255">
+        <select id="linkSubtaskSelect" class="form-select form-select-sm">
+            <option value="">(sin subtarea)</option>
+            <?php foreach ($subtasks as $s): ?>
+                <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+            <?php endforeach; ?>
+        </select>
         <button type="button" id="linkAddBtn" class="btn btn-sm btn-primary">
             <i class="bi bi-plus-lg"></i>
         </button>
@@ -238,12 +285,17 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="subtaskSuggestLoading" class="text-muted small">Pensando...</div>
+                <div class="mb-2">
+                    <label for="subtaskSuggestContexto" class="form-label small mb-1">Contexto extra (opcional)</label>
+                    <textarea id="subtaskSuggestContexto" class="form-control form-control-sm" rows="2" placeholder="Algo que ayude a generar mejores subtareas..."></textarea>
+                </div>
+                <div id="subtaskSuggestLoading" class="text-muted small d-none">Pensando...</div>
                 <div id="subtaskSuggestError" class="text-danger small d-none"></div>
                 <div id="subtaskSuggestList" class="d-flex flex-column gap-2"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-outline-primary btn-sm" id="subtaskSuggestGenerateBtn"><i class="bi bi-stars"></i> Generar</button>
                 <button class="btn btn-primary btn-sm" id="subtaskSuggestAddBtn" disabled>Añadir seleccionadas</button>
             </div>
         </div>
@@ -286,6 +338,15 @@
                     <label for="materialEditDescripcion" class="form-label">Descripción (opcional)</label>
                     <textarea id="materialEditDescripcion" class="form-control" rows="2"></textarea>
                 </div>
+                <div class="mb-2">
+                    <label for="materialEditSubtask" class="form-label">Subtarea (opcional)</label>
+                    <select id="materialEditSubtask" class="form-select">
+                        <option value="">(sin subtarea)</option>
+                        <?php foreach ($subtasks as $s): ?>
+                            <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -311,6 +372,15 @@
                 <div class="mb-2">
                     <label for="linkEditDescripcion" class="form-label">Descripción (opcional)</label>
                     <textarea id="linkEditDescripcion" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="mb-2">
+                    <label for="linkEditSubtask" class="form-label">Subtarea (opcional)</label>
+                    <select id="linkEditSubtask" class="form-select">
+                        <option value="">(sin subtarea)</option>
+                        <?php foreach ($subtasks as $s): ?>
+                            <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer">
@@ -490,17 +560,54 @@
 .jt-subtask-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .jt-subtask-item {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
     padding: 6px 8px;
     border-radius: 10px;
     border: 1px solid var(--bs-border-color);
     background: var(--bs-body-bg);
     transition: opacity .15s ease, background-color .15s ease;
 }
+.jt-subtask-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
 .jt-subtask-item.sortable-ghost { opacity: .3; }
 .jt-subtask-item.sortable-chosen { background: var(--bs-tertiary-bg); }
 .jt-subtask-item.is-done { opacity: .6; }
+
+.jt-subtask-attach-toggle {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--bs-border-color);
+    background: transparent;
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+    cursor: pointer;
+}
+.jt-subtask-attach-toggle:hover { background: var(--bs-tertiary-bg); }
+.jt-subtask-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 30px;
+}
+.jt-subtask-attachment-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .8rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+}
+.jt-subtask-attachment-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jt-subtask-attachment-link:hover { text-decoration: underline; }
 
 .jt-subtask-handle {
     flex: 0 0 auto;
@@ -580,6 +687,11 @@
     padding-left: 26px;
     word-break: break-word;
 }
+.jt-material-subtask {
+    font-size: .75rem;
+    color: var(--bs-primary);
+    padding-left: 26px;
+}
 .jt-material-link {
     display: flex;
     align-items: center;
@@ -593,9 +705,10 @@
 .jt-material-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jt-material-size { flex: 0 0 auto; font-size: .75rem; color: var(--bs-secondary-color); }
 
-.jt-link-add { display: flex; gap: 6px; }
-.jt-link-add #linkUrlInput { flex: 1 1 40%; }
-.jt-link-add #linkTituloInput { flex: 1 1 40%; }
+.jt-link-add { display: flex; flex-wrap: wrap; gap: 6px; }
+.jt-link-add #linkUrlInput { flex: 1 1 100%; }
+.jt-link-add #linkTituloInput { flex: 1 1 auto; }
+.jt-link-add #linkSubtaskSelect { flex: 1 1 auto; max-width: 160px; }
 
 .jt-log-list { display: flex; flex-direction: column; gap: 6px; }
 .jt-log-item {
@@ -748,11 +861,13 @@ document.addEventListener('DOMContentLoaded', function () {
         item.className = 'jt-subtask-item';
         item.dataset.id = subtask.id;
         item.innerHTML = `
-            <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
-            <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
-            <span class="jt-subtask-title"></span>
-            <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
-            <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+            <div class="jt-subtask-row">
+                <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
+                <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
+                <span class="jt-subtask-title"></span>
+                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+            </div>
         `;
         item.querySelector('.jt-subtask-title').textContent = subtask.title;
         return item;
@@ -862,21 +977,34 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Sugerir subtareas (IA) ---
     const subtaskSuggestBtn = document.getElementById('subtaskSuggestBtn');
     const subtaskSuggestModal = new bootstrap.Modal(document.getElementById('subtaskSuggestModal'));
+    const subtaskSuggestContexto = document.getElementById('subtaskSuggestContexto');
     const subtaskSuggestLoading = document.getElementById('subtaskSuggestLoading');
     const subtaskSuggestError = document.getElementById('subtaskSuggestError');
     const subtaskSuggestList = document.getElementById('subtaskSuggestList');
+    const subtaskSuggestGenerateBtn = document.getElementById('subtaskSuggestGenerateBtn');
     const subtaskSuggestAddBtn = document.getElementById('subtaskSuggestAddBtn');
 
-    subtaskSuggestBtn.addEventListener('click', async () => {
+    subtaskSuggestBtn.addEventListener('click', () => {
+        subtaskSuggestContexto.value = '';
+        subtaskSuggestList.innerHTML = '';
+        subtaskSuggestError.classList.add('d-none');
+        subtaskSuggestLoading.classList.add('d-none');
+        subtaskSuggestAddBtn.disabled = true;
+        subtaskSuggestModal.show();
+        subtaskSuggestContexto.focus();
+    });
+
+    subtaskSuggestGenerateBtn.addEventListener('click', async () => {
         subtaskSuggestList.innerHTML = '';
         subtaskSuggestError.classList.add('d-none');
         subtaskSuggestLoading.classList.remove('d-none');
         subtaskSuggestAddBtn.disabled = true;
-        subtaskSuggestBtn.disabled = true;
-        subtaskSuggestModal.show();
+        subtaskSuggestGenerateBtn.disabled = true;
 
         try {
-            const data = await postJSON('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/sugerir-subtareas');
+            const data = await postJSON('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/sugerir-subtareas', {
+                contexto: subtaskSuggestContexto.value.trim(),
+            });
             if (!data.success || !data.subtareas || !data.subtareas.length) {
                 throw new Error(data.error || 'Sin sugerencias');
             }
@@ -898,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', function () {
             subtaskSuggestError.classList.remove('d-none');
         } finally {
             subtaskSuggestLoading.classList.add('d-none');
-            subtaskSuggestBtn.disabled = false;
+            subtaskSuggestGenerateBtn.disabled = false;
         }
     });
 
@@ -942,6 +1070,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const materialesList = document.getElementById('materialesList');
     const materialesEmptyMsg = document.getElementById('materialesEmptyMsg');
     const materialInput = document.getElementById('materialInput');
+    const materialSubtaskSelect = document.getElementById('materialSubtaskSelect');
 
     function materialIcon(name) {
         const ext = (name.split('.').pop() || '').toLowerCase();
@@ -967,6 +1096,7 @@ document.addEventListener('DOMContentLoaded', function () {
         div.dataset.id = f.id;
         div.dataset.nombre = f.nombre_original;
         div.dataset.descripcion = f.descripcion || '';
+        div.dataset.subtaskId = f.subtask_id || '';
         div.innerHTML = `
             <div class="jt-material-row">
                 <a href="${f.url}" target="_blank" class="jt-material-link">
@@ -979,6 +1109,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         `;
         div.querySelector('.jt-material-name').textContent = f.nombre_original;
+        setMaterialSubtask(div, f.subtask_id, f.subtask_title);
         return div;
     }
 
@@ -997,12 +1128,31 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function setMaterialSubtask(item, subtaskId, subtaskTitle) {
+        item.dataset.subtaskId = subtaskId || '';
+        let subEl = item.querySelector('.jt-material-subtask');
+        if (subtaskId && subtaskTitle) {
+            if (!subEl) {
+                subEl = document.createElement('div');
+                subEl.className = 'jt-material-subtask';
+                subEl.innerHTML = '<i class="bi bi-list-check"></i> <span></span>';
+                item.appendChild(subEl);
+            }
+            subEl.querySelector('span').textContent = subtaskTitle;
+        } else if (subEl) {
+            subEl.remove();
+        }
+    }
+
     materialInput.addEventListener('change', async () => {
         if (!materialInput.files.length) return;
 
         const formData = new FormData();
         for (const file of materialInput.files) {
             formData.append('archivo', file);
+        }
+        if (materialSubtaskSelect.value) {
+            formData.append('subtask_id', materialSubtaskSelect.value);
         }
 
         materialInput.disabled = true;
@@ -1031,6 +1181,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const materialEditModal = new bootstrap.Modal(document.getElementById('materialEditModal'));
     const materialEditNombre = document.getElementById('materialEditNombre');
     const materialEditDescripcion = document.getElementById('materialEditDescripcion');
+    const materialEditSubtask = document.getElementById('materialEditSubtask');
     const materialEditSaveBtn = document.getElementById('materialEditSaveBtn');
     let materialEditItem = null;
 
@@ -1040,6 +1191,7 @@ document.addEventListener('DOMContentLoaded', function () {
             materialEditItem = editBtn.closest('.jt-material-item');
             materialEditNombre.value = materialEditItem.dataset.nombre || '';
             materialEditDescripcion.value = materialEditItem.dataset.descripcion || '';
+            materialEditSubtask.value = materialEditItem.dataset.subtaskId || '';
             materialEditModal.show();
             return;
         }
@@ -1069,12 +1221,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('<?= site_url('journal/materiales') ?>/' + materialEditItem.dataset.id + '/editar', {
                 nombre_original: nombre,
                 descripcion: materialEditDescripcion.value.trim(),
+                subtask_id: materialEditSubtask.value,
             });
             if (!data.success) throw new Error(data.error || 'No se pudo editar el material.');
 
             materialEditItem.dataset.nombre = data.file.nombre_original;
             materialEditItem.querySelector('.jt-material-name').textContent = data.file.nombre_original;
             setMaterialDesc(materialEditItem, data.file.descripcion);
+            setMaterialSubtask(materialEditItem, data.file.subtask_id, data.file.subtask_title);
             materialEditModal.hide();
         } catch (err) {
             alert(err.message || 'No se pudo editar el material.');
@@ -1088,6 +1242,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const linksEmptyMsg = document.getElementById('linksEmptyMsg');
     const linkUrlInput = document.getElementById('linkUrlInput');
     const linkTituloInput = document.getElementById('linkTituloInput');
+    const linkSubtaskSelect = document.getElementById('linkSubtaskSelect');
     const linkAddBtn = document.getElementById('linkAddBtn');
 
     function buildLinkItem(l) {
@@ -1096,6 +1251,7 @@ document.addEventListener('DOMContentLoaded', function () {
         div.dataset.id = l.id;
         div.dataset.titulo = l.titulo || '';
         div.dataset.descripcion = l.descripcion || '';
+        div.dataset.subtaskId = l.subtask_id || '';
         div.innerHTML = `
             <div class="jt-material-row">
                 <a href="${l.url}" target="_blank" rel="noopener" class="jt-material-link">
@@ -1108,6 +1264,7 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
         div.querySelector('.jt-material-name').textContent = l.titulo || l.url;
         div.querySelector('.jt-material-link').href = l.url;
+        setLinkSubtask(div, l.subtask_id, l.subtask_title);
         return div;
     }
 
@@ -1126,6 +1283,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function setLinkSubtask(item, subtaskId, subtaskTitle) {
+        item.dataset.subtaskId = subtaskId || '';
+        let subEl = item.querySelector('.jt-material-subtask');
+        if (subtaskId && subtaskTitle) {
+            if (!subEl) {
+                subEl = document.createElement('div');
+                subEl.className = 'jt-material-subtask';
+                subEl.innerHTML = '<i class="bi bi-list-check"></i> <span></span>';
+                item.appendChild(subEl);
+            }
+            subEl.querySelector('span').textContent = subtaskTitle;
+        } else if (subEl) {
+            subEl.remove();
+        }
+    }
+
     async function addLink() {
         const url = linkUrlInput.value.trim();
         if (!url) return;
@@ -1135,6 +1308,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/enlaces', {
                 url,
                 titulo: linkTituloInput.value.trim(),
+                subtask_id: linkSubtaskSelect.value,
             });
             if (!data.success) throw new Error(data.error || 'No se pudo añadir el enlace.');
 
@@ -1156,6 +1330,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const linkEditModal = new bootstrap.Modal(document.getElementById('linkEditModal'));
     const linkEditTitulo = document.getElementById('linkEditTitulo');
     const linkEditDescripcion = document.getElementById('linkEditDescripcion');
+    const linkEditSubtask = document.getElementById('linkEditSubtask');
     const linkEditSaveBtn = document.getElementById('linkEditSaveBtn');
     let linkEditItem = null;
 
@@ -1165,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', function () {
             linkEditItem = editBtn.closest('.jt-material-item');
             linkEditTitulo.value = linkEditItem.dataset.titulo || '';
             linkEditDescripcion.value = linkEditItem.dataset.descripcion || '';
+            linkEditSubtask.value = linkEditItem.dataset.subtaskId || '';
             linkEditModal.show();
             return;
         }
@@ -1191,12 +1367,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('<?= site_url('journal/enlaces') ?>/' + linkEditItem.dataset.id + '/editar', {
                 titulo: linkEditTitulo.value.trim(),
                 descripcion: linkEditDescripcion.value.trim(),
+                subtask_id: linkEditSubtask.value,
             });
             if (!data.success) throw new Error(data.error || 'No se pudo editar el enlace.');
 
             linkEditItem.dataset.titulo = data.link.titulo || '';
             linkEditItem.querySelector('.jt-material-name').textContent = data.link.titulo || data.link.url;
             setLinkDesc(linkEditItem, data.link.descripcion);
+            setLinkSubtask(linkEditItem, data.link.subtask_id, data.link.subtask_title);
             linkEditModal.hide();
         } catch (err) {
             alert(err.message || 'No se pudo editar el enlace.');
