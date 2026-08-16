@@ -2,12 +2,18 @@
 
 namespace App\Models;
 
+use App\Services\ReadingJournalSyncService;
 use CodeIgniter\Model;
 
 class TaskModel extends Model
 {
     protected $table = 'tasks';
     protected $primaryKey = 'id';
+
+    // Si se crea una task en la categoría "Lectura" (desde Journal o desde
+    // cualquier otro sitio), el módulo Lectura se entera y crea su book
+    // vinculado mínimo. Ver ReadingJournalSyncService::createBookForTask.
+    protected $afterInsert = ['syncReadingBookOnInsert'];
 
     protected $allowedFields = [
         'category',
@@ -67,5 +73,25 @@ class TaskModel extends Model
         }
 
         return $result;
+    }
+
+    /**
+     * Callback afterInsert: si la task nueva es de categoría "Lectura",
+     * delega en el servicio de sincronización para crear su book
+     * vinculado. Nunca debe romper la creación de la task en Journal.
+     */
+    protected function syncReadingBookOnInsert(array $eventData): array
+    {
+        $data = $eventData['data'] ?? [];
+
+        if (($data['category'] ?? null) === 'Lectura') {
+            try {
+                (new ReadingJournalSyncService())->createBookForTask((int) $eventData['id'], $data);
+            } catch (\Throwable $e) {
+                log_message('error', 'ReadingJournalSyncService::createBookForTask failed: ' . $e->getMessage());
+            }
+        }
+
+        return $eventData;
     }
 }

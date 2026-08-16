@@ -4,6 +4,8 @@ namespace App\Controllers;
 
 use App\Models\BookModel;
 use App\Models\ReadingSessionModel;
+use App\Services\BookLookupService;
+use App\Services\ReadingJournalSyncService;
 
 class Reading extends BaseController
 {
@@ -18,11 +20,13 @@ class Reading extends BaseController
 
     protected BookModel $bookModel;
     protected ReadingSessionModel $sessionModel;
+    protected ReadingJournalSyncService $syncService;
 
     public function __construct()
     {
         $this->bookModel = new BookModel();
         $this->sessionModel = new ReadingSessionModel();
+        $this->syncService = new ReadingJournalSyncService();
     }
 
     /**
@@ -54,6 +58,22 @@ class Reading extends BaseController
         return view('reading/form', ['libro' => null]);
     }
 
+    /**
+     * Búsqueda de portada/autor/ISBN/páginas contra Open Library (AJAX),
+     * usada tanto al añadir un libro como para completar uno ya existente.
+     */
+    public function buscarLibro()
+    {
+        $query = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($query) < 3) {
+            return $this->response->setJSON(['success' => true, 'resultados' => []]);
+        }
+
+        $resultados = (new BookLookupService())->buscar($query);
+
+        return $this->response->setJSON(['success' => true, 'resultados' => $resultados]);
+    }
+
     public function crearLibro()
     {
         $data = $this->datosDelFormulario();
@@ -62,7 +82,16 @@ class Reading extends BaseController
             $data['started_at'] = date('Y-m-d');
         }
 
-        $id = $this->bookModel->insert($data, true);
+        // Si se subió una imagen manualmente (libro no encontrado en la
+        // API), tiene prioridad sobre cualquier URL de portada.
+        $subida = $this->procesarPortadaSubida(null);
+        if ($subida !== null) {
+            $data['cover_url'] = $subida;
+        }
+
+        // Crea también la task en Journal (categoría Lectura): Journal sigue
+        // siendo la puerta de entrada aunque el alta se haga desde aquí.
+        $id = $this->syncService->crearLibroConTask($data);
         if (!$id) {
             return redirect()->back()->withInput()->with('error', 'Revisa el título del libro.');
         }
@@ -100,8 +129,51 @@ class Reading extends BaseController
 
         $data = $this->datosDelFormulario();
 
-        // Transiciones de fecha: solo se rellenan la primera vez, nunca se
-        // pisan ni se usan para comparar "deberías haber terminado ya".
+        $subida = $this->procesarPortadaSubida($libro['cover_url'] ?? null);
+        if ($subida !== null) {
+            $data['cover_url'] = $subida;
+        }
+
+        $data = $this->conTransicionesDeFecha($libro, $data);
+
+        $this->bookModel->update($id, $data);
+        $this->sincronizarConTask($id, $libro);
+
+        return redirect()->to(site_url('reading/libro/' . $id))->with('success', 'Libro actualizado.');
+    }
+
+    /**
+     * Cambio de estado desde el selector rápido (fuera de Ajustes): guarda
+     * al toque, sin pasar por el resto del formulario.
+     */
+    public function actualizarEstado(int $id)
+    {
+        $libro = $this->bookModel->find($id);
+        if (!$libro) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $status = $input['status'] ?? '';
+        if (!array_key_exists($status, self::ESTADOS)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Estado no válido.']);
+        }
+
+        $data = $this->conTransicionesDeFecha($libro, ['status' => $status]);
+
+        $this->bookModel->update($id, $data);
+        $this->sincronizarConTask($id, $libro);
+
+        return $this->response->setJSON(['success' => true, 'status' => $status]);
+    }
+
+    /**
+     * Transiciones de fecha: solo se rellenan la primera vez, nunca se
+     * pisan ni se usan para comparar "deberías haber terminado ya". La
+     * valoración solo tiene sentido si el libro está terminado.
+     */
+    private function conTransicionesDeFecha(array $libro, array $data): array
+    {
         if ($data['status'] === 'leyendo' && empty($libro['started_at'])) {
             $data['started_at'] = date('Y-m-d');
         }
@@ -109,12 +181,20 @@ class Reading extends BaseController
             $data['finished_at'] = date('Y-m-d');
         }
         if ($data['status'] !== 'terminado') {
-            $data['rating'] = null; // la valoración solo tiene sentido al terminar
+            $data['rating'] = null;
         }
 
-        $this->bookModel->update($id, $data);
+        return $data;
+    }
 
-        return redirect()->to(site_url('reading/libro/' . $id))->with('success', 'Libro actualizado.');
+    private function sincronizarConTask(int $bookId, array $libroAntes): void
+    {
+        if (empty($libroAntes['task_id'])) {
+            return;
+        }
+
+        $libroActualizado = $this->bookModel->find($bookId);
+        $this->syncService->pushBookSettingsToTask((int) $libroAntes['task_id'], $libroActualizado);
     }
 
     public function borrarLibro(int $id)
@@ -156,8 +236,9 @@ class Reading extends BaseController
 
         // El primer toque saca al libro de "quiero leer" sin que haga falta
         // decidirlo aparte; y si se alcanzó página, se actualiza el progreso.
+        $justStarted = $libro['status'] === 'quiero_leer';
         $bookUpdate = [];
-        if ($libro['status'] === 'quiero_leer') {
+        if ($justStarted) {
             $bookUpdate['status'] = 'leyendo';
             $bookUpdate['started_at'] = $libro['started_at'] ?: date('Y-m-d');
         }
@@ -166,6 +247,15 @@ class Reading extends BaseController
         }
         if (!empty($bookUpdate)) {
             $this->bookModel->update($id, $bookUpdate);
+        }
+
+        if (!empty($libro['task_id'])) {
+            $this->syncService->pushSessionToTask(
+                (int) $libro['task_id'],
+                $minutes !== '' ? (int) $minutes : 0,
+                $pageReached !== '' ? (int) $pageReached : null,
+                $justStarted
+            );
         }
 
         return $this->response->setJSON([
@@ -195,6 +285,43 @@ class Reading extends BaseController
             'success' => true,
             'mensaje' => 'Anotado. Mañana será otro día.',
         ]);
+    }
+
+    /**
+     * Si el formulario trae un archivo de imagen ("cover_image"), lo sube y
+     * devuelve su URL absoluta (para libros que la API no encuentra). Borra
+     * la portada anterior solo si era una imagen subida por nosotros mismos
+     * (las de la API externa no se tocan). Devuelve null si no hay archivo
+     * válido, para no pisar el cover_url que ya traiga el formulario.
+     */
+    private function procesarPortadaSubida(?string $coverUrlActual): ?string
+    {
+        $file = $this->request->getFile('cover_image');
+        if (!$file || !$file->isValid() || $file->hasMoved()) {
+            return null;
+        }
+
+        if (strpos((string) $file->getClientMimeType(), 'image/') !== 0) {
+            return null;
+        }
+
+        $uploadDir = FCPATH . 'upload/images/reading/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $prefijoLocal = base_url('upload/images/reading/');
+        if ($coverUrlActual && str_starts_with($coverUrlActual, $prefijoLocal)) {
+            $rutaAnterior = $uploadDir . basename($coverUrlActual);
+            if (is_file($rutaAnterior)) {
+                unlink($rutaAnterior);
+            }
+        }
+
+        $newName = $file->getRandomName();
+        $file->move($uploadDir, $newName);
+
+        return $prefijoLocal . $newName;
     }
 
     private function datosDelFormulario(): array

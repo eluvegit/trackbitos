@@ -14,7 +14,7 @@ class BookModel extends Model
     public const ESTADOS = ['quiero_leer', 'leyendo', 'terminado', 'abandonado', 'pausado'];
 
     protected $allowedFields = [
-        'title', 'author', 'cover_url', 'isbn', 'total_pages', 'current_page',
+        'task_id', 'title', 'author', 'cover_url', 'isbn', 'total_pages', 'current_page',
         'status', 'min_goal_pages', 'anchor_routine', 'rating', 'started_at', 'finished_at',
     ];
 

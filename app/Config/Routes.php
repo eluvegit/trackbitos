@@ -42,9 +42,11 @@ $routes->match(['GET', 'POST'], 'lentillas/avisos/eliminar/(:num)', 'Lentillas::
 $routes->group('reading', ['filter' => 'auth'], function ($routes) {
     $routes->GET('/', 'Reading::library');
     $routes->GET('nuevo', 'Reading::nuevoLibro');
+    $routes->GET('buscar', 'Reading::buscarLibro');
     $routes->POST('crear', 'Reading::crearLibro');
     $routes->GET('libro/(:num)', 'Reading::libro/$1');
     $routes->POST('libro/(:num)/actualizar', 'Reading::actualizarLibro/$1');
+    $routes->POST('libro/(:num)/estado', 'Reading::actualizarEstado/$1');
     $routes->POST('libro/(:num)/borrar', 'Reading::borrarLibro/$1');
     $routes->POST('libro/(:num)/sesion', 'Reading::registrarSesion/$1');
     $routes->POST('libro/(:num)/hoy-no-toca', 'Reading::registrarSkip/$1');
@@ -576,6 +578,16 @@ $routes->group('buscapp/api', ['namespace' => 'App\Controllers\Buscapp'], static
 $routes->group('buscapp', ['filter' => 'auth', 'namespace' => 'App\Controllers\Buscapp'], static function ($routes) {
     $routes->GET('/', 'Admin::index');
     $routes->GET('(:num)', 'Admin::ver/$1');
+});
+
+// ---- Piezas: versionado de modelos 3D (spec en el chat) ----
+// API para piezas-cli/trackbitos.py, mono-usuario: un único token Bearer
+// compartido (filtro 'piezasApi', piezas.apiToken en .env), no Myth\Auth.
+// Fase 4: solo lectura + alta de máquina. Sin interfaz web todavía (fase 6).
+$routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
+    $routes->POST('maquina/registrar', 'Api::registrarMaquina');
+    $routes->GET('variantes', 'Api::variantes');
+    $routes->GET('variante/(:num)/estado', 'Api::varianteEstado/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
