@@ -8,19 +8,24 @@
 | 2 | `PiezaService` con los verbos | ✅ Hecho |
 | 3 | `trackbitos estado` (hash de nube desde fichero local) | ✅ Hecho |
 | 4 | API de lectura (`/variantes`, `/variante/{id}/estado`) + cliente conectado | ✅ Hecho |
-| 5 | API de subida y descarga, con verificación de hash en ambos extremos | ⬜ Pendiente |
-| 6 | Interfaz web: ficha de variante y botones de los verbos | ⬜ Pendiente |
-| 7 | Papelera y purga de sesiones al validar | ⬜ Pendiente |
+| 5 | API de subida y descarga, con verificación de hash en ambos extremos | ✅ Hecho |
+| 6 | Interfaz web: ficha de variante y botones de los verbos | ✅ Hecho |
+| 7 | Papelera y purga de sesiones al validar | ✅ Hecho |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
 - Modelos: `app/Models/Pieza{Maquina,Familia,Variante,Version,Rama,Sesion,Descarga}Model.php`
   (prefijados "Pieza" a propósito — ya existe un `SesionModel`/tabla `sesiones` para el módulo de rodajes fotográficos, completamente distinto)
 - Verbos: `app/Services/PiezaService.php`
+- Círculo descarga→subida (invariante 8): `app/Services/PiezaSyncService.php`
+- Ficheros en disco: `app/Services/PiezaAlmacen.php` (bajo `writable/piezas/`)
 - API: `app/Controllers/Piezas/Api.php`, filtro `app/Filters/PiezasApiAuth.php`, rutas bajo `piezas/api` en `app/Config/Routes.php`, token en `.env` (`piezas.apiToken`, no versionado)
+- Web: `app/Controllers/Piezas/Web.php` + `app/Views/piezas/{index,variante}.php`, rutas bajo `piezas` (filtro `auth`)
+- Purga de la papelera del servidor: `php spark piezas:purgar` (`app/Commands/PiezasPurgar.php`), pensado para cron diario
 - Cliente CLI: `piezas-cli/trackbitos.py` (fuera de `app/`, se puede mover a cualquier carpeta del equipo — no depende de vivir en este repo). Config real en `~/.trackbitos/config.json`.
 
-Para continuar: pide la fase 5 ("API de subida y descarga") y sigue el orden de la sección 10 más abajo.
+**Las siete fases están cerradas.** El módulo funciona de punta a punta: dos máquinas, ficheros
+versionados, asientos que cuadran, web para juzgar versiones y purga automática.
 
 ---
 
@@ -130,6 +135,8 @@ Estos son el núcleo del sistema. Deben validarse en los modelos/servicios y, do
 4. **Las versiones son inmutables** en `ruta_blend`, `hash_blend`, `ruta_stl`, `hash_stl` y `numero`. Los campos de anotación (`resultado`, `medidas`) sí son editables.
 5. **Las sesiones no se purgan hasta que la versión que las cerró pasa a `validada`.** No al promocionar: si la impresión sale mal, aún hacen falta.
 6. **Nada se borra: se mueve a papelera.** Servidor y cliente. Purga automática a los 30 días.
+
+**Qué significa "purgar una sesión" (fase 7).** Se aparta su `.blend`, no su registro. La fila conserva número, hashes, máquina, fecha y log, y solo se marca `purgada = 1`: lo que ocupa sitio es el fichero, y lo que da valor al historial dentro de tres meses es el registro. La versión validada tiene su propia copia del fichero, así que no se pierde nada recuperable — y durante los 30 días de gracia el `.blend` sigue en la papelera, con `ruta_blend` apuntando ahí por si hace falta rescatarlo a mano.
 7. `version.cambio` es obligatorio y no puede quedar vacío. Es el campo que da valor al historial dentro de tres meses.
 8. **Toda descarga se cierra**, por subida, por declaración de "sin cambios" o por cierre forzado con motivo. Una subida solo se acepta si su `hash_padre` coincide con el `hash_entregado` de una descarga abierta de esa misma máquina.
 
@@ -154,6 +161,8 @@ Cada uno es una transacción atómica que debe fallar entera si viola un invaria
 | **Derivar variante** | Crea variante nueva con `origen_version_id` apuntando a la versión de partida. Numeración propia desde v001. No copia ficheros ni referencias. |
 
 Implementados en `PiezaService` (fase 2) como: `crearFamilia`, `crearVariante`, `abrirSesion`, `subirSesion`, `cerrarSesion`, `promocionar`, `devolverATrabajo`, `marcarImpresa`, `validar`, `descartar`, `derivarVariante`.
+
+**Corrección de "devolver a trabajo" (descubierta en la fase 6).** Tal como estaba, el verbo no podía ejecutarse nunca: siempre hay una rama abierta (promocionar cierra una y abre otra), y el invariante 2 no admite una segunda. Retomar una versión antigua implica por fuerza abandonar la línea en curso, así que el verbo ahora cierra la rama abierta —sin versión que la cierre, porque no se promociona— y abre la nueva. Al ser destructivo, por defecto **se niega y explica** cuántas sesiones subidas quedarían sin promocionar; solo procede con confirmación explícita (`abandonar_rama`), que en la web es una casilla que nombra la consecuencia. Las sesiones no se pierden: quedan colgando de la rama cerrada.
 
 ---
 
@@ -273,7 +282,13 @@ Si sí se modificó, el mismo comando te dirá que subas. En ningún caso tienes
 
 **Escape obligatorio.** Si la máquina que tiene la descarga abierta no está disponible (disco formateado, fichero borrado, portátil roto), el asiento no puede cuadrarse nunca y el sistema quedaría bloqueado para siempre. Debe existir un cierre forzado desde la web, que exige un motivo escrito y queda registrado con `cerrada_por = forzado`. No es un atajo: es la válvula que evita que un sistema estricto se convierta en una trampa.
 
-**Pendiente de implementar (fase 5):** ninguna de las rutas de escritura (abrir sesión real vía API, subir con verificación de `hash_padre`, cerrar-sin-cambios, forzar-cierre) existe todavía. `PiezaDescargaModel` es CRUD simple a la espera de esta lógica.
+Implementado (fase 5) en `PiezaSyncService`: `entregarSesion`/`entregarVersion` abren el asiento, `recibir` lo cuadra y lo cierra, `cerrarSinCambios` y `forzarCierre` son las otras dos salidas. Verificado con las dos máquinas contra la API real.
+
+**Tres cadenas se aceptan, no una.** Además del caso normal (asiento abierto + `hash_padre` = `hash_entregado`), hay dos encadenamientos igual de verificables que si no se admitieran obligarían a bajar un fichero que ya tienes delante:
+
+1. **Rama estrenada**: no hay `hash_padre` porque no había nada que descargar. Solo se acepta si la rama no tiene ninguna sesión subida.
+2. **Segunda subida de la misma sesión**: el `hash_padre` es tu propia subida anterior. El asiento ya se cerró con la primera.
+3. **Primera sesión tras promocionar**: el `hash_padre` es el hash de la versión que abrió la rama. En cuanto la rama tiene una subida, esta puerta se cierra sola — por eso no permite pisar trabajo de la otra máquina.
 
 ### 4.5 Identidad de máquina
 
@@ -310,14 +325,26 @@ Configuración en `~/.trackbitos/config.json`: URL base, token de API, **UUID de
 
 ```
 trackbitos estado          # el más usado — diagnóstico completo          ✅ hecho
-trackbitos abrir <variante>                                               ⬜ fase 5
-trackbitos bajar                                                          ⬜ fase 5
-trackbitos ver <variante>          # descarga de consulta, sin abrir sesión  ⬜ fase 5
-trackbitos subir                                                          ⬜ fase 5
-trackbitos cerrar                                                         ⬜ fase 5
-trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero  ⬜ fase 5
-trackbitos promocionar                                                    ⬜ fase 5
+trackbitos abrir <variante>        # sesión sin descargar: variante estrenada  ✅ hecho
+trackbitos bajar [<variante>]                                             ✅ hecho
+trackbitos ver <variante>          # descarga de consulta, sin abrir sesión  ✅ hecho
+trackbitos subir [--log "..."]                                            ✅ hecho
+trackbitos cerrar                                                         ✅ hecho
+trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero  ✅ hecho
+trackbitos promocionar --cambio "..." [--medidas "..."]                   ✅ hecho
+trackbitos papelera                # qué hay apartado y cuándo caduca    ✅ hecho
 ```
+
+La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
+son dos máquinas de escritorio que se encienden a ratos, y un cron en cada una sería una pieza
+más que mantener para algo que cuesta un listado de directorio. En el servidor sí hay comando
+para cron: `php spark piezas:purgar`.
+
+Todos aceptan `--dir` (por defecto, el directorio actual). `bajar`/`ver` aceptan
+`--ignorar-pendiente` para el aviso de copia viva en la otra máquina.
+
+El cierre forzado **no tiene comando**: es de uso web a propósito (spec 4.4), para
+que no se convierta en el atajo de cada noche.
 
 ### 5.2 Requisito clave: el script razona, no el usuario
 
@@ -355,35 +382,50 @@ torso-recto · rama desde-v002 · sesión 8
 
 Endpoints REST bajo `/piezas/api/`, autenticados por token Bearer único compartido en cabecera (mono-usuario — ver `App\Filters\PiezasApiAuth`).
 
+Toda escritura declara además la máquina en la cabecera **`X-Maquina-Uuid`** (spec 4.5). Un UUID desconocido se rechaza con 404 en vez de darse de alta solo: el alta es explícita, vía `/maquina/registrar`, para que el registro de máquinas no se llene de fantasmas a mitad de una subida.
+
 ```
 POST /maquina/registrar                  { uuid, hostname, so } → alta o ping        ✅ hecho
 GET  /variantes                          lista con estado resumido                    ✅ hecho
 GET  /variante/{id}/estado               rama abierta, última sesión, hash nube,      ✅ hecho
-                                         bloqueo y descargas pendientes por máquina
-POST /variante/{id}/sesion/abrir         { maquina } → 409 si ya hay sesión abierta   ⬜ fase 5
-GET  /sesion/{id}/descargar              devuelve el .blend + hash en cabecera;       ⬜ fase 5
-                                         abre el asiento de descarga (máquina, fecha)
-POST /sesion/{id}/subir                  multipart + hash_padre; 409 si no cuadra     ⬜ fase 5
-POST /descarga/{id}/cerrar-sin-cambios   { hash_local } → debe igualar hash_entregado ⬜ fase 5
-POST /descarga/{id}/forzar-cierre        { motivo } → solo desde la web               ⬜ fase 5
-POST /sesion/{id}/cerrar                                                              ⬜ fase 5
-POST /variante/{id}/promocionar          { cambio, medidas? } → crea versión, cierra rama  ⬜ fase 5
-POST /version/{id}/impresa               { params_impresion }                         ⬜ fase 5
-POST /version/{id}/validar               { resultado } → degrada la anterior          ⬜ fase 5
-POST /version/{id}/descartar             { resultado } → motivo obligatorio           ⬜ fase 5
-POST /version/{id}/devolver-a-trabajo    abre rama nueva                              ⬜ fase 5
-POST /variante/derivar                   { origen_version_id, nombre }                ⬜ fase 5
+                                         origen de descarga, bloqueo y pendientes
+POST /variante/{id}/sesion/abrir         409 si ya hay sesión abierta                 ✅ hecho
+GET  /sesion/{id}/descargar              devuelve el .blend + asiento en cabeceras;   ✅ hecho
+                                         ?motivo=trabajo|consulta [&ignorar_pendiente=1]
+GET  /version/{id}/descargar             igual, partiendo de una versión promocionada ✅ hecho
+POST /sesion/{id}/subir                  multipart + hash_padre; 409 si no cuadra     ✅ hecho
+POST /descarga/{id}/cerrar-sin-cambios   { hash_local } → debe igualar hash_entregado ✅ hecho
+POST /descarga/{id}/forzar-cierre        { motivo } → solo desde la web               ✅ hecho
+POST /sesion/{id}/cerrar                                                              ✅ hecho
+POST /variante/{id}/promocionar          { cambio, medidas? } → crea versión, cierra rama  ✅ hecho
+POST /version/{id}/impresa               { params_impresion }                         ✅ hecho
+POST /version/{id}/validar               { resultado } → degrada la anterior          ✅ hecho
+POST /version/{id}/descartar             { resultado } → motivo obligatorio           ✅ hecho
+POST /version/{id}/devolver-a-trabajo    abre rama nueva                              ✅ hecho
+POST /variante/derivar                   { origen_version_id, nombre }                ✅ hecho
 ```
 
-El servidor debe **recalcular el hash** de todo fichero recibido y rechazar la subida si no coincide con el declarado.
+`GET /version/{id}/descargar` no estaba en el diseño original y hizo falta: al promocionar, la rama nueva nace sin ninguna sesión subida, así que sin este endpoint el ciclo normal (promocionar → seguir trabajando) no tendría de dónde bajar el fichero.
 
-Nota: los endpoints de fase 5 son en su mayoría llamadas directas a los verbos ya implementados en `PiezaService` (fase 2) — la fase 5 es sobre todo "exponerlos por HTTP con manejo de ficheros", no reinventar la lógica.
+El servidor **recalcula el hash** de todo fichero recibido y rechaza la subida (422) si no coincide con el declarado. Es una comprobación distinta e independiente de la del `hash_padre` (409): una responde "¿me ha llegado entero lo que dices?", la otra "¿parte de la copia que yo te entregué?".
+
+Las cabeceras del asiento que devuelve una descarga: `X-Hash-Blend`, `X-Descarga-Id`, `X-Variante-Id`, `X-Variante-Nombre`, `X-Rama-Id`, `X-Rama-Nombre`, `X-Sesion-Id`, `X-Sesion-Numero`, `X-Origen-Tipo`, `X-Origen-Numero`. El cliente las vuelca en su `.sesion.json`.
+
+Códigos de error: 404 no encontrado, 403 máquina equivocada, 409 el asiento no cuadra (o el verbo no aplica en ese estado), 422 el fichero o los datos no son lo que dicen ser. Que el sistema se niegue no es un 500: es su trabajo.
+
+Nota: los verbos de versión son llamadas directas a `PiezaService` (fase 2) — ahí la fase 5 solo expone por HTTP, no reinventa lógica. Lo que sí es nuevo es todo el manejo de ficheros y el cuadre de asientos.
 
 ---
 
 ## 7. Interfaz web
 
 Sobria y orientada al estado. Lo que debe responder de un vistazo: **cuál es la buena y dónde está el trabajo en curso.**
+
+Implementada (fase 6) en `app/Controllers/Piezas/Web.php` y `app/Views/piezas/`. Índice de familias → variantes, ficha de variante, y el alta de familias/variantes (sin ella el módulo no arrancaba desde cero).
+
+**La web no descarga ficheros, y es deliberado.** La identidad de máquina la declara el script, nunca el navegador (4.5): un `.blend` bajado desde el móvil no tendría disco que registrar ni asiento que cuadrar. Así que la ficha muestra el hash de la nube y el comando exacto a ejecutar, y quien toca ficheros sigue siendo `trackbitos.py`.
+
+**Lo que sí es exclusivo de la web:** el cierre forzado de una descarga (4.4). No existe como comando del cliente a propósito — es la válvula de escape, no el atajo de cada noche.
 
 ### 7.1 Ficha de variante
 
@@ -397,6 +439,12 @@ Sobria y orientada al estado. Lo que debe responder de un vistazo: **cuál es la
   bajar desde el sobremesa y machacar trabajo que quedó en el portátil.
 - Historial de versiones en orden inverso, con estado, `cambio` y `resultado`.
 - Botones = los verbos de la sección 3. Deshabilitados con explicación cuando no aplican (no ocultos: el usuario debe entender por qué no puede).
+
+  Dos detalles que se descubrieron al verlo en pantalla, y que la implementación ya respeta:
+  la explicación va como **texto visible**, no como `title` — un botón deshabilitado no recibe
+  eventos de ratón, así que su tooltip no llega a mostrarse nunca; y un botón deshabilitado se
+  pinta **gris**, no en su color vivo atenuado, porque sobre fondo oscuro un `btn-outline-info`
+  al 65% de opacidad sigue leyéndose como disponible.
 
 ### 7.2 Avisos
 
@@ -413,6 +461,17 @@ Promocionar es el momento que cierra un ciclo de trabajo. La confirmación debe 
 
 - Los `.blend` y `.stl` se guardan en el servidor, fuera del directorio público, servidos solo vía API autenticada.
 - Rutas por variante y versión, con nombres derivados de los IDs (no de texto libre del usuario).
+
+Disposición real (`PiezaAlmacen`, bajo `writable/piezas/`):
+
+```
+variante-3/rama-5/sesion-41.blend                      ← trabajo en curso, purgable (invariante 5)
+variante-3/version-v002.blend                          ← copia propia de la versión, nunca se purga
+papelera/20260816-154424-variante-3-rama-5-sesion-41.blend   ← apartado al validar, caduca a los 30 días
+```
+
+La versión se lleva **su propia copia** aunque el contenido sea idéntico al de la sesión que promocionó. Si apuntase al fichero de la sesión, la purga de la fase 7 se llevaría por delante justo el fichero que nunca debe perderse.
+
 - Incluir el directorio de subidas en el backup existente a Backblaze B2.
 - **Fuera de este sistema** (van aparte, en almacenamiento en la nube en modo transmitir): fotos de referencia en alta resolución, ficheros `.ctb` de placas laminadas, imágenes de compartir en alta. Solo se guarda la ruta o una nota, no el binario.
 
@@ -435,8 +494,8 @@ Cada fase debe quedar funcionando y verificable por sí sola antes de pasar a la
 2. **Lógica de verbos** como servicio (`PiezaService`), sin interfaz. Probar por consola que promocionar cierra la rama y abre la siguiente, y que validar degrada la anterior. ✅
 3. **`trackbitos estado`** en el cliente, con el hash de la nube leído de un fichero local en lugar de la API. Verificar las cuatro filas de la tabla 4.3 creando ficheros a mano. ✅
 4. **API** de lectura (`/variantes`, `/variante/{id}/estado`) y conectar el cliente contra ella. ✅
-5. **API de subida y descarga**, con verificación de hash en ambos extremos. ⬜ ← siguiente
-6. **Interfaz web**: ficha de variante y botones de los verbos. ⬜
-7. **Papelera y purga** de sesiones al validar. ⬜
+5. **API de subida y descarga**, con verificación de hash en ambos extremos. ✅
+6. **Interfaz web**: ficha de variante y botones de los verbos. ✅
+7. **Papelera y purga** de sesiones al validar. ✅
 
 La fase 3 es la que concentraba el riesgo del diseño — quedó probada a fondo (incluido un bug real de codificación UTF-8 en Windows) antes de construir nada encima.

@@ -9,13 +9,24 @@ use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
+use App\Services\PiezaService;
+use App\Services\PiezaSyncService;
+use RuntimeException;
+use Throwable;
 
 /**
  * Endpoints que consume piezas-cli/trackbitos.py. Todo responde JSON, sin
  * vistas. Autenticación: Bearer token único (filtro 'piezasApi'), no
- * Myth\Auth — ver App\Filters\PiezasApiAuth. Fase 4: solo lectura
- * (/variantes, /variante/{id}/estado) + alta de máquina; los verbos de
- * escritura (sesión, subida, promocionar...) llegan en la fase 5.
+ * Myth\Auth — ver App\Filters\PiezasApiAuth.
+ *
+ * La identidad de máquina va aparte del token (spec 4.5): la declara el
+ * cliente con su UUID, en la cabecera X-Maquina-Uuid (o en el cuerpo, para
+ * /maquina/registrar). El token dice "eres tú"; el UUID dice "desde qué
+ * disco", que es lo que de verdad importa para cuadrar los asientos.
+ *
+ * Casi todo lo que hay aquí es traducción HTTP: la lógica vive en
+ * PiezaService (verbos) y PiezaSyncService (descarga/subida). Este
+ * controlador no decide nada de dominio.
  */
 class Api extends BaseController
 {
@@ -25,6 +36,8 @@ class Api extends BaseController
     private PiezaSesionModel $sesionModel;
     private PiezaDescargaModel $descargaModel;
     private PiezaMaquinaModel $maquinaModel;
+    private PiezaService $servicio;
+    private PiezaSyncService $sync;
 
     public function __construct()
     {
@@ -34,6 +47,8 @@ class Api extends BaseController
         $this->sesionModel   = new PiezaSesionModel();
         $this->descargaModel = new PiezaDescargaModel();
         $this->maquinaModel  = new PiezaMaquinaModel();
+        $this->servicio      = new PiezaService();
+        $this->sync          = new PiezaSyncService();
     }
 
     /**
@@ -85,11 +100,11 @@ class Api extends BaseController
             return $this->response->setJSON(['error' => 'Variante no encontrada.'])->setStatusCode(404);
         }
 
-        $rama = $this->ramaModel->abiertaDe($id);
-        $ultimaSubida = $rama ? $this->sesionModel->ultimaSubida((int) $rama['id']) : null;
-        $sesionAbierta = $rama
-            ? $this->sesionModel->where('rama_id', $rama['id'])->where('cerrada_en', null)->first()
-            : null;
+        $estado         = $this->sync->estadoDeSincronizacion($id);
+        $rama           = $estado['rama'];
+        $ultimaSubida   = $estado['ultima_subida'];
+        $sesionAbierta  = $estado['sesion_abierta'];
+        $origenDescarga = $estado['origen_descarga'];
 
         return $this->response->setJSON([
             'variante_id' => (int) $variante['id'],
@@ -99,7 +114,8 @@ class Api extends BaseController
                 'nombre'     => $this->ramaModel->nombre($rama),
                 'abierta_en' => $rama['abierta_en'],
             ] : null,
-            'hash_nube'            => $ultimaSubida['hash_blend'] ?? null,
+            'hash_nube'            => $estado['hash_nube'],
+            'origen_descarga'      => $origenDescarga,
             'ultima_sesion_subida' => $ultimaSubida ? [
                 'id'         => (int) $ultimaSubida['id'],
                 'numero'     => (int) $ultimaSubida['numero'],
@@ -119,8 +135,348 @@ class Api extends BaseController
                 'maquina_nombre' => $this->nombreMaquina((int) $d['maquina_id']),
                 'motivo'         => $d['motivo'],
                 'descargado_en'  => $d['descargado_en'],
-            ], $this->descargaModel->abiertasParaVariante($id)),
+            ], $estado['descargas_pendientes']),
         ]);
+    }
+
+    // ---- Sesiones de trabajo ------------------------------------------
+
+    /**
+     * Abrir sesión sin descargar nada: el caso de estrenar variante, cuando
+     * todavía no hay ningún .blend del que partir. Lo normal es bajar, que
+     * abre la sesión y entrega el fichero de una vez.
+     */
+    public function abrirSesion(int $varianteId)
+    {
+        return $this->responder(function () use ($varianteId) {
+            $maquina = $this->exigirMaquina();
+            $sesion  = $this->servicio->abrirSesion($varianteId, (int) $maquina['id']);
+
+            return ['sesion' => $this->resumenSesion($sesion)];
+        });
+    }
+
+    public function cerrarSesion(int $sesionId)
+    {
+        return $this->responder(function () use ($sesionId) {
+            return ['sesion' => $this->resumenSesion($this->servicio->cerrarSesion($sesionId))];
+        });
+    }
+
+    /**
+     * Entrega el .blend y abre el asiento de descarga. Los datos del asiento
+     * viajan en cabeceras porque el cuerpo es el fichero: el cliente los
+     * necesita para escribir su .sesion.json y poder cuadrar después.
+     */
+    public function descargarSesion(int $sesionId)
+    {
+        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarSesion($sesionId, $maquinaId, $motivo, $ignorar));
+    }
+
+    public function descargarVersion(int $versionId)
+    {
+        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarVersion($versionId, $maquinaId, $motivo, $ignorar));
+    }
+
+    /**
+     * Subida multipart: fichero en 'blend', y los campos 'hash' (lo que el
+     * cliente dice que ha calculado) y 'hash_padre' (de qué copia parte).
+     */
+    public function subirSesion(int $sesionId)
+    {
+        return $this->responder(function () use ($sesionId) {
+            $maquina = $this->exigirMaquina();
+
+            $fichero = $this->request->getFile('blend');
+            if (!$fichero || !$fichero->isValid()) {
+                throw new RuntimeException(
+                    'Falta el fichero en el campo "blend" de la petición multipart'
+                    . ($fichero ? ' (' . $fichero->getErrorString() . ').' : '.'),
+                    422
+                );
+            }
+
+            $hash = trim((string) $this->request->getPost('hash'));
+            if ($hash === '') {
+                throw new RuntimeException('Falta el campo "hash": toda subida declara el sha256 de lo que envía.', 422);
+            }
+
+            $resultado = $this->sync->recibir(
+                $sesionId,
+                (int) $maquina['id'],
+                $fichero->getTempName(),
+                $hash,
+                $this->request->getPost('hash_padre'),
+                $this->request->getPost('log')
+            );
+
+            return [
+                'sesion'   => $this->resumenSesion($resultado['sesion']),
+                'descarga' => $resultado['descarga'] ? $this->resumenDescarga($resultado['descarga']) : null,
+            ];
+        });
+    }
+
+    // ---- Asientos de descarga ------------------------------------------
+
+    public function cerrarSinCambios(int $descargaId)
+    {
+        return $this->responder(function () use ($descargaId) {
+            $maquina    = $this->exigirMaquina();
+            $hashLocal  = trim((string) $this->dato('hash_local'));
+
+            if ($hashLocal === '') {
+                throw new RuntimeException(
+                    'Falta "hash_local": el servidor no se fía de que no hayas tocado nada, exige la prueba.',
+                    422
+                );
+            }
+
+            $resultado = $this->sync->cerrarSinCambios($descargaId, (int) $maquina['id'], $hashLocal);
+
+            return [
+                'descarga' => $this->resumenDescarga($resultado['descarga']),
+                'sesion'   => $resultado['sesion'] ? $this->resumenSesion($resultado['sesion']) : null,
+            ];
+        });
+    }
+
+    /**
+     * La válvula de escape para una copia que ya no existe (spec 4.4). Es de
+     * uso web: el cliente no la expone como comando, precisamente para que
+     * no se convierta en el atajo de cada noche.
+     */
+    public function forzarCierre(int $descargaId)
+    {
+        return $this->responder(function () use ($descargaId) {
+            $resultado = $this->sync->forzarCierre($descargaId, (string) $this->dato('motivo'));
+
+            return [
+                'descarga' => $this->resumenDescarga($resultado['descarga']),
+                'sesion'   => $resultado['sesion'] ? $this->resumenSesion($resultado['sesion']) : null,
+            ];
+        });
+    }
+
+    // ---- Verbos sobre versiones ----------------------------------------
+
+    public function promocionar(int $varianteId)
+    {
+        return $this->responder(function () use ($varianteId) {
+            $version = $this->servicio->promocionar(
+                $varianteId,
+                (string) $this->dato('cambio'),
+                $this->dato('medidas')
+            );
+
+            $ramaNueva = $this->ramaModel->abiertaDe($varianteId);
+
+            return [
+                'version'    => $this->resumenVersion($version),
+                'rama_nueva' => $ramaNueva ? [
+                    'id'     => (int) $ramaNueva['id'],
+                    'nombre' => $this->ramaModel->nombre($ramaNueva),
+                ] : null,
+            ];
+        });
+    }
+
+    public function marcarImpresa(int $versionId)
+    {
+        return $this->responder(fn() => [
+            'version' => $this->resumenVersion($this->servicio->marcarImpresa($versionId, $this->dato('params_impresion'))),
+        ]);
+    }
+
+    public function validar(int $versionId)
+    {
+        return $this->responder(fn() => [
+            'version' => $this->resumenVersion($this->servicio->validar($versionId, $this->dato('resultado'))),
+        ]);
+    }
+
+    public function descartar(int $versionId)
+    {
+        return $this->responder(fn() => [
+            'version' => $this->resumenVersion($this->servicio->descartar($versionId, (string) $this->dato('resultado'))),
+        ]);
+    }
+
+    public function devolverATrabajo(int $versionId)
+    {
+        return $this->responder(function () use ($versionId) {
+            $rama = $this->servicio->devolverATrabajo($versionId);
+
+            return ['rama' => ['id' => (int) $rama['id'], 'nombre' => $this->ramaModel->nombre($rama)]];
+        });
+    }
+
+    public function derivarVariante()
+    {
+        return $this->responder(function () {
+            $variante = $this->servicio->derivarVariante(
+                (int) $this->dato('origen_version_id'),
+                (string) $this->dato('nombre'),
+                $this->dato('notas')
+            );
+
+            return ['variante' => $this->resumenVariante($variante)];
+        });
+    }
+
+    // ---- Plomería -------------------------------------------------------
+
+    /**
+     * Cuerpo del fichero + asiento en cabeceras. No usa $this->responder
+     * porque lo que devuelve no es JSON, pero traduce los errores igual.
+     */
+    private function entregarFichero(callable $entrega)
+    {
+        try {
+            $maquina = $this->exigirMaquina();
+            $entrega = $entrega(
+                (int) $maquina['id'],
+                (string) ($this->request->getGet('motivo') ?? 'consulta'),
+                (bool) $this->request->getGet('ignorar_pendiente')
+            );
+        } catch (Throwable $e) {
+            return $this->comoError($e);
+        }
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/octet-stream')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $entrega['nombre_fichero'] . '"')
+            ->setHeader('X-Hash-Blend', $entrega['hash'])
+            ->setHeader('X-Descarga-Id', (string) $entrega['descarga']['id'])
+            ->setHeader('X-Variante-Id', (string) $entrega['variante']['id'])
+            ->setHeader('X-Variante-Nombre', rawurlencode($entrega['variante']['nombre']))
+            ->setHeader('X-Rama-Id', (string) $entrega['rama']['id'])
+            ->setHeader('X-Rama-Nombre', rawurlencode($this->ramaModel->nombre($entrega['rama'])))
+            ->setHeader('X-Sesion-Id', (string) ($entrega['sesion_trabajo']['id'] ?? ''))
+            ->setHeader('X-Sesion-Numero', (string) ($entrega['sesion_trabajo']['numero'] ?? ''))
+            ->setHeader('X-Origen-Tipo', $entrega['origen']['tipo'])
+            ->setHeader('X-Origen-Numero', (string) $entrega['origen']['numero'])
+            ->setBody(file_get_contents($entrega['ruta_absoluta']));
+    }
+
+    /**
+     * Ejecuta la acción y traduce el resultado a JSON. Los errores de
+     * dominio llevan el estado HTTP en el code de la excepción; sin code,
+     * 409: que el sistema se niegue no es un fallo del servidor, es su
+     * trabajo (spec 0, "se niega y explica").
+     */
+    private function responder(callable $accion)
+    {
+        try {
+            return $this->response->setJSON(['ok' => true] + $accion());
+        } catch (Throwable $e) {
+            return $this->comoError($e);
+        }
+    }
+
+    private function comoError(Throwable $e)
+    {
+        $codigo = $e->getCode();
+        if (!is_int($codigo) || $codigo < 400 || $codigo > 499) {
+            $codigo = $e instanceof RuntimeException ? 409 : 500;
+        }
+
+        if ($codigo === 500) {
+            log_message('error', '[Piezas API] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+        }
+
+        return $this->response->setJSON(['ok' => false, 'error' => $e->getMessage()])->setStatusCode($codigo);
+    }
+
+    /**
+     * Identidad de máquina: cabecera X-Maquina-Uuid. No se da de alta aquí
+     * — para eso está /maquina/registrar, que el cliente llama al arrancar:
+     * si un UUID desconocido pudiera aparecer a mitad de una subida, el
+     * registro de máquinas se llenaría de fantasmas.
+     */
+    private function exigirMaquina(): array
+    {
+        $uuid = trim($this->request->getHeaderLine('X-Maquina-Uuid'));
+        if ($uuid === '') {
+            $uuid = trim((string) $this->dato('uuid'));
+        }
+        if ($uuid === '') {
+            throw new RuntimeException('Falta la cabecera X-Maquina-Uuid: toda escritura declara desde qué máquina viene.', 422);
+        }
+
+        $maquina = $this->maquinaModel->where('uuid', $uuid)->first();
+        if (!$maquina) {
+            throw new RuntimeException("Máquina desconocida ({$uuid}). Regístrala primero con POST /maquina/registrar.", 404);
+        }
+
+        return $maquina;
+    }
+
+    /**
+     * El cliente manda JSON, pero las subidas van en multipart (no puede ir
+     * un fichero dentro de un JSON), así que los campos se buscan en los dos
+     * sitios.
+     */
+    private function dato(string $clave)
+    {
+        $valor = $this->request->getPost($clave);
+        if ($valor !== null) {
+            return $valor;
+        }
+
+        try {
+            return $this->request->getJsonVar($clave);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function resumenSesion(array $sesion): array
+    {
+        return [
+            'id'           => (int) $sesion['id'],
+            'numero'       => (int) $sesion['numero'],
+            'rama_id'      => (int) $sesion['rama_id'],
+            'maquina_id'   => (int) $sesion['maquina_id'],
+            'abierta_en'   => $sesion['abierta_en'],
+            'cerrada_en'   => $sesion['cerrada_en'],
+            'hash_blend'   => $sesion['hash_blend'],
+            'hash_padre'   => $sesion['hash_padre'],
+            'tamano_bytes' => $sesion['tamano_bytes'] !== null ? (int) $sesion['tamano_bytes'] : null,
+            'subida_en'    => $sesion['subida_en'],
+        ];
+    }
+
+    private function resumenDescarga(array $descarga): array
+    {
+        return [
+            'id'             => (int) $descarga['id'],
+            'sesion_id'      => $descarga['sesion_id'] !== null ? (int) $descarga['sesion_id'] : null,
+            'variante_id'    => (int) $descarga['variante_id'],
+            'rama_id'        => (int) $descarga['rama_id'],
+            'maquina_id'     => (int) $descarga['maquina_id'],
+            'motivo'         => $descarga['motivo'],
+            'descargado_en'  => $descarga['descargado_en'],
+            'hash_entregado' => $descarga['hash_entregado'],
+            'cerrada'        => (bool) $descarga['cerrada'],
+            'cerrada_por'    => $descarga['cerrada_por'],
+        ];
+    }
+
+    private function resumenVersion(array $version): array
+    {
+        return [
+            'id'              => (int) $version['id'],
+            'variante_id'     => (int) $version['variante_id'],
+            'numero'          => (int) $version['numero'],
+            'etiqueta'        => sprintf('v%03d', (int) $version['numero']),
+            'estado'          => $version['estado'],
+            'promocionada_en' => $version['promocionada_en'],
+            'hash_blend'      => $version['hash_blend'],
+            'cambio'          => $version['cambio'],
+            'medidas'         => $version['medidas'],
+            'resultado'       => $version['resultado'],
+        ];
     }
 
     private function resumenVariante(array $variante): array

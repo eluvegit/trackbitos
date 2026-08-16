@@ -67,6 +67,7 @@ class Dashboard extends BaseController
             ['ruta' => 'buscapp', 'icono' => '📟', 'titulo' => 'Buscapp', 'texto' => 'Avisos de llamada estilo busca/telegrama: usuarios y envíos de la app.'],
             ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
             ['ruta' => 'sesiones', 'icono' => '📸', 'titulo' => 'Sesiones', 'texto' => 'Kanban de sesiones de foto/vídeo: moodboard, equipo y model releases.'],
+            ['ruta' => 'piezas', 'icono' => '🧱', 'titulo' => 'Piezas', 'texto' => 'Versionado de modelos 3D en Blender: qué versión es la buena y dónde está.'],
         ];
     }
 }

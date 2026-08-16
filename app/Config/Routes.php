@@ -580,14 +580,58 @@ $routes->group('buscapp', ['filter' => 'auth', 'namespace' => 'App\Controllers\B
     $routes->GET('(:num)', 'Admin::ver/$1');
 });
 
-// ---- Piezas: versionado de modelos 3D (spec en el chat) ----
+// ---- Piezas: versionado de modelos 3D (spec en piezas-cli/SPEC.md) ----
+// El grupo de la API va PRIMERO: sus rutas son más específicas ('piezas/api/...')
+// y llevan otro filtro de autenticación, así que no deben caer nunca en el
+// grupo web, que exige sesión de navegador y respondería con una redirección.
+//
 // API para piezas-cli/trackbitos.py, mono-usuario: un único token Bearer
 // compartido (filtro 'piezasApi', piezas.apiToken en .env), no Myth\Auth.
-// Fase 4: solo lectura + alta de máquina. Sin interfaz web todavía (fase 6).
+// Fase 5: lectura + escritura (sesiones, subida/descarga con cuadre de
+// hashes, verbos de versión).
 $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
     $routes->POST('maquina/registrar', 'Api::registrarMaquina');
+
+    // Lectura
     $routes->GET('variantes', 'Api::variantes');
     $routes->GET('variante/(:num)/estado', 'Api::varianteEstado/$1');
+
+    // Sesiones de trabajo y ficheros
+    $routes->POST('variante/(:num)/sesion/abrir', 'Api::abrirSesion/$1');
+    $routes->GET('sesion/(:num)/descargar', 'Api::descargarSesion/$1');
+    $routes->GET('version/(:num)/descargar', 'Api::descargarVersion/$1');
+    $routes->POST('sesion/(:num)/subir', 'Api::subirSesion/$1');
+    $routes->POST('sesion/(:num)/cerrar', 'Api::cerrarSesion/$1');
+
+    // Asientos de descarga (invariante 8)
+    $routes->POST('descarga/(:num)/cerrar-sin-cambios', 'Api::cerrarSinCambios/$1');
+    $routes->POST('descarga/(:num)/forzar-cierre', 'Api::forzarCierre/$1');
+
+    // Verbos de versión. 'variante/derivar' va antes que los patrones con
+    // (:num) para que no lo capture ninguno de ellos.
+    $routes->POST('variante/derivar', 'Api::derivarVariante');
+    $routes->POST('variante/(:num)/promocionar', 'Api::promocionar/$1');
+    $routes->POST('version/(:num)/impresa', 'Api::marcarImpresa/$1');
+    $routes->POST('version/(:num)/validar', 'Api::validar/$1');
+    $routes->POST('version/(:num)/descartar', 'Api::descartar/$1');
+    $routes->POST('version/(:num)/devolver-a-trabajo', 'Api::devolverATrabajo/$1');
+});
+
+// Interfaz web (fase 6). Los ficheros NO se bajan desde aquí: quien toca el
+// disco es el script, que es el único que puede identificar la máquina
+// (spec 4.5) — esta web puede abrirse desde el móvil.
+$routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
+    $routes->GET('/', 'Web::index');
+    $routes->POST('familia', 'Web::crearFamilia');
+    $routes->POST('variante', 'Web::crearVariante');
+    $routes->GET('variante/(:num)', 'Web::variante/$1');
+    $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
+    $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
+    $routes->POST('version/(:num)/validar', 'Web::validar/$1');
+    $routes->POST('version/(:num)/descartar', 'Web::descartar/$1');
+    $routes->POST('version/(:num)/devolver-a-trabajo', 'Web::devolverATrabajo/$1');
+    $routes->POST('version/(:num)/derivar', 'Web::derivarVariante/$1');
+    $routes->POST('descarga/(:num)/forzar-cierre', 'Web::forzarCierre/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

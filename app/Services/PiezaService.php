@@ -119,10 +119,11 @@ class PiezaService
 
     /**
      * "Subir sesión": guarda el .blend de una sesión ya abierta. El cálculo
-     * del hash y el guardado físico del fichero son responsabilidad del
-     * llamador (API, fase 5) — aquí solo se persisten los datos ya conocidos.
+     * del hash, el guardado físico del fichero y el cuadre del asiento de
+     * descarga son responsabilidad de PiezaSyncService, que llama aquí —
+     * este método solo persiste los datos ya verificados.
      */
-    public function subirSesion(int $sesionId, string $rutaBlend, string $hashBlend, int $tamanoBytes, ?string $log = null): array
+    public function subirSesion(int $sesionId, string $rutaBlend, string $hashBlend, int $tamanoBytes, ?string $log = null, ?string $hashPadre = null): array
     {
         $sesion = $this->sesionModel->find($sesionId);
         if (!$sesion) {
@@ -133,8 +134,10 @@ class PiezaService
             'ruta_blend'   => $rutaBlend,
             'hash_blend'   => $hashBlend,
             'tamano_bytes' => $tamanoBytes,
+            'hash_padre'   => $hashPadre,
             'subida_en'    => date('Y-m-d H:i:s'),
         ];
+        // Una segunda subida sin nota no debe borrar la nota de la primera.
         if ($log !== null) {
             $datos['log'] = $log;
         }
@@ -169,6 +172,16 @@ class PiezaService
             throw new RuntimeException("La variante {$varianteId} no tiene ninguna rama abierta que promocionar.");
         }
 
+        // Promocionar con una sesión viva dejaría el bloqueo colgando de una
+        // rama ya cerrada, y la rama nueva nacería inutilizable (invariante 3
+        // se comprueba por variante, no por rama). Se niega y explica.
+        if ($this->sesionModel->hayAbiertaParaVariante($varianteId)) {
+            throw new RuntimeException(
+                'Hay una sesión de trabajo sin cerrar en esta variante. Súbela y ciérrala antes de promocionar: '
+                . 'lo que quede sin subir no entraría en la versión.'
+            );
+        }
+
         $ultimaSubida = $this->sesionModel->ultimaSubida((int) $rama['id']);
         if (!$ultimaSubida) {
             throw new RuntimeException(
@@ -177,23 +190,44 @@ class PiezaService
             );
         }
 
-        $versionId = $this->transaccion('promocionar', function () use ($varianteId, $cambio, $medidas, $rama, $ultimaSubida) {
-            $versionId = $this->insertarOFallar($this->versionModel, [
-                'variante_id'     => $varianteId,
-                'numero'          => $this->versionModel->siguienteNumero($varianteId),
-                'estado'          => 'borrador',
-                'promocionada_en' => date('Y-m-d H:i:s'),
-                'ruta_blend'      => $ultimaSubida['ruta_blend'],
-                'hash_blend'      => $ultimaSubida['hash_blend'],
-                'cambio'          => $cambio,
-                'medidas'         => $medidas,
-            ]);
+        // La versión se lleva su propia copia del fichero, no la ruta de la
+        // sesión: las sesiones se purgan al validar (invariante 5) y esa purga
+        // se llevaría por delante justo el fichero que nunca debe perderse.
+        $numero      = $this->versionModel->siguienteNumero($varianteId);
+        $almacen     = new PiezaAlmacen();
+        $rutaVersion = $almacen->rutaVersion($varianteId, $numero);
 
-            $this->ramaModel->cerrar($rama['id'], $versionId);
-            $this->ramaModel->abrir($varianteId, $versionId);
+        if (!$almacen->existe($ultimaSubida['ruta_blend'])) {
+            throw new RuntimeException(
+                "El .blend de la sesión {$ultimaSubida['numero']} no está en el almacén "
+                . "({$ultimaSubida['ruta_blend']}). No se promociona una versión sin fichero real detrás."
+            );
+        }
+        $almacen->copiar($ultimaSubida['ruta_blend'], $rutaVersion);
 
-            return $versionId;
-        });
+        try {
+            $versionId = $this->transaccion('promocionar', function () use ($varianteId, $numero, $cambio, $medidas, $rama, $ultimaSubida, $rutaVersion) {
+                $versionId = $this->insertarOFallar($this->versionModel, [
+                    'variante_id'     => $varianteId,
+                    'numero'          => $numero,
+                    'estado'          => 'borrador',
+                    'promocionada_en' => date('Y-m-d H:i:s'),
+                    'ruta_blend'      => $rutaVersion,
+                    'hash_blend'      => $ultimaSubida['hash_blend'],
+                    'cambio'          => $cambio,
+                    'medidas'         => $medidas,
+                ]);
+
+                $this->ramaModel->cerrar($rama['id'], $versionId);
+                $this->ramaModel->abrir($varianteId, $versionId);
+
+                return $versionId;
+            });
+        } catch (Throwable $e) {
+            $almacen->descartarEscritura($rutaVersion);
+
+            throw $e;
+        }
 
         return $this->versionModel->find($versionId);
     }
@@ -203,15 +237,54 @@ class PiezaService
      * existente, sin tocarla (las versiones son inmutables). Típicamente
      * para retomar una versión superada/descartada, o iterar sobre la
      * validada actual.
+     *
+     * Siempre hay una rama abierta (promocionar cierra una y abre otra), así
+     * que retomar una versión antigua implica necesariamente abandonar la
+     * línea en curso. Eso es destructivo y ambiguo, así que por defecto se
+     * niega y explica cuánto trabajo dejaría atrás; con $abandonarRama el
+     * usuario ya sabe lo que hace. Las sesiones no se pierden: quedan
+     * colgando de la rama cerrada, con su historial intacto.
      */
-    public function devolverATrabajo(int $versionId): array
+    public function devolverATrabajo(int $versionId, bool $abandonarRama = false): array
     {
         $version = $this->versionModel->find($versionId);
         if (!$version) {
             throw new RuntimeException("Versión {$versionId} no encontrada.");
         }
 
-        return $this->ramaModel->abrir((int) $version['variante_id'], $versionId);
+        $varianteId = (int) $version['variante_id'];
+
+        if ($this->sesionModel->hayAbiertaParaVariante($varianteId)) {
+            throw new RuntimeException(
+                'Hay una sesión de trabajo sin cerrar en esta variante. Ciérrala antes de cambiar de línea de trabajo.'
+            );
+        }
+
+        $ramaAbierta = $this->ramaModel->abiertaDe($varianteId);
+
+        if ($ramaAbierta && !$abandonarRama) {
+            $subidas = count($this->sesionModel
+                ->where('rama_id', $ramaAbierta['id'])
+                ->where('subida_en IS NOT NULL')
+                ->findAll());
+
+            throw new RuntimeException(sprintf(
+                'La rama "%s" sigue abierta con %d sesión(es) subida(s) sin promocionar. Volver a la v%03d '
+                . 'la cerraría sin convertirla en versión: ese trabajo quedaría solo en el historial.',
+                $this->ramaModel->nombre($ramaAbierta),
+                $subidas,
+                (int) $version['numero']
+            ));
+        }
+
+        return $this->transaccion('devolver a trabajo', function () use ($ramaAbierta, $varianteId, $versionId) {
+            if ($ramaAbierta) {
+                // Sin versión que la cierre: la rama se abandona, no se promociona.
+                $this->ramaModel->cerrar((int) $ramaAbierta['id']);
+            }
+
+            return $this->ramaModel->abrir($varianteId, $versionId);
+        });
     }
 
     /**
@@ -231,13 +304,59 @@ class PiezaService
 
     /**
      * "Validar": impresa -> validada. Degrada la anterior validada de la
-     * misma variante a superada (invariante 1, PiezaVersionModel::marcarValidada).
+     * misma variante a superada (invariante 1, PiezaVersionModel::marcarValidada)
+     * y habilita la purga de las sesiones que llevaron hasta ella.
      */
     public function validar(int $versionId, ?string $resultado = null): array
     {
         $this->exigirEstado($versionId, ['impresa'], 'validar');
 
-        return $this->versionModel->marcarValidada($versionId, $resultado);
+        $version = $this->versionModel->marcarValidada($versionId, $resultado);
+
+        // Invariante 5: las sesiones se purgan al VALIDAR, no al promocionar.
+        // Si la impresión sale mal, los .blend intermedios aún hacen falta
+        // para entender qué se probó; una vez la pieza física funciona, ya
+        // no. Va fuera de la transacción de marcarValidada a propósito: mover
+        // ficheros no es reversible con un rollback, y un fallo purgando no
+        // debe deshacer una validación que es correcta.
+        $this->purgarSesionesDe($versionId);
+
+        return $version;
+    }
+
+    /**
+     * Aparta los .blend de las sesiones de la rama que cerró esta versión.
+     * Las filas NO se borran: se marcan `purgada` y conservan número, hashes,
+     * máquina y log. Lo que ocupa sitio es el fichero; lo que da valor al
+     * historial es el registro, y eso se queda.
+     *
+     * @return int cuántas sesiones se purgaron
+     */
+    public function purgarSesionesDe(int $versionId): int
+    {
+        $rama = $this->ramaModel->where('cerrada_por_version_id', $versionId)->first();
+        if (!$rama) {
+            return 0;
+        }
+
+        $almacen  = new PiezaAlmacen();
+        $purgadas = 0;
+
+        foreach ($this->sesionModel->where('rama_id', $rama['id'])->where('purgada', 0)->findAll() as $sesion) {
+            $datos = ['purgada' => 1];
+
+            if (!empty($sesion['ruta_blend'])) {
+                $enPapelera = $almacen->aPapelera($sesion['ruta_blend']);
+                if ($enPapelera !== null) {
+                    $datos['ruta_blend'] = $enPapelera;
+                }
+            }
+
+            $this->sesionModel->update($sesion['id'], $datos);
+            $purgadas++;
+        }
+
+        return $purgadas;
     }
 
     /**

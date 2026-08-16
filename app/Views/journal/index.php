@@ -243,6 +243,24 @@ foreach ($categories as $category) {
     .jt-inline-subtasks { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--bs-border-color); }
 
     .jt-subtask-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+
+    /* Filtros de subtareas hechas (solo visual, no altera el orden real) */
+    .jt-subtask-filters { display: flex; gap: 4px; margin-bottom: 4px; }
+    .jt-subtask-filter-btn {
+        background: none;
+        border: none;
+        color: var(--bs-secondary-color);
+        opacity: .55;
+        font-size: .75rem;
+        line-height: 1;
+        padding: 2px 5px;
+        border-radius: 6px;
+    }
+    .jt-subtask-filter-btn:hover { opacity: 1; background: var(--bs-tertiary-bg); }
+    .jt-subtask-filter-btn.active { opacity: 1; color: #0d6efd; background: rgba(13,110,253,.12); }
+    .jt-subtask-list.hide-done .jt-subtask-item.is-done { display: none; }
+    .jt-subtask-list.push-done .jt-subtask-item.is-done { order: 1; }
+
     .jt-subtask-item {
         display: flex;
         align-items: center;
@@ -528,6 +546,14 @@ foreach ($categories as $category) {
 
                                     <!-- Subtareas (inline, plegable) -->
                                     <div class="collapse jt-inline-subtasks" id="subtasks-<?= $task['id'] ?>">
+                                        <div class="jt-subtask-filters">
+                                            <button type="button" class="jt-subtask-filter-btn js-hide-done" title="Ocultar/mostrar subtareas hechas">
+                                                <i class="bi bi-eye-slash"></i>
+                                            </button>
+                                            <button type="button" class="jt-subtask-filter-btn js-push-done" title="Empujar las hechas al final">
+                                                <i class="bi bi-arrow-down-square"></i>
+                                            </button>
+                                        </div>
                                         <div class="jt-subtask-list" data-task-id="<?= $task['id'] ?>">
                                             <?php foreach ($subs as $s): ?>
                                                 <?php $sDone = !empty($s['is_done']); ?>
@@ -1258,6 +1284,42 @@ foreach ($categories as $category) {
                 toggle.classList.remove('has-subtasks');
             }
         }
+
+        // Filtros visuales de subtareas hechas (ocultar / empujar abajo).
+        // Solo afectan a la presentación: el orden real en el DOM/BD no cambia.
+        const subtaskFilterPrefs = {
+            hide: localStorage.getItem('journalSubtaskHideDone') === '1',
+            push: localStorage.getItem('journalSubtaskPushDone') === '1',
+        };
+
+        function applySubtaskFilters() {
+            document.querySelectorAll('.jt-subtask-list').forEach(list => {
+                list.classList.toggle('hide-done', subtaskFilterPrefs.hide);
+                list.classList.toggle('push-done', subtaskFilterPrefs.push);
+            });
+            document.querySelectorAll('.js-hide-done').forEach(btn => {
+                btn.classList.toggle('active', subtaskFilterPrefs.hide);
+            });
+            document.querySelectorAll('.js-push-done').forEach(btn => {
+                btn.classList.toggle('active', subtaskFilterPrefs.push);
+            });
+        }
+
+        document.querySelectorAll('.js-hide-done').forEach(btn => {
+            btn.addEventListener('click', () => {
+                subtaskFilterPrefs.hide = !subtaskFilterPrefs.hide;
+                localStorage.setItem('journalSubtaskHideDone', subtaskFilterPrefs.hide ? '1' : '0');
+                applySubtaskFilters();
+            });
+        });
+        document.querySelectorAll('.js-push-done').forEach(btn => {
+            btn.addEventListener('click', () => {
+                subtaskFilterPrefs.push = !subtaskFilterPrefs.push;
+                localStorage.setItem('journalSubtaskPushDone', subtaskFilterPrefs.push ? '1' : '0');
+                applySubtaskFilters();
+            });
+        });
+        applySubtaskFilters();
 
         document.querySelectorAll('.jt-inline-subtasks').forEach(panel => {
             const list = panel.querySelector('.jt-subtask-list');

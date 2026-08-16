@@ -112,6 +112,15 @@
         </button>
     </div>
 
+    <div class="jt-subtask-filters">
+        <button type="button" class="jt-subtask-filter-btn js-hide-done" title="Ocultar/mostrar subtareas hechas">
+            <i class="bi bi-eye-slash"></i>
+        </button>
+        <button type="button" class="jt-subtask-filter-btn js-push-done" title="Empujar las hechas al final">
+            <i class="bi bi-arrow-down-square"></i>
+        </button>
+    </div>
+
     <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
         <?php foreach ($subtasks as $s):
             $isDone = !empty($s['is_done']);
@@ -558,6 +567,24 @@
 }
 
 .jt-subtask-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+/* Filtros de subtareas hechas (solo visual, no altera el orden real) */
+.jt-subtask-filters { display: flex; gap: 4px; margin-bottom: 6px; }
+.jt-subtask-filter-btn {
+    background: none;
+    border: none;
+    color: var(--bs-secondary-color);
+    opacity: .55;
+    font-size: .78rem;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+.jt-subtask-filter-btn:hover { opacity: 1; background: var(--bs-tertiary-bg); }
+.jt-subtask-filter-btn.active { opacity: 1; color: #0d6efd; background: rgba(13,110,253,.12); }
+.jt-subtask-list.hide-done .jt-subtask-item.is-done { display: none; }
+.jt-subtask-list.push-done .jt-subtask-item.is-done { order: 1; }
+
 .jt-subtask-item {
     display: flex;
     flex-direction: column;
@@ -837,6 +864,34 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtaskEmptyMsg = document.getElementById('subtaskEmptyMsg');
     const subtaskInput = document.getElementById('subtaskInput');
     const subtaskAddBtn = document.getElementById('subtaskAddBtn');
+
+    // Filtros visuales de subtareas hechas (ocultar / empujar abajo).
+    // Solo afectan a la presentación: el orden real en el DOM/BD no cambia.
+    const subtaskHideBtn = document.querySelector('.js-hide-done');
+    const subtaskPushBtn = document.querySelector('.js-push-done');
+    const subtaskFilterPrefs = {
+        hide: localStorage.getItem('journalSubtaskHideDone') === '1',
+        push: localStorage.getItem('journalSubtaskPushDone') === '1',
+    };
+
+    function applySubtaskFilters() {
+        subtaskList.classList.toggle('hide-done', subtaskFilterPrefs.hide);
+        subtaskList.classList.toggle('push-done', subtaskFilterPrefs.push);
+        subtaskHideBtn.classList.toggle('active', subtaskFilterPrefs.hide);
+        subtaskPushBtn.classList.toggle('active', subtaskFilterPrefs.push);
+    }
+
+    subtaskHideBtn.addEventListener('click', () => {
+        subtaskFilterPrefs.hide = !subtaskFilterPrefs.hide;
+        localStorage.setItem('journalSubtaskHideDone', subtaskFilterPrefs.hide ? '1' : '0');
+        applySubtaskFilters();
+    });
+    subtaskPushBtn.addEventListener('click', () => {
+        subtaskFilterPrefs.push = !subtaskFilterPrefs.push;
+        localStorage.setItem('journalSubtaskPushDone', subtaskFilterPrefs.push ? '1' : '0');
+        applySubtaskFilters();
+    });
+    applySubtaskFilters();
 
     const subtaskEditModal = new bootstrap.Modal(document.getElementById('subtaskEditModal'));
     const subtaskEditInput = document.getElementById('subtaskEditInput');
