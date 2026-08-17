@@ -310,15 +310,21 @@ class Web extends BaseController
 
     // ---- Alta de familias y variantes ----------------------------------
 
+    /**
+     * Alta de una pieza. Se queda en el índice en vez de saltar a la ficha
+     * de su variante: lo normal al empezar es dar de alta varias piezas
+     * seguidas, y volver atrás cada vez sería peor que un clic de más.
+     */
     public function crearFamilia()
     {
         return $this->ejecutar(
             fn() => $this->servicio->crearFamilia(
                 trim((string) $this->request->getPost('nombre')),
-                $this->request->getPost('notas') ?: null
+                $this->request->getPost('notas') ?: null,
+                $this->request->getPost('sku') ?: null
             ),
-            fn($familia) => site_url('piezas'),
-            fn($familia) => 'Familia "' . $familia['nombre'] . '" creada.'
+            fn($creado) => site_url('piezas'),
+            fn($creado) => 'Pieza "' . $creado['familia']['nombre'] . '" creada, ya lista para trabajar.'
         );
     }
 
@@ -441,7 +447,7 @@ class Web extends BaseController
     {
         $familia = $this->familiaModel->find($familiaId);
         if (!$familia) {
-            return redirect()->to(site_url('piezas'))->with('error', 'Esa familia no existe.');
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa pieza no existe.');
         }
 
         return $this->ejecutar(

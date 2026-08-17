@@ -17,7 +17,7 @@ Crea `~/.trackbitos/config.json` (en Windows, `C:\Users\<tú>\.trackbitos\config
 }
 ```
 
-El `uuid` de máquina se genera solo la primera vez que ejecutas cualquier comando. El nombre de la máquina se propone a partir del hostname y es editable en la web.
+El `uuid` de máquina se genera solo la primera vez que ejecutas cualquier comando. El nombre de la máquina sale del hostname del equipo: **no hay pantalla para cambiarlo**, así que si quieres que se lea bien en los avisos, ponle nombre al equipo antes de la primera ejecución.
 
 ⚠️ El token vive en el `.env` del servidor (`piezas.apiToken`, no versionado). Si trabajas contra producción y contra un entorno local, cada uno tiene el suyo — no asumas que es el mismo.
 
@@ -38,13 +38,13 @@ Regla mnemónica: si es un fichero que **editas** (el `.blend`), es CLI. Si es u
 mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
 ```
 
-1. **Crear la variante** en la web (`/piezas`, botón "Familia" si hace falta, luego "Variante"). Nace con su rama de trabajo ya abierta.
+1. **Crear la pieza** en la web (`/piezas`, botón "Pieza"). Nace con su variante `base` y su rama de trabajo ya abiertas: no hay que decidir nada más para empezar. Solo se añaden **variantes** si esa pieza acaba teniendo varias líneas de diseño (una silla alta y otra baja); lo normal es no tocarlas.
 
 2. **Abrir sesión** en el CLI, en la carpeta de trabajo de esa pieza:
    ```
    trackbitos abrir torso-recto
    ```
-   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1. El nombre admite la familia, la variante o ambas (ver el truco de la sección 5).
+   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1. El nombre admite la pieza, la variante o ambas (ver el truco de la sección 5).
 
 3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta.
 
@@ -86,7 +86,7 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 | Comando | Qué hace |
 |---|---|
 | `trackbitos estado` | El más usado: diagnóstico en lenguaje natural de la carpeta actual — qué hacer, sin comparar hashes tú. |
-| `trackbitos variantes` | El catálogo completo desde la terminal, agrupado por familia: qué piezas hay y por dónde va cada una. |
+| `trackbitos variantes` | El catálogo completo desde la terminal, agrupado por pieza: qué hay y por dónde va cada cosa. |
 | `trackbitos abrir <pieza>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
 | `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
 | `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
@@ -99,22 +99,22 @@ Todos aceptan `--dir` (por defecto, la carpeta actual). `bajar`/`ver` aceptan `-
 
 Truco: si usas **una carpeta por pieza**, `trackbitos estado` ya sabe en qué variante/rama/sesión estás con solo mirar el `.sesion.json` que él mismo dejó — no hace falta escribir el nombre salvo al empezar algo nuevo.
 
-**Cómo nombrar la pieza** en los comandos que lo piden (`abrir`, `bajar`, `ver`): vale el nombre de la **familia**, el de la **variante**, trozos de cualquiera de los dos, los dos juntos, o el id. Para una familia "Pincel de pintura" con variante "estandar", todo esto funciona igual:
+**Cómo nombrar la pieza** en los comandos que lo piden (`abrir`, `bajar`, `ver`): vale el nombre de la **pieza**, el de la **variante**, trozos de cualquiera de los dos, los dos juntos, o el id. Para una pieza "Pincel de pintura" con su variante "base", todo esto funciona igual:
 
 ```
 trackbitos abrir pincel
-trackbitos abrir estandar
-trackbitos abrir "pincel estandar"
+trackbitos abrir base
+trackbitos abrir "pincel base"
 trackbitos abrir 3
 ```
 
-Se busca sobre familia + variante porque es como se piensa la pieza: la familia lleva el nombre real y la variante suele ser una etiqueta genérica ("estandar") que por sí sola no dice qué es. Si lo que escribes encaja con varias, te las lista **con su familia delante** (`Pincel de pintura / estandar`, `Casco romano / estandar`) para que puedas concretar; un nombre de variante exacto siempre gana sobre las coincidencias parciales.
+Se busca sobre pieza + variante porque es como se piensa: la pieza lleva el nombre real y la variante suele ser una etiqueta genérica —`base` se repite en **todas** las piezas, porque es la que se crea sola. Por eso, si lo que escribes encaja con varias, te las lista **con su pieza delante** (`Pincel de pintura / base`, `Casco romano / base`) para que puedas concretar; un nombre de variante exacto siempre gana sobre las coincidencias parciales.
 
 ---
 
 ## 6. La web, por secciones
 
-- **`/piezas`** — catálogo: familias con sus variantes, versión validada (o "sin versión buena"), avisos de sesión abierta o descargas pendientes. Aquí también se crean familias y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la familia).
+- **`/piezas`** — catálogo: cada pieza con sus variantes, versión validada (o "sin versión buena"), avisos de sesión abierta o descargas pendientes. Aquí también se dan de alta piezas y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la pieza).
 - **Ficha de variante** (`/piezas/variante/{id}`) — historial completo de versiones con sus **renders** (imágenes por versión, para ver la evolución), botones de los verbos (marcar impresa, validar, descartar, devolver a trabajo, derivar variante), el **STL** de cada versión, y una caja "Desde tu máquina" con los comandos ya escritos con el nombre exacto, listos para copiar.
 
 ---
@@ -124,7 +124,7 @@ Se busca sobre familia + variante porque es como se piensa la pieza: la familia 
 | Fichero | Quién lo sube/baja | Por qué |
 |---|---|---|
 | `.blend` de trabajo | Solo el CLI | Necesita identidad de máquina para cuadrar qué copia vive en qué disco (invariante 8). |
-| Referencias (familia) | Web | Fotos que se miran, no se editan iterativamente. |
+| Referencias (de la pieza) | Web | Fotos que se miran, no se editan iterativamente. |
 | Renders (versión) | Web | Igual: resultado visual de una iteración, no algo que se sincroniza entre discos. |
 | STL (versión) | Web | Se exporta una vez y se adjunta; inmutable después. Se descarga como adjunto (para el laminador), no se muestra inline. |
 
@@ -132,9 +132,9 @@ Se busca sobre familia + variante porque es como se piensa la pieza: la familia 
 
 ## 8. SKU, galería y placa de impresión
 
-**SKU** — campo de texto libre y opcional en cada variante (botón con lápiz junto al nombre, en la ficha, o al crearla). Es solo una referencia manual tuya: cuando alguien te pide una pieza por el código que usa en tu tienda/Etsy, lo apuntas aquí para poder buscarla luego. Trackbitos no sincroniza con esa otra web, solo guarda el mismo texto. En el índice (`/piezas`) hay un buscador que filtra por nombre o SKU al escribir.
+**SKU** — campo de texto libre y opcional en cada variante (al dar de alta la pieza, al crear una variante, o con el lápiz junto al nombre en la ficha). Es solo una referencia manual tuya: cuando alguien te pide una pieza por el código que usa en tu tienda/Etsy, lo apuntas aquí para poder buscarla luego. Trackbitos no sincroniza con esa otra web, solo guarda el mismo texto. En el índice (`/piezas`) hay un buscador que filtra por nombre o SKU al escribir.
 
-**Galería** (`/piezas/galeria`) — solo las piezas con **versión validada**: es la vista de "qué tengo listo para imprimir", no el catálogo de trabajo en curso. La miniatura sale del render más reciente de esa versión (o de la referencia de la familia si no hay render).
+**Galería** (`/piezas/galeria`) — solo las piezas con **versión validada**: es la vista de "qué tengo listo para imprimir", no el catálogo de trabajo en curso. La miniatura sale del render más reciente de esa versión (o de la referencia de la pieza si no hay render).
 
 **Placa de impresión** — un carrito para juntar varias piezas y descargar todos sus STL de golpe:
 1. Desde la galería (o desde la ficha de una variante validada, junto al botón "Descargar STL"), pulsa **"Añadir a la placa"** en cada pieza que quieras imprimir junta.

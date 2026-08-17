@@ -22,6 +22,14 @@ use Throwable;
  */
 class PiezaService
 {
+    /**
+     * Nombre de la variante que se crea sola con cada pieza. "base" y no
+     * "estándar" ni "original": no promete nada sobre las que puedan venir
+     * después, que es justo lo que hace falta cuando todavía no sabes si
+     * habrá más de una.
+     */
+    public const VARIANTE_BASE = 'base';
+
     private PiezaFamiliaModel $familiaModel;
     private PiezaVarianteModel $varianteModel;
     private PiezaVersionModel $versionModel;
@@ -37,11 +45,39 @@ class PiezaService
         $this->sesionModel   = new PiezaSesionModel();
     }
 
-    public function crearFamilia(string $nombre, ?string $notas = null): array
+    /**
+     * Crea la pieza (en el esquema, "familia") y de una vez su variante
+     * inicial, que se llama "base".
+     *
+     * Las variantes son la excepción, no la norma: la mayoría de piezas son
+     * una sola cosa ("un pincel y ya"), y obligar a inventarse un nombre de
+     * variante para llegar a modelar era peaje puro. Quien sí necesite
+     * varias líneas de diseño las añade después, o las deriva de una versión
+     * concreta, que es de donde salen de verdad.
+     *
+     * La jerarquía no cambia — sigue haciendo falta para numerar versiones
+     * por variante y para colgar las referencias de la pieza, comunes a
+     * todas ellas (spec 1.1). Lo que se quita es el trabajo manual.
+     *
+     * @return array{familia: array, variante: array}
+     */
+    public function crearFamilia(string $nombre, ?string $notas = null, ?string $sku = null): array
     {
-        $id = $this->insertarOFallar($this->familiaModel, ['nombre' => $nombre, 'notas' => $notas]);
+        $sku = $this->normalizarSkuOFallar($sku);
 
-        return $this->familiaModel->find($id);
+        $familiaId = $this->transaccion('crear la pieza', function () use ($nombre, $notas) {
+            return $this->insertarOFallar($this->familiaModel, ['nombre' => $nombre, 'notas' => $notas]);
+        });
+
+        // Fuera de la transacción anterior a propósito: crearVariante abre su
+        // propia transacción (rama incluida) y anidarlas en CodeIgniter no
+        // daría un punto de retorno intermedio real.
+        $variante = $this->crearVariante($familiaId, self::VARIANTE_BASE, null, $sku);
+
+        return [
+            'familia'  => $this->familiaModel->find($familiaId),
+            'variante' => $variante,
+        ];
     }
 
     /**

@@ -14,7 +14,7 @@
         <?php endif; ?>
     </a>
     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia">
-        <i class="bi bi-plus-lg"></i> Familia
+        <i class="bi bi-plus-lg"></i> Pieza
     </button>
     <?php if (!empty($familias)): ?>
         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalVariante">
@@ -37,8 +37,10 @@
 
 <?php if (empty($familias)): ?>
     <p class="text-muted">
-        Todavía no hay ninguna familia. Una familia es la pieza conceptual (cuerpo, brazo, casco);
-        dentro van las variantes, que son cada línea de diseño con su propia numeración de versiones.
+        Todavía no hay ninguna pieza. Crea una (pincel, casco, silla...) y nacerá lista para
+        trabajar: no hace falta decidir nada más. Si algún día esa pieza tiene varias líneas de
+        diseño (una silla alta y otra baja), se añaden como <strong>variantes</strong>, cada una
+        con su propia numeración de versiones.
     </p>
 <?php else: ?>
     <?php foreach ($familias as $familia): ?>
@@ -47,14 +49,17 @@
                 <h6 class="mb-1 d-flex align-items-center gap-2">
                     <i class="bi bi-collection text-secondary"></i>
                     <?= esc($familia['nombre']) ?>
-                    <span class="text-muted small fw-normal"><?= count($familia['variantes']) ?> variante(s)</span>
+                    <?php if (count($familia['variantes']) > 1): ?>
+                        <?php // Con una sola variante el contador es ruido: la mayoría de piezas son una sola cosa. ?>
+                        <span class="text-muted small fw-normal"><?= count($familia['variantes']) ?> variantes</span>
+                    <?php endif; ?>
                 </h6>
                 <?php if (!empty($familia['notas'])): ?>
                     <p class="text-muted small mb-2"><?= esc($familia['notas']) ?></p>
                 <?php endif; ?>
 
                 <?php if (empty($familia['variantes'])): ?>
-                    <p class="text-muted small mb-0">Sin variantes todavía.</p>
+                    <p class="text-muted small mb-0">Sin variantes todavía: añádele una con el botón «Variante».</p>
                 <?php else: ?>
                     <div class="list-group list-group-flush">
                         <?php foreach ($familia['variantes'] as $v): ?>
@@ -92,7 +97,7 @@
                     </div>
                 <?php endif; ?>
 
-                <!-- Referencias del original: comunes a toda la familia (spec 1.1) -->
+                <!-- Referencias del original: comunes a toda la pieza, no por variante (spec 1.1) -->
                 <hr class="my-2">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <span class="small text-muted"><i class="bi bi-camera"></i> Referencias</span>
@@ -156,20 +161,26 @@
     <?php endforeach; ?>
 <?php endif; ?>
 
-<!-- Alta de familia -->
+<!-- Alta de pieza (en el esquema, "familia": ver la nota de vocabulario en SPEC.md) -->
 <div class="modal fade" id="modalFamilia" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content" method="post" action="<?= site_url('piezas/familia') ?>">
             <?= csrf_field() ?>
             <div class="modal-header">
-                <h6 class="modal-title">Familia nueva</h6>
+                <h6 class="modal-title">Pieza nueva</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <label class="form-label small">Nombre</label>
-                <input type="text" name="nombre" class="form-control form-control-sm mb-2" placeholder="cuerpo, brazo, casco..." maxlength="150" required>
+                <input type="text" name="nombre" class="form-control form-control-sm mb-2" placeholder="pincel, casco, silla..." maxlength="150" required>
+                <label class="form-label small">SKU (opcional)</label>
+                <input type="text" name="sku" class="form-control form-control-sm mb-2" placeholder="el código de tu tienda, si ya lo tienes" maxlength="50">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
+                <p class="text-muted small mt-2 mb-0">
+                    Nace lista para trabajar, con numeración propia desde v001. Solo hace falta
+                    añadir variantes si esta pieza acaba teniendo varias líneas de diseño.
+                </p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -189,7 +200,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <label class="form-label small">Familia</label>
+                <label class="form-label small">Pieza</label>
                 <select name="familia_id" class="form-select form-select-sm mb-2" required>
                     <?php foreach ($familias as $familia): ?>
                         <option value="<?= (int) $familia['id'] ?>"><?= esc($familia['nombre']) ?></option>

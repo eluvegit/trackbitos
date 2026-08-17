@@ -299,8 +299,9 @@ def asegurar_maquina(config: dict) -> dict:
 def nombre_completo(variante: dict) -> str:
     """
     "Pincel de pintura / estandar". El nombre de la variante solo es único
-    dentro de su familia ("estandar" se repetirá en cuanto haya dos piezas),
-    así que en cualquier mensaje al usuario va con su familia delante: una
+    dentro de su pieza ("base" se repite en TODAS las piezas, porque es la
+    que se crea sola), así que en cualquier mensaje al usuario va con el
+    nombre de la pieza delante: una
     lista de tres "estandar" no sirve para elegir ninguno.
     """
     familia = variante.get("familia_nombre")
@@ -309,11 +310,11 @@ def nombre_completo(variante: dict) -> str:
 
 def resolver_variante(config: dict, texto: str) -> dict:
     """
-    Acepta el id, el nombre de la variante, el de su familia, o trozos de
+    Acepta el id, el nombre de la pieza, el de la variante, o trozos de
     ambos en cualquier orden ("pincel", "estandar", "pincel estandar").
 
-    Se busca sobre familia + variante porque es como se piensa la pieza: la
-    familia es el nombre real ("Pincel de pintura") y la variante suele ser
+    Se busca sobre pieza + variante porque es como se piensa: la pieza lleva
+    el nombre real ("Pincel de pintura") y la variante suele ser
     una etiqueta genérica ("estandar") que por sí sola no dice qué es.
     """
     variantes = api_get(config, "/variantes").get("variantes", [])
@@ -328,7 +329,7 @@ def resolver_variante(config: dict, texto: str) -> dict:
     else:
         # El nombre exacto de variante gana siempre: si tienes una variante
         # llamada "estandar" y escribes "estandar", es esa, aunque el texto
-        # también aparezca dentro del nombre de otras familias.
+        # también aparezca dentro del nombre de otras piezas.
         exactas = [v for v in variantes if v["nombre"].lower() == texto.lower()]
         if not exactas:
             palabras = texto.lower().split()
@@ -343,7 +344,7 @@ def resolver_variante(config: dict, texto: str) -> dict:
     ambiguas = ", ".join(nombre_completo(v) for v in exactas)
     raise RuntimeError(
         f"'{texto}' encaja con varias: {ambiguas}.\n"
-        "    Concreta añadiendo la familia, p.ej.: trackbitos abrir \"pincel estandar\""
+        "    Concreta añadiendo la pieza, p.ej.: trackbitos abrir \"pincel base\""
     )
 
 
@@ -856,7 +857,7 @@ def cmd_variantes(args) -> int:
 
     por_familia: dict = {}
     for v in variantes:
-        por_familia.setdefault(v.get("familia_nombre") or "(sin familia)", []).append(v)
+        por_familia.setdefault(v.get("familia_nombre") or "(sin pieza)", []).append(v)
 
     print()
     for familia in sorted(por_familia):

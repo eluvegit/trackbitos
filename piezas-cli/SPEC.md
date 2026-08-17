@@ -93,6 +93,31 @@ que se pide la pieza fuera de Trackbitos y lo que la hace reconocible en la carp
 o dentro del laminador. Aplica también al STL suelto y a los ficheros dentro del `.zip` de la
 placa.
 
+**Fase 12 (2026-08-17): "Pieza" en vez de "Familia", y variante `base` automática.**
+
+Dos cambios que vienen del primer uso real, con ~15 piezas por meter y solo dos con variantes
+de verdad (una silla y unas piernas).
+
+**Nota de vocabulario — desajuste deliberado.** Lo que el esquema llama `familia`
+(`piezas_familias`, `familia_id`, `PiezaFamiliaModel`) **la interfaz lo llama "Pieza"**.
+"Familia" es vocabulario de catálogo industrial y no es lo que uno piensa al abrir Blender; y
+que el módulo Piezas contenga piezas no es redundancia, es coherencia — igual que Comidas
+contiene comidas. No se renombró el esquema por dos razones: `piezas_piezas` sería peor que lo
+que hay, y el módulo ya está en producción con datos. **Al leer el código, `familia` = "pieza"
+de cara al usuario.** El vocabulario visible se cambió en las vistas, los mensajes del
+controlador y el CLI; el esquema, los modelos y las rutas (`piezas/familia/...`) se quedan.
+
+**Variante `base` automática** (`PiezaService::VARIANTE_BASE`). `crearFamilia()` crea de una vez
+la pieza y su primera variante, llamada `base`, y devuelve `['familia' => …, 'variante' => …]`.
+Antes había que rellenar dos formularios e inventarse un nombre de variante para poder empezar a
+modelar; las variantes son la excepción (la mayoría de piezas son una sola cosa), así que ese
+peaje lo pagaba siempre quien no las necesitaba. La jerarquía no cambia — sigue haciendo falta
+para numerar versiones por variante y para colgar las referencias de la pieza (1.1) — lo que se
+quita es el trabajo manual. El alta acepta ahora el SKU, que se aplica a esa variante base.
+El nombre es `base` y no `estándar`/`original` porque no promete nada sobre las que vengan.
+
+En la ficha, el contador de variantes solo aparece a partir de dos: con una sola es ruido.
+
 ---
 
 ## 0. Contexto
@@ -118,7 +143,7 @@ familia  →  variante  →  version
                       →  rama  →  sesion
 ```
 
-- **familia**: la pieza conceptual (cuerpo, brazo, casco).
+- **familia**: la pieza conceptual (cuerpo, brazo, casco). ⚠️ **En la interfaz se llama "Pieza"** — ver la nota de vocabulario en la fase 12.
 - **variante**: una línea de diseño dentro de la familia (torso-recto, pose-futbolista). Cada variante tiene su propia numeración de versiones desde v001.
 - **version**: un estado congelado y consolidado, creado al promocionar. **Inmutable.**
 - **rama**: línea de trabajo abierta partiendo de una versión. Nunca se edita una versión existente; se apila encima.
@@ -586,3 +611,45 @@ Cada fase debe quedar funcionando y verificable por sí sola antes de pasar a la
 7. **Papelera y purga** de sesiones al validar. ✅
 
 La fase 3 es la que concentraba el riesgo del diseño — quedó probada a fondo (incluido un bug real de codificación UTF-8 en Windows) antes de construir nada encima.
+
+---
+
+## 11. Pendiente
+
+### 11.1 Categorías y vista de listado en el índice (lo siguiente)
+
+El índice (`/piezas`, `app/Views/piezas/index.php`) es hoy **una tarjeta grande por pieza, una
+detrás de otra**. Con 3 piezas se lee bien; con 15 —que es lo que hay pendiente de meter— es un
+chorizo sin orden en el que no se encuentra nada.
+
+Lo que hace falta:
+
+- **Categorías, pensadas como las carpetas que ya existen en disco.** No mezclar piezas del
+  cuerpo con objetos, con accesorios, ni con dioramas cuando los haya. La idea es reproducir en
+  la web la organización que ya se usa fuera de ella, no inventar una taxonomía nueva.
+- **Vista de listado**, más densa que las tarjetas actuales: se trata de barrer 15+ piezas de un
+  vistazo, no de lucir cada una.
+
+Decisiones que quedan por tomar (no están tomadas):
+
+- La categoría sería un nivel **por encima de la pieza** (`familia`), no un sustituto de la
+  variante. Puede ser una tabla nueva, o un simple campo de texto en `piezas_familias` — lo
+  segundo es mucho más barato y probablemente suficiente para media docena de categorías.
+- Si una pieza puede estar en varias categorías (probablemente no hace falta).
+- Si el listado sustituye a las tarjetas o convive con ellas.
+
+**Contexto de dimensionado:** ~15 piezas ya modeladas fuera del sistema, de las cuales **solo dos
+tienen variantes de verdad** (una silla y unas piernas), más un caso de pistola pequeña/grande
+que nacería de derivar una versión. Es decir: el índice debe optimizarse para *una pieza, una
+variante*, y tratar las variantes como la excepción que son.
+
+### 11.2 Cabos sueltos menores
+
+- **Despliegue**: cron diario de `php spark piezas:purgar` e incluir `writable/piezas/` en el
+  backup a Backblaze B2 (sección 8). Sigue sin hacerse.
+- **La primera pieza real** (`Pincel de pintura`) tiene su variante llamada `estandar`, anterior
+  a la variante `base` automática de la fase 12. Funciona igual; renombrarla es solo cosmético.
+- **`piezas-cli/__pycache__/`** está versionado en git y aparece como modificado en cada
+  ejecución del cliente. Debería ir al `.gitignore`.
+- No hay pantalla para **renombrar una máquina**: el nombre sale del hostname y solo se puede
+  cambiar en la base de datos. La sección 4.5 lo daba por editable en la web; no se construyó.
