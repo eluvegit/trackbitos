@@ -48,17 +48,19 @@ class PiezaService
      * Crea la variante y le abre de una vez su rama inicial (desde_version_id
      * NULL): sin rama abierta no habría dónde abrir la primera sesión.
      */
-    public function crearVariante(int $familiaId, string $nombre, ?string $notas = null): array
+    public function crearVariante(int $familiaId, string $nombre, ?string $notas = null, ?string $sku = null): array
     {
         if (!$this->familiaModel->find($familiaId)) {
             throw new RuntimeException("Familia {$familiaId} no encontrada.");
         }
+        $sku = $this->normalizarSkuOFallar($sku);
 
-        $varianteId = $this->transaccion('crear la variante', function () use ($familiaId, $nombre, $notas) {
+        $varianteId = $this->transaccion('crear la variante', function () use ($familiaId, $nombre, $notas, $sku) {
             $varianteId = $this->insertarOFallar($this->varianteModel, [
                 'familia_id' => $familiaId,
                 'nombre'     => $nombre,
                 'notas'      => $notas,
+                'sku'        => $sku,
             ]);
 
             $this->ramaModel->abrir($varianteId);
@@ -67,6 +69,43 @@ class PiezaService
         });
 
         return $this->varianteModel->find($varianteId);
+    }
+
+    /**
+     * El SKU es lo único de la variante que se puede editar libremente
+     * después de crearla (nombre y familia no tienen verbo de edición
+     * todavía: no hacía falta hasta ahora). Es una referencia manual —
+     * Trackbitos no sincroniza con la tienda, solo guarda el mismo código.
+     */
+    public function actualizarSku(int $varianteId, ?string $sku): array
+    {
+        if (!$this->varianteModel->find($varianteId)) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $sku = $this->normalizarSkuOFallar($sku, $varianteId);
+        $this->varianteModel->update($varianteId, ['sku' => $sku]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    private function normalizarSkuOFallar(?string $sku, ?int $excluirVarianteId = null): ?string
+    {
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return null;
+        }
+
+        $query = $this->varianteModel->where('sku', $sku);
+        if ($excluirVarianteId !== null) {
+            $query->where('id !=', $excluirVarianteId);
+        }
+        $existente = $query->first();
+        if ($existente) {
+            throw new RuntimeException("El SKU '{$sku}' ya lo tiene \"{$existente['nombre']}\".");
+        }
+
+        return $sku;
     }
 
     /**
@@ -285,6 +324,35 @@ class PiezaService
 
             return $this->ramaModel->abrir($varianteId, $versionId);
         });
+    }
+
+    /**
+     * Adjunta el STL de una versión para poder imprimirla. Aparte de
+     * promocionar: el usuario lo exporta desde Blender cuando le hace
+     * falta, no siempre en el mismo momento en que sube el .blend. Una vez
+     * puesto es inmutable (PiezaVersionModel::CAMPOS_INMUTABLES) — si hace
+     * falta otro STL, es porque el modelo cambió, y eso es una versión
+     * nueva, no un reemplazo silencioso del que ya se imprimió con este.
+     */
+    public function adjuntarStl(int $versionId, string $rutaRelativa, string $hash): array
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version) {
+            throw new RuntimeException("Versión {$versionId} no encontrada.");
+        }
+        if (!empty($version['ruta_stl'])) {
+            throw new RuntimeException(
+                "La versión {$versionId} ya tiene un STL adjunto. Es inmutable, como el .blend: "
+                . 'si el modelo cambió, promociona una versión nueva.'
+            );
+        }
+
+        $this->versionModel->update($versionId, [
+            'ruta_stl' => $rutaRelativa,
+            'hash_stl' => $hash,
+        ]);
+
+        return $this->versionModel->find($versionId);
     }
 
     /**

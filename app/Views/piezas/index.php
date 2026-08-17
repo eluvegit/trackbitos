@@ -7,7 +7,13 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Piezas</strong>
 
-    <button type="button" class="btn btn-sm btn-outline-success ms-auto" data-bs-toggle="modal" data-bs-target="#modalFamilia">
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
+        <i class="bi bi-grid-3x3-gap"></i> Galería
+        <?php if (!empty($carritoCount)): ?>
+            <span class="badge text-bg-primary"><?= (int) $carritoCount ?></span>
+        <?php endif; ?>
+    </a>
+    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia">
         <i class="bi bi-plus-lg"></i> Familia
     </button>
     <?php if (!empty($familias)): ?>
@@ -22,6 +28,11 @@
 <?php endif; ?>
 <?php if (session('error')): ?>
     <div class="alert alert-warning py-2"><?= esc(session('error')) ?></div>
+<?php endif; ?>
+
+<?php if (!empty($familias)): ?>
+    <input type="search" id="buscadorPiezas" class="form-control form-control-sm mb-3"
+        placeholder="Buscar por nombre o SKU..." autocomplete="off">
 <?php endif; ?>
 
 <?php if (empty($familias)): ?>
@@ -48,9 +59,13 @@
                     <div class="list-group list-group-flush">
                         <?php foreach ($familia['variantes'] as $v): ?>
                             <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
-                                class="list-group-item list-group-item-action px-0 bg-transparent">
+                                class="list-group-item list-group-item-action px-0 bg-transparent"
+                                data-buscar="<?= esc(strtolower($v['nombre'] . ' ' . ($v['sku'] ?? '')), 'attr') ?>">
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                     <strong><?= esc($v['nombre']) ?></strong>
+                                    <?php if (!empty($v['sku'])): ?>
+                                        <span class="badge text-bg-light text-muted border font-monospace"><?= esc($v['sku']) ?></span>
+                                    <?php endif; ?>
 
                                     <?php if ($v['validada']): ?>
                                         <span class="badge text-bg-success">
@@ -76,6 +91,66 @@
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+
+                <!-- Referencias del original: comunes a toda la familia (spec 1.1) -->
+                <hr class="my-2">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="small text-muted"><i class="bi bi-camera"></i> Referencias</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
+                        data-bs-toggle="modal" data-bs-target="#modalReferencia<?= (int) $familia['id'] ?>">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+                <?php if (empty($familia['referencias'])): ?>
+                    <p class="text-muted small mb-0">
+                        Sin fotos de referencia todavía (medidas de calibre, ángulos del original).
+                    </p>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php foreach ($familia['referencias'] as $r): ?>
+                            <div class="position-relative" style="width: 72px;">
+                                <a href="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                    title="<?= esc($r['notas'] ?? '') ?>">
+                                    <img src="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>"
+                                        class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
+                                        alt="Referencia" loading="lazy">
+                                </a>
+                                <form method="post" action="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/borrar') ?>"
+                                    onsubmit="return confirm('¿Apartar esta referencia a la papelera?');" class="position-absolute top-0 end-0">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-dark py-0 px-1 opacity-75" style="font-size: .65rem;" title="Borrar">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Alta de referencia -->
+        <div class="modal fade" id="modalReferencia<?= (int) $familia['id'] ?>" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" enctype="multipart/form-data"
+                    action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/referencia') ?>">
+                    <?= csrf_field() ?>
+                    <div class="modal-header">
+                        <h6 class="modal-title">Referencia para <?= esc($familia['nombre']) ?></h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label small">Foto</label>
+                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
+                        <label class="form-label small">Notas (medidas de calibre, qué muestra)</label>
+                        <textarea name="notas" class="form-control form-control-sm" rows="2"
+                            placeholder="Alto total 78mm con calibre, vista frontal"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button class="btn btn-sm btn-primary">Subir</button>
+                    </div>
+                </form>
             </div>
         </div>
     <?php endforeach; ?>
@@ -122,6 +197,8 @@
                 </select>
                 <label class="form-label small">Nombre</label>
                 <input type="text" name="nombre" class="form-control form-control-sm mb-2" placeholder="torso-recto, pose-futbolista..." maxlength="150" required>
+                <label class="form-label small">SKU (opcional)</label>
+                <input type="text" name="sku" class="form-control form-control-sm mb-2" placeholder="el código de tu tienda, si ya lo tienes" maxlength="50">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
                 <p class="text-muted small mt-2 mb-0">
@@ -135,5 +212,18 @@
         </form>
     </div>
 </div>
+
+<script>
+(function () {
+    var buscador = document.getElementById('buscadorPiezas');
+    if (!buscador) return;
+    buscador.addEventListener('input', function () {
+        var q = buscador.value.trim().toLowerCase();
+        document.querySelectorAll('[data-buscar]').forEach(function (fila) {
+            fila.style.display = fila.getAttribute('data-buscar').indexOf(q) === -1 ? 'none' : '';
+        });
+    });
+})();
+</script>
 
 <?= $this->endSection() ?>

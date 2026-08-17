@@ -60,7 +60,42 @@ $porQueNo = function (array $v) use ($acciones): array {
     <span class="text-muted fw-normal"><?= esc($familia['nombre']) ?></span>
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= esc($variante['nombre']) ?></strong>
+    <?php if (!empty($variante['sku'])): ?>
+        <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
+    <?php endif; ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar SKU"
+        data-bs-toggle="modal" data-bs-target="#modalSku">
+        <i class="bi bi-pencil"></i>
+    </button>
+
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
+        <i class="bi bi-grid-3x3-gap"></i> Galería
+        <?php if (!empty($carrito)): ?>
+            <span class="badge text-bg-primary"><?= count($carrito) ?></span>
+        <?php endif; ?>
+    </a>
 </h5>
+
+<div class="modal fade" id="modalSku" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/sku') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title">SKU de <?= esc($variante['nombre']) ?></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">Referencia manual, para buscar la pieza cuando alguien te la pida por su código.</p>
+                <input type="text" name="sku" class="form-control form-control-sm"
+                    value="<?= esc($variante['sku'] ?? '', 'attr') ?>" placeholder="p. ej. FLOR-001" maxlength="50">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
@@ -220,6 +255,63 @@ $porQueNo = function (array $v) use ($acciones): array {
                             </div>
                         <?php endif; ?>
 
+                        <!-- Renders de esta versión: el resultado visual de esta iteración concreta -->
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                            <?php foreach ($v['renders'] as $r): ?>
+                                <div class="position-relative" style="width: 56px;">
+                                    <a href="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                        title="<?= esc($r['notas'] ?? '') ?>">
+                                        <img src="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>"
+                                            class="rounded border" style="width: 56px; height: 56px; object-fit: cover;"
+                                            alt="Render" loading="lazy">
+                                    </a>
+                                    <form method="post" action="<?= site_url('piezas/render/' . (int) $r['id'] . '/borrar') ?>"
+                                        onsubmit="return confirm('¿Apartar este render a la papelera?');" class="position-absolute top-0 end-0">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-dark py-0 px-1 opacity-75" style="font-size: .6rem;" title="Borrar">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                data-bs-toggle="modal" data-bs-target="#modalRender<?= $v['id'] ?>" title="Añadir render">
+                                <i class="bi bi-image"></i> <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+
+                        <!-- STL para imprimir: aparte del .blend, inmutable una vez adjuntado -->
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            <?php if (!empty($v['ruta_stl'])): ?>
+                                <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
+                                    class="btn btn-sm btn-outline-success py-0 px-2">
+                                    <i class="bi bi-file-earmark-arrow-down"></i> Descargar STL
+                                </a>
+                                <?php if ($v['estado'] === 'validada'): ?>
+                                    <?php if (in_array((int) $v['id'], $carrito, true)): ?>
+                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . $v['id']) ?>">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-success py-0 px-2">
+                                                <i class="bi bi-check-lg"></i> En la placa
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . $v['id']) ?>">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-outline-primary py-0 px-2">
+                                                <i class="bi bi-plus-lg"></i> Añadir a la placa
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                    data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">
+                                    <i class="bi bi-file-earmark-arrow-up"></i> Adjuntar STL
+                                </button>
+                            <?php endif; ?>
+                        </div>
+
                         <div class="d-flex flex-wrap gap-1 mt-2">
                             <!--
                                 Botones siempre visibles, deshabilitados con explicación cuando
@@ -370,6 +462,55 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button class="btn btn-sm btn-primary">Derivar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="modal fade" id="modalRender<?= $v['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <form class="modal-content" method="post" enctype="multipart/form-data"
+                            action="<?= site_url('piezas/version/' . $v['id'] . '/render') ?>">
+                            <?= csrf_field() ?>
+                            <div class="modal-header">
+                                <h6 class="modal-title">Render de <?= $etiqueta($v) ?></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="form-label small">Imagen</label>
+                                <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
+                                <label class="form-label small">Notas</label>
+                                <textarea name="notas" class="form-control form-control-sm" rows="2"
+                                    placeholder="Vista frontal, viewport de Blender"></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button class="btn btn-sm btn-primary">Subir</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="modal fade" id="modalStl<?= $v['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <form class="modal-content" method="post" enctype="multipart/form-data"
+                            action="<?= site_url('piezas/version/' . $v['id'] . '/stl') ?>">
+                            <?= csrf_field() ?>
+                            <div class="modal-header">
+                                <h6 class="modal-title">STL de <?= $etiqueta($v) ?></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="small text-muted mb-2">
+                                    Una vez adjuntado no se puede reemplazar: si el modelo cambia, promociona
+                                    una versión nueva y sube el STL ahí.
+                                </p>
+                                <label class="form-label small">Fichero .stl</label>
+                                <input type="file" name="stl" accept=".stl" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button class="btn btn-sm btn-primary">Adjuntar</button>
                             </div>
                         </form>
                     </div>

@@ -4,6 +4,7 @@ namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
 use App\Models\PiezaDescargaModel;
+use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
@@ -76,14 +77,21 @@ class Api extends BaseController
 
     /**
      * Lista de variantes con estado resumido (spec 7.1: de un vistazo, cuál
-     * es la buena y dónde está el trabajo en curso).
+     * es la buena y dónde está el trabajo en curso). La consume tanto
+     * "trackbitos estado" (indirectamente) como el nuevo "trackbitos
+     * variantes", que es el catálogo visto desde la terminal.
      */
     public function variantes()
     {
         $variantes = $this->varianteModel->orderBy('nombre', 'ASC')->findAll();
 
+        $familias = [];
+        foreach ((new PiezaFamiliaModel())->findAll() as $f) {
+            $familias[$f['id']] = $f['nombre'];
+        }
+
         return $this->response->setJSON([
-            'variantes' => array_map(fn($v) => $this->resumenVariante($v), $variantes),
+            'variantes' => array_map(fn($v) => $this->resumenVariante($v, $familias), $variantes),
         ]);
     }
 
@@ -479,7 +487,11 @@ class Api extends BaseController
         ];
     }
 
-    private function resumenVariante(array $variante): array
+    /**
+     * @param array<int, string> $familias id => nombre, precargado por el llamador para no
+     *                                     consultar la familia una vez por variante.
+     */
+    private function resumenVariante(array $variante, array $familias = []): array
     {
         $validada = $this->versionModel
             ->where('variante_id', $variante['id'])
@@ -495,12 +507,15 @@ class Api extends BaseController
             'id'                    => (int) $variante['id'],
             'nombre'                => $variante['nombre'],
             'familia_id'            => (int) $variante['familia_id'],
+            'familia_nombre'        => $familias[$variante['familia_id']] ?? null,
             'version_validada'      => $validada ? [
                 'id'     => (int) $validada['id'],
                 'numero' => (int) $validada['numero'],
             ] : null,
+            'versiones'             => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
             'rama_abierta'          => $rama !== null,
             'sesion_abierta'        => $sesionAbierta !== null,
+            'sesion_maquina'        => $sesionAbierta ? $this->nombreMaquina((int) $sesionAbierta['maquina_id']) : null,
             'descargas_pendientes'  => count($this->descargaModel->abiertasParaVariante((int) $variante['id'])),
         ];
     }

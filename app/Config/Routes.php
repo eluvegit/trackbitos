@@ -625,6 +625,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('familia', 'Web::crearFamilia');
     $routes->POST('variante', 'Web::crearVariante');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
+    $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');
@@ -632,6 +633,29 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('version/(:num)/devolver-a-trabajo', 'Web::devolverATrabajo/$1');
     $routes->POST('version/(:num)/derivar', 'Web::derivarVariante/$1');
     $routes->POST('descarga/(:num)/forzar-cierre', 'Web::forzarCierre/$1');
+
+    // Imágenes: referencias (familia) y renders (versión). A diferencia
+    // del .blend, se suben y se sirven desde aquí mismo (spec 1.1 +
+    // excepción documentada en la cabecera de Web.php).
+    $routes->POST('familia/(:num)/referencia', 'Web::subirReferencia/$1');
+    $routes->POST('referencia/(:num)/borrar', 'Web::borrarReferencia/$1');
+    $routes->GET('referencia/(:num)/imagen', 'Web::imagenReferencia/$1');
+    $routes->POST('version/(:num)/render', 'Web::subirRender/$1');
+    $routes->POST('render/(:num)/borrar', 'Web::borrarRender/$1');
+    $routes->GET('render/(:num)/imagen', 'Web::imagenRender/$1');
+
+    // STL para imprimir: se adjunta aparte del .blend (spec 8), inmutable
+    // una vez puesto.
+    $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
+    $routes->GET('version/(:num)/stl/descargar', 'Web::descargarStl/$1');
+
+    // Galería (solo piezas validadas) + placa de impresión: carrito de STL
+    // en sesión, para bajarlos todos de golpe y meterlos en un laminador.
+    $routes->GET('galeria', 'Web::galeria');
+    $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
+    $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
+    $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
+    $routes->GET('carrito/descargar', 'Web::carritoDescargar');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

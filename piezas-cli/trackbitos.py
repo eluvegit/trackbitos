@@ -794,6 +794,48 @@ def cmd_papelera(args) -> int:
     return 0
 
 
+def cmd_variantes(args) -> int:
+    """
+    El catálogo completo desde la terminal — la misma foto que la portada
+    web (/piezas), para cuando se trabaja por SSH o simplemente no se
+    quiere abrir el navegador para saber "¿qué tengo y por dónde voy?".
+    """
+    config = cargar_config()
+    asegurar_maquina(config)
+
+    variantes = api_get(config, "/variantes").get("variantes", [])
+    if not variantes:
+        print("\nTodavía no hay ninguna variante. Créala en la web.\n")
+        return 0
+
+    por_familia: dict = {}
+    for v in variantes:
+        por_familia.setdefault(v.get("familia_nombre") or "(sin familia)", []).append(v)
+
+    print()
+    for familia in sorted(por_familia):
+        print(f"{familia}")
+        for v in sorted(por_familia[familia], key=lambda v: v["nombre"]):
+            if v["version_validada"]:
+                buena = f"v{v['version_validada']['numero']:03d} ✓"
+            else:
+                buena = "sin versión buena"
+
+            avisos = []
+            if v["sesion_abierta"]:
+                avisos.append(f"sesión abierta en {v.get('sesion_maquina') or '?'}")
+            if v["descargas_pendientes"]:
+                avisos.append(f"{v['descargas_pendientes']} descarga(s) sin cerrar")
+
+            linea = f"  {v['nombre']:<28} {buena:<16} {v['versiones']} versión(es)"
+            if avisos:
+                linea += "  ⚠ " + " · ".join(avisos)
+            print(linea)
+        print()
+
+    return 0
+
+
 def cmd_promocionar(args) -> int:
     directorio = _directorio(args)
     config = cargar_config()
@@ -882,6 +924,9 @@ def main(argv: Optional[list] = None) -> int:
 
     p = subs.add_parser("papelera", help="Qué hay apartado y cuándo caduca.")
     p.set_defaults(func=cmd_papelera)
+
+    p = subs.add_parser("variantes", help="El catálogo completo: qué piezas hay y por dónde va cada una.")
+    p.set_defaults(func=cmd_variantes)
 
     args = parser.parse_args(argv)
 

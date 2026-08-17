@@ -1,0 +1,133 @@
+# Trackbitos · Piezas — Tutorial de uso
+
+Guía práctica de "qué hago y en qué orden". Para el detalle técnico de cómo está construido, ver `SPEC.md`.
+
+---
+
+## 1. Configurar el CLI (una vez por máquina)
+
+`trackbitos.py` es Python 3 puro, sin dependencias que instalar. Cópialo a cualquier carpeta de cada equipo (Mac y Windows) — no depende de vivir dentro del repo.
+
+Crea `~/.trackbitos/config.json` (en Windows, `C:\Users\<tú>\.trackbitos\config.json`):
+
+```json
+{
+  "url_base": "https://trackbitos.host/public/piezas/api",
+  "token": "<piezas.apiToken del .env del servidor>"
+}
+```
+
+El `uuid` de máquina se genera solo la primera vez que ejecutas cualquier comando. El nombre de la máquina se propone a partir del hostname y es editable en la web.
+
+⚠️ El token vive en el `.env` del servidor (`piezas.apiToken`, no versionado). Si trabajas contra producción y contra un entorno local, cada uno tiene el suyo — no asumas que es el mismo.
+
+---
+
+## 2. El reparto de trabajo: web vs. CLI
+
+- **La web** (`/piezas`) es para mirar, juzgar y administrar: catálogo, historial de versiones, marcar impresa/validar/descartar, referencias, renders, STL. Nunca toca el `.blend` de trabajo.
+- **El CLI** es el único que toca el `.blend`: abrir sesión, bajar, subir, cerrar, promocionar. Necesita saber desde qué máquina se ejecuta (por eso el UUID), porque hay que cuadrar qué copia vive en qué disco.
+
+Regla mnemónica: si es un fichero que **editas** (el `.blend`), es CLI. Si es un fichero que **generas una vez y adjuntas** (foto, render, STL) o una decisión (validar, descartar), es web.
+
+---
+
+## 3. Flujo completo de una pieza nueva
+
+```bash
+mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
+```
+
+1. **Crear la variante** en la web (`/piezas`, botón "Familia" si hace falta, luego "Variante"). Nace con su rama de trabajo ya abierta.
+
+2. **Abrir sesión** en el CLI, en la carpeta de trabajo de esa pieza:
+   ```
+   trackbitos abrir torso-recto
+   ```
+   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1.
+
+3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta.
+
+4. **Subir** cuando quieras dejar constancia (se puede subir varias veces dentro de la misma sesión):
+   ```
+   trackbitos subir --log "primer boceto del torso"
+   ```
+
+5. **Cerrar la sesión** cuando das esa tanda de trabajo por terminada:
+   ```
+   trackbitos cerrar
+   ```
+
+6. **Promocionar** cuando el estado merece congelarse como versión (crea `v001`, cierra la rama actual y abre `desde-v001` para seguir trabajando):
+   ```
+   trackbitos promocionar --cambio "primera versión completa del torso" --medidas "alto 45mm, ancho hombros 22mm"
+   ```
+
+7. **Exportar el STL desde Blender** y adjuntarlo a esa versión, ya en la **web** (ficha de la variante → tarjeta de la versión → "Adjuntar STL"). Es aparte de promocionar porque no siempre se exporta en el mismo momento, y es inmutable una vez puesto: si el modelo cambia, toca una versión nueva.
+
+8. **Imprimir** la pieza. En la web, marcar esa versión como **Impresa** (con los parámetros de impresión).
+
+9. **Juzgar el resultado**, también en la web:
+   - **Validar** → es la buena. La anterior validada (si la había) pasa a "superada" sola.
+   - **Descartar** → no sirve, con el motivo. No se borra nunca.
+
+10. Si sigues iterando: `trackbitos bajar` te trae el punto de partida de la rama nueva (el `.blend` de la versión que acabas de promocionar), editas, `subir`, `promocionar` otra vez para `v002`, y repites desde el paso 3.
+
+---
+
+## 4. Cambiar de máquina
+
+En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `trackbitos bajar` trae lo último. Si alguien se olvida de cerrar y lo detectas desde la otra máquina, la web tiene **"Forzar cierre"** en la ficha de la variante — es la válvula de escape para cuando la copia ya no se puede recuperar (disco formateado, portátil roto), no un atajo del día a día.
+
+---
+
+## 5. Comandos del CLI
+
+| Comando | Qué hace |
+|---|---|
+| `trackbitos estado` | El más usado: diagnóstico en lenguaje natural de la carpeta actual — qué hacer, sin comparar hashes tú. |
+| `trackbitos variantes` | El catálogo completo desde la terminal, agrupado por familia: qué piezas hay y por dónde va cada una. |
+| `trackbitos abrir <variante>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
+| `trackbitos bajar [<variante>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
+| `trackbitos ver <variante>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
+| `trackbitos subir [--log "..."]` | Sube el `.blend` de la carpeta actual. |
+| `trackbitos cerrar [--sin-cambios]` | Cierra la sesión, o la descarga sin subir fichero. |
+| `trackbitos promocionar --cambio "..." [--medidas "..."]` | Congela la última sesión subida como versión nueva. |
+| `trackbitos papelera` | Qué hay apartado localmente y cuándo caduca (30 días). |
+
+Todos aceptan `--dir` (por defecto, la carpeta actual). `bajar`/`ver` aceptan `--ignorar-pendiente` para saltarse el aviso de copia viva en la otra máquina.
+
+Truco: si usas **una carpeta por pieza**, `trackbitos estado` ya sabe en qué variante/rama/sesión estás con solo mirar el `.sesion.json` que él mismo dejó — no hace falta escribir el nombre salvo al empezar algo nuevo. Y ni siquiera hace falta el nombre exacto: acepta coincidencia parcial y, si no acierta, lista las variantes que hay.
+
+---
+
+## 6. La web, por secciones
+
+- **`/piezas`** — catálogo: familias con sus variantes, versión validada (o "sin versión buena"), avisos de sesión abierta o descargas pendientes. Aquí también se crean familias y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la familia).
+- **Ficha de variante** (`/piezas/variante/{id}`) — historial completo de versiones con sus **renders** (imágenes por versión, para ver la evolución), botones de los verbos (marcar impresa, validar, descartar, devolver a trabajo, derivar variante), el **STL** de cada versión, y una caja "Desde tu máquina" con los comandos ya escritos con el nombre exacto, listos para copiar.
+
+---
+
+## 7. Imágenes y STL — quién sirve qué
+
+| Fichero | Quién lo sube/baja | Por qué |
+|---|---|---|
+| `.blend` de trabajo | Solo el CLI | Necesita identidad de máquina para cuadrar qué copia vive en qué disco (invariante 8). |
+| Referencias (familia) | Web | Fotos que se miran, no se editan iterativamente. |
+| Renders (versión) | Web | Igual: resultado visual de una iteración, no algo que se sincroniza entre discos. |
+| STL (versión) | Web | Se exporta una vez y se adjunta; inmutable después. Se descarga como adjunto (para el laminador), no se muestra inline. |
+
+---
+
+## 8. SKU, galería y placa de impresión
+
+**SKU** — campo de texto libre y opcional en cada variante (botón con lápiz junto al nombre, en la ficha, o al crearla). Es solo una referencia manual tuya: cuando alguien te pide una pieza por el código que usa en tu tienda/Etsy, lo apuntas aquí para poder buscarla luego. Trackbitos no sincroniza con esa otra web, solo guarda el mismo texto. En el índice (`/piezas`) hay un buscador que filtra por nombre o SKU al escribir.
+
+**Galería** (`/piezas/galeria`) — solo las piezas con **versión validada**: es la vista de "qué tengo listo para imprimir", no el catálogo de trabajo en curso. La miniatura sale del render más reciente de esa versión (o de la referencia de la familia si no hay render).
+
+**Placa de impresión** — un carrito para juntar varias piezas y descargar todos sus STL de golpe:
+1. Desde la galería (o desde la ficha de una variante validada, junto al botón "Descargar STL"), pulsa **"Añadir a la placa"** en cada pieza que quieras imprimir junta.
+2. Cuando tengas las que quieres, **"Descargar placa"** te da un `.zip` con todos los STL, listo para abrir en el laminador y colocar en una plancha.
+3. El carrito no se vacía solo al descargar (por si hace falta repetir la descarga) — usa **"Vaciar placa"** cuando termines esa tanda.
+
+El carrito vive en la sesión del navegador, no en la base de datos: es de usar y tirar en cada impresión, no un historial.

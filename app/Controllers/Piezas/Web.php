@@ -5,11 +5,15 @@ namespace App\Controllers\Piezas;
 use App\Controllers\BaseController;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaRamaModel;
+use App\Models\PiezaReferenciaModel;
+use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
+use App\Services\PiezaAlmacen;
 use App\Services\PiezaService;
 use App\Services\PiezaSyncService;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -17,34 +21,66 @@ use Throwable;
  * orientada al estado: lo que debe responder de un vistazo es cuál es la
  * versión buena y dónde está el trabajo en curso.
  *
- * Lo que esta interfaz NO hace, a propósito: descargar ficheros. La
- * identidad de máquina la declara el script, nunca el navegador (spec 4.5)
- * — la web puede abrirse desde el móvil, donde no hay ningún disco que
- * registrar. Así que aquí se muestra el hash de la nube y el comando exacto
- * a ejecutar, y quien toca ficheros sigue siendo trackbitos.py.
+ * Lo que esta interfaz NO hace, a propósito: descargar el .blend/.stl de
+ * trabajo. La identidad de máquina la declara el script, nunca el
+ * navegador (spec 4.5) — la web puede abrirse desde el móvil, donde no hay
+ * ningún disco que registrar. Así que aquí se muestra el hash de la nube y
+ * el comando exacto a ejecutar, y quien toca esos ficheros sigue siendo
+ * trackbitos.py.
+ *
+ * Excepción deliberada: las imágenes (referencias y renders, más abajo) y
+ * el STL para imprimir. A diferencia del .blend, no hace falta cuadrar
+ * ningún disco para adjuntar o descargar ninguno de los dos — no hay
+ * edición iterativa que sincronizar, solo un fichero final que subir una
+ * vez (STL) o mirar (fotos) — así que se suben y se sirven directamente
+ * desde el navegador.
  */
 class Web extends BaseController
 {
     /** Días en borrador/impresa a partir de los cuales se marca como olvidada (spec 7.2). */
     private const DIAS_PENDIENTE_DE_JUICIO = 14;
 
+    /**
+     * La "placa" de piezas para imprimir juntas: un carrito de versiones
+     * validadas con STL, guardado en la sesión de navegador. No es una
+     * tabla — no hace falta persistirlo entre sesiones, es de usar y
+     * vaciar en cada tanda de impresión.
+     */
+    private const SESION_CARRITO = 'piezas_carrito';
+
+    /** Mimes aceptados para referencias/renders → extensión con la que se guardan. */
+    private const MIMES_IMAGEN = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+    ];
+
+    private const TAMANO_MAX_IMAGEN = 20 * 1024 * 1024; // 20 MB: fotos de móvil, no hace falta más.
+    private const TAMANO_MAX_STL    = 50 * 1024 * 1024; // 50 MB: piezas pequeñas, pero con margen.
+
     private PiezaFamiliaModel $familiaModel;
     private PiezaVarianteModel $varianteModel;
     private PiezaVersionModel $versionModel;
     private PiezaRamaModel $ramaModel;
     private PiezaSesionModel $sesionModel;
+    private PiezaReferenciaModel $referenciaModel;
+    private PiezaRenderModel $renderModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
+    private PiezaAlmacen $almacen;
 
     public function __construct()
     {
-        $this->familiaModel  = new PiezaFamiliaModel();
-        $this->varianteModel = new PiezaVarianteModel();
-        $this->versionModel  = new PiezaVersionModel();
-        $this->ramaModel     = new PiezaRamaModel();
-        $this->sesionModel   = new PiezaSesionModel();
-        $this->servicio      = new PiezaService();
-        $this->sync          = new PiezaSyncService();
+        $this->familiaModel     = new PiezaFamiliaModel();
+        $this->varianteModel    = new PiezaVarianteModel();
+        $this->versionModel     = new PiezaVersionModel();
+        $this->ramaModel        = new PiezaRamaModel();
+        $this->sesionModel      = new PiezaSesionModel();
+        $this->referenciaModel  = new PiezaReferenciaModel();
+        $this->renderModel      = new PiezaRenderModel();
+        $this->servicio         = new PiezaService();
+        $this->sync             = new PiezaSyncService();
+        $this->almacen          = new PiezaAlmacen();
     }
 
     /**
@@ -60,10 +96,17 @@ class Web extends BaseController
                 fn($v) => $this->resumen($v),
                 $this->varianteModel->where('familia_id', $familia['id'])->orderBy('nombre', 'ASC')->findAll()
             );
+            // Comunes a toda la familia (spec 1.1): las referencias del
+            // original ayudan a modelar cualquiera de sus variantes.
+            $familia['referencias'] = $this->referenciaModel
+                ->where('familia_id', $familia['id'])->orderBy('subida_en', 'DESC')->findAll();
         }
         unset($familia);
 
-        return view('piezas/index', ['familias' => $familias]);
+        return view('piezas/index', [
+            'familias'     => $familias,
+            'carritoCount' => count($this->carritoActual()),
+        ]);
     }
 
     /**
@@ -84,6 +127,10 @@ class Web extends BaseController
         foreach ($versiones as &$version) {
             $version['pendiente_de_juicio'] = $this->llevaDemasiadoPendiente($version);
             $version['sesiones']            = $this->sesionesQueLlevaronA((int) $version['id']);
+            // Por versión, no por familia (a diferencia de las referencias):
+            // es el resultado visual de esa iteración concreta.
+            $version['renders']             = $this->renderModel
+                ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->findAll();
         }
         unset($version);
 
@@ -101,7 +148,139 @@ class Web extends BaseController
             'pendientes' => $this->descripcionPendientes($estado['descargas_pendientes']),
             'acciones'  => $this->accionesDisponibles($estado, $versiones),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
+            'carrito'   => $this->carritoActual(),
         ]);
+    }
+
+    /**
+     * Galería: solo las piezas con versión validada — es la vista de "qué
+     * tengo listo para imprimir", no el catálogo de trabajo en curso (para
+     * eso está el índice). Miniatura: el render más reciente de la versión
+     * validada y, si no hay, la referencia más reciente de la familia.
+     */
+    public function galeria()
+    {
+        $piezas = [];
+
+        foreach ($this->varianteModel->orderBy('nombre', 'ASC')->findAll() as $variante) {
+            $validada = $this->versionModel
+                ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
+            if (!$validada) {
+                continue;
+            }
+
+            $render = $this->renderModel
+                ->where('version_id', $validada['id'])->orderBy('subida_en', 'DESC')->first();
+            $miniatura = $render ? site_url('piezas/render/' . $render['id'] . '/imagen') : null;
+
+            if (!$miniatura) {
+                $referencia = $this->referenciaModel
+                    ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->first();
+                $miniatura = $referencia ? site_url('piezas/referencia/' . $referencia['id'] . '/imagen') : null;
+            }
+
+            $piezas[] = ['variante' => $variante, 'validada' => $validada, 'miniatura' => $miniatura];
+        }
+
+        return view('piezas/galeria', [
+            'piezas'  => $piezas,
+            'carrito' => $this->carritoActual(),
+        ]);
+    }
+
+    public function carritoAgregar(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version || empty($version['ruta_stl'])) {
+            return redirect()->back()->with('error', 'Esa versión no tiene STL adjunto: no se puede añadir a la placa.');
+        }
+
+        $carrito = $this->carritoActual();
+        if (!in_array($versionId, $carrito, true)) {
+            $carrito[] = $versionId;
+            $this->carritoGuardar($carrito);
+        }
+
+        return redirect()->back()->with('success', 'Añadida a la placa.');
+    }
+
+    public function carritoQuitar(int $versionId)
+    {
+        $this->carritoGuardar(array_values(array_diff($this->carritoActual(), [$versionId])));
+
+        return redirect()->back()->with('success', 'Quitada de la placa.');
+    }
+
+    public function carritoVaciar()
+    {
+        $this->carritoGuardar([]);
+
+        return redirect()->to(site_url('piezas/galeria'))->with('success', 'Placa vaciada.');
+    }
+
+    /**
+     * Empaqueta los STL de la placa en un .zip para importar de golpe en
+     * el laminador. El carrito NO se vacía solo: si la descarga falla a
+     * mitad (conexión, lo que sea) el usuario no quiere volver a marcar
+     * todo desde cero — "Vaciar placa" es una acción aparte y explícita.
+     */
+    public function carritoDescargar()
+    {
+        $carrito = $this->carritoActual();
+        if (empty($carrito)) {
+            return redirect()->to(site_url('piezas/galeria'))->with('error', 'La placa está vacía.');
+        }
+
+        $versiones = array_filter(
+            $this->versionModel->whereIn('id', $carrito)->findAll(),
+            fn($v) => !empty($v['ruta_stl']) && $this->almacen->existe($v['ruta_stl'])
+        );
+        if (empty($versiones)) {
+            return redirect()->to(site_url('piezas/galeria'))
+                ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
+        }
+
+        $carpetaTmp = WRITEPATH . 'piezas/tmp';
+        if (!is_dir($carpetaTmp) && !mkdir($carpetaTmp, 0775, true) && !is_dir($carpetaTmp)) {
+            throw new RuntimeException('No se pudo crear la carpeta temporal para la placa.');
+        }
+        $rutaZip = $carpetaTmp . '/placa-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($rutaZip, \ZipArchive::CREATE) !== true) {
+            throw new RuntimeException('No se pudo crear el zip de la placa.');
+        }
+        foreach ($versiones as $version) {
+            $variante = $this->varianteModel->find($version['variante_id']);
+            $zip->addFile($this->almacen->absoluta($version['ruta_stl']), $this->nombreArchivoStl($variante, $version));
+        }
+        $zip->close();
+
+        // El fichero tiene que seguir existiendo cuando DownloadResponse lo
+        // lea durante send(), que ocurre después de que este método
+        // retorne — por eso el borrado va en un shutdown function, no aquí.
+        register_shutdown_function(static function () use ($rutaZip) {
+            @unlink($rutaZip);
+        });
+
+        return $this->response->download($rutaZip, null, true);
+    }
+
+    private function nombreArchivoStl(?array $variante, array $version): string
+    {
+        $base = preg_replace('/[^A-Za-z0-9_-]+/', '-', $variante['nombre'] ?? ('variante-' . $version['variante_id']));
+
+        return sprintf('%s-v%03d.stl', trim((string) $base, '-'), (int) $version['numero']);
+    }
+
+    private function carritoActual(): array
+    {
+        return array_values(array_unique((array) session(self::SESION_CARRITO)));
+    }
+
+    private function carritoGuardar(array $ids): void
+    {
+        session()->set(self::SESION_CARRITO, array_values(array_unique($ids)));
     }
 
     // ---- Alta de familias y variantes ----------------------------------
@@ -124,10 +303,22 @@ class Web extends BaseController
             fn() => $this->servicio->crearVariante(
                 (int) $this->request->getPost('familia_id'),
                 trim((string) $this->request->getPost('nombre')),
-                $this->request->getPost('notas') ?: null
+                $this->request->getPost('notas') ?: null,
+                $this->request->getPost('sku') ?: null
             ),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Variante "' . $variante['nombre'] . '" creada, con su rama inicial abierta.'
+        );
+    }
+
+    public function editarSku(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->actualizarSku($varianteId, $this->request->getPost('sku')),
+            fn($variante) => site_url('piezas/variante/' . $variante['id']),
+            fn($variante) => $variante['sku']
+                ? 'SKU actualizado: ' . $variante['sku'] . '.'
+                : 'SKU quitado.'
         );
     }
 
@@ -217,6 +408,227 @@ class Web extends BaseController
             fn($resultado) => site_url('piezas/variante/' . $varianteId),
             fn($resultado) => 'Descarga cerrada a la fuerza. Queda registrada como cierre sin prueba, con tu motivo.'
         );
+    }
+
+    // ---- Imágenes: referencias (familia) y renders (versión) ------------
+
+    public function subirReferencia(int $familiaId)
+    {
+        $familia = $this->familiaModel->find($familiaId);
+        if (!$familia) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa familia no existe.');
+        }
+
+        return $this->ejecutar(
+            function () use ($familiaId) {
+                $extension = $this->validarImagen($this->request->getFile('imagen'));
+
+                $id = $this->referenciaModel->insert([
+                    'familia_id' => $familiaId,
+                    'ruta_imagen' => '',
+                    'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
+                    'subida_en'   => date('Y-m-d H:i:s'),
+                ], true);
+                if (!$id) {
+                    // Sin esto, un id=false se cuela como 0 en la ruta de
+                    // fichero (PHP no tiene strict_types aquí) y se guarda
+                    // un fichero huérfano antes de que reviente el update.
+                    throw new RuntimeException('No se pudo registrar la referencia: ' . implode(' ', $this->referenciaModel->errors()));
+                }
+
+                $ruta = $this->almacen->rutaReferencia($familiaId, $id, $extension);
+                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+
+                $this->referenciaModel->update($id, [
+                    'ruta_imagen'  => $ruta,
+                    'hash_imagen'  => $this->almacen->hash($ruta),
+                    'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                ]);
+
+                return $familiaId;
+            },
+            fn() => site_url('piezas'),
+            fn() => 'Referencia añadida.'
+        );
+    }
+
+    public function borrarReferencia(int $id)
+    {
+        $referencia = $this->referenciaModel->find($id);
+        if (!$referencia) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa referencia no existe.');
+        }
+
+        // Invariante 6 en espíritu: el fichero se aparta, no se destruye —
+        // el registro de la referencia sí se quita, porque a diferencia de
+        // una sesión o una versión no es parte del histórico de trabajo.
+        $this->almacen->aPapelera($referencia['ruta_imagen']);
+        $this->referenciaModel->delete($id);
+
+        return redirect()->to(site_url('piezas'))->with('success', 'Referencia apartada a la papelera.');
+    }
+
+    public function subirRender(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa versión no existe.');
+        }
+
+        return $this->verboDeVersion(
+            $versionId,
+            function () use ($versionId, $version) {
+                $extension = $this->validarImagen($this->request->getFile('imagen'));
+
+                $id = $this->renderModel->insert([
+                    'version_id'  => $versionId,
+                    'ruta_imagen' => '',
+                    'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
+                    'subida_en'   => date('Y-m-d H:i:s'),
+                ], true);
+                if (!$id) {
+                    throw new RuntimeException('No se pudo registrar el render: ' . implode(' ', $this->renderModel->errors()));
+                }
+
+                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, $extension);
+                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+
+                $this->renderModel->update($id, [
+                    'ruta_imagen'  => $ruta,
+                    'hash_imagen'  => $this->almacen->hash($ruta),
+                    'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                ]);
+
+                return $version;
+            },
+            fn() => sprintf('Render añadido a v%03d.', (int) $version['numero'])
+        );
+    }
+
+    public function borrarRender(int $id)
+    {
+        $render = $this->renderModel->find($id);
+        if (!$render) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Ese render no existe.');
+        }
+        $version = $this->versionModel->find($render['version_id']);
+
+        $this->almacen->aPapelera($render['ruta_imagen']);
+        $this->renderModel->delete($id);
+
+        $destino = $version ? site_url('piezas/variante/' . $version['variante_id']) : site_url('piezas');
+
+        return redirect()->to($destino)->with('success', 'Render apartado a la papelera.');
+    }
+
+    /**
+     * Adjunta el STL para imprimir esta versión. Separado de "Marcar
+     * impresa" a propósito: no siempre se exporta en el mismo momento en
+     * que se sube el .blend, y así se puede adjuntar en cuanto esté listo,
+     * antes o después de imprimir.
+     */
+    public function subirStl(int $versionId)
+    {
+        return $this->verboDeVersion(
+            $versionId,
+            function () use ($versionId) {
+                $version = $this->versionModel->find($versionId);
+
+                // Comprobar ANTES de tocar disco: PiezaService::adjuntarStl
+                // repite este chequeo, pero si se hiciera solo ahí, un
+                // segundo intento ya habría sobrescrito el fichero de la
+                // ruta (determinista por variante+número) antes de que la
+                // base de datos lo rechazara.
+                if (!empty($version['ruta_stl'])) {
+                    throw new RuntimeException(
+                        "La versión {$versionId} ya tiene un STL adjunto. Es inmutable: "
+                        . 'si el modelo cambió, promociona una versión nueva.'
+                    );
+                }
+
+                $file = $this->request->getFile('stl');
+                if (!$file || !$file->isValid() || $file->hasMoved()) {
+                    throw new RuntimeException('No ha llegado ningún fichero STL válido.');
+                }
+                if ($file->getSize() > self::TAMANO_MAX_STL) {
+                    throw new RuntimeException('El STL pesa más de 50 MB.');
+                }
+                if (strtolower(pathinfo($file->getClientName(), PATHINFO_EXTENSION)) !== 'stl') {
+                    throw new RuntimeException('Solo se admiten ficheros .stl.');
+                }
+
+                $ruta = $this->almacen->rutaStl((int) $version['variante_id'], (int) $version['numero']);
+                $this->almacen->guardar($file->getTempName(), $ruta);
+                $hash = $this->almacen->hash($ruta);
+
+                return $this->servicio->adjuntarStl($versionId, $ruta, $hash);
+            },
+            fn($version) => sprintf('STL adjuntado a v%03d. Ya se puede descargar para imprimir.', (int) $version['numero'])
+        );
+    }
+
+    /**
+     * A diferencia de las imágenes, el STL se sirve para descargar (no
+     * inline): se abre en el laminador, no en el navegador.
+     */
+    public function descargarStl(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version || empty($version['ruta_stl']) || !$this->almacen->existe($version['ruta_stl'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return $this->response->download($this->almacen->absoluta($version['ruta_stl']), null, true);
+    }
+
+    /**
+     * Sirve la imagen desde writable/ (spec sección 8: fuera del directorio
+     * público). A diferencia del .blend, aquí no hace falta declarar
+     * máquina — el filtro 'auth' de sesión de navegador basta.
+     */
+    public function imagenReferencia(int $id)
+    {
+        $referencia = $this->referenciaModel->find($id);
+        if (!$referencia || !$this->almacen->existe($referencia['ruta_imagen'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        // setMime=true para que el Content-Type salga del tipo real de la
+        // imagen, e inline() para que el navegador la pinte en el <img> en
+        // vez de ofrecer descargarla.
+        return $this->response->download($this->almacen->absoluta($referencia['ruta_imagen']), null, true)->inline();
+    }
+
+    public function imagenRender(int $id)
+    {
+        $render = $this->renderModel->find($id);
+        if (!$render || !$this->almacen->existe($render['ruta_imagen'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return $this->response->download($this->almacen->absoluta($render['ruta_imagen']), null, true)->inline();
+    }
+
+    /**
+     * Valida el fichero subido y devuelve la extensión con la que se debe
+     * guardar. El mime se comprueba con el detectado por el servidor
+     * (finfo), no el que declara el navegador, que se puede falsear.
+     */
+    private function validarImagen($file): string
+    {
+        if (!$file || !$file->isValid() || $file->hasMoved()) {
+            throw new RuntimeException('No ha llegado ninguna imagen válida.');
+        }
+        if ($file->getSize() > self::TAMANO_MAX_IMAGEN) {
+            throw new RuntimeException('La imagen pesa más de 20 MB.');
+        }
+
+        $mime = $file->getMimeType();
+        if (!isset(self::MIMES_IMAGEN[$mime])) {
+            throw new RuntimeException("Formato no admitido ({$mime}). Solo JPEG, PNG o WEBP.");
+        }
+
+        return self::MIMES_IMAGEN[$mime];
     }
 
     // ---- Plomería -------------------------------------------------------

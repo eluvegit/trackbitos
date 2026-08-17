@@ -46,6 +46,11 @@ class PiezaVersionModel extends Model
     /**
      * Bloquea la modificación de los campos congelados de una versión ya
      * creada. Se niega y explica en vez de dejar pasar la escritura.
+     *
+     * ruta_stl/hash_stl nacen vacíos (el STL se adjunta aparte, cuando el
+     * usuario lo exporta para imprimir — ver PiezaService::adjuntarStl) y
+     * por eso su PRIMERA asignación no cuenta como cambio: solo se bloquea
+     * sobreescribir un valor que ya estaba puesto.
      */
     public function update($id = null, $data = null): bool
     {
@@ -53,7 +58,10 @@ class PiezaVersionModel extends Model
             $actual = $this->find($id);
             if ($actual) {
                 foreach (self::CAMPOS_INMUTABLES as $campo) {
-                    if (array_key_exists($campo, $data) && (string) $data[$campo] !== (string) ($actual[$campo] ?? '')) {
+                    $valorActual = $actual[$campo] ?? null;
+                    $yaEstabaPuesto = $valorActual !== null && $valorActual !== '';
+
+                    if ($yaEstabaPuesto && array_key_exists($campo, $data) && (string) $data[$campo] !== (string) $valorActual) {
                         throw new RuntimeException(
                             "La versión {$id} es inmutable: no se puede cambiar '{$campo}' "
                             . "(de '{$actual[$campo]}' a '{$data[$campo]}'). Crea una versión nueva."

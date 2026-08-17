@@ -27,6 +27,47 @@ Dónde vive cada cosa:
 **Las siete fases están cerradas.** El módulo funciona de punta a punta: dos máquinas, ficheros
 versionados, asientos que cuadran, web para juzgar versiones y purga automática.
 
+**Fase 8 (añadida tras el cierre, 2026-08-17): imágenes.** `trackbitos variantes` en el cliente
+(catálogo desde la terminal, sección 5.1) y referencias/renders en la web (sección 7.4). A
+diferencia del resto del módulo, las imágenes se suben y se sirven directamente desde el
+navegador — no hace falta identidad de máquina para mirar una foto. Migración
+`2026-08-17-000001_CreatePiezasImagenesTables.php`, modelos `PiezaReferenciaModel`/
+`PiezaRenderModel`, rutas de fichero en `PiezaAlmacen::rutaReferencia()`/`rutaRender()`.
+
+**Fase 9 (añadida el mismo día): STL para imprimir.** `ruta_stl`/`hash_stl` ya existían en el
+esquema desde la fase 1 pero no había ningún verbo que los rellenase — el bloqueo de
+`PiezaVersionModel::CAMPOS_INMUTABLES` (invariante 4) trataba la primera asignación (de vacío a
+un valor) igual que una modificación, así que habría reventado en cuanto se intentara. Arreglado:
+ese guard ahora solo bloquea sobreescribir un valor que ya estaba puesto, no ponerlo por primera
+vez. Verbo nuevo `PiezaService::adjuntarStl()`, ruta de fichero en
+`PiezaAlmacen::rutaStl()` (junto al `.blend` de la misma versión), web en `Web::subirStl()`/
+`descargarStl()` (botón en la tarjeta de cada versión del historial). Mismo criterio que las
+imágenes — sin identidad de máquina, se sube y se descarga directamente desde el navegador —
+pero con descarga como adjunto, no inline: el STL se abre en el laminador, no se mira en el
+navegador. Inmutable en cuanto se adjunta: si el modelo cambia, toca promocionar una versión
+nueva y subir el STL ahí.
+
+**Fase 10 (añadida el mismo día): SKU, galería y placa de impresión.**
+
+- **SKU**: columna `sku` en `piezas_variantes` (nullable, único a nivel de esquema —
+  `AddSkuToPiezasVariantes`), referencia manual para cuando alguien pide una pieza por el código
+  que usa en otro sitio (tienda, Etsy...). Trackbitos no sincroniza con ese otro sistema, solo
+  guarda el mismo texto. Verbo `PiezaService::actualizarSku()` (la única edición posible tras
+  crear una variante); unicidad comprobada en el servicio, no solo en el índice, para dar un
+  mensaje que diga qué variante ya lo tiene. Editable en el alta y con un lápiz en la cabecera de
+  la ficha. Buscador por nombre/SKU en el índice (JS puro, sin ida y vuelta al servidor).
+- **Galería** (`/piezas/galeria`, `Web::galeria()`): solo variantes con versión validada — es la
+  vista de "qué tengo listo para imprimir", no el catálogo de trabajo en curso. Miniatura: el
+  render más reciente de la versión validada y, si no hay, la referencia más reciente de la
+  familia.
+- **Placa de impresión**: un carrito de versiones validadas con STL, en sesión de navegador
+  (`Web::SESION_CARRITO`) — no es tabla, es de usar y vaciar en cada tanda. "Añadir/quitar de la
+  placa" desde la galería o desde la ficha de variante; "Descargar placa" empaqueta los STL en un
+  `.zip` (`ZipArchive`, fichero temporal en `writable/piezas/tmp/`, borrado con
+  `register_shutdown_function` tras servirlo) listo para importar de golpe en el laminador. El
+  carrito no se vacía solo al descargar — "Vaciar placa" es una acción aparte y explícita, para no
+  perder la selección si la descarga falla a mitad.
+
 ---
 
 ## 0. Contexto
@@ -333,6 +374,7 @@ trackbitos cerrar                                                         ✅ he
 trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero  ✅ hecho
 trackbitos promocionar --cambio "..." [--medidas "..."]                   ✅ hecho
 trackbitos papelera                # qué hay apartado y cuándo caduca    ✅ hecho
+trackbitos variantes               # catálogo completo, agrupado por familia ✅ hecho
 ```
 
 La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
@@ -455,6 +497,24 @@ Implementada (fase 6) en `app/Controllers/Piezas/Web.php` y `app/Views/piezas/`.
 
 Promocionar es el momento que cierra un ciclo de trabajo. La confirmación debe ser explícita y satisfactoria: número de versión asignado, fecha, y la rama nueva ya abierta. Es el punto donde el usuario ve una victoria cerrada.
 
+### 7.4 Referencias y renders (fase 8)
+
+Dos galerías de imágenes, cada una en el nivel de la jerarquía que le corresponde (spec 1.1):
+
+- **Referencias**, en el índice (`/piezas`), dentro de la tarjeta de cada familia. Fotos del
+  original con medidas de calibre — comunes a todas las variantes, así que no se duplican por
+  variante. Con notas de texto libre (la medida, el ángulo).
+- **Renders**, en la ficha de variante, dentro de cada tarjeta de versión del historial. El
+  resultado visual de esa iteración concreta, así que cuelga de la versión: permite ver la
+  evolución del modelo a lo largo del historial en vez de una sola galería suelta.
+
+Ambas son subida real (JPEG/PNG/WEBP, máximo 20 MB), no solo enlace — a diferencia del `.blend`,
+mirar una foto no exige identidad de máquina, así que la sube y la sirve la propia web
+(`Web::subirReferencia`/`subirRender`, `Web::imagenReferencia`/`imagenRender`), con el filtro
+`auth` de sesión de navegador. Borrar aparta el fichero a la papelera (invariante 6 en espíritu)
+pero sí quita el registro: a diferencia de una sesión o una versión, una foto de más no es parte
+del histórico de trabajo que hay que conservar.
+
 ---
 
 ## 8. Almacenamiento
@@ -467,13 +527,15 @@ Disposición real (`PiezaAlmacen`, bajo `writable/piezas/`):
 ```
 variante-3/rama-5/sesion-41.blend                      ← trabajo en curso, purgable (invariante 5)
 variante-3/version-v002.blend                          ← copia propia de la versión, nunca se purga
+familia-2/referencia-7.jpg                              ← foto de referencia (fase 8)
+variante-3/version-9/render-4.jpg                       ← render de una versión concreta (fase 8)
 papelera/20260816-154424-variante-3-rama-5-sesion-41.blend   ← apartado al validar, caduca a los 30 días
 ```
 
 La versión se lleva **su propia copia** aunque el contenido sea idéntico al de la sesión que promocionó. Si apuntase al fichero de la sesión, la purga de la fase 7 se llevaría por delante justo el fichero que nunca debe perderse.
 
 - Incluir el directorio de subidas en el backup existente a Backblaze B2.
-- **Fuera de este sistema** (van aparte, en almacenamiento en la nube en modo transmitir): fotos de referencia en alta resolución, ficheros `.ctb` de placas laminadas, imágenes de compartir en alta. Solo se guarda la ruta o una nota, no el binario.
+- **Fuera de este sistema todavía**: ficheros `.ctb` de placas laminadas. Las fotos de referencia y las imágenes de render sí se guardan aquí desde la fase 8 (decisión revisada: el coste de una foto de móvil es bajo y merece la pena tenerlas a mano en la ficha).
 
 ---
 
