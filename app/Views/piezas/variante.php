@@ -612,11 +612,21 @@ $porQueNo = function (array $v) use ($acciones): array {
                     </p>
                 <?php endif; ?>
 
+                <?php
+                    // En la v001 no hay nada anterior que modificar, así que
+                    // "qué se modificó" no aplica: lo que da valor al historial
+                    // ahí es de dónde sale la pieza. El campo es el mismo
+                    // (version.cambio, obligatorio por el invariante 7); lo que
+                    // cambia es la pregunta, para que se pueda responder.
+                    $primeraVersion = empty($versiones);
+                ?>
                 <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/promocionar') ?>">
                     <?= csrf_field() ?>
-                    <label class="form-label small">Qué se modificó (obligatorio)</label>
+                    <label class="form-label small">
+                        <?= $primeraVersion ? 'Qué es esta pieza (obligatorio)' : 'Qué se modificó (obligatorio)' ?>
+                    </label>
                     <input type="text" name="cambio" class="form-control form-control-sm mb-2"
-                        placeholder="Brazo 0.4mm más grueso en la unión"
+                        placeholder="<?= $primeraVersion ? 'Primer modelado a partir de la foto del original' : 'Brazo 0.4mm más grueso en la unión' ?>"
                         <?= $acciones['puede_promocionar'] ? 'required' : 'disabled' ?>>
                     <label class="form-label small">Medidas</label>
                     <input type="text" name="medidas" class="form-control form-control-sm mb-2"
