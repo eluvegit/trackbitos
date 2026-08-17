@@ -643,7 +643,35 @@ tienen variantes de verdad** (una silla y unas piernas), más un caso de pistola
 que nacería de derivar una versión. Es decir: el índice debe optimizarse para *una pieza, una
 variante*, y tratar las variantes como la excepción que son.
 
-### 11.2 Cabos sueltos menores
+### 11.2 Importar las ~15 piezas que ya existen fuera del sistema
+
+Hay una quincena de modelos ya hechos antes de Trackbitos que hay que meter. **Va después de
+las categorías (11.1)**: si se importan antes, hay que categorizarlas a mano una por una.
+
+**Regla de partida: no se reconstruye el pasado.** Cada pieza entra como **v001** con un `cambio`
+del tipo "importada del trabajo anterior a Trackbitos". Las iteraciones hechas fuera no tienen
+hashes, ni sesiones, ni de qué copia partía cada una — inventarles un historial haría el registro
+menos fiable, no más. El valor empieza en el siguiente toque de cada pieza.
+
+**Camino recomendado: un comando de importación** en el CLI, que recorra una carpeta raíz con una
+subcarpeta por pieza y por cada una haga el ciclo entero (crear, subir, promocionar, y
+opcionalmente marcar impresa + validar si ya está impresa y es buena, y adjuntar el `.stl` si
+está al lado). A mano son 2-3 minutos por pieza; con script, una ejecución desatendida.
+
+Obstáculo conocido: **la API no tiene endpoint para crear piezas** (`crearFamilia` solo existe en
+`Web`). O se añade, o se dan de alta las 15 por web primero — que además es el momento natural de
+decidir nombre, SKU y categoría.
+
+Por preguntar al usuario antes de escribir nada:
+
+1. ¿Una carpeta por pieza con un solo `.blend`, o mezclados / con varios `.blend` antiguos?
+2. ¿Están ya exportados los `.stl` junto a los `.blend`?
+3. De las 15, ¿cuántas están impresas y validadas, y cuántas a medias?
+
+Si están ordenadas en carpetas, el script es casi trivial. Si están mezcladas, el trabajo real es
+ordenarlas y eso no lo puede hacer un script.
+
+### 11.3 Cabos sueltos menores
 
 - **Despliegue**: cron diario de `php spark piezas:purgar` e incluir `writable/piezas/` en el
   backup a Backblaze B2 (sección 8). Sigue sin hacerse.
