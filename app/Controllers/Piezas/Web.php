@@ -3,7 +3,9 @@
 namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
+use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaFamiliaModel;
+use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
@@ -59,6 +61,8 @@ class Web extends BaseController
     private const TAMANO_MAX_IMAGEN = 20 * 1024 * 1024; // 20 MB: fotos de móvil, no hace falta más.
     private const TAMANO_MAX_STL    = 50 * 1024 * 1024; // 50 MB: piezas pequeñas, pero con margen.
 
+    private PiezaCategoriaModel $categoriaModel;
+    private PiezaMaquinaModel $maquinaModel;
     private PiezaFamiliaModel $familiaModel;
     private PiezaVarianteModel $varianteModel;
     private PiezaVersionModel $versionModel;
@@ -72,6 +76,8 @@ class Web extends BaseController
 
     public function __construct()
     {
+        $this->categoriaModel   = new PiezaCategoriaModel();
+        $this->maquinaModel     = new PiezaMaquinaModel();
         $this->familiaModel     = new PiezaFamiliaModel();
         $this->varianteModel    = new PiezaVarianteModel();
         $this->versionModel     = new PiezaVersionModel();
@@ -85,8 +91,14 @@ class Web extends BaseController
     }
 
     /**
-     * Índice: familias con sus variantes, cada una resumida a lo único que
-     * importa de lejos — cuál es la buena y si hay algo en marcha.
+     * Índice: un listado denso agrupado por categoría (spec 11.1). Cada
+     * pieza resumida a lo único que importa de lejos — cuál es la versión
+     * buena y si hay algo en marcha.
+     *
+     * Listado y no las tarjetas grandes de antes: con quince piezas se
+     * trata de barrerlas de un vistazo, no de lucir cada una. Las fotos de
+     * referencia, que vivían en esas tarjetas, se miran ahora en la ficha,
+     * que es donde de verdad se usan (mientras modelas).
      */
     public function index()
     {
@@ -97,17 +109,159 @@ class Web extends BaseController
                 fn($v) => $this->resumen($v),
                 $this->varianteModel->where('familia_id', $familia['id'])->orderBy('nombre', 'ASC')->findAll()
             );
-            // Comunes a toda la familia (spec 1.1): las referencias del
-            // original ayudan a modelar cualquiera de sus variantes.
-            $familia['referencias'] = $this->referenciaModel
-                ->where('familia_id', $familia['id'])->orderBy('subida_en', 'DESC')->findAll();
         }
         unset($familia);
 
         return view('piezas/index', [
+            'categorias'   => $this->categoriaModel->ordenadas(),
+            'grupos'       => $this->agruparPorCategoria($familias),
             'familias'     => $familias,
             'carritoCount' => count($this->carritoActual()),
         ]);
+    }
+
+    /**
+     * Reparte las piezas en sus categorías, respetando el orden que el
+     * usuario les dio. Las categorías vacías se quedan igualmente: son
+     * carpetas, y una carpeta vacía sigue diciendo dónde va lo que llegue.
+     * Las piezas sin clasificar van al final, en un grupo sin categoría que
+     * solo aparece si hay alguna — no es una categoría más, es un "todavía
+     * no colocadas".
+     *
+     * @return list<array{categoria: array|null, piezas: list<array>}>
+     */
+    private function agruparPorCategoria(array $familias): array
+    {
+        $grupos = [];
+        foreach ($this->categoriaModel->ordenadas() as $categoria) {
+            $grupos[(int) $categoria['id']] = ['categoria' => $categoria, 'piezas' => []];
+        }
+
+        $sinCategoria = [];
+        foreach ($familias as $familia) {
+            $categoriaId = $familia['categoria_id'] ?? null;
+            if ($categoriaId !== null && isset($grupos[(int) $categoriaId])) {
+                $grupos[(int) $categoriaId]['piezas'][] = $familia;
+            } else {
+                $sinCategoria[] = $familia;
+            }
+        }
+
+        $grupos = array_values($grupos);
+        if ($sinCategoria !== []) {
+            $grupos[] = ['categoria' => null, 'piezas' => $sinCategoria];
+        }
+
+        return $grupos;
+    }
+
+    // ---- Máquinas -------------------------------------------------------
+
+    /**
+     * Las máquinas que hablan con la API, con lo único editable de ellas:
+     * el nombre (spec 4.5). Se da de alta sola con el hostname, que suele
+     * ser ilegible ("DESKTOP-4F2K1"), y ese nombre es el que aparece en los
+     * avisos de "sesión abierta en…" — que es justo donde tiene que
+     * entenderse sin pensar.
+     *
+     * Pantalla aparte y no un trozo del índice: se entra aquí una vez por
+     * equipo, el día que se estrena.
+     */
+    public function maquinas()
+    {
+        $maquinas = $this->maquinaModel->orderBy('ultima_vez', 'DESC')->findAll();
+
+        foreach ($maquinas as &$maquina) {
+            // Lo que tiene esta máquina en la mano ahora mismo: es el dato
+            // que dice si puedes olvidarte de ella o tienes que ir a buscarla.
+            $maquina['sesiones_abiertas'] = $this->sesionModel
+                ->where('maquina_id', $maquina['id'])->where('cerrada_en', null)->countAllResults();
+            $maquina['dias_sin_verse'] = $this->diasDesde($maquina['ultima_vez']);
+        }
+        unset($maquina);
+
+        return view('piezas/maquinas', ['maquinas' => $maquinas]);
+    }
+
+    public function renombrarMaquina(int $id)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->renombrarMaquina($id, (string) $this->request->getPost('nombre')),
+            fn() => site_url('piezas/maquinas'),
+            fn($maquina) => 'Esta máquina se llama ahora "' . $maquina['nombre'] . '".'
+        );
+    }
+
+    // ---- Categorías -----------------------------------------------------
+
+    public function crearCategoria()
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->crearCategoria((string) $this->request->getPost('nombre')),
+            fn() => site_url('piezas'),
+            fn($categoria) => 'Categoría "' . $categoria['nombre'] . '" creada.'
+        );
+    }
+
+    public function renombrarCategoria(int $id)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->renombrarCategoria($id, (string) $this->request->getPost('nombre')),
+            fn() => site_url('piezas'),
+            fn($categoria) => 'Categoría renombrada a "' . $categoria['nombre'] . '".'
+        );
+    }
+
+    public function borrarCategoria(int $id)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->borrarCategoria($id),
+            fn() => site_url('piezas'),
+            // Decir cuántas piezas se han quedado sueltas evita el susto de
+            // verlas aparecer de golpe al final del índice.
+            fn($resultado) => sprintf(
+                'Categoría "%s" borrada.%s',
+                $resultado['categoria']['nombre'],
+                $resultado['descolocadas'] > 0
+                    ? sprintf(' %d pieza(s) quedan sin clasificar, al final del listado.', $resultado['descolocadas'])
+                    : ''
+            )
+        );
+    }
+
+    public function moverCategoria(int $id, string $direccion)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->moverCategoria($id, $direccion === 'subir' ? -1 : 1),
+            fn() => site_url('piezas'),
+            fn($categoria) => 'Orden actualizado.'
+        );
+    }
+
+    /**
+     * Mueve una pieza de categoría desde el propio listado (el modo
+     * "Organizar"): valor vacío = sacarla de todas, que es distinto de
+     * borrarla y hay que poder hacerlo sin pasar por ningún formulario.
+     */
+    public function clasificarFamilia(int $familiaId)
+    {
+        $categoriaId = $this->request->getPost('categoria_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->clasificarFamilia(
+                $familiaId,
+                ($categoriaId === null || $categoriaId === '') ? null : (int) $categoriaId
+            ),
+            fn() => site_url('piezas'),
+            function ($familia) {
+                if (empty($familia['categoria_id'])) {
+                    return '"' . $familia['nombre'] . '" queda sin clasificar.';
+                }
+                $categoria = $this->categoriaModel->find($familia['categoria_id']);
+
+                return '"' . $familia['nombre'] . '" movida a ' . ($categoria['nombre'] ?? 'su categoría') . '.';
+            }
+        );
     }
 
     /**
@@ -138,6 +292,11 @@ class Web extends BaseController
         return view('piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
+            // Comunes a toda la pieza, no por variante (spec 1.1): las
+            // referencias del original ayudan a modelar cualquiera de sus
+            // variantes, y es aquí — no en el índice — donde se miran.
+            'referencias' => $this->referenciaModel
+                ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->findAll(),
             'origen'    => $this->versionDeOrigen($variante),
             'versiones' => $versiones,
             'validada'  => $this->versionModel->where('variante_id', $id)->where('estado', 'validada')->first(),
@@ -321,7 +480,8 @@ class Web extends BaseController
             fn() => $this->servicio->crearFamilia(
                 trim((string) $this->request->getPost('nombre')),
                 $this->request->getPost('notas') ?: null,
-                $this->request->getPost('sku') ?: null
+                $this->request->getPost('sku') ?: null,
+                $this->request->getPost('categoria_id') ? (int) $this->request->getPost('categoria_id') : null
             ),
             fn($creado) => site_url('piezas'),
             fn($creado) => 'Pieza "' . $creado['familia']['nombre'] . '" creada, ya lista para trabajar.'
@@ -339,6 +499,20 @@ class Web extends BaseController
             ),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Variante "' . $variante['nombre'] . '" creada, con su rama inicial abierta.'
+        );
+    }
+
+    /**
+     * Renombrar la variante. El aviso del mensaje no es adorno: el cliente
+     * se refiere a las variantes por nombre, así que el comando que el
+     * usuario tenga apuntado deja de valer en cuanto esto cambia.
+     */
+    public function renombrarVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->renombrarVariante($varianteId, (string) $this->request->getPost('nombre')),
+            fn($variante) => site_url('piezas/variante/' . $variante['id']),
+            fn($variante) => 'Ahora se llama "' . $variante['nombre'] . '". Desde el script, llámala por ese nombre.'
         );
     }
 
@@ -478,9 +652,26 @@ class Web extends BaseController
 
                 return $familiaId;
             },
-            fn() => site_url('piezas'),
+            fn() => $this->vueltaALaFicha($familiaId),
             fn() => 'Referencia añadida.'
         );
+    }
+
+    /**
+     * A dónde volver tras tocar una referencia. Se sube desde la ficha de
+     * una variante concreta, pero la referencia es de la pieza entera, así
+     * que el destino viene en el formulario en vez de deducirse. Se
+     * comprueba que esa variante sea de esta pieza: es lo que impide
+     * convertir el campo en un redirector a cualquier sitio.
+     */
+    private function vueltaALaFicha(int $familiaId): string
+    {
+        $varianteId = (int) $this->request->getPost('volver_a_variante');
+        $variante   = $varianteId ? $this->varianteModel->find($varianteId) : null;
+
+        return ($variante && (int) $variante['familia_id'] === $familiaId)
+            ? site_url('piezas/variante/' . $varianteId)
+            : site_url('piezas');
     }
 
     public function borrarReferencia(int $id)
@@ -493,10 +684,12 @@ class Web extends BaseController
         // Invariante 6 en espíritu: el fichero se aparta, no se destruye —
         // el registro de la referencia sí se quita, porque a diferencia de
         // una sesión o una versión no es parte del histórico de trabajo.
+        $destino = $this->vueltaALaFicha((int) $referencia['familia_id']);
+
         $this->almacen->aPapelera($referencia['ruta_imagen']);
         $this->referenciaModel->delete($id);
 
-        return redirect()->to(site_url('piezas'))->with('success', 'Referencia apartada a la papelera.');
+        return redirect()->to($destino)->with('success', 'Referencia apartada a la papelera.');
     }
 
     public function subirRender(int $versionId)

@@ -63,7 +63,7 @@ $porQueNo = function (array $v) use ($acciones): array {
     <?php if (!empty($variante['sku'])): ?>
         <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
     <?php endif; ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar SKU"
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre y SKU"
         data-bs-toggle="modal" data-bs-target="#modalSku">
         <i class="bi bi-pencil"></i>
     </button>
@@ -76,24 +76,49 @@ $porQueNo = function (array $v) use ($acciones): array {
     </a>
 </h5>
 
+<?php
+/**
+ * Nombre y SKU en el mismo modal pero en DOS formularios, cada uno con su
+ * botón: son dos verbos distintos y cada uno puede negarse por su cuenta
+ * (un nombre repetido, un SKU que ya tiene otra variante). Con un solo
+ * envío, el fallo de uno dejaría al otro aplicado a medias.
+ */
+?>
 <div class="modal fade" id="modalSku" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <form class="modal-content" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/sku') ?>">
-            <?= csrf_field() ?>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">SKU de <?= esc($variante['nombre']) ?></h6>
+                <h6 class="modal-title">Editar <?= esc($variante['nombre']) ?></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <label class="form-label small mb-1">Nombre de la variante</label>
+                <p class="small text-muted mb-2">
+                    Cómo se llama esta línea de diseño dentro de <strong><?= esc($familia['nombre']) ?></strong>
+                    (<code>pequeña</code>, <code>grande</code>, <code>calva</code>…). Es también el nombre por el
+                    que la pides desde el script, así que al cambiarlo cambia el comando.
+                </p>
+                <form method="post" class="d-flex gap-1 mb-3"
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/nombre') ?>">
+                    <?= csrf_field() ?>
+                    <input type="text" name="nombre" class="form-control form-control-sm"
+                        value="<?= esc($variante['nombre'], 'attr') ?>" maxlength="150" required>
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <hr>
+
+                <label class="form-label small mb-1">SKU</label>
                 <p class="small text-muted mb-2">Referencia manual, para buscar la pieza cuando alguien te la pida por su código.</p>
-                <input type="text" name="sku" class="form-control form-control-sm"
-                    value="<?= esc($variante['sku'] ?? '', 'attr') ?>" placeholder="p. ej. FLOR-001" maxlength="50">
+                <form method="post" class="d-flex gap-1"
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/sku') ?>">
+                    <?= csrf_field() ?>
+                    <input type="text" name="sku" class="form-control form-control-sm"
+                        value="<?= esc($variante['sku'] ?? '', 'attr') ?>" placeholder="p. ej. FLOR-001" maxlength="50">
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-sm btn-primary">Guardar</button>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -636,6 +661,74 @@ $porQueNo = function (array $v) use ($acciones): array {
                         <?= $acciones['puede_promocionar'] ? '' : 'disabled' ?>>
                         Promocionar
                     </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Referencias del original: de la PIEZA, no de esta variante (spec 1.1) -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <h6 class="mb-0"><i class="bi bi-camera"></i> Referencias</h6>
+                    <span class="text-muted small">de <?= esc($familia['nombre'] ?? 'la pieza') ?></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
+                        data-bs-toggle="modal" data-bs-target="#modalReferencia">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+
+                <?php if (empty($referencias)): ?>
+                    <p class="text-muted small mb-0">
+                        Sin fotos de referencia todavía (medidas de calibre, ángulos del original).
+                        Son de la pieza entera: las verás igual desde cualquiera de sus variantes.
+                    </p>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php foreach ($referencias as $r): ?>
+                            <div class="position-relative" style="width: 72px;">
+                                <a href="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                    title="<?= esc($r['notas'] ?? '') ?>">
+                                    <img src="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>"
+                                        class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
+                                        alt="Referencia" loading="lazy">
+                                </a>
+                                <form method="post" action="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/borrar') ?>"
+                                    onsubmit="return confirm('¿Apartar esta referencia a la papelera?');" class="position-absolute top-0 end-0">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
+                                    <button class="btn btn-sm btn-dark py-0 px-1 opacity-75" style="font-size: .65rem;" title="Borrar">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Alta de referencia -->
+        <div class="modal fade" id="modalReferencia" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" enctype="multipart/form-data"
+                    action="<?= site_url('piezas/familia/' . (int) $variante['familia_id'] . '/referencia') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Referencia para <?= esc($familia['nombre'] ?? 'la pieza') ?></h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label small">Foto</label>
+                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
+                        <label class="form-label small">Notas (medidas de calibre, qué muestra)</label>
+                        <textarea name="notas" class="form-control form-control-sm" rows="2"
+                            placeholder="Alto total 78mm con calibre, vista frontal"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button class="btn btn-sm btn-primary">Subir</button>
+                    </div>
                 </form>
             </div>
         </div>

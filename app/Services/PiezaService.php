@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaFamiliaModel;
+use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
@@ -35,14 +37,190 @@ class PiezaService
     private PiezaVersionModel $versionModel;
     private PiezaRamaModel $ramaModel;
     private PiezaSesionModel $sesionModel;
+    private PiezaCategoriaModel $categoriaModel;
+    private PiezaMaquinaModel $maquinaModel;
 
     public function __construct()
     {
-        $this->familiaModel  = new PiezaFamiliaModel();
-        $this->varianteModel = new PiezaVarianteModel();
-        $this->versionModel  = new PiezaVersionModel();
-        $this->ramaModel     = new PiezaRamaModel();
-        $this->sesionModel   = new PiezaSesionModel();
+        $this->familiaModel   = new PiezaFamiliaModel();
+        $this->varianteModel  = new PiezaVarianteModel();
+        $this->versionModel   = new PiezaVersionModel();
+        $this->ramaModel      = new PiezaRamaModel();
+        $this->sesionModel    = new PiezaSesionModel();
+        $this->categoriaModel = new PiezaCategoriaModel();
+        $this->maquinaModel   = new PiezaMaquinaModel();
+    }
+
+    // ---- Máquinas -------------------------------------------------------
+
+    /**
+     * Renombrar una máquina para que se lea (spec 4.5): el nombre de alta
+     * sale del hostname, que puede ser "MacBook-de-Jesus" o "DESKTOP-4F2K1".
+     * Es lo único editable de una máquina, y a propósito: el UUID es su
+     * identidad y lo pone el cliente, no el navegador.
+     *
+     * El nombre tiene que ser único porque su único trabajo es distinguirlas
+     * en los avisos: dos máquinas llamadas "MacBook" convierten "sesión
+     * abierta en MacBook" en una frase que no dice dónde ir a mirar.
+     */
+    public function renombrarMaquina(int $maquinaId, string $nombre): array
+    {
+        if (!$this->maquinaModel->find($maquinaId)) {
+            throw new RuntimeException("Máquina {$maquinaId} no encontrada.");
+        }
+
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            throw new RuntimeException('La máquina necesita un nombre.');
+        }
+
+        foreach ($this->maquinaModel->findAll() as $existente) {
+            if ((int) $existente['id'] !== $maquinaId
+                && mb_strtolower($existente['nombre']) === mb_strtolower($nombre)) {
+                throw new RuntimeException("Ya hay otra máquina llamada \"{$existente['nombre']}\".");
+            }
+        }
+
+        $this->maquinaModel->update($maquinaId, ['nombre' => $nombre]);
+
+        return $this->maquinaModel->find($maquinaId);
+    }
+
+    // ---- Categorías (spec 11.1) -----------------------------------------
+
+    /**
+     * Nace la última de la lista: quien crea una categoría a mitad de
+     * organizar no está diciendo nada sobre su prioridad, y colarla arriba
+     * movería de sitio las que el usuario ya había colocado.
+     */
+    public function crearCategoria(string $nombre): array
+    {
+        $nombre = $this->nombreDeCategoriaOFallar($nombre);
+
+        $id = $this->insertarOFallar($this->categoriaModel, [
+            'nombre' => $nombre,
+            'orden'  => 1 + (int) ($this->categoriaModel->selectMax('orden')->first()['orden'] ?? 0),
+        ]);
+
+        return $this->categoriaModel->find($id);
+    }
+
+    public function renombrarCategoria(int $categoriaId, string $nombre): array
+    {
+        if (!$this->categoriaModel->find($categoriaId)) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
+
+        $nombre = $this->nombreDeCategoriaOFallar($nombre, $categoriaId);
+        $this->categoriaModel->update($categoriaId, ['nombre' => $nombre]);
+
+        return $this->categoriaModel->find($categoriaId);
+    }
+
+    /**
+     * Borrar una categoría no toca las piezas que había dentro: se quedan
+     * sin clasificar, visibles al final del índice. Se devuelve cuántas
+     * son para poder decirlo — que aparezcan de golpe abajo sin avisar es
+     * justo lo que hace pensar que se han perdido.
+     *
+     * @return array{categoria: array, descolocadas: int}
+     */
+    public function borrarCategoria(int $categoriaId): array
+    {
+        $categoria = $this->categoriaModel->find($categoriaId);
+        if (!$categoria) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
+
+        $descolocadas = $this->familiaModel->where('categoria_id', $categoriaId)->countAllResults();
+
+        // El ON DELETE SET NULL del esquema haría esto solo, pero hacerlo
+        // aquí deja el recuento y el efecto en el mismo sitio, y no depende
+        // de que la FK exista (la base de producción se migró después).
+        $this->transaccion('borrar la categoría', function () use ($categoriaId) {
+            $this->familiaModel->where('categoria_id', $categoriaId)->set('categoria_id', null)->update();
+            $this->categoriaModel->delete($categoriaId);
+        });
+
+        return ['categoria' => $categoria, 'descolocadas' => $descolocadas];
+    }
+
+    /**
+     * Sube o baja una categoría intercambiando su `orden` con la vecina.
+     * Con media docena de categorías esto basta y sobra; un campo de orden
+     * editable a mano obligaría a pensar en números que a nadie le importan.
+     */
+    public function moverCategoria(int $categoriaId, int $direccion): array
+    {
+        $categoria = $this->categoriaModel->find($categoriaId);
+        if (!$categoria) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
+
+        $lista    = $this->categoriaModel->ordenadas();
+        $posicion = array_search((int) $categoria['id'], array_column($lista, 'id'), false);
+        $destino  = $posicion + ($direccion < 0 ? -1 : 1);
+
+        if ($destino < 0 || $destino >= count($lista)) {
+            return $categoria; // Ya está en el borde: no es un error, no hay nada que hacer.
+        }
+
+        // Se reescribe la lista entera y no solo el par que se intercambia:
+        // las categorías creadas antes de reordenar nada comparten `orden`
+        // (todas a 0 no, pero sí pueden empatar tras varios borrados) y un
+        // intercambio de valores iguales no movería nada.
+        $vecina = $lista[$destino];
+        $lista[$destino]  = $categoria;
+        $lista[$posicion] = $vecina;
+
+        $this->transaccion('reordenar las categorías', function () use ($lista) {
+            foreach ($lista as $posicion => $fila) {
+                $this->categoriaModel->update($fila['id'], ['orden' => $posicion + 1]);
+            }
+        });
+
+        return $this->categoriaModel->find($categoriaId);
+    }
+
+    /**
+     * Mete una pieza en una categoría, o la saca de todas ($categoriaId
+     * null). Es una reorganización, no un cambio de identidad: nada del
+     * historial de versiones depende de dónde esté colocada la pieza.
+     */
+    public function clasificarFamilia(int $familiaId, ?int $categoriaId): array
+    {
+        $familia = $this->familiaModel->find($familiaId);
+        if (!$familia) {
+            throw new RuntimeException("Pieza {$familiaId} no encontrada.");
+        }
+        if ($categoriaId !== null && !$this->categoriaModel->find($categoriaId)) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
+
+        $this->familiaModel->update($familiaId, ['categoria_id' => $categoriaId]);
+
+        return $this->familiaModel->find($familiaId);
+    }
+
+    private function nombreDeCategoriaOFallar(string $nombre, ?int $excluirId = null): string
+    {
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            throw new RuntimeException('La categoría necesita un nombre.');
+        }
+
+        // Comparación insensible a mayúsculas y en PHP, no en SQL: son media
+        // docena de filas, y así el criterio no depende de la collation de
+        // la base. "Accesorios" y "accesorios" son la misma carpeta para
+        // quien organiza.
+        foreach ($this->categoriaModel->findAll() as $existente) {
+            if ((int) $existente['id'] !== $excluirId
+                && mb_strtolower($existente['nombre']) === mb_strtolower($nombre)) {
+                throw new RuntimeException("Ya existe una categoría llamada \"{$existente['nombre']}\".");
+            }
+        }
+
+        return $nombre;
     }
 
     /**
@@ -61,12 +239,19 @@ class PiezaService
      *
      * @return array{familia: array, variante: array}
      */
-    public function crearFamilia(string $nombre, ?string $notas = null, ?string $sku = null): array
+    public function crearFamilia(string $nombre, ?string $notas = null, ?string $sku = null, ?int $categoriaId = null): array
     {
         $sku = $this->normalizarSkuOFallar($sku);
+        if ($categoriaId !== null && !$this->categoriaModel->find($categoriaId)) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
 
-        $familiaId = $this->transaccion('crear la pieza', function () use ($nombre, $notas) {
-            return $this->insertarOFallar($this->familiaModel, ['nombre' => $nombre, 'notas' => $notas]);
+        $familiaId = $this->transaccion('crear la pieza', function () use ($nombre, $notas, $categoriaId) {
+            return $this->insertarOFallar($this->familiaModel, [
+                'nombre'       => $nombre,
+                'categoria_id' => $categoriaId,
+                'notas'        => $notas,
+            ]);
         });
 
         // Fuera de la transacción anterior a propósito: crearVariante abre su
@@ -90,6 +275,9 @@ class PiezaService
             throw new RuntimeException("Familia {$familiaId} no encontrada.");
         }
         $sku = $this->normalizarSkuOFallar($sku);
+        // Misma comprobación que al renombrar: si solo se exigiera allí, un
+        // duplicado seguiría entrando por esta puerta.
+        $nombre = $this->nombreDeVarianteOFallar($familiaId, $nombre);
 
         $varianteId = $this->transaccion('crear la variante', function () use ($familiaId, $nombre, $notas, $sku) {
             $varianteId = $this->insertarOFallar($this->varianteModel, [
@@ -108,10 +296,59 @@ class PiezaService
     }
 
     /**
-     * El SKU es lo único de la variante que se puede editar libremente
-     * después de crearla (nombre y familia no tienen verbo de edición
-     * todavía: no hacía falta hasta ahora). Es una referencia manual —
-     * Trackbitos no sincroniza con la tienda, solo guarda el mismo código.
+     * Renombrar una variante. Hace falta desde el primer uso real: las
+     * piezas con varias líneas de diseño nacen con una llamada `base`
+     * (fase 12), y en cuanto aparece la segunda ese nombre deja de decir
+     * nada — "base" y "grande" no se leen como una pareja.
+     *
+     * Es cosmético para el registro: lo que identifica a la variante es su
+     * id, y ni las versiones ni los hashes ni los asientos de descarga
+     * dependen del nombre. Lo único que cambia de verdad es cómo se la
+     * llama desde el cliente (`trackbitos bajar "Pistola grande"`), que es
+     * justo el motivo para poder arreglarlo.
+     */
+    public function renombrarVariante(int $varianteId, string $nombre): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $nombre = $this->nombreDeVarianteOFallar((int) $variante['familia_id'], $nombre, $varianteId);
+        $this->varianteModel->update($varianteId, ['nombre' => $nombre]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
+     * El nombre de una variante solo tiene que ser único **dentro de su
+     * pieza** ("base" se repite en cuanto hay dos piezas, y está bien).
+     * Pero dentro de la misma pieza sí, porque el cliente resuelve las
+     * variantes por nombre: dos "grande" en la misma pistola harían
+     * ambiguo un `trackbitos bajar`, que es peor que un nombre feo.
+     */
+    private function nombreDeVarianteOFallar(int $familiaId, string $nombre, ?int $excluirId = null): string
+    {
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            throw new RuntimeException('La variante necesita un nombre.');
+        }
+
+        $hermanas = $this->varianteModel->where('familia_id', $familiaId)->findAll();
+        foreach ($hermanas as $hermana) {
+            if ((int) $hermana['id'] !== $excluirId
+                && mb_strtolower($hermana['nombre']) === mb_strtolower($nombre)) {
+                throw new RuntimeException("Esta pieza ya tiene una variante llamada \"{$hermana['nombre']}\".");
+            }
+        }
+
+        return $nombre;
+    }
+
+    /**
+     * El SKU es la otra cosa editable de una variante. Es una referencia
+     * manual — Trackbitos no sincroniza con la tienda, solo guarda el mismo
+     * código.
      */
     public function actualizarSku(int $varianteId, ?string $sku): array
     {
@@ -156,6 +393,7 @@ class PiezaService
             throw new RuntimeException("Versión de origen {$origenVersionId} no encontrada.");
         }
         $varianteOrigen = $this->varianteModel->find($origen['variante_id']);
+        $nombre         = $this->nombreDeVarianteOFallar((int) $varianteOrigen['familia_id'], $nombre);
 
         $varianteId = $this->transaccion('derivar la variante', function () use ($origenVersionId, $nombre, $notas, $varianteOrigen) {
             $varianteId = $this->insertarOFallar($this->varianteModel, [

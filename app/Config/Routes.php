@@ -624,8 +624,23 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('/', 'Web::index');
     $routes->POST('familia', 'Web::crearFamilia');
     $routes->POST('variante', 'Web::crearVariante');
+
+    // Categorías: el nivel por encima de la pieza (spec 11.1). Van antes
+    // que 'familia/(:num)/...' porque 'categoria' es literal y no debe
+    // competir con ningún patrón numérico.
+    $routes->POST('categoria', 'Web::crearCategoria');
+    $routes->POST('categoria/(:num)/renombrar', 'Web::renombrarCategoria/$1');
+    $routes->POST('categoria/(:num)/borrar', 'Web::borrarCategoria/$1');
+    $routes->POST('categoria/(:num)/mover/(subir|bajar)', 'Web::moverCategoria/$1/$2');
+    $routes->POST('familia/(:num)/categoria', 'Web::clasificarFamilia/$1');
+
+    // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
+    // cliente al registrarse, nunca la web.
+    $routes->GET('maquinas', 'Web::maquinas');
+    $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
+    $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');

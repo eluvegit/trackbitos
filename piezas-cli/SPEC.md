@@ -11,10 +11,11 @@
 | 5 | API de subida y descarga, con verificación de hash en ambos extremos | ✅ Hecho |
 | 6 | Interfaz web: ficha de variante y botones de los verbos | ✅ Hecho |
 | 7 | Papelera y purga de sesiones al validar | ✅ Hecho |
+| 8-13 | Imágenes, STL, SKU/galería/placa, descarga web del `.blend`, «Pieza» + variante `base`, categorías y listado | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
-- Modelos: `app/Models/Pieza{Maquina,Familia,Variante,Version,Rama,Sesion,Descarga}Model.php`
+- Modelos: `app/Models/Pieza{Maquina,Categoria,Familia,Variante,Version,Rama,Sesion,Descarga}Model.php`
   (prefijados "Pieza" a propósito — ya existe un `SesionModel`/tabla `sesiones` para el módulo de rodajes fotográficos, completamente distinto)
 - Verbos: `app/Services/PiezaService.php`
 - Círculo descarga→subida (invariante 8): `app/Services/PiezaSyncService.php`
@@ -117,6 +118,52 @@ quita es el trabajo manual. El alta acepta ahora el SKU, que se aplica a esa var
 El nombre es `base` y no `estándar`/`original` porque no promete nada sobre las que vengan.
 
 En la ficha, el contador de variantes solo aparece a partir de dos: con una sola es ruido.
+
+**Fase 13 (2026-08-17): categorías y vista de listado en el índice.**
+
+El índice era una tarjeta grande por pieza, una detrás de otra. Con tres piezas se leía bien;
+con quince —las que hay pendientes de meter— era un chorizo sin orden. Ahora es un **listado
+denso agrupado por categoría**, con las quince en una pantalla.
+
+- **Categorías** (`piezas_categorias`, `categoria_id` en `piezas_familias`): las carpetas que ya
+  existen en disco, no una taxonomía nueva. Un nivel **por encima** de la pieza, plano y sin
+  anidar. Tabla y no un campo de texto: con texto libre una errata crea una categoría fantasma
+  en silencio y renombrar obliga a repasar todas las piezas. Verbos en `PiezaService`:
+  `crearCategoria`, `renombrarCategoria`, `borrarCategoria`, `moverCategoria`,
+  `clasificarFamilia`. Se gestionan desde el modal «Categorías» del índice.
+- **Sin clasificar es un estado legítimo**, no un error: una pieza recién creada puede no saber
+  todavía dónde va, y aparece en un grupo propio al final. Borrar una categoría **no borra sus
+  piezas** (`ON DELETE SET NULL`, más el mismo efecto explícito en el servicio): se quedan sin
+  clasificar y el mensaje dice cuántas son, porque verlas aparecer de golpe abajo sin aviso es
+  justo lo que hace pensar que se han perdido.
+- **Modo «Organizar»**: los selectores de categoría por fila y las flechas de orden solo se ven
+  al encenderlo, y el modo se recuerda entre cargas — cada pieza que cambia de categoría recarga
+  la página, y colocar quince seguidas sería encenderlo quince veces.
+- El plegado de cada categoría se recuerda en `localStorage`; el buscador abre todos los grupos
+  mientras se busca y restaura el plegado al vaciar el campo.
+- **Renombrar variantes** (`PiezaService::renombrarVariante()`, lápiz en la cabecera de la ficha,
+  junto al SKU). Hacía falta desde el primer uso real: una pieza con varias líneas de diseño nace
+  con una variante `base` (fase 12), y en cuanto llega la segunda ese nombre deja de decir nada —
+  `base` y `grande` no se leen como una pareja; `pequeña` y `grande` sí. Es cosmético para el
+  registro (lo que identifica a la variante es su id: ni versiones, ni hashes, ni asientos
+  dependen del nombre), pero **no es cosmético para el cliente**, que resuelve las variantes por
+  nombre — por eso el mensaje avisa de que el comando cambia, y por eso el nombre debe ser único
+  **dentro de su pieza**: dos `grande` en la misma pistola harían ambiguo un `trackbitos bajar`.
+  Entre piezas distintas se repite libremente (`base` está en casi todas). La misma comprobación
+  se aplica al crear y al derivar variantes: si solo viviera en el renombrado, un duplicado
+  entraría por la otra puerta.
+- **Pantalla de máquinas** (`/piezas/maquinas`, icono en la cabecera del índice): la que faltaba
+  desde la 4.5, que ya daba el nombre por editable en la web. Se da de alta con el hostname
+  (`DESKTOP-4F2K1`) y ese nombre es el que sale en los avisos de «sesión abierta en…», donde
+  tiene que entenderse sin pensar. El nombre es lo **único** editable — el UUID es la identidad y
+  lo pone el cliente — y se exige único: dos máquinas llamadas «MacBook» convierten ese aviso en
+  una frase que no dice dónde ir a mirar. Cada máquina muestra además cuántas sesiones tiene
+  abiertas ahora mismo, que es lo que decide si puedes olvidarte de ella.
+- **Las fotos de referencia se mudan a la ficha de variante.** Vivían en las tarjetas del índice,
+  que ya no existen, y la ficha es donde de verdad se miran: mientras modelas. Siguen siendo de
+  la pieza entera (1.1), así que se ven iguales desde cualquiera de sus variantes; el formulario
+  lleva la variante de vuelta en `volver_a_variante`, y el controlador comprueba que sea de esa
+  misma pieza antes de redirigir.
 
 ---
 
@@ -402,7 +449,7 @@ Un equipo nuevo aparece solo con ejecutar el script: cero mantenimiento de lista
 
 Es presentación, no lógica.
 
-Implementado (fase 4): `POST /maquina/registrar` vía `PiezaMaquinaModel::registrar()`, alta automática de UUID en `piezas-cli/trackbitos.py::cargar_config()`.
+Implementado (fase 4): `POST /maquina/registrar` vía `PiezaMaquinaModel::registrar()`, alta automática de UUID en `piezas-cli/trackbitos.py::cargar_config()`. El renombrado en la web llegó en la fase 13: `/piezas/maquinas` (`Web::maquinas()`), con `PiezaService::renombrarMaquina()`.
 
 ---
 
@@ -513,7 +560,7 @@ Nota: los verbos de versión son llamadas directas a `PiezaService` (fase 2) —
 
 Sobria y orientada al estado. Lo que debe responder de un vistazo: **cuál es la buena y dónde está el trabajo en curso.**
 
-Implementada (fase 6) en `app/Controllers/Piezas/Web.php` y `app/Views/piezas/`. Índice de familias → variantes, ficha de variante, y el alta de familias/variantes (sin ella el módulo no arrancaba desde cero).
+Implementada (fase 6) en `app/Controllers/Piezas/Web.php` y `app/Views/piezas/`. Índice de piezas → variantes, ficha de variante, y el alta de piezas/variantes (sin ella el módulo no arrancaba desde cero). El índice pasó a ser un listado agrupado por categorías en la fase 13.
 
 **La web no descarga ficheros de trabajo, y es deliberado.** La identidad de máquina la declara el script, nunca el navegador (4.5): un `.blend` de sesión bajado desde el móvil no tendría disco que registrar ni asiento que cuadrar. Así que para el trabajo en curso la ficha muestra el hash de la nube y el comando exacto a ejecutar, y quien toca esos ficheros sigue siendo `trackbitos.py`. La excepción del `.blend` de una versión ya cerrada está en la fase 11.
 
@@ -616,68 +663,51 @@ La fase 3 es la que concentraba el riesgo del diseño — quedó probada a fondo
 
 ## 11. Pendiente
 
-### 11.1 Categorías y vista de listado en el índice (lo siguiente)
+### 11.1 Meter las piezas que ya existen fuera del sistema
 
-El índice (`/piezas`, `app/Views/piezas/index.php`) es hoy **una tarjeta grande por pieza, una
-detrás de otra**. Con 3 piezas se lee bien; con 15 —que es lo que hay pendiente de meter— es un
-chorizo sin orden en el que no se encuentra nada.
+**Decidido (2026-08-17): se suben a mano por la web, sin importador.** Se diseñó uno (escaneo a
+CSV revisable + comando `importar` en el CLI, con cuatro endpoints nuevos de API: crear pieza,
+crear variante, listar categorías y adjuntar STL) y se descartó por desproporcionado para 27
+ficheros que se meten una sola vez. Si algún día vuelve a hacer falta, el diseño está aquí
+descrito y los verbos que necesitaba ya existen en `PiezaService`; lo único que falta es la capa
+de API y el comando.
 
-Lo que hace falta:
+**Inventario real** (27 ficheros → 24 piezas, en cuatro categorías que son sus carpetas):
 
-- **Categorías, pensadas como las carpetas que ya existen en disco.** No mezclar piezas del
-  cuerpo con objetos, con accesorios, ni con dioramas cuando los haya. La idea es reproducir en
-  la web la organización que ya se usa fuera de ella, no inventar una taxonomía nueva.
-- **Vista de listado**, más densa que las tarjetas actuales: se trata de barrer 15+ piezas de un
-  vistazo, no de lucir cada una.
+- **Objetos**: Lupa, Micrófono, Rastrillo, Zoleta, Libro, Flores, Mojón, Mini playmobil, Copa,
+  **Pistola** (`pequeña`/`grande`) y **Silla** (dos variantes).
+- **Cuerpo**: Brazo integral, Brazo, Mano, Brazo y mano, Estructura interior, Pelo, Torso,
+  Completo, **Cabeza** (`normal`/`calva`) y **Piernas** (`rectas`).
+- **Otros**: Junta pistola. · **Pruebas**: Números, Modelo conos.
 
-Decisiones que quedan por tomar (no están tomadas):
+Tres cosas que conviene tener presentes al meterlas:
 
-- La categoría sería un nivel **por encima de la pieza** (`familia`), no un sustituto de la
-  variante. Puede ser una tabla nueva, o un simple campo de texto en `piezas_familias` — lo
-  segundo es mucho más barato y probablemente suficiente para media docena de categorías.
-- Si una pieza puede estar en varias categorías (probablemente no hace falta).
-- Si el listado sustituye a las tarjetas o convive con ellas.
+1. **La unidad es el fichero, no la pieza física.** «Brazo y mano en el mismo `.blend`» no puede
+   colgar a la vez de *Brazo* y de *Mano* — serían dos copias vivas del mismo fichero, justo lo
+   que el módulo existe para impedir. Entra como una pieza propia.
+2. **`Completo` es un ensamblaje y aquí no hay ensamblajes.** Entra como una pieza más, sin
+   relación con torso/pelo/piernas: si se promociona un torso nuevo, *Completo* no se entera. Se
+   convive anotando en su `cambio` de qué versiones parte, pero es disciplina, no una
+   comprobación del sistema.
+3. **Las de `Pruebas` no se validan nunca** (son calibraciones), así que se quedarán siempre en
+   *sin versión buena* en el listado. Es esperado, no un olvido.
 
-**Contexto de dimensionado:** ~15 piezas ya modeladas fuera del sistema, de las cuales **solo dos
-tienen variantes de verdad** (una silla y unas piernas), más un caso de pistola pequeña/grande
-que nacería de derivar una versión. Es decir: el índice debe optimizarse para *una pieza, una
-variante*, y tratar las variantes como la excepción que son.
+**Regla de partida al meterlas: no se reconstruye el pasado.** Cada pieza entra como **v001** con
+un `cambio` del tipo "importada del trabajo anterior a Trackbitos". Las iteraciones hechas fuera
+no tienen hashes, ni sesiones, ni de qué copia partía cada una — inventarles un historial haría el
+registro menos fiable, no más. El valor empieza en el siguiente toque de cada pieza.
 
-### 11.2 Importar las ~15 piezas que ya existen fuera del sistema
+El ciclo a mano por pieza: alta por web (nombre, categoría, SKU) → `trackbitos abrir <pieza>` →
+copiar el `.blend` → `subir` → `cerrar` → `promocionar --cambio "importada…"` → y si ya está
+impresa y es buena, marcarla impresa y validarla desde la ficha, más adjuntar el `.stl` ahí mismo.
+Los `.stl` ya están exportados junto a los `.blend`, así que se pueden subir en la misma pasada.
 
-Hay una quincena de modelos ya hechos antes de Trackbitos que hay que meter. **Va después de
-las categorías (11.1)**: si se importan antes, hay que categorizarlas a mano una por una.
-
-**Regla de partida: no se reconstruye el pasado.** Cada pieza entra como **v001** con un `cambio`
-del tipo "importada del trabajo anterior a Trackbitos". Las iteraciones hechas fuera no tienen
-hashes, ni sesiones, ni de qué copia partía cada una — inventarles un historial haría el registro
-menos fiable, no más. El valor empieza en el siguiente toque de cada pieza.
-
-**Camino recomendado: un comando de importación** en el CLI, que recorra una carpeta raíz con una
-subcarpeta por pieza y por cada una haga el ciclo entero (crear, subir, promocionar, y
-opcionalmente marcar impresa + validar si ya está impresa y es buena, y adjuntar el `.stl` si
-está al lado). A mano son 2-3 minutos por pieza; con script, una ejecución desatendida.
-
-Obstáculo conocido: **la API no tiene endpoint para crear piezas** (`crearFamilia` solo existe en
-`Web`). O se añade, o se dan de alta las 15 por web primero — que además es el momento natural de
-decidir nombre, SKU y categoría.
-
-Por preguntar al usuario antes de escribir nada:
-
-1. ¿Una carpeta por pieza con un solo `.blend`, o mezclados / con varios `.blend` antiguos?
-2. ¿Están ya exportados los `.stl` junto a los `.blend`?
-3. De las 15, ¿cuántas están impresas y validadas, y cuántas a medias?
-
-Si están ordenadas en carpetas, el script es casi trivial. Si están mezcladas, el trabajo real es
-ordenarlas y eso no lo puede hacer un script.
-
-### 11.3 Cabos sueltos menores
+### 11.2 Cabos sueltos menores
 
 - **Despliegue**: cron diario de `php spark piezas:purgar` e incluir `writable/piezas/` en el
   backup a Backblaze B2 (sección 8). Sigue sin hacerse.
 - **La primera pieza real** (`Pincel de pintura`) tiene su variante llamada `estandar`, anterior
-  a la variante `base` automática de la fase 12. Funciona igual; renombrarla es solo cosmético.
+  a la variante `base` automática de la fase 12. Ya se puede renombrar desde la ficha (fase 13)
+  si molesta; funciona igual como está.
 - **`piezas-cli/__pycache__/`** está versionado en git y aparece como modificado en cada
   ejecución del cliente. Debería ir al `.gitignore`.
-- No hay pantalla para **renombrar una máquina**: el nombre sale del hostname y solo se puede
-  cambiar en la base de datos. La sección 4.5 lo daba por editable en la web; no se construyó.
