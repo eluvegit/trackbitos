@@ -649,6 +649,11 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
     $routes->GET('version/(:num)/stl/descargar', 'Web::descargarStl/$1');
 
+    // El .blend de una versión ya promocionada, sin declarar máquina: es
+    // inmutable y nadie espera que vuelva, así que no hay asiento que
+    // cuadrar. Las sesiones (trabajo en curso) siguen siendo del CLI.
+    $routes->GET('version/(:num)/blend/descargar', 'Web::descargarBlend/$1');
+
     // Galería (solo piezas validadas) + placa de impresión: carrito de STL
     // en sesión, para bajarlos todos de golpe y meterlos en un laminador.
     $routes->GET('galeria', 'Web::galeria');

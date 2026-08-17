@@ -52,6 +52,15 @@ def sha256_de(ruta: Path) -> str:
     return h.hexdigest()
 
 
+# Los JSON que lee este script (config.json a mano, .sesion.json propio) se
+# leen con utf-8-sig, no utf-8: en Windows casi cualquier forma cómoda de
+# crear un fichero de texto (Bloc de notas, PowerShell 5.1 con -Encoding
+# utf8) le mete un BOM delante, y json.loads revienta con él. utf-8-sig se
+# come el BOM si está y no estorba si no está. Al escribir se usa utf-8 a
+# secas: el BOM se tolera de entrada, no se propaga.
+ENCODING_LECTURA = "utf-8-sig"
+
+
 def encontrar_blend(directorio: Path) -> Optional[Path]:
     """
     El .sesion.json no dice el nombre del fichero: se asume que hay un
@@ -66,7 +75,7 @@ def cargar_json(ruta: Path) -> Optional[dict]:
     if not ruta.is_file():
         return None
     try:
-        return json.loads(ruta.read_text(encoding="utf-8"))
+        return json.loads(ruta.read_text(encoding=ENCODING_LECTURA))
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -141,7 +150,7 @@ def cargar_config() -> dict:
             '"token": "<piezas.apiToken del .env del servidor>"}'
         )
 
-    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    config = json.loads(CONFIG_PATH.read_text(encoding=ENCODING_LECTURA))
     if not config.get("uuid"):
         config["uuid"] = str(uuidlib.uuid4())
         guardar_config(config)
@@ -169,11 +178,20 @@ def _abrir(peticion: urllib.request.Request, config: dict):
         return urllib.request.urlopen(peticion, timeout=60)
     except urllib.error.HTTPError as e:
         cuerpo = e.read().decode("utf-8", errors="replace")
+        # El cuerpo de un error no siempre es el {"error": "..."} de la API:
+        # un hosting puede colar su propia página, y json.loads() de eso
+        # devuelve texto suelto (o revienta) en vez de un diccionario. Sin
+        # este cuidado, el fallo al leer el error sustituía al error mismo y
+        # dejaba al usuario sin saber qué respondió el servidor.
         try:
-            mensaje = json.loads(cuerpo).get("error") or cuerpo
+            datos = json.loads(cuerpo)
         except json.JSONDecodeError:
-            mensaje = cuerpo.strip()
-        raise RuntimeError(mensaje) from e
+            datos = None
+        mensaje = datos.get("error") if isinstance(datos, dict) else None
+        mensaje = mensaje or cuerpo.strip() or e.reason
+        # El código HTTP es la mitad del diagnóstico (401 token, 404 ruta o
+        # máquina, 409 asiento que no cuadra) y se estaba perdiendo.
+        raise RuntimeError(f"HTTP {e.code} desde {peticion.full_url}\n    {mensaje}") from e
     except urllib.error.URLError as e:
         raise RuntimeError(f"no se pudo conectar con {config.get('url_base')}: {e.reason}") from e
 
@@ -278,27 +296,55 @@ def asegurar_maquina(config: dict) -> dict:
     })
 
 
+def nombre_completo(variante: dict) -> str:
+    """
+    "Pincel de pintura / estandar". El nombre de la variante solo es único
+    dentro de su familia ("estandar" se repetirá en cuanto haya dos piezas),
+    así que en cualquier mensaje al usuario va con su familia delante: una
+    lista de tres "estandar" no sirve para elegir ninguno.
+    """
+    familia = variante.get("familia_nombre")
+    return f"{familia} / {variante['nombre']}" if familia else variante["nombre"]
+
+
 def resolver_variante(config: dict, texto: str) -> dict:
-    """Acepta el id o el nombre; con el nombre a medias, lista las opciones."""
+    """
+    Acepta el id, el nombre de la variante, el de su familia, o trozos de
+    ambos en cualquier orden ("pincel", "estandar", "pincel estandar").
+
+    Se busca sobre familia + variante porque es como se piensa la pieza: la
+    familia es el nombre real ("Pincel de pintura") y la variante suele ser
+    una etiqueta genérica ("estandar") que por sí sola no dice qué es.
+    """
     variantes = api_get(config, "/variantes").get("variantes", [])
     if not variantes:
         raise RuntimeError("no hay ninguna variante todavía. Créala en la web.")
 
+    def buscable(v: dict) -> str:
+        return f"{v.get('familia_nombre') or ''} {v['nombre']}".lower()
+
     if texto.isdigit():
         exactas = [v for v in variantes if v["id"] == int(texto)]
     else:
+        # El nombre exacto de variante gana siempre: si tienes una variante
+        # llamada "estandar" y escribes "estandar", es esa, aunque el texto
+        # también aparezca dentro del nombre de otras familias.
         exactas = [v for v in variantes if v["nombre"].lower() == texto.lower()]
         if not exactas:
-            exactas = [v for v in variantes if texto.lower() in v["nombre"].lower()]
+            palabras = texto.lower().split()
+            exactas = [v for v in variantes if all(p in buscable(v) for p in palabras)]
 
     if len(exactas) == 1:
         return exactas[0]
     if not exactas:
-        disponibles = ", ".join(v["nombre"] for v in variantes)
+        disponibles = ", ".join(nombre_completo(v) for v in variantes)
         raise RuntimeError(f"no hay ninguna variante que sea '{texto}'. Hay: {disponibles}")
 
-    ambiguas = ", ".join(v["nombre"] for v in exactas)
-    raise RuntimeError(f"'{texto}' encaja con varias: {ambiguas}. Concreta.")
+    ambiguas = ", ".join(nombre_completo(v) for v in exactas)
+    raise RuntimeError(
+        f"'{texto}' encaja con varias: {ambiguas}.\n"
+        "    Concreta añadiendo la familia, p.ej.: trackbitos abrir \"pincel estandar\""
+    )
 
 
 # --------------------------------------------------------------------------

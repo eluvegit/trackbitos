@@ -44,7 +44,7 @@ mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
    ```
    trackbitos abrir torso-recto
    ```
-   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1.
+   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1. El nombre admite la familia, la variante o ambas (ver el truco de la sección 5).
 
 3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta.
 
@@ -87,9 +87,9 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 |---|---|
 | `trackbitos estado` | El más usado: diagnóstico en lenguaje natural de la carpeta actual — qué hacer, sin comparar hashes tú. |
 | `trackbitos variantes` | El catálogo completo desde la terminal, agrupado por familia: qué piezas hay y por dónde va cada una. |
-| `trackbitos abrir <variante>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
-| `trackbitos bajar [<variante>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
-| `trackbitos ver <variante>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
+| `trackbitos abrir <pieza>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
+| `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
+| `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
 | `trackbitos subir [--log "..."]` | Sube el `.blend` de la carpeta actual. |
 | `trackbitos cerrar [--sin-cambios]` | Cierra la sesión, o la descarga sin subir fichero. |
 | `trackbitos promocionar --cambio "..." [--medidas "..."]` | Congela la última sesión subida como versión nueva. |
@@ -97,7 +97,18 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 
 Todos aceptan `--dir` (por defecto, la carpeta actual). `bajar`/`ver` aceptan `--ignorar-pendiente` para saltarse el aviso de copia viva en la otra máquina.
 
-Truco: si usas **una carpeta por pieza**, `trackbitos estado` ya sabe en qué variante/rama/sesión estás con solo mirar el `.sesion.json` que él mismo dejó — no hace falta escribir el nombre salvo al empezar algo nuevo. Y ni siquiera hace falta el nombre exacto: acepta coincidencia parcial y, si no acierta, lista las variantes que hay.
+Truco: si usas **una carpeta por pieza**, `trackbitos estado` ya sabe en qué variante/rama/sesión estás con solo mirar el `.sesion.json` que él mismo dejó — no hace falta escribir el nombre salvo al empezar algo nuevo.
+
+**Cómo nombrar la pieza** en los comandos que lo piden (`abrir`, `bajar`, `ver`): vale el nombre de la **familia**, el de la **variante**, trozos de cualquiera de los dos, los dos juntos, o el id. Para una familia "Pincel de pintura" con variante "estandar", todo esto funciona igual:
+
+```
+trackbitos abrir pincel
+trackbitos abrir estandar
+trackbitos abrir "pincel estandar"
+trackbitos abrir 3
+```
+
+Se busca sobre familia + variante porque es como se piensa la pieza: la familia lleva el nombre real y la variante suele ser una etiqueta genérica ("estandar") que por sí sola no dice qué es. Si lo que escribes encaja con varias, te las lista **con su familia delante** (`Pincel de pintura / estandar`, `Casco romano / estandar`) para que puedas concretar; un nombre de variante exacto siempre gana sobre las coincidencias parciales.
 
 ---
 

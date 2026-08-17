@@ -68,6 +68,31 @@ nueva y subir el STL ahí.
   carrito no se vacía solo al descargar — "Vaciar placa" es una acción aparte y explícita, para no
   perder la selección si la descarga falla a mitad.
 
+**Fase 11 (2026-08-17): descargar el `.blend` de una versión desde la web.**
+
+La web ya dejaba bajar el STL de una versión pero no su `.blend`, siendo los dos igual de
+inmutables y colgando de la misma versión — una asimetría accidental, no una decisión. Ahora
+`GET /piezas/version/{id}/blend/descargar` (`Web::descargarBlend()`) lo sirve como adjunto.
+
+**Por qué no rompe la sección 4.4:** lo que obliga a declarar máquina no es la extensión del
+fichero, es que haya **trabajo que deba volver**. Una versión es inmutable (invariante 4) y está
+cerrada: nadie espera que la devuelvas, así que no hay asiento que abrir ni cadena `hash_padre`
+que romper. Las **sesiones** siguen siendo exclusivas del cliente, que es donde vive ese riesgo.
+Y si alguien acabase trabajando sobre esta copia, el cliente no la daría por buena: sin
+`.sesion.json` la tabla 4.3 la trata como divergencia (fila 4).
+
+Aun así, la ficha lo avisa junto al botón, como texto visible y no como `title` (7.1): *"Ese
+`.blend` no queda registrado: para mirar, no para trabajar."* El aviso va en una sola línea a
+propósito — se repite en cada versión del historial, y la explicación completa vive en el panel
+lateral "Desde tu máquina".
+
+**Nombre de fichero con SKU.** Las descargas se llamaban `version-v002.stl`, que es el nombre en
+disco (derivado de IDs, sección 8) y no dice de qué pieza son. Ahora `Web::nombreArchivo()` las
+sirve como `PM-042-torso-recto-v002.blend`: SKU delante cuando lo hay, porque es el código por el
+que se pide la pieza fuera de Trackbitos y lo que la hace reconocible en la carpeta de descargas
+o dentro del laminador. Aplica también al STL suelto y a los ficheros dentro del `.zip` de la
+placa.
+
 ---
 
 ## 0. Contexto
@@ -465,7 +490,7 @@ Sobria y orientada al estado. Lo que debe responder de un vistazo: **cuál es la
 
 Implementada (fase 6) en `app/Controllers/Piezas/Web.php` y `app/Views/piezas/`. Índice de familias → variantes, ficha de variante, y el alta de familias/variantes (sin ella el módulo no arrancaba desde cero).
 
-**La web no descarga ficheros, y es deliberado.** La identidad de máquina la declara el script, nunca el navegador (4.5): un `.blend` bajado desde el móvil no tendría disco que registrar ni asiento que cuadrar. Así que la ficha muestra el hash de la nube y el comando exacto a ejecutar, y quien toca ficheros sigue siendo `trackbitos.py`.
+**La web no descarga ficheros de trabajo, y es deliberado.** La identidad de máquina la declara el script, nunca el navegador (4.5): un `.blend` de sesión bajado desde el móvil no tendría disco que registrar ni asiento que cuadrar. Así que para el trabajo en curso la ficha muestra el hash de la nube y el comando exacto a ejecutar, y quien toca esos ficheros sigue siendo `trackbitos.py`. La excepción del `.blend` de una versión ya cerrada está en la fase 11.
 
 **Lo que sí es exclusivo de la web:** el cierre forzado de una descarga (4.4). No existe como comando del cliente a propósito — es la válvula de escape, no el atajo de cada noche.
 

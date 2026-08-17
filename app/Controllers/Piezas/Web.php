@@ -21,19 +21,20 @@ use Throwable;
  * orientada al estado: lo que debe responder de un vistazo es cuál es la
  * versión buena y dónde está el trabajo en curso.
  *
- * Lo que esta interfaz NO hace, a propósito: descargar el .blend/.stl de
- * trabajo. La identidad de máquina la declara el script, nunca el
- * navegador (spec 4.5) — la web puede abrirse desde el móvil, donde no hay
- * ningún disco que registrar. Así que aquí se muestra el hash de la nube y
- * el comando exacto a ejecutar, y quien toca esos ficheros sigue siendo
- * trackbitos.py.
+ * Lo que esta interfaz NO hace, a propósito: mover ficheros de TRABAJO —
+ * el .blend de una sesión, en cualquier sentido. La identidad de máquina
+ * la declara el script, nunca el navegador (spec 4.5) — la web puede
+ * abrirse desde el móvil, donde no hay ningún disco que registrar. Así que
+ * para el trabajo en curso aquí se muestra el hash de la nube y el comando
+ * exacto a ejecutar, y quien toca esos ficheros sigue siendo trackbitos.py.
  *
- * Excepción deliberada: las imágenes (referencias y renders, más abajo) y
- * el STL para imprimir. A diferencia del .blend, no hace falta cuadrar
- * ningún disco para adjuntar o descargar ninguno de los dos — no hay
- * edición iterativa que sincronizar, solo un fichero final que subir una
- * vez (STL) o mirar (fotos) — así que se suben y se sirven directamente
- * desde el navegador.
+ * Excepción deliberada, y una sola razón para las tres: nada de lo que se
+ * mueve desde el navegador tiene que volver. Las imágenes (referencias y
+ * renders) y el STL solo se suben una vez o se miran; y el .blend de una
+ * versión ya promocionada es inmutable (invariante 4) y está cerrado, así
+ * que descargarlo no abre ningún asiento que cuadrar. Lo que exige
+ * declarar máquina no es el formato del fichero: es que haya trabajo que
+ * deba regresar.
  */
 class Web extends BaseController
 {
@@ -252,7 +253,7 @@ class Web extends BaseController
         }
         foreach ($versiones as $version) {
             $variante = $this->varianteModel->find($version['variante_id']);
-            $zip->addFile($this->almacen->absoluta($version['ruta_stl']), $this->nombreArchivoStl($variante, $version));
+            $zip->addFile($this->almacen->absoluta($version['ruta_stl']), $this->nombreArchivo($variante, $version, 'stl'));
         }
         $zip->close();
 
@@ -266,11 +267,27 @@ class Web extends BaseController
         return $this->response->download($rutaZip, null, true);
     }
 
-    private function nombreArchivoStl(?array $variante, array $version): string
+    /**
+     * Nombre con el que se descarga un fichero de una versión. Lleva el SKU
+     * delante cuando lo hay: es el código por el que se pide la pieza fuera
+     * de Trackbitos, y es lo que la hace reconocible en la carpeta de
+     * descargas o dentro del laminador, donde ya no está la ficha al lado
+     * para mirarlo.
+     */
+    private function nombreArchivo(?array $variante, array $version, string $extension): string
     {
-        $base = preg_replace('/[^A-Za-z0-9_-]+/', '-', $variante['nombre'] ?? ('variante-' . $version['variante_id']));
+        $partes = array_filter([
+            $this->paraNombreDeArchivo($variante['sku'] ?? null),
+            $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . $version['variante_id'],
+        ]);
 
-        return sprintf('%s-v%03d.stl', trim((string) $base, '-'), (int) $version['numero']);
+        return sprintf('%s-v%03d.%s', implode('-', $partes), (int) $version['numero'], $extension);
+    }
+
+    /** Deja solo lo que sobrevive intacto a cualquier sistema de ficheros. */
+    private function paraNombreDeArchivo(?string $texto): string
+    {
+        return trim(preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $texto), '-');
     }
 
     private function carritoActual(): array
@@ -578,7 +595,40 @@ class Web extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
-        return $this->response->download($this->almacen->absoluta($version['ruta_stl']), null, true);
+        $variante = $this->varianteModel->find($version['variante_id']);
+
+        // En disco el fichero se llama version-v002.stl (nombres derivados de
+        // IDs, spec 8); quien lo descarga necesita saber de qué pieza es.
+        return $this->response->download($this->almacen->absoluta($version['ruta_stl']), null, true)
+            ->setFileName($this->nombreArchivo($variante, $version, 'stl'));
+    }
+
+    /**
+     * El .blend de una VERSIÓN, descargable sin declarar máquina.
+     *
+     * Es la única excepción a "la web no descarga .blend" (spec 7) y se
+     * sostiene en que una versión es inmutable (invariante 4) y está
+     * cerrada: nadie espera que la devuelvas, así que no hay asiento que
+     * cuadrar ni cadena hash_padre que romper. Sirve para mirar el modelo
+     * desde una máquina sin el cliente instalado.
+     *
+     * Las sesiones siguen fuera: ahí sí hay trabajo en curso que debe
+     * volver, y una copia sin registrar es justo lo que la sección 4.4
+     * existe para evitar. Si alguien acaba trabajando sobre esta copia, el
+     * cliente lo verá como divergencia (tabla 4.3, fila 4) al faltarle el
+     * .sesion.json — nunca la dará por buena.
+     */
+    public function descargarBlend(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version || !$this->almacen->existe($version['ruta_blend'] ?? null)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $variante = $this->varianteModel->find($version['variante_id']);
+
+        return $this->response->download($this->almacen->absoluta($version['ruta_blend']), null, true)
+            ->setFileName($this->nombreArchivo($variante, $version, 'blend'));
     }
 
     /**

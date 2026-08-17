@@ -282,6 +282,10 @@ $porQueNo = function (array $v) use ($acciones): array {
 
                         <!-- STL para imprimir: aparte del .blend, inmutable una vez adjuntado -->
                         <div class="d-flex flex-wrap gap-1 mt-2">
+                            <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>"
+                                class="btn btn-sm btn-outline-secondary py-0 px-2">
+                                <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
+                            </a>
                             <?php if (!empty($v['ruta_stl'])): ?>
                                 <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
                                     class="btn btn-sm btn-outline-success py-0 px-2">
@@ -310,6 +314,17 @@ $porQueNo = function (array $v) use ($acciones): array {
                                     <i class="bi bi-file-earmark-arrow-up"></i> Adjuntar STL
                                 </button>
                             <?php endif; ?>
+                        </div>
+
+                        <!--
+                            Aviso, no tooltip (spec 7.1): esta descarga no abre asiento,
+                            así que el sistema no sabe que esa copia existe. Va en una
+                            sola línea a propósito — se repite en cada versión del
+                            historial, y el porqué completo está en "Desde tu máquina".
+                        -->
+                        <div class="text-warning-emphasis small mt-1">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Ese <code>.blend</code> <strong>no queda registrado</strong>: para mirar, no para trabajar.
                         </div>
 
                         <div class="d-flex flex-wrap gap-1 mt-2">
@@ -620,10 +635,19 @@ $porQueNo = function (array $v) use ($acciones): array {
             <div class="card-body p-3">
                 <h6 class="mb-2"><i class="bi bi-terminal"></i> Desde tu máquina</h6>
                 <p class="text-muted small mb-2">
-                    Los ficheros no se bajan desde aquí: quien toca el disco es el script, que es el único
+                    El <strong>trabajo</strong> no se baja desde aquí: quien toca el disco es el script, que es el único
                     que puede identificar la máquina y cuadrar la descarga. Esta web puede abrirse desde el móvil.
+                    Lo que sí puedes bajar del navegador es el <code>.blend</code> de una versión ya cerrada,
+                    pero solo para mirarlo: esa copia no queda registrada.
                 </p>
-                <pre class="small mb-0 user-select-all"><code>trackbitos bajar <?= esc($variante['nombre']) ?>
+                <?php
+                    // Familia + variante, entrecomillado: el nombre de la variante
+                    // solo es único dentro de su familia ("estandar" se repite en
+                    // cuanto hay dos piezas) y este comando es para copiar y pegar
+                    // — tiene que funcionar tal cual, no la mitad de las veces.
+                    $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+                ?>
+                <pre class="small mb-0 user-select-all"><code>trackbitos bajar "<?= esc($refCli) ?>"
 
 trackbitos estado
 trackbitos subir
