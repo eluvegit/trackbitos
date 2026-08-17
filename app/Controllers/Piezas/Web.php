@@ -276,8 +276,16 @@ class Web extends BaseController
      */
     private function nombreArchivo(?array $variante, array $version, string $extension): string
     {
+        // La familia va incluida (igual que en las descargas del CLI, ver
+        // PiezaSyncService::nombreFichero): "estandar-v001.stl" no dice de
+        // qué pieza es en cuanto hay dos variantes llamadas igual, y estos
+        // ficheros acaban sueltos en una carpeta de descargas o en el
+        // laminador, lejos de la ficha que los explicaba.
+        $familia = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
+
         $partes = array_filter([
             $this->paraNombreDeArchivo($variante['sku'] ?? null),
+            $this->paraNombreDeArchivo($familia['nombre'] ?? null),
             $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . $version['variante_id'],
         ]);
 

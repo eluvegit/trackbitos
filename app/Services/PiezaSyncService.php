@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PiezaDescargaModel;
+use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
@@ -524,16 +525,34 @@ class PiezaSyncService
 
     /**
      * Nombre con el que el fichero aterriza en el disco del usuario. Legible
-     * (lo va a ver en Blender), pero saneado: el nombre de la variante es
-     * texto libre y puede traer acentos, espacios o barras.
+     * (lo va a ver en Blender), pero saneado: los nombres son texto libre y
+     * pueden traer acentos, espacios o barras.
+     *
+     * Lleva la FAMILIA delante, no solo la variante: el nombre de la
+     * variante suele ser una etiqueta genérica ("estandar") que se repite
+     * entre piezas, así que por sí solo no distingue nada en cuanto tienes
+     * dos .blend abiertos o dos carpetas al lado. El SKU va primero cuando
+     * lo hay, para que ordene igual que las descargas de la web.
      */
     private function nombreFichero(array $variante, array $rama, ?array $sesion): string
     {
-        $limpio = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $variante['nombre']), '-') ?: 'variante';
+        $familia = (new PiezaFamiliaModel())->find($variante['familia_id']);
+
+        $partes = array_filter([
+            $this->paraNombreDeArchivo($variante['sku'] ?? null),
+            $this->paraNombreDeArchivo($familia['nombre'] ?? null),
+            $this->paraNombreDeArchivo($variante['nombre']) ?: 'variante',
+        ]);
+        $base = implode('-', $partes);
 
         return $sesion
-            ? sprintf('%s-r%d-s%03d.blend', $limpio, (int) $rama['id'], (int) $sesion['numero'])
-            : sprintf('%s-r%d-consulta.blend', $limpio, (int) $rama['id']);
+            ? sprintf('%s-r%d-s%03d.blend', $base, (int) $rama['id'], (int) $sesion['numero'])
+            : sprintf('%s-r%d-consulta.blend', $base, (int) $rama['id']);
+    }
+
+    private function paraNombreDeArchivo(?string $texto): string
+    {
+        return trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', (string) $texto), '-');
     }
 
     private function transaccion(string $accion, callable $pasos)
