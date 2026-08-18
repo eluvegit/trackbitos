@@ -69,54 +69,53 @@
 
 <?php
 /**
- * Pinta la parte de una variante que se lee de lejos: cuál es la versión
- * buena y si hay trabajo en marcha en otra máquina. Se reutiliza tal cual
- * en la fila de una pieza de variante única y en las subfilas de las que
- * tienen varias, para que ambas se lean igual.
+ * Tabla, no tarjetas con badges que se envuelven: con quince piezas de
+ * un vistazo hay que poder leer columna por columna (nombre, SKU, estado,
+ * versiones, aviso), no perseguir cada dato en un sitio distinto de cada
+ * fila. Estos tres devuelven el HTML de una celda (nunca texto de usuario
+ * sin `esc()`), para no repetir la misma condición en la fila de pieza
+ * única y en cada subfila de variante.
  */
-$estadoVariante = static function (array $v): void { ?>
-    <?php if (!empty($v['sku'])): ?>
-        <?php // Sin color de fondo: text-bg-light sobre el tema oscuro deja el código casi ilegible. ?>
-        <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($v['sku']) ?></span>
-    <?php endif; ?>
+$colEstado = static function (array $v): string {
+    if ($v['validada']) {
+        return '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> v'
+            . sprintf('%03d', (int) $v['validada']['numero']) . '</span>';
+    }
+    // Antes esto era validada-o-no, y todo lo demás ("nunca se imprimió",
+    // "impresa, pendiente de juzgar", "la última se descartó") se veía
+    // igual: "sin versión buena". Aquí sí importa en qué línea de vida
+    // está, no solo si ya tiene una buena.
+    if ($v['ultima_version_estado'] === 'impresa') {
+        return '<span class="badge text-bg-info" title="Impresa, pendiente de juzgar el resultado">'
+            . '<i class="bi bi-printer-fill"></i> sin validar</span>';
+    }
+    if ($v['ultima_version_estado'] === 'descartada') {
+        return '<span class="badge text-bg-danger" title="La última versión se descartó">'
+            . '<i class="bi bi-x-circle-fill"></i> descartada</span>';
+    }
 
-    <?php
-        /**
-         * Antes esto era validada-o-no, y todo lo demás ("nunca se imprimió",
-         * "impresa, pendiente de juzgar", "la última se descartó") se veía
-         * igual: "sin versión buena". Aquí sí importa en qué línea de vida
-         * está, no solo si ya tiene una buena — sobre todo para no confundir
-         * "todavía sin intentar" con "ya se probó y falló, hay que rehacerla".
-         */
-    ?>
-    <?php if ($v['validada']): ?>
-        <span class="badge text-bg-success">
-            <i class="bi bi-check-circle-fill"></i> v<?= sprintf('%03d', (int) $v['validada']['numero']) ?>
-        </span>
-    <?php elseif ($v['ultima_version_estado'] === 'impresa'): ?>
-        <span class="badge text-bg-info" title="Impresa, pendiente de juzgar el resultado">
-            <i class="bi bi-printer-fill"></i> impresa, sin validar
-        </span>
-    <?php elseif ($v['ultima_version_estado'] === 'descartada'): ?>
-        <span class="badge text-bg-danger" title="La última versión se descartó">
-            <i class="bi bi-x-circle-fill"></i> última descartada
-        </span>
-    <?php else: ?>
-        <span class="badge text-bg-secondary">sin versión buena</span>
-    <?php endif; ?>
+    return '<span class="badge text-bg-secondary">sin versión buena</span>';
+};
 
-    <span class="text-muted small"><?= (int) $v['versiones'] ?> vers.</span>
+$colAviso = static function (array $v): string {
+    if ($v['bloqueo']) {
+        return '<span class="badge text-bg-warning"><i class="bi bi-lock-fill"></i> '
+            . esc($v['bloqueo']['maquina']) . '</span>';
+    }
+    if (!empty($v['pendientes'])) {
+        return '<span class="badge text-bg-warning"><i class="bi bi-download"></i> '
+            . count($v['pendientes']) . ' sin cerrar</span>';
+    }
 
-    <?php if ($v['bloqueo']): ?>
-        <span class="badge text-bg-warning">
-            <i class="bi bi-lock-fill"></i> <?= esc($v['bloqueo']['maquina']) ?>
-        </span>
-    <?php elseif (!empty($v['pendientes'])): ?>
-        <span class="badge text-bg-warning">
-            <i class="bi bi-download"></i> <?= count($v['pendientes']) ?> sin cerrar
-        </span>
-    <?php endif; ?>
-<?php };
+    return '';
+};
+
+$colSku = static function (array $v): string {
+    // Sin color de fondo: text-bg-light sobre el tema oscuro deja el código casi ilegible.
+    return empty($v['sku'])
+        ? ''
+        : '<span class="badge border text-body-secondary font-monospace fw-normal">' . esc($v['sku']) . '</span>';
+};
 
 /** Todo lo que debe encontrar el buscador de una pieza: su nombre y el de sus variantes con sus SKU. */
 $textoBuscable = static function (array $familia): string {
@@ -130,65 +129,71 @@ $textoBuscable = static function (array $familia): string {
 };
 ?>
 
-<?php foreach ($grupos as $indice => $grupo): ?>
-    <?php $categoria = $grupo['categoria']; ?>
-    <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
-    <div class="mb-3" data-grupo>
-        <div class="d-flex align-items-center gap-2 border-bottom pb-1 mb-1">
-            <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
-                data-plegar="<?= $idGrupo ?>">
-                <i class="bi bi-chevron-down" data-chevron></i>
-            </button>
-            <span class="fw-semibold text-uppercase small <?= $categoria ? '' : 'text-muted fst-italic' ?>">
-                <?= $categoria ? esc($categoria['nombre']) : 'Sin clasificar' ?>
-            </span>
-            <span class="badge border text-body-secondary" data-contador><?= count($grupo['piezas']) ?></span>
+<table class="table table-sm align-middle mb-2" id="tablaPiezas">
+    <?php foreach ($grupos as $indice => $grupo): ?>
+        <?php $categoria = $grupo['categoria']; ?>
+        <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
+        <tbody class="table-group-divider">
+            <tr>
+                <td colspan="6" class="py-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
+                            data-plegar="<?= $idGrupo ?>">
+                            <i class="bi bi-chevron-down" data-chevron></i>
+                        </button>
+                        <span class="fw-semibold text-uppercase small <?= $categoria ? '' : 'text-muted fst-italic' ?>">
+                            <?= $categoria ? esc($categoria['nombre']) : 'Sin clasificar' ?>
+                        </span>
+                        <span class="badge border text-body-secondary" data-contador><?= count($grupo['piezas']) ?></span>
 
-            <?php if ($categoria): ?>
-                <span class="zona-organizar d-none ms-auto d-flex gap-1">
-                    <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/subir') ?>">
-                        <?= csrf_field() ?>
-                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Subir"
-                            <?= $indice === 0 ? 'disabled' : '' ?>><i class="bi bi-arrow-up"></i></button>
-                    </form>
-                    <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/bajar') ?>">
-                        <?= csrf_field() ?>
-                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Bajar"><i class="bi bi-arrow-down"></i></button>
-                    </form>
-                </span>
-            <?php endif; ?>
-        </div>
+                        <?php if ($categoria): ?>
+                            <span class="zona-organizar d-none ms-auto d-flex gap-1">
+                                <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/subir') ?>">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Subir"
+                                        <?= $indice === 0 ? 'disabled' : '' ?>><i class="bi bi-arrow-up"></i></button>
+                                </form>
+                                <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/bajar') ?>">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Bajar"><i class="bi bi-arrow-down"></i></button>
+                                </form>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
 
-        <div id="<?= $idGrupo ?>">
+        <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <p class="text-muted small ps-4 mb-0">Vacía: mueve piezas aquí desde «Organizar».</p>
+                <tr><td colspan="6" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
-            <div class="list-group list-group-flush">
-                <?php foreach ($grupo['piezas'] as $familia): ?>
-                    <?php $variantes = $familia['variantes']; ?>
-                    <div class="list-group-item px-2 py-1" data-pieza
-                        data-buscar="<?= esc($textoBuscable($familia), 'attr') ?>">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <?php if (count($variantes) === 1): ?>
-                                <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
-                                <a href="<?= site_url('piezas/variante/' . (int) $variantes[0]['id']) ?>"
-                                    class="d-flex align-items-center gap-2 flex-wrap flex-grow-1 text-decoration-none text-body">
-                                    <strong class="text-truncate"><?= esc($familia['nombre']) ?></strong>
-                                    <?php $estadoVariante($variantes[0]) ?>
-                                </a>
-                            <?php else: ?>
-                                <strong class="flex-grow-1 text-truncate"><?= esc($familia['nombre']) ?></strong>
-                                <?php if (count($variantes) > 1): ?>
-                                    <span class="text-muted small"><?= count($variantes) ?> variantes</span>
-                                <?php else: ?>
-                                    <span class="text-muted small fst-italic">sin variantes</span>
-                                <?php endif; ?>
-                            <?php endif; ?>
-
+            <?php foreach ($grupo['piezas'] as $familia): ?>
+                <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
+                <tr data-pieza data-buscar="<?= $buscar ?>">
+                    <td>
+                        <?php if (count($variantes) === 1): ?>
+                            <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
+                            <a href="<?= site_url('piezas/variante/' . (int) $variantes[0]['id']) ?>"
+                                class="text-decoration-none text-body"><?= esc($familia['nombre']) ?></a>
+                        <?php else: ?>
+                            <?= esc($familia['nombre']) ?>
+                            <span class="text-muted small">
+                                (<?= count($variantes) > 0 ? count($variantes) . ' variantes' : 'sin variantes' ?>)
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
+                    <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
+                    <td class="text-muted small text-end">
+                        <?= count($variantes) === 1 ? (int) $variantes[0]['versiones'] . ' vers.' : '' ?>
+                    </td>
+                    <td><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
+                    <td class="zona-organizar d-none">
+                        <div class="d-flex gap-1 justify-content-end">
                             <?php // Cambiar de categoría: un select que se envía solo, oculto salvo en modo Organizar. ?>
-                            <form method="post" class="zona-organizar d-none"
-                                action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/categoria') ?>">
+                            <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/categoria') ?>">
                                 <?= csrf_field() ?>
                                 <select name="categoria_id" class="form-select form-select-sm py-0"
                                     style="width: auto; font-size: .75rem;" onchange="this.form.submit()">
@@ -203,8 +208,7 @@ $textoBuscable = static function (array $familia): string {
                             </form>
 
                             <?php // Borrar (a papelera): mismo modo Organizar, para no ensuciar la fila el resto del tiempo. ?>
-                            <form method="post" class="zona-organizar d-none"
-                                action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/borrar') ?>"
+                            <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/borrar') ?>"
                                 onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
                                 <?= csrf_field() ?>
                                 <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar">
@@ -212,25 +216,29 @@ $textoBuscable = static function (array $familia): string {
                                 </button>
                             </form>
                         </div>
+                    </td>
+                </tr>
 
-                        <?php if (count($variantes) > 1): ?>
-                            <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
-                            <div class="ms-3 border-start ps-2">
-                                <?php foreach ($variantes as $v): ?>
-                                    <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
-                                        class="d-flex align-items-center gap-2 flex-wrap text-decoration-none text-body py-1">
-                                        <span class="text-truncate"><?= esc($v['nombre']) ?></span>
-                                        <?php $estadoVariante($v) ?>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-<?php endforeach; ?>
+                <?php if (count($variantes) > 1): ?>
+                    <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
+                    <?php foreach ($variantes as $v): ?>
+                        <tr data-subpieza data-buscar="<?= $buscar ?>">
+                            <td class="ps-4">
+                                <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
+                                    class="text-decoration-none text-body">↳ <?= esc($v['nombre']) ?></a>
+                            </td>
+                            <td><?= $colSku($v) ?></td>
+                            <td><?= $colEstado($v) ?></td>
+                            <td class="text-muted small text-end"><?= (int) $v['versiones'] ?> vers.</td>
+                            <td><?= $colAviso($v) ?></td>
+                            <td class="zona-organizar d-none"></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </tbody>
+    <?php endforeach; ?>
+</table>
 
 <p class="text-muted small d-none" id="sinResultados">Ninguna pieza coincide con la búsqueda.</p>
 
@@ -425,30 +433,40 @@ $textoBuscable = static function (array $familia): string {
         var q = buscador.value.trim().toLowerCase();
         var encontradas = 0;
 
-        document.querySelectorAll('[data-pieza]').forEach(function (fila) {
+        // Filas de pieza (una por familia) y de variante (subfilas, cuando
+        // hay más de una): comparten el mismo data-buscar, así que se
+        // muestran/ocultan juntas sin más que iterar las dos.
+        document.querySelectorAll('[data-pieza], [data-subpieza]').forEach(function (fila) {
             var visible = fila.getAttribute('data-buscar').indexOf(q) !== -1;
             fila.classList.toggle('d-none', !visible);
-            if (visible) encontradas++;
+            if (fila.hasAttribute('data-pieza') && visible) encontradas++;
         });
 
         // Un grupo cerrado escondería resultados sin decirlo: mientras se
         // busca se abren todos, y al vaciar el campo se restaura el plegado
-        // que el usuario había dejado.
-        document.querySelectorAll('[data-grupo]').forEach(function (grupo) {
-            var cuerpo = grupo.querySelector('[id^="cat-"]');
-            var visibles = grupo.querySelectorAll('[data-pieza]:not(.d-none)').length;
-            var contador = grupo.querySelector('[data-contador]');
+        // que el usuario había dejado. La cabecera de cada categoría es el
+        // <tbody> justo antes del que lleva el id "cat-N" (mismo orden en
+        // que los pinta el bucle de PHP).
+        document.querySelectorAll('tbody[id]').forEach(function (cuerpo) {
+            var cabecera = cuerpo.previousElementSibling;
+            var visibles = cuerpo.querySelectorAll('[data-pieza]:not(.d-none)').length;
+            var contador = cabecera ? cabecera.querySelector('[data-contador]') : null;
 
             if (q === '') {
-                grupo.classList.remove('d-none');
-                if (contador) contador.textContent = grupo.querySelectorAll('[data-pieza]').length;
-                if (cuerpo) pintar(cuerpo.id, cerradas().indexOf(cuerpo.id) === -1);
+                if (cabecera) cabecera.classList.remove('d-none');
+                if (contador) contador.textContent = cuerpo.querySelectorAll('[data-pieza]').length;
+                pintar(cuerpo.id, cerradas().indexOf(cuerpo.id) === -1);
                 return;
             }
 
-            grupo.classList.toggle('d-none', visibles === 0);
+            cuerpo.classList.toggle('d-none', visibles === 0);
+            if (cabecera) cabecera.classList.toggle('d-none', visibles === 0);
             if (contador) contador.textContent = visibles;
-            if (cuerpo) pintar(cuerpo.id, true);
+            var chevron = cabecera ? cabecera.querySelector('[data-chevron]') : null;
+            if (chevron && visibles > 0) {
+                chevron.classList.add('bi-chevron-down');
+                chevron.classList.remove('bi-chevron-right');
+            }
         });
 
         if (sinResultados) sinResultados.classList.toggle('d-none', q === '' || encontradas > 0);

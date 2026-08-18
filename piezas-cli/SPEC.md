@@ -348,6 +348,17 @@ peso que no tiene sentido versionar en el propio servidor.
   que no se quedaron en borrador), sesiones de trabajo totales, y días desde que se creó.
   `Web::pesoDeVariante()` reutiliza el mismo cálculo que ya usaba `estadisticas()` por familia,
   ahora también por variante suelta.
+- **El índice pasa de tarjetas con badges que se envuelven a una tabla real.** Con el catálogo ya
+  grande, las filas de `list-group-item` con badges en `flex-wrap` se leían mal: cada fila
+  envolvía en un sitio distinto según cuántos avisos tuviera, sin ninguna columna alineada. Ahora
+  es una única `<table>` para todo el listado (columnas: Pieza, SKU, Estado, Versiones, Aviso, y
+  una de Organizar que solo aparece en ese modo) — un `<table>` no puede llevar un `<div>` como
+  hijo directo, así que cada categoría son dos `<tbody>` consecutivos (uno de cabecera, siempre
+  visible; otro con el `id="cat-N"` de siempre, plegable) en vez del `<div data-grupo>` que las
+  envolvía antes. Las filas de variante (cuando hay más de una) llevan `data-subpieza` en vez de
+  `data-pieza` — mismo `data-buscar` que su fila de pieza, para que el buscador las oculte juntas
+  — pero fuera del recuento de "cuántas piezas hay" en la cabecera de cada categoría, que sigue
+  contando solo `data-pieza`.
 
 ---
 
