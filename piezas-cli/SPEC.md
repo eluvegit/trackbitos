@@ -20,6 +20,7 @@
 | 19 | Columna "Estado": qué hay terminado + si hay trabajo encima (`modificando`) | ✅ Hecho (detalle abajo) |
 | 20 | Invariante 9 (impresión sin juzgar) y `cerrar` sin subir | ✅ Hecho (detalle abajo) |
 | 21 | Varios STL por versión (imprimir a trozos y montar) | ✅ Hecho (detalle abajo) |
+| 22 | `abrir` fusionado en `bajar`: un solo comando para pieza nueva o con historial | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -515,6 +516,18 @@ multiplica es la exportación para imprimir, no el modelo.
   pero descargar y quitar cuelgan del STL concreto (`GET stl/{id}/descargar`,
   `POST stl/{id}/quitar`).
 
+**Fase 22 (2026-08-19): `abrir` fusionado en `bajar`.** El comando aparte "abrir" (sesión sin
+descargar, solo para piezas recién estrenadas) desaparece: `bajar` ya calculaba internamente si
+había algo que descargar (`origen_descarga`) y, si no había nada, simplemente se negaba y remitía
+a "abrir". Ahora, en ese mismo caso — y solo con motivo "trabajo", no con "ver" — hace lo que
+hacía "abrir": abre la sesión sin descargar nada, en vez de negarse. Un único comando para las dos
+situaciones, sin que el usuario tenga que saber de antemano si hay algo que traer o no (mismo
+principio que `git checkout`/`pull` sobre una rama vacía o con historial). Alias `a` (antes de
+"abrir") se conserva apuntando ahora a "bajar", junto al `b` de siempre. La llamada al servidor
+sigue siendo la misma (`POST /variante/{id}/sesion/abrir`), así que el invariante 9 (fase 20,
+"no se sigue trabajando a ciegas") se aplica igual que antes — no hizo falta tocar nada del lado
+del servidor.
+
 ---
 
 ## 0. Contexto
@@ -823,23 +836,24 @@ Configuración en `~/.trackbitos/config.json`: URL base, token de API, **UUID de
 ### 5.1 Comandos
 
 ```
-trackbitos estado      (e)   # el más usado — diagnóstico completo          ✅ hecho
-trackbitos abrir       (a)   <variante>  # sesión sin descargar: variante estrenada  ✅ hecho
-trackbitos bajar       (b)   [<variante>]                                   ✅ hecho
-trackbitos ver         (v)   <variante>  # descarga de consulta, sin abrir sesión  ✅ hecho
-trackbitos subir       (s)   [--log "..."]                                  ✅ hecho
+trackbitos estado      (e)      # el más usado — diagnóstico completo       ✅ hecho
+trackbitos bajar       (b, a)   [<variante>]  # descarga y abre sesión; si la pieza está
+                                 # recién estrenada (nada que descargar), solo abre sesión ✅ hecho
+trackbitos ver         (v)      <variante>  # descarga de consulta, sin abrir sesión ✅ hecho
+trackbitos subir       (s)      [--log "..."]                               ✅ hecho
 trackbitos cerrar      (c)                                                  ✅ hecho
 trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero    ✅ hecho
-trackbitos promocionar (p)   --cambio "..." [--medidas "..."]               ✅ hecho
-trackbitos papelera    (pa)  # qué hay apartado y cuándo caduca             ✅ hecho
-trackbitos catalogo    (ca)  # catálogo completo, agrupado por categoría    ✅ hecho
-trackbitos variantes   (va)  <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
-trackbitos actualizar  (ac)  # comprueba y aplica una versión nueva del cliente  ✅ hecho
+trackbitos promocionar (p)      --cambio "..." [--medidas "..."]            ✅ hecho
+trackbitos papelera    (pa)     # qué hay apartado y cuándo caduca          ✅ hecho
+trackbitos catalogo    (ca)     # catálogo completo, agrupado por categoría ✅ hecho
+trackbitos variantes   (va)     <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
+trackbitos actualizar  (ac)     # comprueba y aplica una versión nueva del cliente ✅ hecho
 ```
 
-Alias cortos entre paréntesis (`trackbitos a "perro"` = `trackbitos abrir "perro"`): una letra para
-los seis de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
-sigue funcionando igual — es azúcar, no un modo nuevo.
+Alias cortos entre paréntesis (`trackbitos b "perro"` = `trackbitos bajar "perro"`): una letra
+para los de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
+sigue funcionando igual — es azúcar, no un modo nuevo. `bajar` tiene dos alias (`b` y `a`) porque
+hasta la fase 22 `a` era de un comando aparte, `abrir` — ver esa fase.
 
 La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
 son dos máquinas de escritorio que se encienden a ratos, y un cron en cada una sería una pieza
@@ -1066,7 +1080,7 @@ un `cambio` del tipo "importada del trabajo anterior a Trackbitos". Las iteracio
 no tienen hashes, ni sesiones, ni de qué copia partía cada una — inventarles un historial haría el
 registro menos fiable, no más. El valor empieza en el siguiente toque de cada pieza.
 
-El ciclo a mano por pieza: alta por web (nombre, categoría, SKU) → `trackbitos abrir <pieza>` →
+El ciclo a mano por pieza: alta por web (nombre, categoría, SKU) → `trackbitos bajar <pieza>` →
 copiar el `.blend` → `subir` → `cerrar` → `promocionar --cambio "importada…"` → y si ya está
 impresa y es buena, marcarla impresa y validarla desde la ficha, más adjuntar el `.stl` ahí mismo.
 Los `.stl` ya están exportados junto a los `.blend`, así que se pueden subir en la misma pasada.

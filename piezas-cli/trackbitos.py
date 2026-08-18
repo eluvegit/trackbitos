@@ -3,7 +3,7 @@
 Cliente de Piezas (Trackbitos) — versionado de modelos 3D.
 
 Fase 5: además de diagnosticar ("estado"), el cliente ya mueve ficheros —
-abrir/bajar/ver/subir/cerrar/promocionar contra la API real, con el hash
+bajar/ver/subir/cerrar/promocionar contra la API real, con el hash
 verificado en los dos extremos.
 
 El script razona, no el usuario (spec 5.2): cada comando termina con un
@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -467,7 +467,7 @@ def resolver_variante(config: dict, texto: str) -> dict:
     raise RuntimeError(
         f"'{texto}' encaja con varias:\n\n"
         f"{_listado_agrupado(exactas, categorias_orden)}\n\n"
-        "    Concreta añadiendo la pieza, p.ej.: trackbitos abrir \"pincel base\""
+        "    Concreta añadiendo la pieza, p.ej.: trackbitos bajar \"pincel base\""
     )
 
 
@@ -708,54 +708,6 @@ def cmd_estado(args) -> int:
     return 0 if resultado["accion"] in ("borrable", "descargar") else 1
 
 
-def cmd_abrir(args) -> int:
-    """Sesión sin descargar nada: estrenar una variante que aún no tiene .blend."""
-    directorio = _directorio(args)
-    config = cargar_config()
-    asegurar_maquina(config)
-
-    variante = resolver_variante(config, args.variante)
-
-    # Si la carpeta se reutiliza de una pieza anterior y queda un .blend
-    # suelto, "subir" lo encontraría como único fichero y lo subiría tal
-    # cual — sin avisar, como si fuera la primera versión de ESTA pieza.
-    # Se aparta a la papelera igual que ya hace "bajar": la carpeta debe
-    # quedar limpia antes de empezar a trabajar en algo distinto.
-    sobrante = encontrar_blend(directorio)
-    if sobrante:
-        apartado = a_papelera(sobrante)
-        print(f"  · Había un .blend suelto de otra pieza en esta carpeta: se apartó a {apartado}")
-
-    respuesta = api_post(config, f"/variante/{variante['id']}/sesion/abrir")
-    sesion = respuesta["sesion"]
-
-    estado_api = api_get(config, f"/variante/{variante['id']}/estado")
-    rama = (estado_api.get("rama") or {})
-
-    # nombre_completo, no variante["nombre"] a secas: "base" (la que se crea
-    # sola con cada pieza) no dice de qué pieza es — sin esto, la
-    # confirmación de "abrir" era indistinguible entre piezas distintas.
-    identidad = nombre_completo(variante)
-
-    escribir_sentinel(directorio, {
-        "variante_id": variante["id"],
-        "variante": identidad,
-        "rama_id": rama.get("id"),
-        "rama": rama.get("nombre"),
-        "sesion_id": sesion["id"],
-        "sesion": sesion["numero"],
-        "descarga_id": None,
-        "motivo": "trabajo",
-        "origen": "nuevo",
-        "hash_origen": None,
-        "descargado_en": datetime.now().astimezone().isoformat(timespec="seconds"),
-    })
-
-    print(f"\n{identidad} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta\n")
-    print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
-    return 0
-
-
 def _bajar(args, motivo: str) -> int:
     directorio = _directorio(args)
     config = cargar_config()
@@ -803,12 +755,48 @@ def _bajar(args, motivo: str) -> int:
 
     origen = estado_api.get("origen_descarga")
     if not origen:
-        print(f"\n{variante_nombre}: no hay ningún fichero subido todavía, no hay nada que bajar.")
-        # El id, no el nombre, para que se pueda pegar tal cual: con varias
-        # piezas que comparten "base" el nombre por sí solo no reabriría
-        # necesariamente la misma.
-        print(f"\n  → Empieza de cero: trackbitos abrir {variante_id}\n")
-        return 1
+        if motivo == "consulta":
+            # "ver" es de solo lectura: sin ningún fichero que mirar, no hay
+            # nada que hacer aquí (a diferencia de "trabajo", más abajo, no
+            # tiene sentido abrir una sesión solo para consultar el vacío).
+            print(f"\n{variante_nombre}: no hay ningún fichero subido todavía, no hay nada que mirar.")
+            # El id, no el nombre, para que se pueda pegar tal cual: con
+            # varias piezas que comparten "base" el nombre por sí solo no
+            # resolvería necesariamente la misma.
+            print(f"\n  → Para empezar a trabajar: trackbitos bajar {variante_id}\n")
+            return 1
+
+        # Pieza recién estrenada: no existe ningún fichero todavía, así que
+        # no hay nada que descargar — se abre la sesión directamente, igual
+        # que antes hacía el comando aparte "abrir" (fusionado aquí: como
+        # con `git`, un solo comando sirve para las dos situaciones, sin que
+        # haga falta saber de antemano si hay historial o no).
+        if blend:
+            apartado = a_papelera(blend)
+            print(f"  · Había un .blend suelto de otra pieza en esta carpeta: se apartó a {apartado}")
+
+        respuesta = api_post(config, f"/variante/{variante_id}/sesion/abrir")
+        sesion = respuesta["sesion"]
+        rama = (estado_api.get("rama") or {})
+
+        escribir_sentinel(directorio, {
+            "variante_id": variante_id,
+            "variante": variante_nombre,
+            "rama_id": rama.get("id"),
+            "rama": rama.get("nombre"),
+            "sesion_id": sesion["id"],
+            "sesion": sesion["numero"],
+            "descarga_id": None,
+            "motivo": "trabajo",
+            "origen": "nuevo",
+            "hash_origen": None,
+            "descargado_en": datetime.now().astimezone().isoformat(timespec="seconds"),
+        })
+
+        print(f"\n{variante_nombre} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta")
+        print("  (pieza recién estrenada: no había ningún fichero que descargar)\n")
+        print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
+        return 0
 
     ruta = f"/{origen['tipo']}/{origen['id']}/descargar?motivo={motivo}"
     if args.ignorar_pendiente:
@@ -1245,17 +1233,21 @@ def main(argv: Optional[list] = None) -> int:
         return p
 
     # Alias cortos (spec: una letra para los de uso diario, dos para el
-    # resto, sin que ninguno choque con otro): "trackbitos a <pieza>" en vez
-    # de "trackbitos abrir <pieza>". El nombre completo se sigue aceptando
+    # resto, sin que ninguno choque con otro): "trackbitos b <pieza>" en vez
+    # de "trackbitos bajar <pieza>". El nombre completo se sigue aceptando
     # igual — esto es azúcar, no un reemplazo.
     p = con_dir(subs.add_parser("estado", aliases=["e"], help="Diagnóstico del directorio de trabajo actual. (alias: e)"))
     p.set_defaults(func=cmd_estado)
 
-    p = con_dir(subs.add_parser("abrir", aliases=["a"], help="Abre sesión sin descargar (variante que aún no tiene .blend). (alias: a)"))
-    p.add_argument("variante", help="Nombre o id de la variante.")
-    p.set_defaults(func=cmd_abrir)
-
-    p = con_dir(subs.add_parser("bajar", aliases=["b"], help="Descarga la mesa de trabajo y abre sesión. (alias: b)"))
+    # "abrir" existió como comando aparte hasta la fase 22; se fusionó en
+    # "bajar", que ya distinguía internamente si había algo que descargar o
+    # no (origen_descarga) y antes se limitaba a negarse en el segundo caso.
+    # Alias "a" conservado por compatibilidad con la costumbre del comando
+    # viejo, junto al "b" de siempre — los dos apuntan a lo mismo ahora.
+    p = con_dir(subs.add_parser(
+        "bajar", aliases=["b", "a"],
+        help="Descarga la mesa de trabajo y abre sesión (o solo abre sesión, si la pieza está recién estrenada). (alias: b, a)"
+    ))
     p.add_argument("variante", nargs="?", help="Nombre o id; si ya hay .sesion.json, se deduce.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente",
                    help="Continuar aunque haya una descarga sin cerrar en otra máquina.")
