@@ -351,6 +351,117 @@ class PiezaService
     }
 
     /**
+     * "Borrar variante" (invariante 6, ahora también suelta, no solo la
+     * familia entera): una pieza con varias líneas de diseño puede tener
+     * alguna abandonada — un tamaño que no se pidió nunca más, un
+     * prototipo descartado — sin que el resto de la pieza tenga nada que
+     * ver. Mismo criterio que `borrarFamilia`: se niega si hay una sesión
+     * de trabajo abierta, no destruye nada, solo aparta con fecha.
+     */
+    public function borrarVariante(int $varianteId): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+        if ($variante['borrado_en'] !== null) {
+            throw new RuntimeException('Esa variante ya está en la papelera.');
+        }
+        if ($this->sesionModel->hayAbiertaParaVariante($varianteId)) {
+            throw new RuntimeException(
+                'Esta variante tiene una sesión de trabajo sin cerrar. Ciérrala antes de borrarla.'
+            );
+        }
+
+        $this->varianteModel->update($varianteId, ['borrado_en' => date('Y-m-d H:i:s')]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
+     * Saca una variante de la papelera mientras todavía se pueda: deshace
+     * `borrarVariante` sin más rastro que el que ya hubiera antes.
+     */
+    public function restaurarVariante(int $varianteId): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+        if ($variante['borrado_en'] === null) {
+            throw new RuntimeException('Esa variante no está en la papelera.');
+        }
+
+        $this->varianteModel->update($varianteId, ['borrado_en' => null]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
+     * Purga definitiva de variantes sueltas que llevan más de N días en la
+     * papelera (invariante 6) — mismo criterio que `purgarFamiliasBorradas`,
+     * pero para una sola variante, sin tocar el resto de la pieza. Las
+     * referencias quedan fuera a propósito: son de la familia entera
+     * (spec 1.1), no de esta línea de diseño en concreto.
+     *
+     * Si la familia entera también se purga en la misma pasada, esta
+     * variante ya no aparecerá aquí (la cascada de FK se la habrá llevado
+     * por delante) — no hay conflicto entre las dos purgas, solo un orden
+     * que no importa.
+     *
+     * @return list<string> "Familia / variante" de lo purgado
+     */
+    public function purgarVariantesBorradas(int $dias = 30): array
+    {
+        $limite = date('Y-m-d H:i:s', time() - $dias * 86400);
+
+        $variantes = $this->varianteModel
+            ->where('borrado_en IS NOT NULL')
+            ->where('borrado_en <', $limite)
+            ->findAll();
+
+        if ($variantes === []) {
+            return [];
+        }
+
+        $almacen     = new PiezaAlmacen();
+        $renderModel = new PiezaRenderModel();
+        $nombres     = [];
+
+        foreach ($variantes as $variante) {
+            $varianteId = (int) $variante['id'];
+            $familia    = $this->familiaModel->find((int) $variante['familia_id']);
+
+            foreach ($this->versionModel->where('variante_id', $varianteId)->findAll() as $version) {
+                if (!empty($version['ruta_blend'])) {
+                    $almacen->aPapelera($version['ruta_blend']);
+                }
+                foreach ($this->stlModel->deVersion((int) $version['id']) as $stl) {
+                    if (!empty($stl['ruta_stl'])) {
+                        $almacen->aPapelera($stl['ruta_stl']);
+                    }
+                }
+                foreach ($renderModel->where('version_id', $version['id'])->findAll() as $render) {
+                    $almacen->aPapelera($render['ruta_imagen']);
+                }
+            }
+
+            foreach ($this->ramaModel->where('variante_id', $varianteId)->findAll() as $rama) {
+                foreach ($this->sesionModel->where('rama_id', $rama['id'])->where('purgada', 0)->findAll() as $sesion) {
+                    if (!empty($sesion['ruta_blend'])) {
+                        $almacen->aPapelera($sesion['ruta_blend']);
+                    }
+                }
+            }
+
+            $this->varianteModel->delete($varianteId);
+            $nombres[] = ($familia['nombre'] ?? '?') . ' / ' . $variante['nombre'];
+        }
+
+        return $nombres;
+    }
+
+    /**
      * Purga definitiva de piezas que llevan más de N días en la papelera
      * (invariante 6): borra la fila de verdad — la cascada de FK se lleva
      * variantes, versiones, ramas, sesiones y descargas — y antes aparta a

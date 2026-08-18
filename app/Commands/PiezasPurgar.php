@@ -9,9 +9,10 @@ use CodeIgniter\CLI\CLI;
 
 /**
  * Vacía la papelera de Piezas pasados N días (invariante 6: nada se borra,
- * se aparta; y lo apartado caduca a los 30 días) — tanto la de ficheros
- * (sesiones purgadas al validar, referencias/renders borrados) como la de
- * piezas enteras (`PiezaService::borrarFamilia`).
+ * se aparta; y lo apartado caduca a los 30 días) — la de ficheros (sesiones
+ * purgadas al validar, referencias/renders borrados), la de piezas enteras
+ * (`PiezaService::borrarFamilia`) y la de variantes sueltas
+ * (`PiezaService::borrarVariante`).
  *
  * Pensado para un cron diario en el servidor:
  *     php /ruta/a/trackbitos/spark piezas:purgar
@@ -32,17 +33,29 @@ class PiezasPurgar extends BaseCommand
     {
         $dias = isset($params[0]) ? max(1, (int) $params[0]) : 30;
 
-        // Primero las piezas: purgarFamiliasBorradas aparta a la papelera de
-        // ficheros lo que aún viviera en su sitio original, así que tiene
-        // que correr antes de que purgarPapelera se lleve esos mismos
-        // ficheros por edad.
-        $piezas = (new PiezaService())->purgarFamiliasBorradas($dias);
+        // Primero piezas y variantes: purgarFamiliasBorradas/purgarVariantesBorradas
+        // apartan a la papelera de ficheros lo que aún viviera en su sitio
+        // original, así que tienen que correr antes de que purgarPapelera se
+        // lleve esos mismos ficheros por edad.
+        $servicio = new PiezaService();
+        $piezas   = $servicio->purgarFamiliasBorradas($dias);
 
         if ($piezas === []) {
             CLI::write("Piezas: nada que purgar (ninguna lleva más de {$dias} días en la papelera).", 'green');
         } else {
             CLI::write(sprintf('Piezas purgadas (%d):', count($piezas)), 'yellow');
             foreach ($piezas as $nombre) {
+                CLI::write('  ' . $nombre);
+            }
+        }
+
+        $variantes = $servicio->purgarVariantesBorradas($dias);
+
+        if ($variantes === []) {
+            CLI::write("Variantes: nada que purgar (ninguna lleva más de {$dias} días en la papelera).", 'green');
+        } else {
+            CLI::write(sprintf('Variantes purgadas (%d):', count($variantes)), 'yellow');
+            foreach ($variantes as $nombre) {
                 CLI::write('  ' . $nombre);
             }
         }

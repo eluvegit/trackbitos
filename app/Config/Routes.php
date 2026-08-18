@@ -658,6 +658,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
     $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
+    $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
+    $routes->POST('variante/(:num)/restaurar', 'Web::restaurarVariante/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');

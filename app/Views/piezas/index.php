@@ -303,7 +303,16 @@ $textoBuscable = static function (array $familia): string {
                             <td><?= $colStl($v) ?></td>
                             <td class="text-muted small text-end"><?= (int) $v['versiones'] ?> vers.</td>
                             <td><?= $colAviso($v) ?></td>
-                            <td class="zona-organizar d-none"></td>
+                            <td class="zona-organizar d-none">
+                                <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>
+                                <form method="post" class="text-end" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/borrar') ?>"
+                                    onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $v['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar variante">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

@@ -22,6 +22,7 @@
 | 21 | Varios STL por versión (imprimir a trozos y montar) | ✅ Hecho (detalle abajo) |
 | 22 | `abrir` fusionado en `bajar`: un solo comando para pieza nueva o con historial | ✅ Hecho (detalle abajo) |
 | 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
+| 24 | Papelera también por variante suelta (no solo la pieza entera) | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -554,6 +555,31 @@ una corre una versión distinta del cliente.
 - **De un salto de versión a otro**: una máquina en una versión anterior a esta fase no se
   autoactualiza sola la primera vez — necesita un `trackbitos actualizar` manual, como hasta
   ahora, para llegar aquí. A partir de entonces, ya no hace falta ningún paso más.
+
+**Fase 24 (2026-08-19): papelera también por variante suelta.** Hasta ahora solo se podía borrar
+la pieza entera (`borrarFamilia`). Una pieza con varias líneas de diseño puede tener alguna
+abandonada — un tamaño que no se pidió nunca más, un prototipo descartado — sin que el resto
+tenga nada que ver; borrar la familia entera para quitar solo esa variante se habría llevado por
+delante las demás.
+
+- **`piezas_variantes.borrado_en`**, mismo criterio que `piezas_familias.borrado_en`: mientras
+  esté vacío es una variante normal; en cuanto se pone, desaparece del índice, la galería y el
+  catálogo del cliente (`Api::variantes()`), pero se puede restaurar durante 30 días desde
+  `/piezas/papelera` antes de que `piezas:purgar` se la lleve de verdad.
+- **`PiezaService::borrarVariante()`/`restaurarVariante()`/`purgarVariantesBorradas()`**, calcados
+  de sus equivalentes de familia: se niega si la variante tiene una sesión de trabajo abierta;
+  la purga aparta versiones, STL (varios por versión, fase 21), renders y sesiones sin promocionar
+  a la papelera de ficheros antes de borrar la fila — pero **no** toca las referencias, que son de
+  la familia entera (spec 1.1), no de esta línea de diseño.
+- **`piezas:purgar`** ahora corre las dos purgas (familias y variantes) antes de la de ficheros
+  por edad, por el mismo motivo de siempre: las dos primeras mueven ficheros a la papelera de
+  ficheros, así que tienen que ir antes de que esa papelera se purgue por antigüedad.
+- **Dónde se borra**: un botón en la propia ficha de la variante (junto al lápiz de editar), y
+  uno por cada subfila en el índice cuando una pieza tiene más de una variante (modo
+  "Organizar") — con una sola variante ya está `borrarFamilia` para eso, no hace falta un botón
+  redundante.
+- **`/piezas/papelera`** separa ahora "Piezas enteras" y "Variantes sueltas" en dos listas, cada
+  una con su propio botón de restaurar; el contador del índice suma las dos.
 
 ---
 

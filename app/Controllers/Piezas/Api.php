@@ -105,7 +105,8 @@ class Api extends BaseController
 
         $variantes = $familias === []
             ? []
-            : $this->varianteModel->whereIn('familia_id', array_keys($familias))->orderBy('nombre', 'ASC')->findAll();
+            : $this->varianteModel->whereIn('familia_id', array_keys($familias))
+                ->where('borrado_en', null)->orderBy('nombre', 'ASC')->findAll();
 
         return $this->response->setJSON([
             // El orden en que el usuario colocó sus categorías (spec 11.1),
