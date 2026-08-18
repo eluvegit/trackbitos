@@ -653,6 +653,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // cliente al registrarse, nunca la web.
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
+    $routes->GET('estadisticas', 'Web::estadisticas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');

@@ -198,6 +198,48 @@ class Web extends BaseController
         );
     }
 
+    // ---- Estadísticas de almacenamiento ----------------------------------
+
+    /**
+     * Cuánto ocupa el módulo entero en disco, y qué piezas concretas pesan
+     * más — para saber de un vistazo si hace falta purgar la papelera ya
+     * (en vez de esperar a los 30 días) o aligerar alguna sesión suelta
+     * (spec: `PiezaService::descartarFicheroSesion`). Recorre el disco de
+     * verdad vía `PiezaAlmacen`, no columnas de la base de datos: ni las
+     * referencias ni los renders guardan su tamaño en ninguna tabla, así
+     * que una suma parcial no cuadraría con lo que `writable/piezas` ocupa
+     * de verdad.
+     */
+    public function estadisticas()
+    {
+        $filas = [];
+        foreach ($this->familiaModel->where('borrado_en', null)->findAll() as $familia) {
+            $bytes = 0;
+            foreach ($this->varianteModel->where('familia_id', $familia['id'])->findAll() as $variante) {
+                foreach ($this->versionModel->where('variante_id', $variante['id'])->findAll() as $version) {
+                    $bytes += $this->almacen->tamano($version['ruta_blend']) ?? 0;
+                    $bytes += $this->almacen->tamano($version['ruta_stl']) ?? 0;
+                }
+                foreach ($this->ramaModel->where('variante_id', $variante['id'])->findAll() as $rama) {
+                    foreach ($this->sesionModel->where('rama_id', $rama['id'])->findAll() as $sesion) {
+                        $bytes += $this->almacen->tamano($sesion['ruta_blend']) ?? 0;
+                    }
+                }
+            }
+
+            if ($bytes > 0) {
+                $filas[] = ['familia' => $familia, 'bytes' => $bytes];
+            }
+        }
+        usort($filas, static fn($a, $b) => $b['bytes'] <=> $a['bytes']);
+
+        return view('piezas/estadisticas', [
+            'total'         => $this->almacen->tamanoTotal(),
+            'totalPapelera' => $this->almacen->tamanoPapelera(),
+            'piezas'        => $filas,
+        ]);
+    }
+
     // ---- Categorías -----------------------------------------------------
 
     public function crearCategoria()
@@ -305,6 +347,10 @@ class Web extends BaseController
             // es el resultado visual de esa iteración concreta.
             $version['renders']             = $this->renderModel
                 ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->findAll();
+            // Cuánto pesa esta versión en disco (spec: "qué ocupa cada
+            // fichero"), junto a sus botones de descarga.
+            $version['tamano_blend']        = $this->almacen->tamano($version['ruta_blend']);
+            $version['tamano_stl']          = $this->almacen->tamano($version['ruta_stl']);
         }
         unset($version);
 

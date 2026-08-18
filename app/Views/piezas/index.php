@@ -26,6 +26,9 @@
     <a href="<?= site_url('piezas/maquinas') ?>" class="btn btn-sm btn-outline-secondary" title="Máquinas">
         <i class="bi bi-pc-display"></i>
     </a>
+    <a href="<?= site_url('piezas/estadisticas') ?>" class="btn btn-sm btn-outline-secondary" title="Cuánto ocupa el módulo">
+        <i class="bi bi-hdd-stack"></i>
+    </a>
     <?php // Solo aparece cuando hay algo dentro: no tiene sentido un icono a una papelera vacía. ?>
     <?php if (!empty($papeleraCount)): ?>
         <a href="<?= site_url('piezas/papelera') ?>" class="btn btn-sm btn-outline-secondary" title="Papelera">

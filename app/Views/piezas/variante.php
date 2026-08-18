@@ -11,6 +11,17 @@ $badges = [
 ];
 $etiqueta = fn($v) => 'v' . sprintf('%03d', (int) $v['numero']);
 
+/** KB para lo pequeño, MB con un decimal en cuanto pasa de 1 MB — un .blend de IA en 102400 KB no se lee de un vistazo. */
+$tamanoLegible = function (?int $bytes): string {
+    if ($bytes === null) {
+        return '';
+    }
+
+    return $bytes >= 1024 * 1024
+        ? number_format($bytes / (1024 * 1024), 1) . ' MB'
+        : number_format($bytes / 1024, 0) . ' KB';
+};
+
 /**
  * Por qué esta versión no admite ciertos verbos. Va como texto visible bajo
  * los botones y no como title: un botón deshabilitado no recibe eventos de
@@ -490,11 +501,17 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>"
                                 class="btn btn-sm btn-primary py-0 px-2">
                                 <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
+                                <?php if ($v['tamano_blend'] !== null): ?>
+                                    <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
+                                <?php endif; ?>
                             </a>
                             <?php if (!empty($v['ruta_stl'])): ?>
                                 <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
                                     class="btn btn-sm btn-primary py-0 px-2">
                                     <i class="bi bi-file-earmark-arrow-down"></i> Descargar STL
+                                    <?php if ($v['tamano_stl'] !== null): ?>
+                                        <span class="opacity-75">(<?= $tamanoLegible($v['tamano_stl']) ?>)</span>
+                                    <?php endif; ?>
                                 </a>
                                 <?php if ($v['estado'] === 'validada'): ?>
                                     <?php if (in_array((int) $v['id'], $carrito, true)): ?>
@@ -792,7 +809,7 @@ $porQueNo = function (array $v) use ($acciones): array {
                                         <div class="text-muted">
                                             subida <?= esc($s['subida_en']) ?>
                                             <?php if (!empty($s['tamano_bytes'])): ?>
-                                                · <?= number_format((int) $s['tamano_bytes'] / 1024, 0) ?> KB
+                                                · <?= $tamanoLegible((int) $s['tamano_bytes']) ?>
                                             <?php endif; ?>
                                         </div>
                                     <?php else: ?>

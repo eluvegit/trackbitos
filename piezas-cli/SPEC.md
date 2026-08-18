@@ -325,6 +325,16 @@ peso que no tiene sentido versionar en el propio servidor.
   `Web::variante()` busca ahora el `params_impresion` no vacío más reciente entre TODAS las
   versiones de la variante (`$sugerenciaImpresion`) y precarga el textarea con él, editable; el
   placeholder de ejemplo menciona también la posición en la placa, no solo exposición/capa.
+- **Cuánto ocupa cada fichero, y cuánto el módulo entero.** `PiezaAlmacen::tamano()` calcula el
+  tamaño de un fichero del almacén leyendo el disco (ninguna tabla guarda el tamaño de
+  referencias/renders/versiones, así que no hay columna que consultar); se usa en la ficha junto
+  a "Descargar .blend"/"Descargar STL" de cada versión, y las sesiones ya mostraban el suyo.
+  `PiezaAlmacen::tamanoTotal()`/`tamanoPapelera()` recorren `writable/piezas` entero (o solo su
+  subcarpeta `papelera/`) para las estadísticas globales — nueva pantalla `/piezas/estadisticas`
+  (icono en la cabecera del índice): total del almacén, cuánto de eso está en la papelera (lo
+  que se liberaría con `piezas:purgar` sin esperar a los 30 días) y qué piezas concretas pesan
+  más (suma de sus versiones + sesiones, apartadas o no), para saber cuál aligerar primero con
+  el botón "liberar sitio" (Fase 18) en vez de adivinarlo.
 
 ---
 
