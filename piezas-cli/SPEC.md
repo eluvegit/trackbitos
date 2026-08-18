@@ -312,6 +312,13 @@ peso que no tiene sentido versionar en el propio servidor.
   renombrar la variante (`renombrarVariante`); la pieza en sí no tenía forma de corregirse una
   vez creada. Sin comprobación de unicidad, igual que `crearFamilia`. Ruta:
   `POST piezas/familia/{id}/nombre`.
+- **Alias cortos en el cliente** (sección 5.1): una letra para los seis comandos de uso diario
+  (`e`, `a`, `b`, `v`, `s`, `c`, `p` para estado/abrir/bajar/ver/subir/cerrar/promocionar) y dos
+  para el resto (`pa`, `ca`, `va`, `ac`), vía `add_parser(..., aliases=[...])` de argparse — el
+  nombre completo se sigue aceptando igual. Cuidado al leer `args.comando` en `main()`: con
+  alias, guarda lo que se escribió de verdad ("ac"), no el nombre canónico ("actualizar"), así
+  que la comprobación de "no comprobar versión nueva tras `actualizar`" compara `args.func`
+  (la función ya resuelta), no la cadena.
 
 ---
 
@@ -610,19 +617,23 @@ Configuración en `~/.trackbitos/config.json`: URL base, token de API, **UUID de
 ### 5.1 Comandos
 
 ```
-trackbitos estado          # el más usado — diagnóstico completo          ✅ hecho
-trackbitos abrir <variante>        # sesión sin descargar: variante estrenada  ✅ hecho
-trackbitos bajar [<variante>]                                             ✅ hecho
-trackbitos ver <variante>          # descarga de consulta, sin abrir sesión  ✅ hecho
-trackbitos subir [--log "..."]                                            ✅ hecho
-trackbitos cerrar                                                         ✅ hecho
-trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero  ✅ hecho
-trackbitos promocionar --cambio "..." [--medidas "..."]                   ✅ hecho
-trackbitos papelera                # qué hay apartado y cuándo caduca    ✅ hecho
-trackbitos catalogo                # catálogo completo, agrupado por categoría ✅ hecho
-trackbitos variantes <pieza>       # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
-trackbitos actualizar              # comprueba y aplica una versión nueva del cliente ✅ hecho
+trackbitos estado      (e)   # el más usado — diagnóstico completo          ✅ hecho
+trackbitos abrir       (a)   <variante>  # sesión sin descargar: variante estrenada  ✅ hecho
+trackbitos bajar       (b)   [<variante>]                                   ✅ hecho
+trackbitos ver         (v)   <variante>  # descarga de consulta, sin abrir sesión  ✅ hecho
+trackbitos subir       (s)   [--log "..."]                                  ✅ hecho
+trackbitos cerrar      (c)                                                  ✅ hecho
+trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero    ✅ hecho
+trackbitos promocionar (p)   --cambio "..." [--medidas "..."]               ✅ hecho
+trackbitos papelera    (pa)  # qué hay apartado y cuándo caduca             ✅ hecho
+trackbitos catalogo    (ca)  # catálogo completo, agrupado por categoría    ✅ hecho
+trackbitos variantes   (va)  <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
+trackbitos actualizar  (ac)  # comprueba y aplica una versión nueva del cliente  ✅ hecho
 ```
+
+Alias cortos entre paréntesis (`trackbitos a "perro"` = `trackbitos abrir "perro"`): una letra para
+los seis de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
+sigue funcionando igual — es azúcar, no un modo nuevo.
 
 La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
 son dos máquinas de escritorio que se encienden a ratos, y un cron en cada una sería una pieza

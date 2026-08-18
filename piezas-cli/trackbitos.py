@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -1184,49 +1184,53 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--dir", default=".", help="Directorio de trabajo (por defecto, el actual).")
         return p
 
-    p = con_dir(subs.add_parser("estado", help="Diagnóstico del directorio de trabajo actual."))
+    # Alias cortos (spec: una letra para los de uso diario, dos para el
+    # resto, sin que ninguno choque con otro): "trackbitos a <pieza>" en vez
+    # de "trackbitos abrir <pieza>". El nombre completo se sigue aceptando
+    # igual — esto es azúcar, no un reemplazo.
+    p = con_dir(subs.add_parser("estado", aliases=["e"], help="Diagnóstico del directorio de trabajo actual. (alias: e)"))
     p.set_defaults(func=cmd_estado)
 
-    p = con_dir(subs.add_parser("abrir", help="Abre sesión sin descargar (variante que aún no tiene .blend)."))
+    p = con_dir(subs.add_parser("abrir", aliases=["a"], help="Abre sesión sin descargar (variante que aún no tiene .blend). (alias: a)"))
     p.add_argument("variante", help="Nombre o id de la variante.")
     p.set_defaults(func=cmd_abrir)
 
-    p = con_dir(subs.add_parser("bajar", help="Descarga la mesa de trabajo y abre sesión."))
+    p = con_dir(subs.add_parser("bajar", aliases=["b"], help="Descarga la mesa de trabajo y abre sesión. (alias: b)"))
     p.add_argument("variante", nargs="?", help="Nombre o id; si ya hay .sesion.json, se deduce.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente",
                    help="Continuar aunque haya una descarga sin cerrar en otra máquina.")
     p.set_defaults(func=cmd_bajar)
 
-    p = con_dir(subs.add_parser("ver", help="Descarga solo para mirar: no abre sesión."))
+    p = con_dir(subs.add_parser("ver", aliases=["v"], help="Descarga solo para mirar: no abre sesión. (alias: v)"))
     p.add_argument("variante", nargs="?", help="Nombre o id de la variante.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente")
     p.set_defaults(func=cmd_ver)
 
-    p = con_dir(subs.add_parser("subir", help="Sube el .blend de este directorio a su sesión."))
+    p = con_dir(subs.add_parser("subir", aliases=["s"], help="Sube el .blend de este directorio a su sesión. (alias: s)"))
     p.add_argument("--log", help='Nota de la sesión (p.ej. "guardado sin cambios de geometría").')
     p.set_defaults(func=cmd_subir)
 
-    p = con_dir(subs.add_parser("cerrar", help="Cierra la sesión (o la descarga, con --sin-cambios)."))
+    p = con_dir(subs.add_parser("cerrar", aliases=["c"], help="Cierra la sesión (o la descarga, con --sin-cambios). (alias: c)"))
     p.add_argument("--sin-cambios", action="store_true", dest="sin_cambios",
                    help="Cierra la descarga sin subir: exige que el fichero siga siendo el entregado.")
     p.set_defaults(func=cmd_cerrar)
 
-    p = con_dir(subs.add_parser("promocionar", help="Congela la última sesión subida como versión nueva."))
+    p = con_dir(subs.add_parser("promocionar", aliases=["p"], help="Congela la última sesión subida como versión nueva. (alias: p)"))
     p.add_argument("--cambio", help="Obligatorio: qué se modificó, en una línea.")
     p.add_argument("--medidas", help="Cotas de calibre relevantes.")
     p.set_defaults(func=cmd_promocionar)
 
-    p = subs.add_parser("papelera", help="Qué hay apartado y cuándo caduca.")
+    p = subs.add_parser("papelera", aliases=["pa"], help="Qué hay apartado y cuándo caduca. (alias: pa)")
     p.set_defaults(func=cmd_papelera)
 
-    p = subs.add_parser("catalogo", help="El catálogo completo: qué piezas hay y por dónde va cada una.")
+    p = subs.add_parser("catalogo", aliases=["ca"], help="El catálogo completo: qué piezas hay y por dónde va cada una. (alias: ca)")
     p.set_defaults(func=cmd_catalogo)
 
-    p = subs.add_parser("variantes", help="Cuántas variantes tiene una pieza y cómo se llama cada una.")
+    p = subs.add_parser("variantes", aliases=["va"], help="Cuántas variantes tiene una pieza y cómo se llama cada una. (alias: va)")
     p.add_argument("pieza", help="Nombre o parte del nombre de la pieza.")
     p.set_defaults(func=cmd_variantes)
 
-    p = subs.add_parser("actualizar", help="Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza.")
+    p = subs.add_parser("actualizar", aliases=["ac"], help="Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza. (alias: ac)")
     p.set_defaults(func=cmd_actualizar)
 
     args = parser.parse_args(argv)
@@ -1245,8 +1249,11 @@ def main(argv: Optional[list] = None) -> int:
     # Aviso automático, actualización manual: se comprueba después del
     # comando (nunca antes, para no añadirle latencia a lo que el usuario
     # vino a hacer de verdad) y en silencio ante cualquier fallo. "actualizar"
-    # se salta esto porque ya acaba de comprobarlo por su cuenta.
-    if args.comando != "actualizar":
+    # (o su alias "ac") se salta esto porque ya acaba de comprobarlo por su
+    # cuenta. Se compara la función resuelta, no args.comando: con alias,
+    # args.comando guarda lo que se escribió de verdad ("ac"), no el nombre
+    # canónico, así que comparar contra la cadena "actualizar" se rompería.
+    if args.func is not cmd_actualizar:
         try:
             nueva = comprobar_version_remota(cargar_config())
             if nueva:
