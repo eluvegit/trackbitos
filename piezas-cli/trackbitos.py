@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -282,6 +282,7 @@ def api_descargar(config: dict, ruta: str, destino_temporal: Path) -> dict:
         "descarga_id": int(cab.get("X-Descarga-Id") or 0) or None,
         "variante_id": int(cab.get("X-Variante-Id") or 0) or None,
         "variante": urllib.parse.unquote(cab.get("X-Variante-Nombre") or ""),
+        "familia": urllib.parse.unquote(cab.get("X-Familia-Nombre") or ""),
         "rama_id": int(cab.get("X-Rama-Id") or 0) or None,
         "rama": urllib.parse.unquote(cab.get("X-Rama-Nombre") or ""),
         "sesion_id": int(cab.get("X-Sesion-Id") or 0) or None,
@@ -682,9 +683,14 @@ def cmd_abrir(args) -> int:
     estado_api = api_get(config, f"/variante/{variante['id']}/estado")
     rama = (estado_api.get("rama") or {})
 
+    # nombre_completo, no variante["nombre"] a secas: "base" (la que se crea
+    # sola con cada pieza) no dice de qué pieza es — sin esto, la
+    # confirmación de "abrir" era indistinguible entre piezas distintas.
+    identidad = nombre_completo(variante)
+
     escribir_sentinel(directorio, {
         "variante_id": variante["id"],
-        "variante": variante["nombre"],
+        "variante": identidad,
         "rama_id": rama.get("id"),
         "rama": rama.get("nombre"),
         "sesion_id": sesion["id"],
@@ -696,7 +702,7 @@ def cmd_abrir(args) -> int:
         "descargado_en": datetime.now().astimezone().isoformat(timespec="seconds"),
     })
 
-    print(f"\n{variante['nombre']} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta\n")
+    print(f"\n{identidad} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta\n")
     print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
     return 0
 
@@ -711,7 +717,9 @@ def _bajar(args, motivo: str) -> int:
 
     if args.variante:
         variante = resolver_variante(config, args.variante)
-        variante_id, variante_nombre = variante["id"], variante["nombre"]
+        # nombre_completo: "base" a secas no dice de qué pieza es (spec:
+        # abrir/bajar deben confirmar SIN AMBIGÜEDAD qué se acaba de tocar).
+        variante_id, variante_nombre = variante["id"], nombre_completo(variante)
     elif sentinel and sentinel.get("variante_id"):
         variante_id, variante_nombre = sentinel["variante_id"], sentinel.get("variante", "?")
     else:
@@ -747,7 +755,10 @@ def _bajar(args, motivo: str) -> int:
     origen = estado_api.get("origen_descarga")
     if not origen:
         print(f"\n{variante_nombre}: no hay ningún fichero subido todavía, no hay nada que bajar.")
-        print(f"\n  → Empieza de cero: trackbitos abrir {variante_nombre}\n")
+        # El id, no el nombre, para que se pueda pegar tal cual: con varias
+        # piezas que comparten "base" el nombre por sí solo no reabriría
+        # necesariamente la misma.
+        print(f"\n  → Empieza de cero: trackbitos abrir {variante_id}\n")
         return 1
 
     ruta = f"/{origen['tipo']}/{origen['id']}/descargar?motivo={motivo}"
@@ -776,9 +787,14 @@ def _bajar(args, motivo: str) -> int:
     finally:
         temporal.unlink(missing_ok=True)
 
+    # Pieza + variante, no la variante a secas ("base" no distingue nada):
+    # es lo que va a la confirmación de abajo y a todo lo que luego lea
+    # este sentinel (estado, cerrar, promocionar...).
+    identidad = f"{asiento['familia']} / {asiento['variante']}" if asiento.get("familia") else asiento["variante"]
+
     escribir_sentinel(directorio, {
         "variante_id": asiento["variante_id"] or variante_id,
-        "variante": asiento["variante"] or variante_nombre,
+        "variante": identidad or variante_nombre,
         "rama_id": asiento["rama_id"],
         "rama": asiento["rama"],
         "sesion_id": asiento["sesion_id"],
@@ -791,7 +807,7 @@ def _bajar(args, motivo: str) -> int:
         "maquina": maquina.get("nombre"),
     })
 
-    print(f"\n{asiento['variante']} · rama {asiento['rama']}"
+    print(f"\n{identidad or variante_nombre} · rama {asiento['rama']}"
           + (f" · sesión {asiento['sesion']} abierta" if asiento["sesion"] else " · solo consulta") + "\n")
     print(f"  ✓ {destino.name} listo en {directorio}")
     if motivo == "trabajo":

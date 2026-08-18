@@ -298,6 +298,15 @@ peso que no tiene sentido versionar en el propio servidor.
   pasadas diez piezas) — es el mismo formato agrupado por categoría que usa `catalogo`, una
   pieza por línea, con "base" (la variante que se crea sola) oculto porque no aporta nada
   repetido en casi todas las líneas.
+- **Las confirmaciones de `abrir`/`bajar`/`ver` ya identifican la pieza, no solo la variante.**
+  Antes decían solo "base · rama … · sesión … abierta" — indistinguible entre piezas distintas,
+  porque casi todas comparten esa misma variante. El servidor manda ahora también el nombre de
+  la familia en la descarga (cabecera `X-Familia-Nombre`, junto a `X-Variante-Nombre`;
+  `PiezaSyncService::entregar` la añade al buscar la variante), y el cliente guarda la
+  identidad completa (`nombre_completo`: "Pieza / variante") en el `.sesion.json` en vez del
+  nombre suelto — así todo lo que ya lee de ahí (`estado`, `cerrar`, `promocionar`...) queda
+  arreglado sin tocarlo aparte. La sugerencia de "empieza de cero: trackbitos abrir …" usa ahora
+  el id numérico, no el nombre, para que sea pegable sin ambigüedad.
 
 ---
 
@@ -686,7 +695,7 @@ POST /variante/derivar                   { origen_version_id, nombre }          
 
 El servidor **recalcula el hash** de todo fichero recibido y rechaza la subida (422) si no coincide con el declarado. Es una comprobación distinta e independiente de la del `hash_padre` (409): una responde "¿me ha llegado entero lo que dices?", la otra "¿parte de la copia que yo te entregué?".
 
-Las cabeceras del asiento que devuelve una descarga: `X-Hash-Blend`, `X-Descarga-Id`, `X-Variante-Id`, `X-Variante-Nombre`, `X-Rama-Id`, `X-Rama-Nombre`, `X-Sesion-Id`, `X-Sesion-Numero`, `X-Origen-Tipo`, `X-Origen-Numero`. El cliente las vuelca en su `.sesion.json`.
+Las cabeceras del asiento que devuelve una descarga: `X-Hash-Blend`, `X-Descarga-Id`, `X-Variante-Id`, `X-Variante-Nombre`, `X-Familia-Nombre`, `X-Rama-Id`, `X-Rama-Nombre`, `X-Sesion-Id`, `X-Sesion-Numero`, `X-Origen-Tipo`, `X-Origen-Numero`. El cliente las vuelca en su `.sesion.json`.
 
 Códigos de error: 404 no encontrado, 403 máquina equivocada, 409 el asiento no cuadra (o el verbo no aplica en ese estado), 422 el fichero o los datos no son lo que dicen ser. Que el sistema se niegue no es un 500: es su trabajo.
 

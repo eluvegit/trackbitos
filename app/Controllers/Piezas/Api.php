@@ -430,6 +430,7 @@ class Api extends BaseController
             ->setHeader('X-Descarga-Id', (string) $entrega['descarga']['id'])
             ->setHeader('X-Variante-Id', (string) $entrega['variante']['id'])
             ->setHeader('X-Variante-Nombre', rawurlencode($entrega['variante']['nombre']))
+            ->setHeader('X-Familia-Nombre', rawurlencode($entrega['variante']['familia_nombre'] ?? ''))
             ->setHeader('X-Rama-Id', (string) $entrega['rama']['id'])
             ->setHeader('X-Rama-Nombre', rawurlencode($this->ramaModel->nombre($entrega['rama'])))
             ->setHeader('X-Sesion-Id', (string) ($entrega['sesion_trabajo']['id'] ?? ''))

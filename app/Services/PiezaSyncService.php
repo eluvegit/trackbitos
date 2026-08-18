@@ -184,6 +184,14 @@ class PiezaSyncService
         $varianteId = (int) $origen['variante_id'];
         $variante   = $this->varianteModel->find($varianteId);
 
+        // El nombre de la variante solo ("base") no identifica la pieza: se
+        // repite en casi todas. El cliente lo necesita junto al de la
+        // familia para que sus confirmaciones ("bajado X", "sesión Y
+        // abierta"...) digan de qué pieza es de verdad, no solo de qué
+        // variante — ver nombre_completo() en trackbitos.py.
+        $familia  = (new PiezaFamiliaModel())->find($variante['familia_id']);
+        $variante = $variante + ['familia_nombre' => $familia['nombre'] ?? null];
+
         $pendientes = $this->descargaModel->abiertasDeOtrasMaquinas($varianteId, $maquinaId);
         if ($pendientes && !$ignorarPendiente) {
             throw new RuntimeException($this->mensajePendientes($pendientes), 409);
