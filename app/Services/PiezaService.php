@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Models\PiezaCategoriaModel;
+use App\Models\PiezaComposicionModel;
+use App\Models\PiezaDescargaModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
+use App\Models\PiezaReferenciaModel;
+use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
@@ -39,16 +43,18 @@ class PiezaService
     private PiezaSesionModel $sesionModel;
     private PiezaCategoriaModel $categoriaModel;
     private PiezaMaquinaModel $maquinaModel;
+    private PiezaComposicionModel $composicionModel;
 
     public function __construct()
     {
-        $this->familiaModel   = new PiezaFamiliaModel();
-        $this->varianteModel  = new PiezaVarianteModel();
-        $this->versionModel   = new PiezaVersionModel();
-        $this->ramaModel      = new PiezaRamaModel();
-        $this->sesionModel    = new PiezaSesionModel();
-        $this->categoriaModel = new PiezaCategoriaModel();
-        $this->maquinaModel   = new PiezaMaquinaModel();
+        $this->familiaModel     = new PiezaFamiliaModel();
+        $this->varianteModel    = new PiezaVarianteModel();
+        $this->versionModel     = new PiezaVersionModel();
+        $this->ramaModel        = new PiezaRamaModel();
+        $this->sesionModel      = new PiezaSesionModel();
+        $this->categoriaModel   = new PiezaCategoriaModel();
+        $this->maquinaModel     = new PiezaMaquinaModel();
+        $this->composicionModel = new PiezaComposicionModel();
     }
 
     // ---- Máquinas -------------------------------------------------------
@@ -266,6 +272,134 @@ class PiezaService
     }
 
     /**
+     * "Borrar pieza" (invariante 6, extendida a la familia entera): no la
+     * destruye, la marca con la fecha en que se apartó. Desaparece del
+     * índice y de la galería, pero se puede restaurar mientras siga en la
+     * papelera — y solo se purga de verdad, fila y ficheros, a los 30 días
+     * (`purgarFamiliasBorradas`, vía `piezas:purgar`).
+     *
+     * Se niega si alguna de sus variantes tiene una sesión de trabajo
+     * abierta: borrar debajo de ese bloqueo dejaría el asiento colgando de
+     * una pieza que ya no aparece en ningún sitio.
+     */
+    public function borrarFamilia(int $familiaId): array
+    {
+        $familia = $this->familiaModel->find($familiaId);
+        if (!$familia) {
+            throw new RuntimeException("Pieza {$familiaId} no encontrada.");
+        }
+        if ($familia['borrado_en'] !== null) {
+            throw new RuntimeException('Esa pieza ya está en la papelera.');
+        }
+
+        foreach ($this->varianteModel->where('familia_id', $familiaId)->findAll() as $variante) {
+            if ($this->sesionModel->hayAbiertaParaVariante((int) $variante['id'])) {
+                throw new RuntimeException(
+                    "La variante \"{$variante['nombre']}\" tiene una sesión de trabajo sin cerrar. "
+                    . 'Ciérrala antes de borrar la pieza.'
+                );
+            }
+        }
+
+        $this->familiaModel->update($familiaId, ['borrado_en' => date('Y-m-d H:i:s')]);
+
+        return $this->familiaModel->find($familiaId);
+    }
+
+    /**
+     * Saca una pieza de la papelera mientras todavía se pueda: deshace
+     * `borrarFamilia` sin más rastro que el que ya hubiera antes.
+     */
+    public function restaurarFamilia(int $familiaId): array
+    {
+        $familia = $this->familiaModel->find($familiaId);
+        if (!$familia) {
+            throw new RuntimeException("Pieza {$familiaId} no encontrada.");
+        }
+        if ($familia['borrado_en'] === null) {
+            throw new RuntimeException('Esa pieza no está en la papelera.');
+        }
+
+        $this->familiaModel->update($familiaId, ['borrado_en' => null]);
+
+        return $this->familiaModel->find($familiaId);
+    }
+
+    /**
+     * Purga definitiva de piezas que llevan más de N días en la papelera
+     * (invariante 6): borra la fila de verdad — la cascada de FK se lleva
+     * variantes, versiones, ramas, sesiones y descargas — y antes aparta a
+     * la papelera de ficheros (`PiezaAlmacen::aPapelera`) todo lo que aún
+     * viviera en su sitio original, para que sus .blend/.stl/imágenes sigan
+     * el mismo plazo de gracia que cualquier otro fichero apartado en vez de
+     * quedar huérfanos en disco.
+     *
+     * Pensado para `piezas:purgar`, junto a la purga de la papelera de
+     * ficheros: es el único punto del módulo que borra piezas de verdad, y
+     * solo toca lo que ya lleva un mes esperando.
+     *
+     * @return list<string> nombres de las piezas purgadas
+     */
+    public function purgarFamiliasBorradas(int $dias = 30): array
+    {
+        $limite = date('Y-m-d H:i:s', time() - $dias * 86400);
+
+        $familias = $this->familiaModel
+            ->where('borrado_en IS NOT NULL')
+            ->where('borrado_en <', $limite)
+            ->findAll();
+
+        if ($familias === []) {
+            return [];
+        }
+
+        $almacen         = new PiezaAlmacen();
+        $referenciaModel = new PiezaReferenciaModel();
+        $renderModel     = new PiezaRenderModel();
+        $nombres         = [];
+
+        foreach ($familias as $familia) {
+            $familiaId = (int) $familia['id'];
+
+            foreach ($this->varianteModel->where('familia_id', $familiaId)->findAll() as $variante) {
+                $varianteId = (int) $variante['id'];
+
+                foreach ($this->versionModel->where('variante_id', $varianteId)->findAll() as $version) {
+                    if (!empty($version['ruta_blend'])) {
+                        $almacen->aPapelera($version['ruta_blend']);
+                    }
+                    if (!empty($version['ruta_stl'])) {
+                        $almacen->aPapelera($version['ruta_stl']);
+                    }
+                    foreach ($renderModel->where('version_id', $version['id'])->findAll() as $render) {
+                        $almacen->aPapelera($render['ruta_imagen']);
+                    }
+                }
+
+                foreach ($this->ramaModel->where('variante_id', $varianteId)->findAll() as $rama) {
+                    // Las sesiones ya purgadas (invariante 5) apuntan a un
+                    // fichero que ya vive en la papelera; solo quedan por
+                    // apartar las que nunca llegaron a promocionar.
+                    foreach ($this->sesionModel->where('rama_id', $rama['id'])->where('purgada', 0)->findAll() as $sesion) {
+                        if (!empty($sesion['ruta_blend'])) {
+                            $almacen->aPapelera($sesion['ruta_blend']);
+                        }
+                    }
+                }
+            }
+
+            foreach ($referenciaModel->where('familia_id', $familiaId)->findAll() as $referencia) {
+                $almacen->aPapelera($referencia['ruta_imagen']);
+            }
+
+            $this->familiaModel->delete($familiaId);
+            $nombres[] = $familia['nombre'];
+        }
+
+        return $nombres;
+    }
+
+    /**
      * Crea la variante y le abre de una vez su rama inicial (desde_version_id
      * NULL): sin rama abierta no habría dónde abrir la primera sesión.
      */
@@ -382,6 +516,25 @@ class PiezaService
     }
 
     /**
+     * Dónde vive el máster de máxima calidad de esta variante (p. ej. la
+     * malla en bruto de una generación por IA, sin decimar ni limpiar de
+     * texturas): fuera del tracker, normalmente en Drive — no hace falta
+     * versionarlo ni bloquearlo entre máquinas, solo poder volver a él. Solo
+     * se guarda el enlace; el fichero en sí nunca pasa por aquí.
+     */
+    public function actualizarEnlaceOriginal(int $varianteId, ?string $enlace): array
+    {
+        if (!$this->varianteModel->find($varianteId)) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $enlace = trim((string) $enlace);
+        $this->varianteModel->update($varianteId, ['enlace_original' => $enlace === '' ? null : $enlace]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
      * "Derivar variante": nueva línea de diseño a partir de una versión ya
      * existente (de la misma familia o de otra). No copia ficheros ni
      * referencias — numeración de versiones propia desde v001.
@@ -409,6 +562,55 @@ class PiezaService
         });
 
         return $this->varianteModel->find($varianteId);
+    }
+
+    /**
+     * "Compuesta de": anota que la versión de OTRA pieza estaba presente en
+     * la escena de esta variante (un torso modelado con el brazo ya hecho
+     * al lado, un "Mini playmobil" que es varias piezas de cuerpo juntas).
+     *
+     * Aparte a propósito de `origen_version_id` (derivarVariante): eso es
+     * de qué fichero concreto se partió, uno solo, y lo usa la
+     * sincronización para la cadena de hashes (spec 4.4). Esto es una
+     * lista puramente informativa — no afecta a ningún invariante, no se
+     * recalcula ni se promociona sola.
+     */
+    public function declararComponente(int $varianteId, int $versionComponenteId, ?string $notas = null): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $version = $this->versionModel->find($versionComponenteId);
+        if (!$version) {
+            throw new RuntimeException("Versión {$versionComponenteId} no encontrada.");
+        }
+
+        if ((int) $version['variante_id'] === $varianteId) {
+            throw new RuntimeException('Una pieza no puede componerse de una versión de sí misma.');
+        }
+
+        if ($this->composicionModel->where('variante_id', $varianteId)->where('version_componente_id', $versionComponenteId)->first()) {
+            throw new RuntimeException('Esa versión ya está anotada como parte de esta pieza.');
+        }
+
+        $id = $this->insertarOFallar($this->composicionModel, [
+            'variante_id'           => $varianteId,
+            'version_componente_id' => $versionComponenteId,
+            'notas'                 => $notas,
+        ]);
+
+        return $this->composicionModel->find($id);
+    }
+
+    public function quitarComponente(int $composicionId): void
+    {
+        if (!$this->composicionModel->find($composicionId)) {
+            throw new RuntimeException("Ese componente {$composicionId} no está anotado (o ya se quitó).");
+        }
+
+        $this->composicionModel->delete($composicionId);
     }
 
     /**
@@ -699,6 +901,55 @@ class PiezaService
         }
 
         return $purgadas;
+    }
+
+    /**
+     * Aparta a mano el .blend de una sesión ya cerrada que no va a llegar a
+     * promocionarse tal cual (p. ej. una subida de prueba que resultó
+     * demasiado pesada y se va a reemplazar por otra reducida). Es lo mismo
+     * que hace `purgarSesionesDe` al validar, pero disparado antes de ese
+     * punto: la rama sigue abierta, así que ni el invariante 5 ni ningún
+     * "descartar" de versión se aplican todavía — sin esto, un .blend de
+     * prueba se queda ocupando sitio para siempre porque el módulo nunca
+     * llegaría a purgar solo esa rama.
+     *
+     * La fila NO se borra, igual que el resto del módulo (invariante 6): se
+     * marca `purgada` y conserva número, hashes, máquina y log. Solo se
+     * mueve el fichero.
+     */
+    public function descartarFicheroSesion(int $sesionId, string $motivo = ''): array
+    {
+        $sesion = $this->sesionModel->find($sesionId);
+        if (!$sesion) {
+            throw new RuntimeException("Sesión {$sesionId} no encontrada.");
+        }
+        if (empty($sesion['cerrada_en'])) {
+            throw new RuntimeException('Esta sesión sigue abierta: ciérrala antes de descartar su fichero.');
+        }
+        if (!empty($sesion['purgada'])) {
+            throw new RuntimeException('El fichero de esta sesión ya se apartó a la papelera.');
+        }
+
+        $descargaAbierta = (new PiezaDescargaModel())->where('sesion_id', $sesionId)->where('cerrada', 0)->first();
+        if ($descargaAbierta) {
+            throw new RuntimeException(
+                "Esta sesión tiene la descarga {$descargaAbierta['id']} sin cerrar. Ciérrala primero."
+            );
+        }
+
+        $datos = ['purgada' => 1];
+        if (!empty($sesion['ruta_blend'])) {
+            $enPapelera = (new PiezaAlmacen())->aPapelera($sesion['ruta_blend']);
+            if ($enPapelera !== null) {
+                $datos['ruta_blend'] = $enPapelera;
+            }
+        }
+        $datos['log'] = trim(($sesion['log'] ? $sesion['log'] . "\n" : '')
+            . 'Fichero apartado a mano' . (trim($motivo) !== '' ? ': ' . trim($motivo) : ' (sin motivo indicado).'));
+
+        $this->sesionModel->update($sesionId, $datos);
+
+        return $this->sesionModel->find($sesionId);
     }
 
     /**

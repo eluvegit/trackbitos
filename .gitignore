@@ -33,3 +33,7 @@ coverage/
 .cache/
 .env
 .env
+
+# Python (piezas-cli/trackbitos.py)
+__pycache__/
+*.pyc

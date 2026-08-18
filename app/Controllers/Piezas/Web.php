@@ -4,6 +4,7 @@ namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
 use App\Models\PiezaCategoriaModel;
+use App\Models\PiezaComposicionModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
@@ -70,6 +71,7 @@ class Web extends BaseController
     private PiezaSesionModel $sesionModel;
     private PiezaReferenciaModel $referenciaModel;
     private PiezaRenderModel $renderModel;
+    private PiezaComposicionModel $composicionModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
@@ -85,6 +87,7 @@ class Web extends BaseController
         $this->sesionModel      = new PiezaSesionModel();
         $this->referenciaModel  = new PiezaReferenciaModel();
         $this->renderModel      = new PiezaRenderModel();
+        $this->composicionModel = new PiezaComposicionModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
@@ -102,7 +105,9 @@ class Web extends BaseController
      */
     public function index()
     {
-        $familias = $this->familiaModel->orderBy('nombre', 'ASC')->findAll();
+        // Las borradas no aparecen aquí (invariante 6): viven aparte, en
+        // /piezas/papelera, mientras dura su plazo de gracia.
+        $familias = $this->familiaModel->where('borrado_en', null)->orderBy('nombre', 'ASC')->findAll();
 
         foreach ($familias as &$familia) {
             $familia['variantes'] = array_map(
@@ -113,10 +118,11 @@ class Web extends BaseController
         unset($familia);
 
         return view('piezas/index', [
-            'categorias'   => $this->categoriaModel->ordenadas(),
-            'grupos'       => $this->agruparPorCategoria($familias),
-            'familias'     => $familias,
-            'carritoCount' => count($this->carritoActual()),
+            'categorias'    => $this->categoriaModel->ordenadas(),
+            'grupos'        => $this->agruparPorCategoria($familias),
+            'familias'      => $familias,
+            'carritoCount'  => count($this->carritoActual()),
+            'papeleraCount' => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults(),
         ]);
     }
 
@@ -304,11 +310,15 @@ class Web extends BaseController
             'ramaNombre' => $estado['rama'] ? $this->ramaModel->nombre($estado['rama']) : null,
             'sesiones'  => $this->sesionesDeRama($estado['rama']),
             'estado'    => $estado,
-            'bloqueo'   => $this->descripcionBloqueo($estado['sesion_abierta']),
+            'bloqueo'   => $this->descripcionBloqueo($estado['sesion_abierta'], $estado['descargas_pendientes']),
             'pendientes' => $this->descripcionPendientes($estado['descargas_pendientes']),
             'acciones'  => $this->accionesDisponibles($estado, $versiones),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
             'carrito'   => $this->carritoActual(),
+            // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban
+            // en la escena de esta variante. Puramente informativo.
+            'componentes'           => $this->componentesDe($id),
+            'versionesParaComponer' => $this->versionesParaComponer($id),
         ]);
     }
 
@@ -322,7 +332,26 @@ class Web extends BaseController
     {
         $piezas = [];
 
-        foreach ($this->varianteModel->orderBy('nombre', 'ASC')->findAll() as $variante) {
+        // Las piezas en la papelera no cuentan como "listas para imprimir",
+        // aunque conserven una versión validada: siguen existiendo hasta que
+        // se purguen, pero ya no aparecen en ningún sitio de cara al usuario.
+        $activas = $this->familiaModel->where('borrado_en', null)->findAll();
+
+        $nombresFamilia    = array_column($activas, 'nombre', 'id');
+        $categoriaDeFamilia = array_column($activas, 'categoria_id', 'id');
+        $activas            = array_column($activas, 'id');
+
+        // Cuántas variantes tiene cada pieza: el nombre de la variante solo
+        // se muestra si hay más de una (spec fase 12 — con una sola, que
+        // siempre se llama "base", el nombre no dice nada). La tarjeta debe
+        // leerse como la pieza, no como una variante suelta sin dueño.
+        $conteoVariantes = [];
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->select('familia_id')->findAll() as $v) {
+            $fid = (int) $v['familia_id'];
+            $conteoVariantes[$fid] = ($conteoVariantes[$fid] ?? 0) + 1;
+        }
+
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->findAll() as $variante) {
             $validada = $this->versionModel
                 ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
             if (!$validada) {
@@ -339,11 +368,27 @@ class Web extends BaseController
                 $miniatura = $referencia ? site_url('piezas/referencia/' . $referencia['id'] . '/imagen') : null;
             }
 
-            $piezas[] = ['variante' => $variante, 'validada' => $validada, 'miniatura' => $miniatura];
+            $familiaId = (int) $variante['familia_id'];
+
+            $piezas[] = [
+                'variante'        => $variante,
+                'familiaNombre'   => $nombresFamilia[$familiaId] ?? '?',
+                'variosVariantes' => ($conteoVariantes[$familiaId] ?? 0) > 1,
+                'validada'        => $validada,
+                'miniatura'       => $miniatura,
+                // Mismo campo que espera agruparPorCategoria() para las
+                // filas del índice: se reutiliza tal cual, sin duplicar la
+                // lógica de reparto por categoría (spec 11.1).
+                'categoria_id'    => $categoriaDeFamilia[$familiaId] ?? null,
+            ];
         }
 
+        // Se ordena por pieza, no por variante: es lo que ahora encabeza la
+        // tarjeta, y es lo que se busca de un vistazo en una parrilla.
+        usort($piezas, fn($a, $b) => [$a['familiaNombre'], $a['variante']['nombre']] <=> [$b['familiaNombre'], $b['variante']['nombre']]);
+
         return view('piezas/galeria', [
-            'piezas'  => $piezas,
+            'grupos'  => $this->agruparPorCategoria($piezas),
             'carrito' => $this->carritoActual(),
         ]);
     }
@@ -488,6 +533,45 @@ class Web extends BaseController
         );
     }
 
+    /**
+     * "Borrar pieza" (invariante 6): no la destruye, la manda a la papelera
+     * — desaparece del índice y de la galería, pero se puede restaurar
+     * durante 30 días desde /piezas/papelera antes de que `piezas:purgar`
+     * se la lleve de verdad.
+     */
+    public function borrarFamilia(int $familiaId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->borrarFamilia($familiaId),
+            fn() => site_url('piezas'),
+            fn($familia) => 'Pieza "' . $familia['nombre'] . '" movida a la papelera. Se puede restaurar en los próximos 30 días.'
+        );
+    }
+
+    /**
+     * La papelera de piezas: lo que se borró y todavía está a tiempo de
+     * volver. Ordenada por fecha de borrado, la más reciente primero —
+     * es la que con más probabilidad se quiere deshacer.
+     */
+    public function papelera()
+    {
+        return view('piezas/papelera', [
+            'familias' => $this->familiaModel
+                ->where('borrado_en IS NOT NULL')
+                ->orderBy('borrado_en', 'DESC')
+                ->findAll(),
+        ]);
+    }
+
+    public function restaurarFamilia(int $familiaId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->restaurarFamilia($familiaId),
+            fn() => site_url('piezas/papelera'),
+            fn($familia) => 'Pieza "' . $familia['nombre'] . '" restaurada.'
+        );
+    }
+
     public function crearVariante()
     {
         return $this->ejecutar(
@@ -527,6 +611,21 @@ class Web extends BaseController
         );
     }
 
+    /**
+     * Enlace al máster de máxima calidad (Drive u otro sitio fuera del
+     * tracker), no un fichero: aquí solo se guarda dónde está.
+     */
+    public function editarEnlaceOriginal(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->actualizarEnlaceOriginal($varianteId, $this->request->getPost('enlace_original')),
+            fn($variante) => site_url('piezas/variante/' . $variante['id']),
+            fn($variante) => $variante['enlace_original']
+                ? 'Enlace al original guardado.'
+                : 'Enlace al original quitado.'
+        );
+    }
+
     public function derivarVariante(int $versionId)
     {
         return $this->ejecutar(
@@ -537,6 +636,36 @@ class Web extends BaseController
             ),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Variante "' . $variante['nombre'] . '" derivada. Empieza su propia numeración desde v001.'
+        );
+    }
+
+    /**
+     * "Compuesta de": anota que la escena de esta variante también incluía
+     * la versión de otra pieza — un torso modelado con el brazo ya hecho al
+     * lado, un "Mini playmobil" que es varias piezas de cuerpo juntas.
+     * Puramente informativo, aparte de derivarVariante (spec 11.1 ampliado).
+     */
+    public function declararComponente(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->declararComponente(
+                $varianteId,
+                (int) $this->request->getPost('version_componente_id'),
+                trim((string) $this->request->getPost('notas')) ?: null
+            ),
+            fn() => site_url('piezas/variante/' . $varianteId),
+            fn() => 'Anotado como parte de esta pieza.'
+        );
+    }
+
+    public function quitarComponente(int $composicionId)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->quitarComponente($composicionId),
+            fn() => site_url('piezas/variante/' . $varianteId),
+            fn() => 'Quitado de la lista.'
         );
     }
 
@@ -612,6 +741,39 @@ class Web extends BaseController
             fn() => $this->sync->forzarCierre($descargaId, (string) $this->request->getPost('motivo')),
             fn($resultado) => site_url('piezas/variante/' . $varianteId),
             fn($resultado) => 'Descarga cerrada a la fuerza. Queda registrada como cierre sin prueba, con tu motivo.'
+        );
+    }
+
+    /**
+     * La misma válvula de escape, para una sesión que nunca pasó por una
+     * descarga ("abrir" en variante estrenada, o el reabrir-sola de
+     * "subir"): si el disco que la abrió desaparece, esto es lo único que
+     * puede liberar el bloqueo (invariante 3).
+     */
+    public function forzarCierreSesion(int $sesionId)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        return $this->ejecutar(
+            fn() => $this->sync->forzarCierreSesion($sesionId, (string) $this->request->getPost('motivo')),
+            fn($resultado) => site_url('piezas/variante/' . $varianteId),
+            fn($resultado) => 'Sesión cerrada a la fuerza. Queda registrada como cierre sin prueba, con tu motivo.'
+        );
+    }
+
+    /**
+     * Aparta a mano el .blend de una sesión ya cerrada y sin promocionar
+     * (p. ej. una subida de prueba demasiado pesada que se va a reemplazar):
+     * libera el sitio en disco sin perder el registro de que existió.
+     */
+    public function descartarFicheroSesion(int $sesionId)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->descartarFicheroSesion($sesionId, (string) $this->request->getPost('motivo')),
+            fn($resultado) => site_url('piezas/variante/' . $varianteId),
+            fn($resultado) => 'Fichero apartado a la papelera. La sesión sigue en el historial, sin ocupar sitio.'
         );
     }
 
@@ -982,17 +1144,82 @@ class Web extends BaseController
         ];
     }
 
-    private function descripcionBloqueo(?array $sesionAbierta): ?array
+    /**
+     * Las piezas que ya se anotaron como "presentes en la escena" de esta
+     * variante, con lo necesario para leerlas de un vistazo: de qué pieza y
+     * variante son, en qué estado sigue esa versión (para el aviso pasivo
+     * si ya quedó superada/descartada — spec 11.1 ampliado).
+     */
+    private function componentesDe(int $varianteId): array
+    {
+        $filas = $this->composicionModel->where('variante_id', $varianteId)->orderBy('creado_en', 'ASC')->findAll();
+
+        return array_map(function ($fila) {
+            $version  = $this->versionModel->find($fila['version_componente_id']);
+            $variante = $version ? $this->varianteModel->find($version['variante_id']) : null;
+            $familia  = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
+
+            return $fila + ['version' => $version, 'variante' => $variante, 'familia' => $familia];
+        }, $filas);
+    }
+
+    /**
+     * Candidatas para el selector de "añadir componente": todas las
+     * versiones de las demás piezas activas (ni la propia variante, para
+     * que no puedas elegirte a ti mismo, ni las que están en la papelera).
+     * No se filtra por estado — una versión ya superada puede seguir
+     * siendo, con toda razón, la que estaba en la escena en su momento.
+     */
+    private function versionesParaComponer(int $varianteExcluidaId): array
+    {
+        $activas = array_column($this->familiaModel->where('borrado_en', null)->findAll(), 'id');
+        if ($activas === []) {
+            return [];
+        }
+
+        $nombresFamilia = array_column($this->familiaModel->whereIn('id', $activas)->findAll(), 'nombre', 'id');
+
+        $variantes = $this->varianteModel->whereIn('familia_id', $activas)->where('id !=', $varianteExcluidaId)->findAll();
+        if ($variantes === []) {
+            return [];
+        }
+        $familiaDeVariante = array_column($variantes, 'familia_id', 'id');
+        $nombreDeVariante  = array_column($variantes, 'nombre', 'id');
+
+        $versiones = $this->versionModel
+            ->whereIn('variante_id', array_keys($familiaDeVariante))
+            ->orderBy('variante_id', 'ASC')->orderBy('numero', 'DESC')
+            ->findAll();
+
+        return array_map(fn($v) => $v + [
+            'familia_nombre'  => $nombresFamilia[$familiaDeVariante[$v['variante_id']]] ?? '?',
+            'variante_nombre' => $nombreDeVariante[$v['variante_id']] ?? '?',
+        ], $versiones);
+    }
+
+    private function descripcionBloqueo(?array $sesionAbierta, array $descargasPendientes = []): ?array
     {
         if (!$sesionAbierta) {
             return null;
         }
 
+        // Si esta sesión ya tiene una descarga sin cerrar, esa descarga
+        // aparece aparte (en $pendientes) con su propio botón de cierre
+        // forzado, y ese cierre se lleva la sesión por delante (spec 4.4).
+        // Ofrecer aquí un segundo botón para lo mismo sería redundante, y
+        // PiezaSyncService::forzarCierreSesion lo rechazaría de todos modos.
+        $tieneDescargaAbierta = (bool) array_filter(
+            $descargasPendientes,
+            fn($d) => (int) ($d['sesion_id'] ?? 0) === (int) $sesionAbierta['id']
+        );
+
         return [
-            'maquina' => $this->sync->nombreDeMaquina((int) $sesionAbierta['maquina_id']) ?? 'otra máquina',
-            'numero'  => (int) $sesionAbierta['numero'],
-            'desde'   => $sesionAbierta['abierta_en'],
-            'dias'    => $this->diasDesde($sesionAbierta['abierta_en']),
+            'id'       => (int) $sesionAbierta['id'],
+            'maquina'  => $this->sync->nombreDeMaquina((int) $sesionAbierta['maquina_id']) ?? 'otra máquina',
+            'numero'   => (int) $sesionAbierta['numero'],
+            'desde'    => $sesionAbierta['abierta_en'],
+            'dias'     => $this->diasDesde($sesionAbierta['abierta_en']),
+            'forzable' => !$tieneDescargaAbierta,
         ];
     }
 

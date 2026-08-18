@@ -26,6 +26,13 @@
     <a href="<?= site_url('piezas/maquinas') ?>" class="btn btn-sm btn-outline-secondary" title="Máquinas">
         <i class="bi bi-pc-display"></i>
     </a>
+    <?php // Solo aparece cuando hay algo dentro: no tiene sentido un icono a una papelera vacía. ?>
+    <?php if (!empty($papeleraCount)): ?>
+        <a href="<?= site_url('piezas/papelera') ?>" class="btn btn-sm btn-outline-secondary" title="Papelera">
+            <i class="bi bi-trash"></i>
+            <span class="badge text-bg-secondary"><?= (int) $papeleraCount ?></span>
+        </a>
+    <?php endif; ?>
     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia">
         <i class="bi bi-plus-lg"></i> Pieza
     </button>
@@ -173,6 +180,16 @@ $textoBuscable = static function (array $familia): string {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </form>
+
+                            <?php // Borrar (a papelera): mismo modo Organizar, para no ensuciar la fila el resto del tiempo. ?>
+                            <form method="post" class="zona-organizar d-none"
+                                action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/borrar') ?>"
+                                onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </form>
                         </div>
 
