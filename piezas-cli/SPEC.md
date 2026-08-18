@@ -23,6 +23,7 @@
 | 22 | `abrir` fusionado en `bajar`: un solo comando para pieza nueva o con historial | ✅ Hecho (detalle abajo) |
 | 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
 | 24 | Papelera también por variante suelta (no solo la pieza entera) | ✅ Hecho (detalle abajo) |
+| 25 | Directorio vacío ya no confunde con "corrupto", y sesiones activas en el índice | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -580,6 +581,25 @@ delante las demás.
   redundante.
 - **`/piezas/papelera`** separa ahora "Piezas enteras" y "Variantes sueltas" en dos listas, cada
   una con su propio botón de restaurar; el contador del índice suma las dos.
+
+**Fase 25 (2026-08-19).** Dos arreglos sueltos, uno en cada lado del módulo.
+
+- **`trackbitos estado` en un directorio vacío ya no dice "corrupto".** Sin `.sesion.json` ni
+  `.blend`, `evaluar()` recibía todo a `None` y caía en la rama de "estado corrupto: no se borra
+  nada" — un mensaje pensado para cuando algo que SÍ era una mesa de trabajo pierde su fichero,
+  no para un directorio que nunca lo fue. `cmd_estado` corta ahora antes, con el mismo mensaje
+  que ya daba `_exigir_sentinel()` para `subir`/`cerrar`/`promocionar` ("no es un directorio de
+  trabajo... empieza con trackbitos bajar"), para no decir dos cosas distintas de la misma
+  situación según el comando.
+- **El índice web muestra quién está trabajando en qué, arriba del todo.** Antes solo se veía el
+  bloqueo mirando la ficha de cada variante una por una. `Web::calcularSesionesActivas()` barre
+  todas las sesiones abiertas de la pieza (puede haber varias a la vez, una por máquina, en
+  piezas distintas) y las remonta hasta su variante y familia. Se refresca sola cada 20s vía
+  `fetch()` a `GET /piezas/sesiones-activas` — repinta solo esa franja, no la página entera
+  (recargar borraría el buscador escrito o el modo "Organizar" encendido), construyendo el DOM a
+  mano (`textContent`, no `innerHTML` con texto interpolado) para no abrir un XSS con un nombre
+  de máquina o de pieza. Se detiene sola si la pestaña está en segundo plano (Page Visibility
+  API) — no gasta peticiones en algo que no se ve.
 
 ---
 

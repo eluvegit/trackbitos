@@ -119,13 +119,76 @@ class Web extends BaseController
         unset($familia);
 
         return view('piezas/index', [
-            'categorias'    => $this->categoriaModel->ordenadas(),
-            'grupos'        => $this->agruparPorCategoria($familias),
-            'familias'      => $familias,
-            'carritoCount'  => count($this->carritoActual()),
-            'papeleraCount' => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
+            'categorias'       => $this->categoriaModel->ordenadas(),
+            'grupos'           => $this->agruparPorCategoria($familias),
+            'familias'         => $familias,
+            'carritoCount'     => count($this->carritoActual()),
+            'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
                 + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
+            'sesionesActivas'  => $this->calcularSesionesActivas(),
         ]);
+    }
+
+    /**
+     * JSON de las sesiones abiertas ahora mismo, para el refresco parcial
+     * del aviso del índice (cada 20s, spec: "arriba del todo si hay una
+     * sesión activa"). Aparte de `index()` para que el JS pueda repintar
+     * solo esa franja sin recargar la página entera — perdería el
+     * buscador escrito o el modo "Organizar" encendido.
+     */
+    public function sesionesActivas()
+    {
+        return $this->response->setJSON(['sesiones' => $this->calcularSesionesActivas()]);
+    }
+
+    /**
+     * Quién está trabajando en qué, ahora mismo, en toda la pieza. Puede
+     * haber más de una a la vez (las dos máquinas en piezas distintas), así
+     * que no vale con mirar una variante — hay que barrer todas las
+     * sesiones abiertas y remontar de vuelta a su variante y familia.
+     */
+    private function calcularSesionesActivas(): array
+    {
+        $sesiones = $this->sesionModel->where('cerrada_en', null)->orderBy('abierta_en', 'ASC')->findAll();
+        if ($sesiones === []) {
+            return [];
+        }
+
+        $ramas           = $this->ramaModel->whereIn('id', array_column($sesiones, 'rama_id'))->findAll();
+        $varianteDeRama  = array_column($ramas, 'variante_id', 'id');
+
+        $variantes          = $this->varianteModel->whereIn('id', array_values($varianteDeRama))->findAll();
+        $familiaDeVariante  = array_column($variantes, 'familia_id', 'id');
+        $nombreDeVariante   = array_column($variantes, 'nombre', 'id');
+
+        $nombreDeFamilia = array_column(
+            $this->familiaModel->whereIn('id', array_values($familiaDeVariante))->findAll(),
+            'nombre',
+            'id'
+        );
+
+        $resultado = [];
+        foreach ($sesiones as $sesion) {
+            $varianteId = $varianteDeRama[$sesion['rama_id']] ?? null;
+            // Datos huérfanos (rama o variante ya no existe) no deberían
+            // pasar, pero si pasan, mejor omitir esa sesión que romper el
+            // aviso entero por una fila suelta.
+            if ($varianteId === null || !isset($nombreDeVariante[$varianteId])) {
+                continue;
+            }
+            $familiaId = $familiaDeVariante[$varianteId];
+
+            $resultado[] = [
+                'variante_id' => $varianteId,
+                'familia'     => $nombreDeFamilia[$familiaId] ?? '?',
+                'variante'    => $nombreDeVariante[$varianteId],
+                'maquina'     => $this->sync->nombreDeMaquina((int) $sesion['maquina_id']) ?? 'máquina desconocida',
+                'desde'       => $sesion['abierta_en'],
+                'dias'        => $this->diasDesde($sesion['abierta_en']),
+            ];
+        }
+
+        return $resultado;
     }
 
     /**

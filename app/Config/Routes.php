@@ -654,6 +654,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('estadisticas', 'Web::estadisticas');
+    $routes->GET('sesiones-activas', 'Web::sesionesActivas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');

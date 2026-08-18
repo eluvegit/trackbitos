@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -671,6 +671,18 @@ def cmd_estado(args) -> int:
     directorio = _directorio(args)
     sentinel = cargar_json(directorio / SENTINEL_NAME)
     blend = encontrar_blend(directorio)
+
+    # Ni .sesion.json ni .blend: no es que algo se haya corrompido, es que
+    # esto nunca fue una mesa de trabajo. Antes caía en evaluar() con todo
+    # a None y salía como "estado corrupto" — alarmante y engañoso para lo
+    # que en realidad es un directorio vacío cualquiera. Mismo mensaje que
+    # ya da _exigir_sentinel() (subir/cerrar/promocionar), para no decir
+    # dos cosas distintas de la misma situación según el comando.
+    if not sentinel and not blend:
+        print(f"\n{directorio}\n")
+        print(f"  · No es un directorio de trabajo: no hay {SENTINEL_NAME} ni ningún .blend aquí.")
+        print("\n  → Empieza con: trackbitos bajar <variante>\n")
+        return 1
 
     hash_local = sha256_de(blend) if blend else None
     hash_origen = sentinel.get("hash_origen") if sentinel else None
