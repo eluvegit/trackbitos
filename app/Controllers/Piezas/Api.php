@@ -577,10 +577,24 @@ class Api extends BaseController
             ->where('estado', 'validada')
             ->first();
 
+        // El listado de la web distingue "sin versión" / "versión sin
+        // imprimir" / "sin validar" / "descartada"; el cliente no podía
+        // porque este dato no salía de aquí y lo resumía todo como una sola
+        // cosa. Es aditivo: un cliente anterior simplemente lo ignora.
+        $ultimaVersion = $this->versionModel
+            ->where('variante_id', $variante['id'])
+            ->orderBy('numero', 'DESC')
+            ->first();
+
         $rama = $this->ramaModel->abiertaDe((int) $variante['id']);
         $sesionAbierta = $rama
             ? $this->sesionModel->where('rama_id', $rama['id'])->where('cerrada_en', null)->first()
             : null;
+
+        // Trabajo subido a la rama abierta y todavía sin promocionar. Sin
+        // esto el cliente no puede distinguir "cerrada y a medias" de "nada
+        // en marcha": las dos se ven igual, sin sesión abierta que avisar.
+        $ultimaSubida = $rama ? $this->sesionModel->ultimaSubida((int) $rama['id']) : null;
 
         $familia = $familias[(int) $variante['familia_id']] ?? [];
 
@@ -596,7 +610,9 @@ class Api extends BaseController
                 'numero' => (int) $validada['numero'],
             ] : null,
             'versiones'             => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
+            'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
             'rama_abierta'          => $rama !== null,
+            'trabajo_en_curso'      => $sesionAbierta !== null || $ultimaSubida !== null,
             'sesion_abierta'        => $sesionAbierta !== null,
             'sesion_maquina'        => $sesionAbierta ? $this->nombreMaquina((int) $sesionAbierta['maquina_id']) : null,
             'descargas_pendientes'  => count($this->descargaModel->abiertasParaVariante((int) $variante['id'])),

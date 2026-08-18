@@ -247,7 +247,9 @@ class Web extends BaseController
         $bytesVersiones = 0;
         foreach ($this->versionModel->where('variante_id', $varianteId)->findAll() as $version) {
             $bytesVersiones += $this->almacen->tamano($version['ruta_blend']) ?? 0;
-            $bytesVersiones += $this->almacen->tamano($version['ruta_stl']) ?? 0;
+            foreach ($this->servicio->stlsDe((int) $version['id']) as $stl) {
+                $bytesVersiones += $this->almacen->tamano($stl['ruta_stl']) ?? 0;
+            }
         }
 
         $bytesSesiones = 0;
@@ -374,7 +376,13 @@ class Web extends BaseController
             // Cuánto pesa esta versión en disco (spec: "qué ocupa cada
             // fichero"), junto a sus botones de descarga.
             $version['tamano_blend']        = $this->almacen->tamano($version['ruta_blend']);
-            $version['tamano_stl']          = $this->almacen->tamano($version['ruta_stl']);
+            // Varios STL por versión (fase 21): la pieza entera, o cada
+            // trozo si se imprime por partes y se monta.
+            $version['stls'] = array_map(function (array $stl) {
+                $stl['tamano'] = $this->almacen->tamano($stl['ruta_stl']);
+
+                return $stl;
+            }, $this->servicio->stlsDe((int) $version['id']));
         }
         unset($version);
 
@@ -476,6 +484,9 @@ class Web extends BaseController
                 'familiaNombre'   => $nombresFamilia[$familiaId] ?? '?',
                 'variosVariantes' => ($conteoVariantes[$familiaId] ?? 0) > 1,
                 'validada'        => $validada,
+                // Cuántos trozos hay que imprimir (fase 21): la galería solo
+                // necesita saber si hay alguno y cuántos, no cuáles.
+                'stls'            => count($this->servicio->stlsDe((int) $validada['id'])),
                 'miniatura'       => $miniatura,
                 // Mismo campo que espera agruparPorCategoria() para las
                 // filas del índice: se reutiliza tal cual, sin duplicar la
@@ -497,8 +508,8 @@ class Web extends BaseController
     public function carritoAgregar(int $versionId)
     {
         $version = $this->versionModel->find($versionId);
-        if (!$version || empty($version['ruta_stl'])) {
-            return redirect()->back()->with('error', 'Esa versión no tiene STL adjunto: no se puede añadir a la placa.');
+        if (!$version || $this->servicio->stlsDe($versionId) === []) {
+            return redirect()->back()->with('error', 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.');
         }
 
         $carrito = $this->carritoActual();
@@ -537,11 +548,21 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/galeria'))->with('error', 'La placa está vacía.');
         }
 
-        $versiones = array_filter(
-            $this->versionModel->whereIn('id', $carrito)->findAll(),
-            fn($v) => !empty($v['ruta_stl']) && $this->almacen->existe($v['ruta_stl'])
-        );
-        if (empty($versiones)) {
+        // Una versión puede aportar varios STL a la placa (fase 21): si la
+        // pieza se imprime en trozos, los trozos van todos o no va ninguno.
+        $versiones = $this->versionModel->whereIn('id', $carrito)->findAll();
+        $porVersion = $this->servicio->stlsDeVersiones(array_map(static fn($v) => (int) $v['id'], $versiones));
+
+        $aEmpaquetar = [];
+        foreach ($versiones as $version) {
+            foreach ($porVersion[(int) $version['id']] ?? [] as $stl) {
+                if ($this->almacen->existe($stl['ruta_stl'])) {
+                    $aEmpaquetar[] = [$version, $stl];
+                }
+            }
+        }
+
+        if ($aEmpaquetar === []) {
             return redirect()->to(site_url('piezas/galeria'))
                 ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
         }
@@ -556,9 +577,12 @@ class Web extends BaseController
         if ($zip->open($rutaZip, \ZipArchive::CREATE) !== true) {
             throw new RuntimeException('No se pudo crear el zip de la placa.');
         }
-        foreach ($versiones as $version) {
+        foreach ($aEmpaquetar as [$version, $stl]) {
             $variante = $this->varianteModel->find($version['variante_id']);
-            $zip->addFile($this->almacen->absoluta($version['ruta_stl']), $this->nombreArchivo($variante, $version, 'stl'));
+            $zip->addFile(
+                $this->almacen->absoluta($stl['ruta_stl']),
+                $this->nombreArchivo($variante, $version, 'stl', $stl['nombre'])
+            );
         }
         $zip->close();
 
@@ -579,7 +603,7 @@ class Web extends BaseController
      * descargas o dentro del laminador, donde ya no está la ficha al lado
      * para mirarlo.
      */
-    private function nombreArchivo(?array $variante, array $version, string $extension): string
+    private function nombreArchivo(?array $variante, array $version, string $extension, ?string $sufijo = null): string
     {
         // La familia va incluida (igual que en las descargas del CLI, ver
         // PiezaSyncService::nombreFichero): "estandar-v001.stl" no dice de
@@ -594,7 +618,18 @@ class Web extends BaseController
             $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . $version['variante_id'],
         ]);
 
-        return sprintf('%s-v%03d.%s', implode('-', $partes), (int) $version['numero'], $extension);
+        // El nombre del trozo va al final ("...-v002-brazo-izquierdo.stl"):
+        // con varios STL por versión, sin él se descargarían tres ficheros
+        // con el mismo nombre y el navegador los numeraría (1), (2)...
+        $sufijo = $this->paraNombreDeArchivo($sufijo);
+
+        return sprintf(
+            '%s-v%03d%s.%s',
+            implode('-', $partes),
+            (int) $version['numero'],
+            $sufijo !== '' ? '-' . $sufijo : '',
+            $extension
+        );
     }
 
     /** Deja solo lo que sobrevive intacto a cualquier sistema de ficheros. */
@@ -1037,18 +1072,6 @@ class Web extends BaseController
             function () use ($versionId) {
                 $version = $this->versionModel->find($versionId);
 
-                // Comprobar ANTES de tocar disco: PiezaService::adjuntarStl
-                // repite este chequeo, pero si se hiciera solo ahí, un
-                // segundo intento ya habría sobrescrito el fichero de la
-                // ruta (determinista por variante+número) antes de que la
-                // base de datos lo rechazara.
-                if (!empty($version['ruta_stl'])) {
-                    throw new RuntimeException(
-                        "La versión {$versionId} ya tiene un STL adjunto. Es inmutable: "
-                        . 'si el modelo cambió, promociona una versión nueva.'
-                    );
-                }
-
                 $file = $this->request->getFile('stl');
                 if (!$file || !$file->isValid() || $file->hasMoved()) {
                     throw new RuntimeException('No ha llegado ningún fichero STL válido.');
@@ -1060,13 +1083,62 @@ class Web extends BaseController
                     throw new RuntimeException('Solo se admiten ficheros .stl.');
                 }
 
-                $ruta = $this->almacen->rutaStl((int) $version['variante_id'], (int) $version['numero']);
-                $this->almacen->guardar($file->getTempName(), $ruta);
-                $hash = $this->almacen->hash($ruta);
+                // Sin nombre no se distinguiría un trozo de otro. Si solo hay
+                // uno, "completo" es lo que de verdad es y ahorra escribirlo.
+                $nombre = trim((string) $this->request->getPost('nombre'));
+                if ($nombre === '') {
+                    $nombre = $this->servicio->stlsDe($versionId) === [] ? 'completo' : '';
+                }
 
-                return $this->servicio->adjuntarStl($versionId, $ruta, $hash);
+                // Alta en dos pasos: la fila primero, porque la ruta del
+                // fichero lleva dentro el id del STL (varios por versión,
+                // fase 21). Así el segundo no puede pisar al primero.
+                $stl  = $this->servicio->reservarStl($versionId, $nombre);
+                $ruta = $this->almacen->rutaStl(
+                    (int) $version['variante_id'],
+                    (int) $version['numero'],
+                    (int) $stl['id']
+                );
+
+                try {
+                    $this->almacen->guardar($file->getTempName(), $ruta);
+                    $hash = $this->almacen->hash($ruta);
+
+                    $this->servicio->adjuntarStl((int) $stl['id'], $ruta, $hash, (int) $file->getSize());
+                } catch (Throwable $e) {
+                    // La reserva quedaría como un STL fantasma sin fichero.
+                    $this->servicio->quitarStl((int) $stl['id']);
+
+                    throw $e;
+                }
+
+                return $version;
             },
             fn($version) => sprintf('STL adjuntado a v%03d. Ya se puede descargar para imprimir.', (int) $version['numero'])
+        );
+    }
+
+    /**
+     * Quitar un STL: con varios por versión, subir el equivocado deja de ser
+     * un accidente raro. Va a la papelera, no se borra (invariante 6).
+     */
+    public function quitarStl(int $stlId)
+    {
+        $stl = $this->servicio->stl($stlId);
+        if (!$stl) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Ese STL no existe.');
+        }
+
+        $version = $this->versionModel->find($stl['version_id']);
+
+        return $this->ejecutar(
+            fn() => $this->servicio->quitarStl($stlId),
+            fn() => site_url('piezas/variante/' . (int) $version['variante_id']),
+            fn($quitado) => sprintf(
+                'STL "%s" quitado de v%03d. El fichero queda 30 días en la papelera.',
+                $quitado['nombre'],
+                (int) $version['numero']
+            )
         );
     }
 
@@ -1074,19 +1146,21 @@ class Web extends BaseController
      * A diferencia de las imágenes, el STL se sirve para descargar (no
      * inline): se abre en el laminador, no en el navegador.
      */
-    public function descargarStl(int $versionId)
+    public function descargarStl(int $stlId)
     {
-        $version = $this->versionModel->find($versionId);
-        if (!$version || empty($version['ruta_stl']) || !$this->almacen->existe($version['ruta_stl'])) {
+        $stl = $this->servicio->stl($stlId);
+        if (!$stl || empty($stl['ruta_stl']) || !$this->almacen->existe($stl['ruta_stl'])) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
+        $version  = $this->versionModel->find($stl['version_id']);
         $variante = $this->varianteModel->find($version['variante_id']);
 
-        // En disco el fichero se llama version-v002.stl (nombres derivados de
-        // IDs, spec 8); quien lo descarga necesita saber de qué pieza es.
-        return $this->response->download($this->almacen->absoluta($version['ruta_stl']), null, true)
-            ->setFileName($this->nombreArchivo($variante, $version, 'stl'));
+        // En disco el fichero se llama version-v002-stl-7.stl (nombres
+        // derivados de IDs, spec 8); quien lo descarga necesita saber de qué
+        // pieza es y, con varios trozos, cuál de ellos.
+        return $this->response->download($this->almacen->absoluta($stl['ruta_stl']), null, true)
+            ->setFileName($this->nombreArchivo($variante, $version, 'stl', $stl['nombre']));
     }
 
     /**
@@ -1113,8 +1187,13 @@ class Web extends BaseController
 
         $variante = $this->varianteModel->find($version['variante_id']);
 
+        // El aviso del modal se lee una vez; el nombre del fichero viaja con
+        // él. Dentro de un mes, en una carpeta de descargas, "solo-lectura"
+        // es lo único que queda para no ponerse a trabajar sobre esta copia
+        // creyendo que cuenta (no abrió asiento: el sistema no sabe que
+        // existe, y lo que se suba desde aquí no cuadraría con nada).
         return $this->response->download($this->almacen->absoluta($version['ruta_blend']), null, true)
-            ->setFileName($this->nombreArchivo($variante, $version, 'blend'));
+            ->setFileName($this->nombreArchivo($variante, $version, 'blend', 'solo-lectura'));
     }
 
     /**
@@ -1213,11 +1292,40 @@ class Web extends BaseController
             'versiones'     => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
             'bloqueo'       => $this->descripcionBloqueo($estado['sesion_abierta']),
             'pendientes'    => $this->descripcionPendientes($estado['descargas_pendientes']),
-            // Sin esto, "sin versión buena" no distinguía entre "nunca se ha
-            // llegado a imprimir" y "impresa, pendiente de juzgar" o "la
-            // última se descartó" — todo se veía igual en el listado.
+            // Sin esto, todo lo que no fuera una versión validada se veía
+            // igual en el listado: "sin versión", "versión sin imprimir",
+            // "impresa, pendiente de juzgar" y "la última se descartó" son
+            // cuatro sitios muy distintos de la vida de una pieza.
             'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
+            // El otro eje: si además hay trabajo encima ahora mismo. Basta
+            // con una sesión abierta (alguien la tiene en su máquina) o con
+            // una ya subida y sin promocionar — ese segundo caso no se veía
+            // en ningún sitio del listado, porque no hay bloqueo ni descarga
+            // pendiente que avisar. Recién promocionada NO cuenta: la rama
+            // nueva nace vacía, y si contase saldría en casi todas siempre.
+            'trabajo_en_curso' => $estado['sesion_abierta'] !== null || $estado['ultima_subida'] !== null,
+            // ¿Está lista para mandar a imprimir? Sin esto había que entrar
+            // pieza por pieza a comprobar si el STL llegó a adjuntarse, que
+            // es un paso aparte de promocionar y por eso se olvida.
+            //
+            // Se mira la versión validada si la hay, y si no la última: es la
+            // que imprimirías, no cualquiera del historial.
+            'stl' => $this->estadoStl($validada ?: $ultimaVersion),
         ];
+    }
+
+    /**
+     * @return array{aplica: bool, trozos: int}  aplica=false si no hay
+     *         ninguna versión todavía: no es que falte el STL, es que aún no
+     *         hay nada que exportar.
+     */
+    private function estadoStl(?array $version): array
+    {
+        if (!$version) {
+            return ['aplica' => false, 'trozos' => 0];
+        }
+
+        return ['aplica' => true, 'trozos' => count($this->servicio->stlsDe((int) $version['id']))];
     }
 
     private function versionDeOrigen(array $variante): ?array
@@ -1373,7 +1481,14 @@ class Web extends BaseController
             $motivos['promocionar'] = 'Todavía no hay ninguna sesión subida en esta rama. Sube el .blend primero.';
         }
 
-        if ($estado['sesion_abierta']) {
+        // Invariante 9: mientras haya una impresión sin juzgar no se abre
+        // trabajo nuevo. Va antes que el aviso de sesión abierta porque es la
+        // condición de fondo: cerrar la sesión no desbloquea nada.
+        $sinJuzgar = array_values(array_filter($versiones, static fn($v) => $v['estado'] === 'impresa'));
+
+        if ($sinJuzgar !== []) {
+            $motivos['devolver'] = 'Hay una impresión sin juzgar: di si sirve o descártala antes de abrir trabajo nuevo.';
+        } elseif ($estado['sesion_abierta']) {
             $motivos['devolver'] = 'Hay una sesión sin cerrar. Ciérrala antes de cambiar de línea de trabajo.';
         }
 
@@ -1381,6 +1496,9 @@ class Web extends BaseController
             'puede_promocionar' => !isset($motivos['promocionar']),
             'puede_devolver'    => !isset($motivos['devolver']),
             'motivos'           => $motivos,
+            // Para que la ficha pueda decirlo arriba, no solo al pulsar: es lo
+            // que impide trabajar desde el CLI, y ahí el usuario no ve botones.
+            'sin_juzgar' => array_map(static fn($v) => (int) $v['numero'], $sinJuzgar),
             // La versión de la que ya parte la rama abierta (spec: "Devolver
             // a trabajo" en ESA versión sería cerrar esa misma rama para
             // abrir una idéntica — nada que devolver, solo confusión). Las

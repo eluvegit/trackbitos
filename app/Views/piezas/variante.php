@@ -4,7 +4,9 @@
 <?php
 $badges = [
     'borrador'   => 'text-bg-secondary',
-    'impresa'    => 'text-bg-info',
+    // Azul, no el cyan de "info": sobre el tema oscuro salía chillón. Mismo
+    // color que el badge "sin validar" del listado — es el mismo estado.
+    'impresa'    => 'text-bg-primary',
     'validada'   => 'text-bg-success',
     'superada'   => 'text-bg-dark',
     'descartada' => 'text-bg-danger',
@@ -204,6 +206,34 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
     acción (spec 7.1): son los que evitan ponerse a trabajar aquí sobre algo
     que quedó a medias en la otra máquina.
 -->
+<?php // Invariante 9: va el primero de todos. Es lo que impide abrir trabajo
+      // nuevo desde el cliente, y allí no hay botones que se puedan desactivar
+      // — el usuario solo se encontraría un error al escribir "abrir". ?>
+<?php if (!empty($acciones['sin_juzgar'])): ?>
+    <?php // Ojo con el nombre: $pendientes ya está cogido más abajo, por las descargas sin cerrar. ?>
+    <?php $sinJuzgar = $acciones['sin_juzgar']; ?>
+    <div class="alert alert-primary py-2 mb-2">
+        <i class="bi bi-printer-fill"></i>
+        <strong>
+            <?= count($sinJuzgar) === 1 ? 'La v' . sprintf('%03d', $sinJuzgar[0]) . ' está impresa y sin juzgar' : 'Hay ' . count($sinJuzgar) . ' versiones impresas y sin juzgar' ?>
+        </strong>
+        <div class="small mt-1">
+            Hasta que digas si esa impresión sirve, esta pieza está parada: no se puede abrir sesión desde el
+            cliente ni devolverla a trabajo. Es a propósito — seguir modelando encima sería partir de algo que
+            no sabes si funciona, y el juicio que no se hace con la pieza en la mano no se hace nunca.
+            <strong>Si ya sabes que no vale, descártala con el motivo y sigue desde ahí.</strong>
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+            <?php foreach ($versiones as $v): ?>
+                <?php if ($v['estado'] !== 'impresa') continue; ?>
+                <a href="#version-<?= (int) $v['id'] ?>" class="btn btn-sm btn-outline-primary">
+                    Juzgar <?= $etiqueta($v) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php if ($bloqueo): ?>
     <div class="alert alert-warning py-2 mb-2 d-flex flex-wrap align-items-center gap-2">
         <div class="flex-grow-1">
@@ -353,7 +383,7 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
             </p>
         <?php else: ?>
             <?php foreach ($versiones as $v): ?>
-                <div class="card shadow-sm mb-2">
+                <div class="card shadow-sm mb-2" id="version-<?= (int) $v['id'] ?>">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                             <span class="badge <?= $badges[$v['estado']] ?? 'text-bg-secondary' ?>"><?= $etiqueta($v) ?></span>
@@ -444,36 +474,75 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                                     <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
                                 <?php endif; ?>
                             </button>
-                            <?php if (!empty($v['ruta_stl'])): ?>
-                                <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
-                                    class="btn btn-sm btn-primary py-0 px-2">
-                                    <i class="bi bi-file-earmark-arrow-down"></i> Descargar STL
-                                    <?php if ($v['tamano_stl'] !== null): ?>
-                                        <span class="opacity-75">(<?= $tamanoLegible($v['tamano_stl']) ?>)</span>
-                                    <?php endif; ?>
-                                </a>
-                                <?php if ($v['estado'] === 'validada'): ?>
-                                    <?php if (in_array((int) $v['id'], $carrito, true)): ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . $v['id']) ?>">
-                                            <?= csrf_field() ?>
-                                            <button class="btn btn-sm btn-success py-0 px-2">
-                                                <i class="bi bi-check-lg"></i> En la placa
-                                            </button>
-                                        </form>
-                                    <?php else: ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . $v['id']) ?>">
-                                            <?= csrf_field() ?>
-                                            <button class="btn btn-sm btn-outline-primary py-0 px-2">
-                                                <i class="bi bi-plus-lg"></i> Añadir a la placa
-                                            </button>
-                                        </form>
-                                    <?php endif; ?>
+                            <?php
+                                /*
+                                 * Un STL por trozo a imprimir, no uno por versión: los dos brazos
+                                 * van por separado aunque compartan .blend, y una pieza más alta
+                                 * que la placa se corta y se monta. El .blend sigue siendo uno
+                                 * solo — ahí están todas las partes juntas.
+                                 */
+                            ?>
+                            <?php foreach ($v['stls'] as $stl): ?>
+                                <?php
+                                    /*
+                                     * El botón tiene que decir QUÉ se descarga, no solo de qué
+                                     * trozo es: junto a "Descargar .blend", un botón que ponga
+                                     * solo "completo" no se lee como una descarga de nada.
+                                     *
+                                     * El nombre solo se intercala cuando aporta: con un único
+                                     * STL llamado "completo" (el nombre que se pone solo) sería
+                                     * repetir que la pieza entera es la pieza entera.
+                                     */
+                                    $soloUno = count($v['stls']) === 1;
+                                    $queTrozo = ($soloUno && mb_strtolower($stl['nombre']) === 'completo')
+                                        ? ''
+                                        : ' ' . $stl['nombre'];
+                                ?>
+                                <div class="btn-group" role="group">
+                                    <a href="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/descargar') ?>"
+                                        class="btn btn-sm btn-primary py-0 px-2">
+                                        <i class="bi bi-file-earmark-arrow-down"></i>
+                                        Descargar<?= esc($queTrozo) ?> .STL
+                                        <?php if ($stl['tamano'] !== null): ?>
+                                            <span class="opacity-75">(<?= $tamanoLegible($stl['tamano']) ?>)</span>
+                                        <?php endif; ?>
+                                    </a>
+                                    <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/quitar') ?>">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1 h-100"
+                                            title="Quitar este STL (va a la papelera, 30 días)">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">
+                                <i class="bi bi-file-earmark-arrow-up"></i>
+                                <?= empty($v['stls']) ? 'Adjuntar STL' : 'Añadir otro STL' ?>
+                            </button>
+
+                            <?php // La placa se lleva TODOS los trozos de la versión: media pieza no se imprime. ?>
+                            <?php if (!empty($v['stls']) && $v['estado'] === 'validada'): ?>
+                                <?php if (in_array((int) $v['id'], $carrito, true)): ?>
+                                    <form method="post" action="<?= site_url('piezas/carrito/quitar/' . $v['id']) ?>">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-success py-0 px-2">
+                                            <i class="bi bi-check-lg"></i> En la placa
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <form method="post" action="<?= site_url('piezas/carrito/agregar/' . $v['id']) ?>">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-outline-primary py-0 px-2">
+                                            <i class="bi bi-plus-lg"></i> Añadir a la placa
+                                            <?php if (count($v['stls']) > 1): ?>
+                                                <span class="opacity-75">(<?= count($v['stls']) ?> trozos)</span>
+                                            <?php endif; ?>
+                                        </button>
+                                    </form>
                                 <?php endif; ?>
-                            <?php else: ?>
-                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
-                                    data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">
-                                    <i class="bi bi-file-earmark-arrow-up"></i> Adjuntar STL
-                                </button>
                             <?php endif; ?>
                         </div>
 
@@ -709,8 +778,19 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                             <div class="modal-body">
                                 <p class="small text-muted mb-2">
                                     Una vez adjuntado no se puede reemplazar: si el modelo cambia, promociona
-                                    una versión nueva y sube el STL ahí.
+                                    una versión nueva y sube el STL ahí. Puedes adjuntar <strong>varios</strong>:
+                                    los brazos por separado, o una pieza alta partida en trozos que luego se montan.
                                 </p>
+                                <label class="form-label small">Qué trozo es</label>
+                                <input type="text" name="nombre" maxlength="150" class="form-control form-control-sm mb-2"
+                                    placeholder="<?= empty($v['stls']) ? 'completo' : 'brazo izquierdo' ?>"
+                                    <?= empty($v['stls']) ? '' : 'required' ?>>
+                                <?php if (!empty($v['stls'])): ?>
+                                    <div class="form-text small mb-2">
+                                        Ya hay: <?= esc(implode(', ', array_column($v['stls'], 'nombre'))) ?>.
+                                    </div>
+                                <?php endif; ?>
+
                                 <label class="form-label small">Fichero .stl</label>
                                 <input type="file" name="stl" accept=".stl" class="form-control form-control-sm" required>
                             </div>

@@ -686,8 +686,11 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
 
     // STL para imprimir: se adjunta aparte del .blend (spec 8), inmutable
     // una vez puesto.
+    // Subir cuelga de la versión (es a lo que se adjunta); descargar y quitar
+    // cuelgan del STL concreto, porque una versión puede tener varios.
     $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
-    $routes->GET('version/(:num)/stl/descargar', 'Web::descargarStl/$1');
+    $routes->GET('stl/(:num)/descargar', 'Web::descargarStl/$1');
+    $routes->POST('stl/(:num)/quitar', 'Web::quitarStl/$1');
 
     // El .blend de una versión ya promocionada, sin declarar máquina: es
     // inmutable y nadie espera que vuelva, así que no hay asiento que

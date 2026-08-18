@@ -37,13 +37,17 @@ class PiezaAlmacen
     }
 
     /**
-     * El STL para imprimir, junto al .blend de la misma versión. Se adjunta
+     * Un STL para imprimir, junto al .blend de la misma versión. Se adjunta
      * aparte (PiezaService::adjuntarStl), no al promocionar: el usuario
      * decide cuándo exportarlo, normalmente justo antes de imprimir.
+     *
+     * Lleva el id del STL porque una versión puede tener varios (fase 21):
+     * los brazos por separado, o una pieza alta cortada en trozos. Sin él,
+     * el segundo pisaría el fichero del primero.
      */
-    public function rutaStl(int $varianteId, int $numero): string
+    public function rutaStl(int $varianteId, int $numero, int $stlId): string
     {
-        return sprintf('variante-%d/version-v%03d.stl', $varianteId, $numero);
+        return sprintf('variante-%d/version-v%03d-stl-%d.stl', $varianteId, $numero, $stlId);
     }
 
     public function rutaReferencia(int $familiaId, int $referenciaId, string $extension): string

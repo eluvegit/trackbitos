@@ -24,12 +24,16 @@ class PiezaVersionModel extends Model
      * Congelados desde la creación (invariante 4): identifican el fichero
      * exacto de esa versión. numero incluido porque reordenar versiones
      * rompería el historial.
+     *
+     * Los STL ya no están aquí: desde la fase 21 viven en su propia tabla
+     * (`piezas_version_stls`), porque una versión puede tener varios. Su
+     * inmutabilidad se aplica allí, en PiezaService::adjuntarStl().
      */
-    private const CAMPOS_INMUTABLES = ['ruta_blend', 'hash_blend', 'ruta_stl', 'hash_stl', 'numero'];
+    private const CAMPOS_INMUTABLES = ['ruta_blend', 'hash_blend', 'numero'];
 
     protected $allowedFields = [
         'variante_id', 'numero', 'estado', 'promocionada_en',
-        'ruta_blend', 'hash_blend', 'ruta_stl', 'hash_stl',
+        'ruta_blend', 'hash_blend',
         'cambio', 'medidas', 'params_impresion', 'resultado',
     ];
 
@@ -47,10 +51,8 @@ class PiezaVersionModel extends Model
      * Bloquea la modificación de los campos congelados de una versión ya
      * creada. Se niega y explica en vez de dejar pasar la escritura.
      *
-     * ruta_stl/hash_stl nacen vacíos (el STL se adjunta aparte, cuando el
-     * usuario lo exporta para imprimir — ver PiezaService::adjuntarStl) y
-     * por eso su PRIMERA asignación no cuenta como cambio: solo se bloquea
-     * sobreescribir un valor que ya estaba puesto.
+     * Solo se bloquea sobreescribir un valor que ya estaba puesto: la
+     * PRIMERA asignación de un campo vacío no cuenta como cambio.
      */
     public function update($id = null, $data = null): bool
     {

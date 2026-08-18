@@ -17,6 +17,9 @@
 | 16 | `catalogo` por categoría, `variantes <pieza>`, `abrir` ya no pisa ficheros | ✅ Hecho (detalle abajo) |
 | 17 | "Compuesta de": qué otras piezas estaban en la escena de una variante | ✅ Hecho (detalle abajo) |
 | 18 | Enlace al original, liberar sitio de una sesión suelta, y `resolver_variante` más preciso | ✅ Hecho (detalle abajo) |
+| 19 | Columna "Estado": qué hay terminado + si hay trabajo encima (`modificando`) | ✅ Hecho (detalle abajo) |
+| 20 | Invariante 9 (impresión sin juzgar) y `cerrar` sin subir | ✅ Hecho (detalle abajo) |
+| 21 | Varios STL por versión (imprimir a trozos y montar) | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -339,9 +342,7 @@ peso que no tiene sentido versionar en el propio servidor.
   Antes, cualquier pieza sin versión validada se veía igual ("sin versión buena"), tanto la que
   nunca se ha intentado imprimir como la que ya se probó y falló. `Web::resumen()` añade
   `ultima_version_estado` (el estado de la versión más reciente por número) y el índice pinta
-  tres casos distintos cuando no hay validada: **impresa, sin validar** (badge info — se imprimió,
-  falta juzgarla) y **última descartada** (badge danger — se intentó y no sirvió, toca rehacerla),
-  dejando "sin versión buena" solo para cuando de verdad no se ha llegado a imprimir nada.
+  cuatro casos distintos cuando no hay validada (ver más abajo, fase 19).
 - **Tarjeta de estadísticas en la ficha**, justo debajo de la que dice cuál es la versión buena:
   tamaño en disco (desglosado entre versiones y sesiones, para saber si el peso está en lo que
   importa o en trabajo intermedio que ya podría aligerarse), intentos de impresión (versiones
@@ -377,6 +378,142 @@ peso que no tiene sentido versionar en el propio servidor.
   expone ahora `rama_desde_version_id`; la ficha compara cada versión contra ese id
   (`$puedeDevolver($v)`) y desactiva el botón justo en esa versión con su propio motivo — el resto
   de versiones (superadas, descartadas de ramas ya cerradas) lo siguen ofreciendo con normalidad.
+
+**Fase 19 (2026-08-18): la columna "Estado" pasa a decir dos cosas.** "Sin versión buena" era una
+negación ("no tiene la buena") que no decía qué le pasaba a la pieza ni qué tocaba hacer con
+ella, y tras la fase 18 ya ni siquiera cubría lo que su nombre sugería: impresa y descartada se
+habían separado a badges propios, así que la etiqueta genérica se había quedado significando algo
+mucho más concreto de lo que decía. Y faltaba una información entera: si encima hay trabajo en
+marcha.
+
+**Eje 1 — qué hay terminado** (`$badgeMadurez` en la vista; siempre exactamente uno):
+
+| Situación | Etiqueta | Badge |
+|---|---|---|
+| Hay versión validada | `v001 ✓` | success |
+| Ninguna versión promocionada todavía | **`sin versión`** | secondary |
+| Promocionada, aún sin imprimir (`borrador`) | **`versión sin imprimir`** | secondary |
+| Impresa, pendiente de juzgar | `sin validar` | primary |
+| La última se descartó | **`no sirve`** | danger |
+
+- **`sin versión` vs `versión sin imprimir`** es la distinción nueva, y no es cosmética: la
+  primera dice que el trabajo sigue en la sesión y todavía no ha llegado al historial (lo que
+  toca es `promocionar`); la segunda, que ya hay una versión congelada esperando a la impresora
+  (lo que toca es imprimirla y marcarla impresa). Antes las dos se veían igual.
+- **`no sirve`** en vez de `descartada`, que es como lo define esta misma spec (1.3). Se descartó
+  la opción "con errores" porque presupone una causa que muchas veces no es la real: se descarta
+  también porque quedó pequeña o porque el diseño cambió, no solo porque el modelo esté mal. El
+  ENUM de la base de datos, el verbo y el botón siguen llamándose *descartar*; lo que cambia es
+  la etiqueta del listado, que responde a "cómo está la pieza", no a "qué le hiciste".
+- Un estado `superada` como última versión sin ninguna validada solo puede darse si se descartó
+  la validada después; cae en `sin validar`, que sigue siendo cierto.
+- `sin validar` va en **primary** (azul) y no en el `info` que tenía: el cyan de Bootstrap sobre
+  el tema oscuro sale chillón. El mismo cambio en la ficha de variante (`$badges['impresa']`),
+  porque es el mismo estado y tenerlo de dos colores según la pantalla no ayuda a nadie.
+- **La cabecera de categoría pliega entera**, en el índice y en la galería: `data-plegar` pasó
+  del `<button>` de la flecha al contenedor de la línea. El botón se queda dentro (sin el
+  atributo) para que el plegado siga siendo alcanzable con el teclado — su clic burbujea hasta
+  el contenedor, así que la acción se ejecuta una sola vez — y ahora lleva `aria-expanded`, que
+  `pintar()` mantiene al día. El manejador ignora los clics que salgan de un `form` o un enlace,
+  porque los botones de mover categoría de «Organizar» viven en esa misma línea y colocar una
+  categoría no debe plegarla de paso.
+
+**Eje 2 — si además hay trabajo encima**: badge `modificando`, detrás del anterior y sin
+sustituirlo nunca. Una pieza puede estar validada Y modificándose a la vez (es el ciclo normal),
+y si se sustituyeran se perdería de vista qué versión buena hay justo en las piezas que se están
+tocando. Con borde en vez de color sólido, porque modificar es lo normal y no debe competir por
+la atención con lo que sí la reclama.
+
+- Condición (`trabajo_en_curso` en `Web::resumen()`): **rama abierta con al menos una sesión**,
+  abierta o ya subida. No cuesta ninguna consulta extra — `estadoDeSincronizacion()` ya devolvía
+  las dos cosas.
+- **Recién promocionada NO cuenta**: la rama nueva nace vacía (4.4). Si contase, `modificando`
+  saldría en casi todas las piezas siempre y dejaría de decir nada.
+- Lo que de verdad no se veía en ninguna parte era el caso **subido, cerrado y sin promocionar**:
+  no hay sesión abierta que muestre el candado ni descarga pendiente que avisar, así que la fila
+  se veía idéntica a una pieza intacta. La sesión abierta ya salía, pero en la columna "Aviso" y
+  como candado con el nombre de la máquina — que se lee como "bloqueado", no como "en marcha".
+  Ese candado se queda donde está: aporta **en qué máquina**, que `modificando` no dice.
+
+**En el cliente, el mismo vocabulario** (`estado_de_version()` y `avisos_de()` en
+`trackbitos.py`, usadas por `catalogo` y `variantes`): dos vocabularios para el mismo estado
+obligarían a traducir mentalmente al pasar de la terminal al navegador. Para poder distinguirlos,
+`resumenVariante()` de la API expone ahora `ultima_version_estado` y `trabajo_en_curso`, que ya
+tenía `Web::resumen()` pero no salían por la API.
+
+- `modificando, sin promocionar` solo se añade **cuando no hay sesión abierta**: si la hay, el
+  aviso de sesión ya dice que se está modificando, y con la máquina además.
+- Es aditivo, así que un cliente anterior lo ignora sin romperse; y al revés — el cliente se
+  autoactualiza (fase 15) y la web no, así que un cliente nuevo contra un servidor viejo
+  **detecta que la clave no viene y cae a `sin validar`**, sin aviso de trabajo en curso. Es lo
+  único cierto con lo que ese servidor sabe contar, y preferible a afirmar un estado inventado.
+- La columna del listado del cliente pasa de `:<16` a `:<21`. Con 16 ya se descuadraba desde
+  antes: "sin versión buena" medía 17.
+- Cliente **v1.5.0**. Tocar `trackbitos.py` sin subir `VERSION` dejaría a las dos máquinas sin
+  enterarse: la autoactualización (fase 15) compara esa constante con la del fichero desplegado
+  en el servidor, así que el número es parte del cambio, no un trámite posterior.
+
+**Fase 20 (2026-08-18): no se sigue trabajando a ciegas.** Dos agujeros por los que el trabajo se
+salía del registro, uno de diseño y otro un fallo.
+
+**Invariante 9 — una impresión sin juzgar bloquea el trabajo nuevo** (sección 2, donde está el
+razonamiento completo). `PiezaService::exigirNadaSinJuzgar()`, llamado desde `abrirSesion()` y
+`devolverATrabajo()`. En la web, `accionesDisponibles()` desactiva "Devolver a trabajo" con su
+motivo, y la ficha lo avisa **arriba del todo**, antes que el bloqueo de sesión: es lo que impide
+trabajar desde el cliente, y allí no hay botones que desactivar — el usuario solo se encontraría
+un error al escribir `abrir`. El aviso lleva un enlace directo a cada versión pendiente
+(`#version-{id}`) para juzgarla sin buscarla por el historial.
+
+**`cerrar` dejaba escapar el trabajo de una sesión abierta de cero.** El cliente ya se negaba a
+cerrar con cambios sin subir, pero comparando contra `hash_origen` — y `abrir` (empezar una pieza
+de cero, sin partir de ningún fichero) lo escribe a `None`. La condición exigía que existiese para
+actuar, así que en ese caso concreto no protegía nada: modelabas, guardabas, cerrabas, y el
+`.blend` se quedaba solo en tu disco con la sesión cerrada y vacía. Ahora, si hay un `.blend`
+delante, sin subida previa se niega igual. Sin `.blend` sí se puede cerrar: no hay nada que subir
+y esa sesión de consulta es legítima.
+
+Esta comprobación vive **solo en el cliente**, a diferencia del invariante 9: el servidor no puede
+saber si hay un fichero sin subir en el disco de la otra máquina. Lo único que ve es una sesión
+sin `subida_en`, que es exactamente lo mismo que una sesión de consulta legítima.
+
+**Fase 21 (2026-08-18): varios STL por versión.** Un modelo se imprime a trozos más veces de lo
+que parece: los dos brazos van por separado aunque compartan escena, y una pieza más alta que la
+placa se corta y se monta. Con una sola columna `ruta_stl` había que elegir qué trozo se guardaba,
+o inventarse versiones falsas para meter los demás.
+
+**El `.blend` sigue siendo uno solo**, y no es una limitación pendiente de levantar: ahí están
+todas las partes juntas, y eso es justo lo que lo hace la fuente de la versión. Lo que se
+multiplica es la exportación para imprimir, no el modelo.
+
+- **Tabla `piezas_version_stls`**: `version_id` → `nombre` (qué trozo es: "brazo izquierdo",
+  "completo"), `ruta_stl`, `hash_stl`, `tamano_bytes`, `subido_en`. `UNIQUE (version_id, nombre)`
+  — el nombre es lo único que distingue un trozo de otro, y repetido daría dos ficheros
+  indistinguibles al bajarlos. `ON DELETE CASCADE`.
+- **Las columnas `ruta_stl`/`hash_stl` de `piezas_versiones` se retiran**, después de que la
+  migración copie su contenido a la tabla nueva con el nombre `completo` (que es lo que de verdad
+  eran). Dejarlas habría sido tener dos sitios donde mirar y ninguna forma de saber cuál manda.
+  El `down()` devuelve el más antiguo de cada versión. Salen también de
+  `PiezaVersionModel::CAMPOS_INMUTABLES`: esa inmutabilidad se aplica ahora en
+  `PiezaService::adjuntarStl()`.
+- **Alta en dos pasos**, como las referencias: `reservarStl()` crea la fila y devuelve su id,
+  porque la ruta del fichero lo lleva dentro (`version-v002-stl-7.stl`) — sin él, el segundo STL
+  pisaría el fichero del primero, que es exactamente lo que la ruta anterior (determinista por
+  variante+número) hacía. Luego `adjuntarStl()` confirma ruta y hash. Si el guardado falla a
+  mitad, el controlador deshace la reserva para no dejar un STL fantasma sin fichero.
+- **`quitarStl()`**: con varios por versión, subir el equivocado deja de ser un accidente raro y
+  hace falta una vía de vuelta. El fichero va a la **papelera** (invariante 6), no se borra. La
+  fila sí se borra, a diferencia de las sesiones purgadas: una sesión conserva número, hashes y
+  log porque documenta trabajo que existió; un STL retirado no documenta nada que el historial
+  necesite.
+- **La placa se lleva todos los trozos de la versión**: media pieza no se imprime. El `.zip`
+  nombra cada fichero con el trozo al final (`PM-042-brazos-base-v002-brazo-izquierdo.stl`) —
+  sin eso, tres trozos de la misma versión se descargarían con el mismo nombre y el navegador
+  los numeraría `(1)`, `(2)`.
+- La galería muestra cuántos trozos tiene una pieza cuando son más de uno, para no mandar a la
+  placa media pieza creyendo que va entera.
+- **Rutas**: subir sigue colgando de la versión (`POST version/{id}/stl`, es a lo que se adjunta),
+  pero descargar y quitar cuelgan del STL concreto (`GET stl/{id}/descargar`,
+  `POST stl/{id}/quitar`).
 
 ---
 
@@ -430,12 +567,16 @@ variante
 
 version
   id, variante_id, numero, estado, promocionada_en,
-  ruta_blend, hash_blend, ruta_stl (nullable), hash_stl (nullable),
+  ruta_blend, hash_blend,   -- un solo .blend: todas las partes en la misma escena
   cambio,              -- obligatorio, una línea: qué se modificó
   medidas,             -- texto libre: cotas de calibre relevantes
   params_impresion,    -- exposición, altura de capa, capas base
   resultado,           -- rellenado tras imprimir
   UNIQUE (variante_id, numero)
+
+version_stl            -- fase 21: una pieza se imprime a trozos y se monta
+  id, version_id, nombre, ruta_stl, hash_stl, tamano_bytes, subido_en
+  UNIQUE (version_id, nombre)
 
 rama
   id, variante_id, desde_version_id (nullable), abierta,
@@ -483,13 +624,20 @@ Estos son el núcleo del sistema. Deben validarse en los modelos/servicios y, do
 1. **Una sola versión `validada` por variante.** Al validar una, la anterior pasa automáticamente a `superada` en la misma transacción.
 2. **Una sola rama `abierta` por variante.** Promocionar la cierra.
 3. **Una sola sesión sin cerrar por variante.** Actúa como bloqueo de máquina.
-4. **Las versiones son inmutables** en `ruta_blend`, `hash_blend`, `ruta_stl`, `hash_stl` y `numero`. Los campos de anotación (`resultado`, `medidas`) sí son editables.
+4. **Las versiones son inmutables** en `ruta_blend`, `hash_blend` y `numero`. Los campos de anotación (`resultado`, `medidas`) sí son editables. Cada STL de la versión es igual de inmutable una vez subido (fase 21): se añade o se quita, nunca se sobreescribe.
 5. **Las sesiones no se purgan hasta que la versión que las cerró pasa a `validada`.** No al promocionar: si la impresión sale mal, aún hacen falta.
 6. **Nada se borra: se mueve a papelera.** Servidor y cliente. Purga automática a los 30 días.
 
 **Qué significa "purgar una sesión" (fase 7).** Se aparta su `.blend`, no su registro. La fila conserva número, hashes, máquina, fecha y log, y solo se marca `purgada = 1`: lo que ocupa sitio es el fichero, y lo que da valor al historial dentro de tres meses es el registro. La versión validada tiene su propia copia del fichero, así que no se pierde nada recuperable — y durante los 30 días de gracia el `.blend` sigue en la papelera, con `ruta_blend` apuntando ahí por si hace falta rescatarlo a mano.
 7. `version.cambio` es obligatorio y no puede quedar vacío. Es el campo que da valor al historial dentro de tres meses.
 8. **Toda descarga se cierra**, por subida, por declaración de "sin cambios" o por cierre forzado con motivo. Una subida solo se acepta si su `hash_padre` coincide con el `hash_entregado` de una descarga abierta de esa misma máquina.
+9. **Una impresión sin juzgar bloquea el trabajo nuevo** (fase 20). Mientras la variante tenga alguna versión en estado `impresa`, no se puede `abrirSesion` ni `devolverATrabajo`. Se sale validando o descartando.
+
+**Por qué el 9.** Seguir modelando encima de algo que se imprimió pero no se juzgó es trabajar a ciegas: no sabes si partes de una pieza buena. Y ese juicio, si no se hace en caliente —con la pieza recién salida de la impresora en la mano—, no se hace nunca: quedan versiones `impresa` para siempre y el historial deja de decir cuál era la buena. Si ya sabes que no vale, el camino es descartarla con el motivo (que queda escrito, spec 1.3) y seguir desde ahí — no dejarla en el limbo.
+
+Mira **todas** las versiones, no solo la última: si mirase solo la última, promocionar otra encima bastaría para que el bloqueo desapareciera y la impresa se quedara sin juzgar, que es justo lo que la regla existe para impedir.
+
+Lo que **no** bloquea, a propósito: subir y cerrar una sesión que ya estaba abierta cuando se marcó la impresión, y promocionar lo que ya estaba subido. La regla cierra las puertas de entrada al trabajo nuevo, no atrapa dentro el que ya estaba en marcha. Tampoco afecta a `derivarVariante`: derivar abre otra línea de diseño, y el juicio pendiente es de la variante original.
 
 **Nota de implementación (fase 1):** MySQL no soporta índices únicos parciales (`WHERE estado='validada'`), así que el invariante 1 no tiene respaldo a nivel de esquema — vive solo en `PiezaVersionModel::marcarValidada()` (transacción + `SELECT ... FOR UPDATE`). Igual para 2 y 3 en `PiezaRamaModel::abrir()` / `PiezaSesionModel::abrir()`.
 
@@ -911,7 +1059,7 @@ Tres cosas que conviene tener presentes al meterlas:
    convive anotando en su `cambio` de qué versiones parte, pero es disciplina, no una
    comprobación del sistema.
 3. **Las de `Pruebas` no se validan nunca** (son calibraciones), así que se quedarán siempre en
-   *sin versión buena* en el listado. Es esperado, no un olvido.
+   *sin validar* en el listado. Es esperado, no un olvido.
 
 **Regla de partida al meterlas: no se reconstruye el pasado.** Cada pieza entra como **v001** con
 un `cambio` del tipo "importada del trabajo anterior a Trackbitos". Las iteraciones hechas fuera

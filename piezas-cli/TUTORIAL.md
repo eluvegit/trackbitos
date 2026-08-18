@@ -63,13 +63,15 @@ mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
    trackbitos promocionar --cambio "primera versión completa del torso" --medidas "alto 45mm, ancho hombros 22mm"
    ```
 
-7. **Exportar el STL desde Blender** y adjuntarlo a esa versión, ya en la **web** (ficha de la variante → tarjeta de la versión → "Adjuntar STL"). Es aparte de promocionar porque no siempre se exporta en el mismo momento, y es inmutable una vez puesto: si el modelo cambia, toca una versión nueva.
+7. **Exportar el STL desde Blender** y adjuntarlo a esa versión, ya en la **web** (ficha de la variante → tarjeta de la versión → "Adjuntar STL"). Es aparte de promocionar porque no siempre se exporta en el mismo momento, y es inmutable una vez puesto: si el modelo cambia, toca una versión nueva. Puedes adjuntar **varios**, cada uno con su nombre — los brazos por separado, o una pieza más alta que la placa partida en trozos. El `.blend` sigue siendo uno solo: ahí están todas las partes juntas.
 
 8. **Imprimir** la pieza. En la web, marcar esa versión como **Impresa** (con los parámetros de impresión).
 
 9. **Juzgar el resultado**, también en la web:
    - **Validar** → es la buena. La anterior validada (si la había) pasa a "superada" sola.
    - **Descartar** → no sirve, con el motivo. No se borra nunca.
+
+   > **Este paso no se puede saltar.** Mientras una versión siga en "impresa" sin juzgar, la pieza queda parada: `trackbitos abrir` y "Devolver a trabajo" se niegan. Seguir modelando encima sería partir de algo que no sabes si funciona. Si ya sabes que no vale, descártala con el motivo y sigue desde ahí.
 
 10. Si sigues iterando: `trackbitos bajar` te trae el punto de partida de la rama nueva (el `.blend` de la versión que acabas de promocionar), editas, `subir`, `promocionar` otra vez para `v002`, y repites desde el paso 3.
 
@@ -116,8 +118,8 @@ Se busca sobre pieza + variante porque es como se piensa: la pieza lleva el nomb
 
 ## 6. La web, por secciones
 
-- **`/piezas`** — catálogo: cada pieza con sus variantes, versión validada (o "sin versión buena"), avisos de sesión abierta o descargas pendientes. Aquí también se dan de alta piezas y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la pieza).
-- **Ficha de variante** (`/piezas/variante/{id}`) — historial completo de versiones con sus **renders** (imágenes por versión, para ver la evolución), botones de los verbos (marcar impresa, validar, descartar, devolver a trabajo, derivar variante), el **STL** de cada versión, y una caja "Desde tu máquina" con los comandos ya escritos con el nombre exacto, listos para copiar.
+- **`/piezas`** — catálogo: cada pieza con sus variantes, en qué punto está (versión validada, o "sin versión" / "versión sin imprimir" / "sin validar" / "no sirve") y si además hay trabajo encima sin promocionar ("modificando"), más los avisos de sesión abierta o descargas pendientes. Aquí también se dan de alta piezas y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la pieza).
+- **Ficha de variante** (`/piezas/variante/{id}`) — historial completo de versiones con sus **renders** (imágenes por versión, para ver la evolución), botones de los verbos (marcar impresa, validar, descartar, devolver a trabajo, derivar variante), los **STL** de cada versión (uno por trozo a imprimir), y una caja "Desde tu máquina" con los comandos ya escritos con el nombre exacto, listos para copiar.
 
 ---
 

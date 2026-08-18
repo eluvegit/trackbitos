@@ -3,8 +3,9 @@
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-box text-primary"></i>
-    <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>
-    <span class="text-muted">/</span>
+    <?php // Sin "Dashboard" delante: galería y ficha empiezan por "Piezas", y tenerlo
+          // en unas vistas sí y en otras no movía de sitio el mismo enlace. Para volver
+          // al dashboard está el logo de la barra de arriba, que sí está en todas. ?>
     <strong class="fw-semibold">Piezas</strong>
 
     <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
@@ -76,25 +77,89 @@
  * sin `esc()`), para no repetir la misma condición en la fila de pieza
  * única y en cada subfila de variante.
  */
-$colEstado = static function (array $v): string {
+/**
+ * Qué tiene la pieza terminado. Antes esto era validada-o-no, y todo lo
+ * demás ("nunca se promocionó nada", "promocionada sin imprimir",
+ * "impresa, pendiente de juzgar", "la última no sirve") se veía igual.
+ */
+$badgeMadurez = static function (array $v): string {
     if ($v['validada']) {
         return '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> v'
             . sprintf('%03d', (int) $v['validada']['numero']) . '</span>';
     }
-    // Antes esto era validada-o-no, y todo lo demás ("nunca se imprimió",
-    // "impresa, pendiente de juzgar", "la última se descartó") se veía
-    // igual: "sin versión buena". Aquí sí importa en qué línea de vida
-    // está, no solo si ya tiene una buena.
     if ($v['ultima_version_estado'] === 'impresa') {
-        return '<span class="badge text-bg-info" title="Impresa, pendiente de juzgar el resultado">'
+        return '<span class="badge text-bg-primary" title="Impresa, pendiente de juzgar el resultado">'
             . '<i class="bi bi-printer-fill"></i> sin validar</span>';
     }
     if ($v['ultima_version_estado'] === 'descartada') {
-        return '<span class="badge text-bg-danger" title="La última versión se descartó">'
-            . '<i class="bi bi-x-circle-fill"></i> descartada</span>';
+        return '<span class="badge text-bg-danger" title="La última versión se descartó: no sirve">'
+            . '<i class="bi bi-x-circle-fill"></i> no sirve</span>';
+    }
+    // Sin ninguna versión promocionada no hay "versión" de la que hablar:
+    // el trabajo aún está en la sesión, no ha llegado al historial.
+    if ($v['ultima_version_estado'] === null) {
+        return '<span class="badge text-bg-secondary" title="Todavía no se ha promocionado ninguna versión">'
+            . '<i class="bi bi-dash-circle"></i> sin versión</span>';
+    }
+    if ($v['ultima_version_estado'] === 'borrador') {
+        return '<span class="badge text-bg-secondary" title="Promocionada, pendiente de imprimir de prueba">'
+            . '<i class="bi bi-printer"></i> versión sin imprimir</span>';
     }
 
-    return '<span class="badge text-bg-secondary">sin versión buena</span>';
+    // Solo llega aquí una "superada" como última sin haber ninguna validada
+    // (posible únicamente si se descartó la validada después). Raro, pero
+    // "sin validar" sigue siendo cierto y no se inventa nada.
+    return '<span class="badge text-bg-secondary">sin validar</span>';
+};
+
+/**
+ * Dos ejes distintos en la misma celda, y en este orden a propósito:
+ * primero qué hay terminado, después si encima hay trabajo en marcha. Una
+ * pieza puede estar validada Y modificándose a la vez — es el ciclo normal
+ * — y si "modificando" sustituyera al otro badge se perdería de vista qué
+ * versión buena hay justo en las piezas que se están tocando.
+ *
+ * Con borde en vez de color sólido: modificar es lo normal, no algo que
+ * reclame atención. Los sólidos quedan para lo que sí la reclama.
+ */
+$colEstado = static function (array $v) use ($badgeMadurez): string {
+    $html = $badgeMadurez($v);
+
+    if (!empty($v['trabajo_en_curso'])) {
+        $html .= ' <span class="badge border text-body-secondary fw-normal"'
+            . ' title="Hay trabajo en la rama abierta que todavía no se ha promocionado">'
+            . '<i class="bi bi-pencil"></i> modificando</span>';
+    }
+
+    return $html;
+};
+
+/**
+ * ¿Está lista para mandar a imprimir? Adjuntar el STL es un paso aparte de
+ * promocionar, así que se olvida — y sin esto había que entrar pieza por
+ * pieza a comprobarlo. Verde: hay STL. Naranja: falta, y es lo único que
+ * separa a esa pieza de la impresora.
+ */
+$colStl = static function (array $v): string {
+    $stl = $v['stl'] ?? ['aplica' => false, 'trozos' => 0];
+
+    // Sin ninguna versión promocionada no falta el STL: falta la versión.
+    if (empty($stl['aplica'])) {
+        return '';
+    }
+
+    if ((int) $stl['trozos'] === 0) {
+        return '<span class="badge border border-warning text-warning-emphasis fw-normal"'
+            . ' title="Esta versión no tiene STL: no se puede imprimir ni añadir a la placa">'
+            . '<i class="bi bi-file-earmark-x"></i> sin STL</span>';
+    }
+
+    $trozos = (int) $stl['trozos'];
+
+    return '<span class="text-success" title="' . ($trozos === 1 ? 'STL adjunto' : $trozos . ' STL adjuntos (se imprime en trozos)') . '">'
+        . '<i class="bi bi-file-earmark-check-fill"></i>'
+        . ($trozos > 1 ? ' <span class="small">' . $trozos . '</span>' : '')
+        . '</span>';
 };
 
 $colAviso = static function (array $v): string {
@@ -135,10 +200,15 @@ $textoBuscable = static function (array $familia): string {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="6" class="py-1">
-                    <div class="d-flex align-items-center gap-2">
+                <td colspan="7" class="py-1">
+                    <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
+                          // obvio, y acertar en un icono de 16px para algo que se hace a diario
+                          // es un peaje sin motivo. El botón sigue existiendo para el teclado —
+                          // su clic burbujea hasta aquí, así que la acción se ejecuta una vez. ?>
+                    <div class="d-flex align-items-center gap-2 user-select-none" style="cursor: pointer"
+                        data-plegar="<?= $idGrupo ?>">
                         <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
-                            data-plegar="<?= $idGrupo ?>">
+                            aria-controls="<?= $idGrupo ?>" aria-expanded="true">
                             <i class="bi bi-chevron-down" data-chevron></i>
                         </button>
                         <span class="fw-semibold text-uppercase small <?= $categoria ? '' : 'text-muted fst-italic' ?>">
@@ -166,7 +236,7 @@ $textoBuscable = static function (array $familia): string {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="6" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="7" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php foreach ($grupo['piezas'] as $familia): ?>
@@ -186,6 +256,7 @@ $textoBuscable = static function (array $familia): string {
                     </td>
                     <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
+                    <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
                     <td class="text-muted small text-end">
                         <?= count($variantes) === 1 ? (int) $variantes[0]['versiones'] . ' vers.' : '' ?>
                     </td>
@@ -229,6 +300,7 @@ $textoBuscable = static function (array $familia): string {
                             </td>
                             <td><?= $colSku($v) ?></td>
                             <td><?= $colEstado($v) ?></td>
+                            <td><?= $colStl($v) ?></td>
                             <td class="text-muted small text-end"><?= (int) $v['versiones'] ?> vers.</td>
                             <td><?= $colAviso($v) ?></td>
                             <td class="zona-organizar d-none"></td>
@@ -379,18 +451,28 @@ $textoBuscable = static function (array $familia): string {
         var cuerpo = document.getElementById(id);
         if (!cuerpo) return;
         cuerpo.classList.toggle('d-none', !abierta);
-        var boton = document.querySelector('[data-plegar="' + id + '"] [data-chevron]');
-        if (boton) {
-            boton.classList.toggle('bi-chevron-down', abierta);
-            boton.classList.toggle('bi-chevron-right', !abierta);
+
+        var cabecera = document.querySelector('[data-plegar="' + id + '"]');
+        if (!cabecera) return;
+
+        var chevron = cabecera.querySelector('[data-chevron]');
+        if (chevron) {
+            chevron.classList.toggle('bi-chevron-down', abierta);
+            chevron.classList.toggle('bi-chevron-right', !abierta);
         }
+        var boton = cabecera.querySelector('[aria-controls]');
+        if (boton) boton.setAttribute('aria-expanded', abierta ? 'true' : 'false');
     }
 
     cerradas().forEach(function (id) { pintar(id, false); });
 
-    document.querySelectorAll('[data-plegar]').forEach(function (boton) {
-        boton.addEventListener('click', function () {
-            var id = boton.getAttribute('data-plegar');
+    document.querySelectorAll('[data-plegar]').forEach(function (cabecera) {
+        cabecera.addEventListener('click', function (e) {
+            // Los botones de «Organizar» viven en esta misma línea: mover una
+            // categoría de sitio no debe plegarla de paso.
+            if (e.target.closest('form, a')) return;
+
+            var id = cabecera.getAttribute('data-plegar');
             var lista = cerradas();
             var estabaCerrada = lista.indexOf(id) !== -1;
 
@@ -459,14 +541,12 @@ $textoBuscable = static function (array $familia): string {
                 return;
             }
 
-            cuerpo.classList.toggle('d-none', visibles === 0);
             if (cabecera) cabecera.classList.toggle('d-none', visibles === 0);
             if (contador) contador.textContent = visibles;
-            var chevron = cabecera ? cabecera.querySelector('[data-chevron]') : null;
-            if (chevron && visibles > 0) {
-                chevron.classList.add('bi-chevron-down');
-                chevron.classList.remove('bi-chevron-right');
-            }
+            // Abre el grupo (y deja flecha y aria coherentes) si tiene algo que
+            // enseñar. Con 0 la cabecera se esconde entera, así que cómo quede
+            // su flecha da igual.
+            pintar(cuerpo.id, visibles > 0);
         });
 
         if (sinResultados) sinResultados.classList.toggle('d-none', q === '' || encontradas > 0);

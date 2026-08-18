@@ -43,9 +43,11 @@
         <?php $categoria = $grupo['categoria']; ?>
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <div class="mb-3" data-grupo>
-            <div class="d-flex align-items-center gap-2 border-bottom pb-1 mb-2">
+            <?php // Igual que en el índice: pliega toda la línea, no solo la flecha. ?>
+            <div class="d-flex align-items-center gap-2 border-bottom pb-1 mb-2 user-select-none"
+                style="cursor: pointer" data-plegar="<?= $idGrupo ?>">
                 <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
-                    data-plegar="<?= $idGrupo ?>">
+                    aria-controls="<?= $idGrupo ?>" aria-expanded="true">
                     <i class="bi bi-chevron-down" data-chevron></i>
                 </button>
                 <span class="fw-semibold text-uppercase small <?= $categoria ? '' : 'text-muted fst-italic' ?>">
@@ -61,7 +63,8 @@
                             $variante = $p['variante'];
                             $validada = $p['validada'];
                             $enCarrito = in_array((int) $validada['id'], $carrito, true);
-                            $tieneStl  = !empty($validada['ruta_stl']);
+                            $stls      = (int) ($p['stls'] ?? 0);
+                            $tieneStl  = $stls > 0;
                         ?>
                         <div class="col">
                             <div class="card shadow-sm h-100">
@@ -88,6 +91,10 @@
                                         v<?= sprintf('%03d', (int) $validada['numero']) ?>
                                         <?php if (!empty($variante['sku'])): ?>
                                             · <?= esc($variante['sku']) ?>
+                                        <?php endif; ?>
+                                        <?php // Se imprime en trozos: saberlo aquí evita mandar a la placa media pieza creyendo que va entera. ?>
+                                        <?php if ($stls > 1): ?>
+                                            · <span title="Se imprime en <?= $stls ?> trozos"><i class="bi bi-boxes"></i> <?= $stls ?></span>
                                         <?php endif; ?>
                                     </div>
 
@@ -135,18 +142,26 @@
         var cuerpo = document.getElementById(id);
         if (!cuerpo) return;
         cuerpo.classList.toggle('d-none', !abierta);
-        var boton = document.querySelector('[data-plegar="' + id + '"] [data-chevron]');
-        if (boton) {
-            boton.classList.toggle('bi-chevron-down', abierta);
-            boton.classList.toggle('bi-chevron-right', !abierta);
+
+        var cabecera = document.querySelector('[data-plegar="' + id + '"]');
+        if (!cabecera) return;
+
+        var chevron = cabecera.querySelector('[data-chevron]');
+        if (chevron) {
+            chevron.classList.toggle('bi-chevron-down', abierta);
+            chevron.classList.toggle('bi-chevron-right', !abierta);
         }
+        var boton = cabecera.querySelector('[aria-controls]');
+        if (boton) boton.setAttribute('aria-expanded', abierta ? 'true' : 'false');
     }
 
     cerradas().forEach(function (id) { pintar(id, false); });
 
-    document.querySelectorAll('[data-plegar]').forEach(function (boton) {
-        boton.addEventListener('click', function () {
-            var id = boton.getAttribute('data-plegar');
+    document.querySelectorAll('[data-plegar]').forEach(function (cabecera) {
+        cabecera.addEventListener('click', function (e) {
+            if (e.target.closest('form, a')) return;
+
+            var id = cabecera.getAttribute('data-plegar');
             var lista = cerradas();
             var estabaCerrada = lista.indexOf(id) !== -1;
 

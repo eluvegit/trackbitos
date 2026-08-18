@@ -80,7 +80,7 @@ class PiezasAltas extends BaseCommand
             ['Junta pistola'],
         ],
         // Calibraciones: se imprimen y se miran, no llegan a validarse
-        // nunca. Se quedarán siempre en "sin versión buena", y es correcto.
+        // nunca. Se quedarán siempre en "sin validar", y es correcto.
         'Pruebas' => [
             ['Números'],
             ['Modelo conos'],

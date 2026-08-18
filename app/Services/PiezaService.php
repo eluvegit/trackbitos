@@ -13,6 +13,7 @@ use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
+use App\Models\PiezaVersionStlModel;
 use CodeIgniter\Model;
 use RuntimeException;
 use Throwable;
@@ -44,9 +45,11 @@ class PiezaService
     private PiezaCategoriaModel $categoriaModel;
     private PiezaMaquinaModel $maquinaModel;
     private PiezaComposicionModel $composicionModel;
+    private PiezaVersionStlModel $stlModel;
 
     public function __construct()
     {
+        $this->stlModel         = new PiezaVersionStlModel();
         $this->familiaModel     = new PiezaFamiliaModel();
         $this->varianteModel    = new PiezaVarianteModel();
         $this->versionModel     = new PiezaVersionModel();
@@ -390,8 +393,12 @@ class PiezaService
                     if (!empty($version['ruta_blend'])) {
                         $almacen->aPapelera($version['ruta_blend']);
                     }
-                    if (!empty($version['ruta_stl'])) {
-                        $almacen->aPapelera($version['ruta_stl']);
+                    // Varios STL por versión desde la fase 21: los brazos por
+                    // separado, una pieza alta cortada en trozos.
+                    foreach ($this->stlModel->deVersion((int) $version['id']) as $stl) {
+                        if (!empty($stl['ruta_stl'])) {
+                            $almacen->aPapelera($stl['ruta_stl']);
+                        }
                     }
                     foreach ($renderModel->where('version_id', $version['id'])->findAll() as $render) {
                         $almacen->aPapelera($render['ruta_imagen']);
@@ -643,6 +650,8 @@ class PiezaService
      */
     public function abrirSesion(int $varianteId, int $maquinaId): array
     {
+        $this->exigirNadaSinJuzgar($varianteId, 'abrir una sesión de trabajo');
+
         $rama = $this->ramaModel->abiertaDe($varianteId);
         if (!$rama) {
             throw new RuntimeException(
@@ -791,6 +800,8 @@ class PiezaService
 
         $varianteId = (int) $version['variante_id'];
 
+        $this->exigirNadaSinJuzgar($varianteId, 'devolver a trabajo');
+
         if ($this->sesionModel->hayAbiertaParaVariante($varianteId)) {
             throw new RuntimeException(
                 'Hay una sesión de trabajo sin cerrar en esta variante. Ciérrala antes de cambiar de línea de trabajo.'
@@ -824,33 +835,101 @@ class PiezaService
         });
     }
 
-    /**
-     * Adjunta el STL de una versión para poder imprimirla. Aparte de
-     * promocionar: el usuario lo exporta desde Blender cuando le hace
-     * falta, no siempre en el mismo momento en que sube el .blend. Una vez
-     * puesto es inmutable (PiezaVersionModel::CAMPOS_INMUTABLES) — si hace
-     * falta otro STL, es porque el modelo cambió, y eso es una versión
-     * nueva, no un reemplazo silencioso del que ya se imprimió con este.
-     */
-    public function adjuntarStl(int $versionId, string $rutaRelativa, string $hash): array
+    /** Los STL de una versión, en el orden en que se subieron. */
+    public function stlsDe(int $versionId): array
     {
-        $version = $this->versionModel->find($versionId);
-        if (!$version) {
+        return $this->stlModel->deVersion($versionId);
+    }
+
+    /** @param int[] $versionIds @return array<int, array> agrupados por versión */
+    public function stlsDeVersiones(array $versionIds): array
+    {
+        return $this->stlModel->porVersiones($versionIds);
+    }
+
+    public function stl(int $stlId): ?array
+    {
+        return $this->stlModel->find($stlId);
+    }
+
+    /**
+     * Reserva el sitio de un STL nuevo en una versión: crea la fila y
+     * devuelve su id, para poder calcular la ruta del fichero (que lleva ese
+     * id dentro) antes de mover nada al almacén. Mismo alta en dos pasos que
+     * las referencias e imágenes.
+     *
+     * Se adjunta aparte de promocionar: el usuario exporta desde Blender
+     * cuando le hace falta, normalmente justo antes de imprimir.
+     */
+    public function reservarStl(int $versionId, string $nombre): array
+    {
+        if (!$this->versionModel->find($versionId)) {
             throw new RuntimeException("Versión {$versionId} no encontrada.");
         }
-        if (!empty($version['ruta_stl'])) {
+
+        $nombre = $this->stlModel->exigirNombreLibre($versionId, $nombre);
+
+        $id = $this->insertarOFallar($this->stlModel, [
+            'version_id' => $versionId,
+            'nombre'     => $nombre,
+        ]);
+
+        return $this->stlModel->find($id);
+    }
+
+    /**
+     * Confirma el STL una vez su fichero ya está en el almacén. Inmutable
+     * desde aquí (invariante 4): un STL se añade o se aparta, nunca se
+     * sobreescribe — si el modelo cambió, eso es una versión nueva, no un
+     * reemplazo silencioso del fichero con el que ya se imprimió.
+     */
+    public function adjuntarStl(int $stlId, string $rutaRelativa, string $hash, ?int $tamanoBytes = null): array
+    {
+        $stl = $this->stlModel->find($stlId);
+        if (!$stl) {
+            throw new RuntimeException("STL {$stlId} no encontrado.");
+        }
+        if (!empty($stl['ruta_stl'])) {
             throw new RuntimeException(
-                "La versión {$versionId} ya tiene un STL adjunto. Es inmutable, como el .blend: "
-                . 'si el modelo cambió, promociona una versión nueva.'
+                "El STL \"{$stl['nombre']}\" ya tiene fichero. Es inmutable, como el .blend: "
+                . 'quítalo y súbelo otra vez, o promociona una versión nueva.'
             );
         }
 
-        $this->versionModel->update($versionId, [
-            'ruta_stl' => $rutaRelativa,
-            'hash_stl' => $hash,
+        $this->stlModel->update($stlId, [
+            'ruta_stl'     => $rutaRelativa,
+            'hash_stl'     => $hash,
+            'tamano_bytes' => $tamanoBytes,
+            'subido_en'    => date('Y-m-d H:i:s'),
         ]);
 
-        return $this->versionModel->find($versionId);
+        return $this->stlModel->find($stlId);
+    }
+
+    /**
+     * Quita un STL de una versión. Con varios por versión, subir el fichero
+     * equivocado deja de ser un accidente raro, así que hace falta una vía
+     * de vuelta — pero por papelera (invariante 6), no borrando: el fichero
+     * sigue 30 días recuperable a mano.
+     *
+     * La fila sí se borra, a diferencia de las sesiones: una sesión purgada
+     * conserva número, hashes y log porque documenta trabajo que existió;
+     * un STL retirado no documenta nada que el historial necesite.
+     */
+    public function quitarStl(int $stlId): array
+    {
+        $stl = $this->stlModel->find($stlId);
+        if (!$stl) {
+            throw new RuntimeException("STL {$stlId} no encontrado.");
+        }
+
+        if (!empty($stl['ruta_stl'])) {
+            (new PiezaAlmacen())->aPapelera($stl['ruta_stl']);
+        }
+
+        $this->stlModel->delete($stlId);
+
+        return $stl;
     }
 
     /**
@@ -990,6 +1069,44 @@ class PiezaService
         $this->versionModel->update($versionId, ['estado' => 'descartada', 'resultado' => $resultado]);
 
         return $this->versionModel->find($versionId);
+    }
+
+    /**
+     * Invariante 9: una impresión sin juzgar bloquea el trabajo nuevo.
+     *
+     * Si ya imprimiste una versión y no has dicho si sirve, seguir modelando
+     * encima es trabajar a ciegas: no sabes si partes de algo bueno. Y ese
+     * juicio, si no se hace en caliente — con la pieza recién salida en la
+     * mano —, no se hace nunca: quedan versiones "impresa" para siempre y el
+     * historial deja de decir cuál era la buena. Para seguir hay que
+     * decidirlo: validar, o descartar y continuar desde ahí.
+     *
+     * Mira TODAS las versiones, no solo la última. Con la última bastaría
+     * con promocionar otra encima para que el bloqueo desapareciera y la
+     * impresa se quedara sin juzgar — una puerta trasera a esta misma regla.
+     */
+    private function exigirNadaSinJuzgar(int $varianteId, string $accion): void
+    {
+        $pendientes = $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->where('estado', 'impresa')
+            ->orderBy('numero', 'ASC')
+            ->findAll();
+
+        if ($pendientes === []) {
+            return;
+        }
+
+        $numeros = array_map(static fn($v) => 'v' . sprintf('%03d', (int) $v['numero']), $pendientes);
+
+        throw new RuntimeException(sprintf(
+            'No se puede %s: %s. Di si la impresión sirve (validar) o si no (descartar, con el motivo) '
+            . 'y sigue desde ahí.',
+            $accion,
+            count($numeros) === 1
+                ? 'la ' . $numeros[0] . ' está impresa y sin juzgar'
+                : 'las versiones ' . implode(', ', $numeros) . ' están impresas y sin juzgar'
+        ));
     }
 
     /**

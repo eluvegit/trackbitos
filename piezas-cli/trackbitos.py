@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -320,6 +320,55 @@ def nombre_completo(variante: dict) -> str:
     """
     familia = variante.get("familia_nombre")
     return f"{familia} / {variante['nombre']}" if familia else variante["nombre"]
+
+
+def estado_de_version(variante: dict) -> str:
+    """
+    Cómo va de "lista" una pieza, en una columna. Mismo vocabulario que el
+    listado de la web a propósito: son la misma pregunta mirada desde dos
+    sitios, y dos nombres distintos para el mismo estado obligarían a
+    traducir mentalmente al pasar de la terminal al navegador.
+    """
+    if variante["version_validada"]:
+        return f"v{variante['version_validada']['numero']:03d} ✓"
+
+    # Servidor anterior a este campo: el cliente se actualiza solo (fase 15)
+    # y la web no, así que durante un tiempo se hablan versiones distintas.
+    # Sin el dato no se puede afinar, y "sin validar" es lo único cierto en
+    # todos los casos — mejor eso que afirmar un estado inventado.
+    if "ultima_version_estado" not in variante:
+        return "sin validar"
+
+    estado = variante["ultima_version_estado"]
+    if estado is None:
+        return "sin versión"
+    if estado == "borrador":
+        return "versión sin imprimir"
+    if estado == "descartada":
+        return "no sirve"
+
+    return "sin validar"
+
+
+def avisos_de(variante: dict) -> list:
+    """
+    Lo que hay encima de la pieza ahora mismo, al margen de lo terminado que
+    esté. "sesión abierta" ya dice que se está modificando, así que el aviso
+    de trabajo sin promocionar solo aparece cuando no la hay: el caso que
+    antes no se veía en ninguna parte — subido, cerrado y ahí parado, sin
+    bloqueo ni descarga pendiente que lo delatase.
+    """
+    avisos = []
+
+    if variante["sesion_abierta"]:
+        avisos.append(f"sesión abierta en {variante.get('sesion_maquina') or '?'}")
+    elif variante.get("trabajo_en_curso"):
+        avisos.append("modificando, sin promocionar")
+
+    if variante["descargas_pendientes"]:
+        avisos.append(f"{variante['descargas_pendientes']} descarga(s) sin cerrar")
+
+    return avisos
 
 
 def _listado_agrupado(variantes: list, categorias_orden: list) -> str:
@@ -899,13 +948,32 @@ def cmd_cerrar(args) -> int:
     if not sesion_id:
         raise RuntimeError("no hay ninguna sesión abierta anotada en este directorio.")
 
-    # Cerrar con trabajo sin subir dejaría ese trabajo fuera del sistema:
-    # la sesión quedaría cerrada y vacía, y el .blend solo en este disco.
-    if blend and sentinel.get("hash_origen") and sha256_de(blend) != sentinel["hash_origen"]:
-        print("\n  ⚠ El fichero ha cambiado desde la última subida.")
-        print("    (puede ser una modificación real o solo un guardado)")
-        print("\n  → Súbelo antes de cerrar: trackbitos subir\n")
-        return 1
+    # Cerrar con trabajo sin subir dejaría ese trabajo fuera del sistema: la
+    # sesión quedaría cerrada y vacía, y el .blend solo en este disco.
+    #
+    # Sin .blend delante no hay nada que subir (sesión de consulta, o abierta
+    # y no usada), y ahí cerrar es legítimo. Pero si lo hay, hay dos motivos
+    # distintos para negarse, y antes solo se cubría el segundo:
+    if blend:
+        origen = sentinel.get("hash_origen")
+
+        # 1) Sesión abierta de cero ("abrir" escribe hash_origen: None porque
+        #    no se partió de ningún fichero). No había con qué comparar y eso
+        #    se leía como "nada que comprobar" — justo al revés: si hay un
+        #    .blend, está entero sin subir.
+        if not origen:
+            print("\n  ⚠ Esta sesión no tiene nada subido, y aquí hay un .blend.")
+            print(f"    ({blend.name})")
+            print("\n  → Súbelo antes de cerrar: trackbitos subir")
+            print("    Si de verdad no quieres conservarlo, borra el fichero y vuelve a cerrar.\n")
+            return 1
+
+        # 2) Se subió algo, pero después se siguió tocando.
+        if sha256_de(blend) != origen:
+            print("\n  ⚠ El fichero ha cambiado desde la última subida.")
+            print("    (puede ser una modificación real o solo un guardado)")
+            print("\n  → Súbelo antes de cerrar: trackbitos subir\n")
+            return 1
 
     api_post(config, f"/sesion/{sesion_id}/cerrar")
     numero = sentinel.get("sesion", "?")
@@ -980,18 +1048,14 @@ def cmd_catalogo(args) -> int:
 
         print(categoria or "Sin clasificar")
         for v in sorted(de_esta_categoria, key=lambda v: nombre_completo(v).lower()):
-            if v["version_validada"]:
-                buena = f"v{v['version_validada']['numero']:03d} ✓"
-            else:
-                buena = "sin versión buena"
+            buena = estado_de_version(v)
 
-            avisos = []
-            if v["sesion_abierta"]:
-                avisos.append(f"sesión abierta en {v.get('sesion_maquina') or '?'}")
-            if v["descargas_pendientes"]:
-                avisos.append(f"{v['descargas_pendientes']} descarga(s) sin cerrar")
+            avisos = avisos_de(v)
 
-            linea = f"  {nombre_completo(v):<30} {buena:<16} {v['versiones']} versión(es)"
+            # 21, no 16: es lo que mide "versión sin imprimir" más el espacio
+            # de separación. Con 16 la columna de la derecha se descolocaba
+            # en cada pieza cuyo estado fuese más largo que eso.
+            linea = f"  {nombre_completo(v):<30} {buena:<21} {v['versiones']} versión(es)"
             if avisos:
                 linea += "  ⚠ " + " · ".join(avisos)
             print(linea)
@@ -1035,15 +1099,11 @@ def cmd_variantes(args) -> int:
 
     print(f"\n{familia} — {len(suyas)} variante(s)\n")
     for v in suyas:
-        buena = f"v{v['version_validada']['numero']:03d} ✓" if v["version_validada"] else "sin versión buena"
+        buena = estado_de_version(v)
 
-        avisos = []
-        if v["sesion_abierta"]:
-            avisos.append(f"sesión abierta en {v.get('sesion_maquina') or '?'}")
-        if v["descargas_pendientes"]:
-            avisos.append(f"{v['descargas_pendientes']} descarga(s) sin cerrar")
+        avisos = avisos_de(v)
 
-        linea = f"  {v['nombre']:<20} {buena:<16} {v['versiones']} versión(es)"
+        linea = f"  {v['nombre']:<20} {buena:<21} {v['versiones']} versión(es)"
         if avisos:
             linea += "  ⚠ " + " · ".join(avisos)
         print(linea)

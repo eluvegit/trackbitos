@@ -13,8 +13,6 @@ $maximo = $piezas === [] ? 0 : max(array_column($piezas, 'bytes'));
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-hdd-stack text-primary"></i>
-    <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>
-    <span class="text-muted">/</span>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Estadísticas</strong>
