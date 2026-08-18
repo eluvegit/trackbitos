@@ -319,6 +319,12 @@ peso que no tiene sentido versionar en el propio servidor.
   alias, guarda lo que se escribió de verdad ("ac"), no el nombre canónico ("actualizar"), así
   que la comprobación de "no comprobar versión nueva tras `actualizar`" compara `args.func`
   (la función ya resuelta), no la cadena.
+- **"Marcar impresa" sugiere los parámetros de la última vez.** El textarea de exposición/capa/
+  posición en la placa salía siempre en blanco, con solo un ejemplo genérico de placeholder —
+  aunque la posición en la placa rara vez cambia entre reimpresiones de la misma pieza.
+  `Web::variante()` busca ahora el `params_impresion` no vacío más reciente entre TODAS las
+  versiones de la variante (`$sugerenciaImpresion`) y precarga el textarea con él, editable; el
+  placeholder de ejemplo menciona también la posición en la placa, no solo exposición/capa.
 
 ---
 

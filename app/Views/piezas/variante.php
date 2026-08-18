@@ -562,8 +562,14 @@ $porQueNo = function (array $v) use ($acciones): array {
                             </div>
                             <div class="modal-body">
                                 <label class="form-label small">Parámetros de impresión</label>
+                                <?php if (!empty($sugerenciaImpresion)): ?>
+                                    <p class="small text-muted mb-1">
+                                        Precargado con lo que se usó la última vez que se imprimió esta pieza —
+                                        ajusta lo que cambie y deja lo demás igual.
+                                    </p>
+                                <?php endif; ?>
                                 <textarea name="params_impresion" class="form-control form-control-sm" rows="2"
-                                    placeholder="exposición 2.4s, capa 0.05mm, 5 capas base"></textarea>
+                                    placeholder="exposición 2.4s, capa 0.05mm, 5 capas base, posición en la placa: borde derecho, inclinada 45°"><?= esc($sugerenciaImpresion ?? '') ?></textarea>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>

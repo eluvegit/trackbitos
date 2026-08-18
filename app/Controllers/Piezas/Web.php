@@ -285,6 +285,19 @@ class Web extends BaseController
         $estado    = $this->sync->estadoDeSincronizacion($id);
         $versiones = $this->versionModel->where('variante_id', $id)->orderBy('numero', 'DESC')->findAll();
 
+        // Sugerencia para "marcar impresa" (exposición, posición en la
+        // placa...): la última vez que se imprimió ALGUNA versión de esta
+        // variante es el mejor punto de partida para la próxima, en vez de
+        // un textarea en blanco cada vez — sobre todo para la posición en
+        // la placa, que rara vez cambia entre reimpresiones de la misma pieza.
+        $sugerenciaImpresion = null;
+        foreach ($versiones as $version) {
+            if (!empty($version['params_impresion'])) {
+                $sugerenciaImpresion = $version['params_impresion'];
+                break;
+            }
+        }
+
         foreach ($versiones as &$version) {
             $version['pendiente_de_juicio'] = $this->llevaDemasiadoPendiente($version);
             $version['sesiones']            = $this->sesionesQueLlevaronA((int) $version['id']);
@@ -319,6 +332,7 @@ class Web extends BaseController
             // en la escena de esta variante. Puramente informativo.
             'componentes'           => $this->componentesDe($id),
             'versionesParaComponer' => $this->versionesParaComponer($id),
+            'sugerenciaImpresion'   => $sugerenciaImpresion,
         ]);
     }
 
