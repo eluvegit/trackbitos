@@ -1163,14 +1163,19 @@ class Web extends BaseController
 
     private function resumen(array $variante): array
     {
-        $estado   = $this->sync->estadoDeSincronizacion((int) $variante['id']);
-        $validada = $this->versionModel->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
+        $estado       = $this->sync->estadoDeSincronizacion((int) $variante['id']);
+        $validada     = $this->versionModel->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
+        $ultimaVersion = $this->versionModel->where('variante_id', $variante['id'])->orderBy('numero', 'DESC')->first();
 
         return $variante + [
             'validada'      => $validada,
             'versiones'     => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
             'bloqueo'       => $this->descripcionBloqueo($estado['sesion_abierta']),
             'pendientes'    => $this->descripcionPendientes($estado['descargas_pendientes']),
+            // Sin esto, "sin versión buena" no distinguía entre "nunca se ha
+            // llegado a imprimir" y "impresa, pendiente de juzgar" o "la
+            // última se descartó" — todo se veía igual en el listado.
+            'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
         ];
     }
 

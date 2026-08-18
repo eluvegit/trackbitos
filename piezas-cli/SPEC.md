@@ -335,6 +335,13 @@ peso que no tiene sentido versionar en el propio servidor.
   que se liberaría con `piezas:purgar` sin esperar a los 30 días) y qué piezas concretas pesan
   más (suma de sus versiones + sesiones, apartadas o no), para saber cuál aligerar primero con
   el botón "liberar sitio" (Fase 18) en vez de adivinarlo.
+- **El listado principal distingue la línea de vida, no solo "tiene versión buena o no".**
+  Antes, cualquier pieza sin versión validada se veía igual ("sin versión buena"), tanto la que
+  nunca se ha intentado imprimir como la que ya se probó y falló. `Web::resumen()` añade
+  `ultima_version_estado` (el estado de la versión más reciente por número) y el índice pinta
+  tres casos distintos cuando no hay validada: **impresa, sin validar** (badge info — se imprimió,
+  falta juzgarla) y **última descartada** (badge danger — se intentó y no sirvió, toca rehacerla),
+  dejando "sin versión buena" solo para cuando de verdad no se ha llegado a imprimir nada.
 
 ---
 

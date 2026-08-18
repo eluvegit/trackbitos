@@ -80,9 +80,26 @@ $estadoVariante = static function (array $v): void { ?>
         <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($v['sku']) ?></span>
     <?php endif; ?>
 
+    <?php
+        /**
+         * Antes esto era validada-o-no, y todo lo demás ("nunca se imprimió",
+         * "impresa, pendiente de juzgar", "la última se descartó") se veía
+         * igual: "sin versión buena". Aquí sí importa en qué línea de vida
+         * está, no solo si ya tiene una buena — sobre todo para no confundir
+         * "todavía sin intentar" con "ya se probó y falló, hay que rehacerla".
+         */
+    ?>
     <?php if ($v['validada']): ?>
         <span class="badge text-bg-success">
             <i class="bi bi-check-circle-fill"></i> v<?= sprintf('%03d', (int) $v['validada']['numero']) ?>
+        </span>
+    <?php elseif ($v['ultima_version_estado'] === 'impresa'): ?>
+        <span class="badge text-bg-info" title="Impresa, pendiente de juzgar el resultado">
+            <i class="bi bi-printer-fill"></i> impresa, sin validar
+        </span>
+    <?php elseif ($v['ultima_version_estado'] === 'descartada'): ?>
+        <span class="badge text-bg-danger" title="La última versión se descartó">
+            <i class="bi bi-x-circle-fill"></i> última descartada
         </span>
     <?php else: ?>
         <span class="badge text-bg-secondary">sin versión buena</span>
