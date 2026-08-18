@@ -21,6 +21,7 @@
 | 20 | Invariante 9 (impresión sin juzgar) y `cerrar` sin subir | ✅ Hecho (detalle abajo) |
 | 21 | Varios STL por versión (imprimir a trozos y montar) | ✅ Hecho (detalle abajo) |
 | 22 | `abrir` fusionado en `bajar`: un solo comando para pieza nueva o con historial | ✅ Hecho (detalle abajo) |
+| 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -527,6 +528,32 @@ principio que `git checkout`/`pull` sobre una rama vacía o con historial). Alia
 sigue siendo la misma (`POST /variante/{id}/sesion/abrir`), así que el invariante 9 (fase 20,
 "no se sigue trabajando a ciegas") se aplica igual que antes — no hizo falta tocar nada del lado
 del servidor.
+
+**Fase 23 (2026-08-19): el cliente se actualiza solo, sin pedirlo.** La fase 15 dejó avisando
+("hay una versión nueva: trackbitos actualizar") pero exigiendo el paso a mano — con dos
+máquinas y sesiones que se turnan para tocar el módulo, ese paso se olvida, y entre medias cada
+una corre una versión distinta del cliente.
+
+- **`_aplicar_actualizacion(config, remota)`**: se extrae de `cmd_actualizar` la parte de
+  "cómo" actualizar (descargar, comprobar que compila antes de tocar nada, apartar la versión
+  vieja a la papelera —invariante 6—, escribir la nueva), para que la compartan `cmd_actualizar`
+  (invocación explícita) y el gancho automático. La lógica de reemplazo no cambia — sigue
+  verificando sintaxis antes de escribir y apartando en vez de sobrescribir directamente.
+- **El gancho de `main()`** (antes solo `comprobar_version_remota` + un aviso) ahora, si hay
+  versión nueva, llama a `_aplicar_actualizacion` directamente y confirma con un mensaje
+  ("trackbitos se actualizó solo: vX → vY"). Sigue disparándose DESPUÉS del comando (nunca
+  antes, para no añadir latencia a lo que el usuario vino a hacer) y en silencio ante cualquier
+  fallo — un tropiezo actualizándose no debe ensombrecer el resultado del comando real que sí le
+  importaba a esa ejecución. Probado extremo a extremo con un servidor HTTP local de prueba:
+  detecta la versión remota, descarga, reemplaza el fichero y aparta la versión vieja
+  correctamente.
+- **`trackbitos actualizar` se conserva** para forzar la comprobación ya mismo (sin esperar al
+  próximo comando) o para ver el error de verdad si la automática viene fallando en silencio —
+  ella sola nunca explica por qué no se actualizó, a propósito, para no ensuciar la salida del
+  comando que el usuario sí pidió.
+- **De un salto de versión a otro**: una máquina en una versión anterior a esta fase no se
+  autoactualiza sola la primera vez — necesita un `trackbitos actualizar` manual, como hasta
+  ahora, para llegar aquí. A partir de entonces, ya no hace falta ningún paso más.
 
 ---
 

@@ -43,7 +43,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -1173,19 +1173,13 @@ def comprobar_version_remota(config: dict) -> Optional[str]:
     return None
 
 
-def cmd_actualizar(args) -> int:
-    config = cargar_config()
-
-    remota = api_get(config, "/cliente/version").get("version")
-    if not remota:
-        raise RuntimeError("el servidor no ha devuelto ninguna versión.")
-
-    if _version_tupla(remota) <= _version_tupla(VERSION):
-        print(f"\nYa tienes la última versión (v{VERSION}).\n")
-        return 0
-
-    print(f"\nHay una versión nueva: v{VERSION} → v{remota}. Descargando...")
-
+def _aplicar_actualizacion(config: dict, remota: str) -> Path:
+    """
+    Descarga, verifica que compila y se reemplaza a sí mismo. Compartido por
+    "actualizar" (invocación explícita) y por la actualización automática de
+    cada ejecución (fase 23) — la lógica de CÓMO actualizar es una sola; lo
+    que cambia entre las dos es quién la dispara y qué dice al terminar.
+    """
     peticion = urllib.request.Request(
         config["url_base"].rstrip("/") + "/cliente/descargar", headers=_cabeceras(config)
     )
@@ -1207,6 +1201,30 @@ def cmd_actualizar(args) -> int:
     # que volver atrás a mano.
     apartada = a_papelera(ruta_actual)
     ruta_actual.write_bytes(contenido_nuevo)
+
+    return apartada
+
+
+def cmd_actualizar(args) -> int:
+    """
+    Comprobación y actualización explícitas, a petición. Con la
+    actualización automática (fase 23) esto ya no hace falta para el día a
+    día — cada ejecución se actualiza sola —, pero sigue sirviendo para
+    forzarlo ya mismo (sin esperar al próximo comando) o para ver el error
+    de verdad si la automática viene fallando en silencio.
+    """
+    config = cargar_config()
+
+    remota = api_get(config, "/cliente/version").get("version")
+    if not remota:
+        raise RuntimeError("el servidor no ha devuelto ninguna versión.")
+
+    if _version_tupla(remota) <= _version_tupla(VERSION):
+        print(f"\nYa tienes la última versión (v{VERSION}).\n")
+        return 0
+
+    print(f"\nHay una versión nueva: v{VERSION} → v{remota}. Descargando...")
+    apartada = _aplicar_actualizacion(config, remota)
 
     print(f"\n  ✓ Actualizado a v{remota}.")
     print(f"    La versión anterior quedó en {apartada}")
@@ -1298,18 +1316,25 @@ def main(argv: Optional[list] = None) -> int:
         print(f"\n  ⚠ {e}\n", file=sys.stderr)
         resultado = 2
 
-    # Aviso automático, actualización manual: se comprueba después del
-    # comando (nunca antes, para no añadirle latencia a lo que el usuario
-    # vino a hacer de verdad) y en silencio ante cualquier fallo. "actualizar"
-    # (o su alias "ac") se salta esto porque ya acaba de comprobarlo por su
-    # cuenta. Se compara la función resuelta, no args.comando: con alias,
-    # args.comando guarda lo que se escribió de verdad ("ac"), no el nombre
-    # canónico, así que comparar contra la cadena "actualizar" se rompería.
+    # Actualización automática (fase 23): antes solo avisaba y exigía
+    # "trackbitos actualizar" a mano; ahora se aplica ella sola. Se dispara
+    # después del comando (nunca antes, para no añadirle latencia a lo que
+    # el usuario vino a hacer de verdad) y en silencio ante cualquier fallo
+    # — un tropiezo actualizándose no debe ensombrecer el resultado del
+    # comando real, que es lo que importaba de esta ejecución. "actualizar"
+    # (o su alias "ac") se salta esto porque ya lo acaba de hacer por su
+    # cuenta, con sus propios mensajes. Se compara la función resuelta, no
+    # args.comando: con alias, args.comando guarda lo que se escribió de
+    # verdad ("ac"), no el nombre canónico, así que comparar contra la
+    # cadena "actualizar" se rompería.
     if args.func is not cmd_actualizar:
         try:
-            nueva = comprobar_version_remota(cargar_config())
+            config_actual = cargar_config()
+            nueva = comprobar_version_remota(config_actual)
             if nueva:
-                print(f"  · Versión nueva de trackbitos disponible (v{VERSION} → v{nueva}): trackbitos actualizar\n")
+                _aplicar_actualizacion(config_actual, nueva)
+                print(f"\n  ✓ trackbitos se actualizó solo: v{VERSION} → v{nueva}. "
+                      "Se aplica desde la próxima ejecución.\n")
         except Exception:
             pass
 
