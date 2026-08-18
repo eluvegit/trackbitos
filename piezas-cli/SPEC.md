@@ -17,6 +17,7 @@
 | 16 | `catalogo` por categoría, `variantes <pieza>`, `abrir` ya no pisa ficheros | ✅ Hecho (detalle abajo) |
 | 17 | "Compuesta de": qué otras piezas estaban en la escena de una variante | ✅ Hecho (detalle abajo) |
 | 18 | Enlace al original, liberar sitio de una sesión suelta, y `resolver_variante` más preciso | ✅ Hecho (detalle abajo) |
+| 19 | Estado real en el catálogo del cliente, fix de `cerrar`, y `abrir` fusionado en `bajar` | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -378,6 +379,33 @@ peso que no tiene sentido versionar en el propio servidor.
   (`$puedeDevolver($v)`) y desactiva el botón justo en esa versión con su propio motivo — el resto
   de versiones (superadas, descartadas de ramas ya cerradas) lo siguen ofreciendo con normalidad.
 
+**Fase 19 (2026-08-19).** Dos cambios de otra sesión/máquina (desplegados directamente por FTP,
+sin pasar por este repo, y traídos aquí después vía `GET /cliente/descargar` para no perder ese
+trabajo) más uno de esta sesión:
+
+- **`trackbitos catalogo` ya muestra el estado real de cada versión**, no solo "sin versión
+  buena" a secas. Nuevas funciones `estado_de_version()` (mismo vocabulario que el índice web:
+  "vNNN ✓", "sin validar", "sin versión", "versión sin imprimir", "no sirve") y `avisos_de()`
+  (añade "modificando, sin promocionar" para el caso de sesiones subidas y cerradas sin
+  promocionar todavía, que antes no se veía en ningún sitio — ni bloqueo ni descarga pendiente
+  lo delataban). Ambas leen campos nuevos del servidor (`ultima_version_estado`,
+  `trabajo_en_curso`) que este repo todavía no tiene documentados en la sección 4 de la API —
+  pendiente de traer también esos cambios de `Api.php`/`PiezaService.php` a este checkout.
+- **`cerrar` ya no dejaba pasar una sesión "abierta de cero" (vía `abrir`, sin `hash_origen`)
+  con un `.blend` sin subir.** Antes, sin nada con qué comparar, se leía como "nada que
+  comprobar" — justo al revés: si hay un `.blend` en el directorio y la sesión no tiene nada
+  subido, ese fichero entero está sin guardar en el sistema. Ahora se niega explícitamente
+  ("Súbelo antes de cerrar", con la opción de borrar el fichero si de verdad no se quiere
+  conservar).
+- **"abrir" fusionado en "bajar".** El comando aparte "abrir" (sesión sin descargar, solo para
+  piezas recién estrenadas) desaparece: `bajar` ya calculaba internamente si había algo que
+  descargar (`origen_descarga`) y, si no había nada, simplemente se negaba y remitía a "abrir".
+  Ahora, en ese mismo caso (y solo con motivo "trabajo", no con "ver"), hace lo que hacía
+  "abrir" — abre la sesión sin descargar nada — en vez de negarse. Un único comando para las dos
+  situaciones, sin que el usuario tenga que saber de antemano si hay algo que traer o no (mismo
+  principio que `git checkout`/`pull` sobre una rama vacía o con historial). Alias `a` (antes de
+  "abrir") se conserva apuntando ahora a "bajar", junto al `b` de siempre.
+
 ---
 
 ## 0. Contexto
@@ -675,23 +703,24 @@ Configuración en `~/.trackbitos/config.json`: URL base, token de API, **UUID de
 ### 5.1 Comandos
 
 ```
-trackbitos estado      (e)   # el más usado — diagnóstico completo          ✅ hecho
-trackbitos abrir       (a)   <variante>  # sesión sin descargar: variante estrenada  ✅ hecho
-trackbitos bajar       (b)   [<variante>]                                   ✅ hecho
-trackbitos ver         (v)   <variante>  # descarga de consulta, sin abrir sesión  ✅ hecho
-trackbitos subir       (s)   [--log "..."]                                  ✅ hecho
+trackbitos estado      (e)      # el más usado — diagnóstico completo       ✅ hecho
+trackbitos bajar       (b, a)   [<variante>]  # descarga y abre sesión; si la pieza está
+                                 # recién estrenada (nada que descargar), solo abre sesión ✅ hecho
+trackbitos ver         (v)      <variante>  # descarga de consulta, sin abrir sesión ✅ hecho
+trackbitos subir       (s)      [--log "..."]                               ✅ hecho
 trackbitos cerrar      (c)                                                  ✅ hecho
 trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero    ✅ hecho
-trackbitos promocionar (p)   --cambio "..." [--medidas "..."]               ✅ hecho
-trackbitos papelera    (pa)  # qué hay apartado y cuándo caduca             ✅ hecho
-trackbitos catalogo    (ca)  # catálogo completo, agrupado por categoría    ✅ hecho
-trackbitos variantes   (va)  <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
-trackbitos actualizar  (ac)  # comprueba y aplica una versión nueva del cliente  ✅ hecho
+trackbitos promocionar (p)      --cambio "..." [--medidas "..."]            ✅ hecho
+trackbitos papelera    (pa)     # qué hay apartado y cuándo caduca          ✅ hecho
+trackbitos catalogo    (ca)     # catálogo completo, agrupado por categoría ✅ hecho
+trackbitos variantes   (va)     <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
+trackbitos actualizar  (ac)     # comprueba y aplica una versión nueva del cliente ✅ hecho
 ```
 
-Alias cortos entre paréntesis (`trackbitos a "perro"` = `trackbitos abrir "perro"`): una letra para
-los seis de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
-sigue funcionando igual — es azúcar, no un modo nuevo.
+Alias cortos entre paréntesis (`trackbitos b "perro"` = `trackbitos bajar "perro"`): una letra
+para los de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
+sigue funcionando igual — es azúcar, no un modo nuevo. `bajar` tiene dos alias (`b` y `a`) porque
+hasta la fase 19 `a` era de un comando aparte, `abrir` — ver esa fase.
 
 La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
 son dos máquinas de escritorio que se encienden a ratos, y un cron en cada una sería una pieza
@@ -918,7 +947,7 @@ un `cambio` del tipo "importada del trabajo anterior a Trackbitos". Las iteracio
 no tienen hashes, ni sesiones, ni de qué copia partía cada una — inventarles un historial haría el
 registro menos fiable, no más. El valor empieza en el siguiente toque de cada pieza.
 
-El ciclo a mano por pieza: alta por web (nombre, categoría, SKU) → `trackbitos abrir <pieza>` →
+El ciclo a mano por pieza: alta por web (nombre, categoría, SKU) → `trackbitos bajar <pieza>` →
 copiar el `.blend` → `subir` → `cerrar` → `promocionar --cambio "importada…"` → y si ya está
 impresa y es buena, marcarla impresa y validarla desde la ficha, más adjuntar el `.stl` ahí mismo.
 Los `.stl` ya están exportados junto a los `.blend`, así que se pueden subir en la misma pasada.

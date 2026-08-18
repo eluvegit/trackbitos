@@ -42,9 +42,9 @@ mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
 
 2. **Abrir sesión** en el CLI, en la carpeta de trabajo de esa pieza:
    ```
-   trackbitos abrir torso-recto
+   trackbitos bajar torso-recto
    ```
-   Como es una variante nueva, no hay nada que descargar: solo reclama la máquina y abre la sesión 1. El nombre admite la pieza, la variante o ambas (ver el truco de la sección 5).
+   Como es una variante nueva, no hay nada que descargar: el mismo comando lo detecta solo y se limita a reclamar la máquina y abrir la sesión 1 (no hace falta un comando aparte para "pieza sin nada todavía"). El nombre admite la pieza, la variante o ambas (ver el truco de la sección 5).
 
 3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta.
 
@@ -89,8 +89,7 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 | `trackbitos catalogo` | El catálogo completo desde la terminal, agrupado por categoría: qué hay y por dónde va cada cosa. |
 | `trackbitos variantes <pieza>` | Zoom sobre una pieza: cuántas variantes tiene y cómo se llama cada una. |
 | `trackbitos actualizar` | Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza a sí mismo. |
-| `trackbitos abrir <pieza>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
-| `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
+| `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión — o, si la pieza es nueva y no hay nada que descargar, solo abre sesión. Se niega si hay cambios sin subir. |
 | `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
 | `trackbitos subir [--log "..."]` | Sube el `.blend` de la carpeta actual. |
 | `trackbitos cerrar [--sin-cambios]` | Cierra la sesión, o la descarga sin subir fichero. |
@@ -101,13 +100,13 @@ Todos aceptan `--dir` (por defecto, la carpeta actual). `bajar`/`ver` aceptan `-
 
 Truco: si usas **una carpeta por pieza**, `trackbitos estado` ya sabe en qué variante/rama/sesión estás con solo mirar el `.sesion.json` que él mismo dejó — no hace falta escribir el nombre salvo al empezar algo nuevo.
 
-**Cómo nombrar la pieza** en los comandos que lo piden (`abrir`, `bajar`, `ver`): vale el nombre de la **pieza**, el de la **variante**, trozos de cualquiera de los dos, los dos juntos, o el id. Para una pieza "Pincel de pintura" con su variante "base", todo esto funciona igual:
+**Cómo nombrar la pieza** en los comandos que lo piden (`bajar`, `ver`): vale el nombre de la **pieza**, el de la **variante**, trozos de cualquiera de los dos, los dos juntos, o el id. Para una pieza "Pincel de pintura" con su variante "base", todo esto funciona igual:
 
 ```
-trackbitos abrir pincel
-trackbitos abrir base
-trackbitos abrir "pincel base"
-trackbitos abrir 3
+trackbitos bajar pincel
+trackbitos bajar base
+trackbitos bajar "pincel base"
+trackbitos bajar 3
 ```
 
 Se busca sobre pieza + variante porque es como se piensa: la pieza lleva el nombre real y la variante suele ser una etiqueta genérica —`base` se repite en **todas** las piezas, porque es la que se crea sola. Por eso, si lo que escribes encaja con varias, te las lista **con su pieza delante** (`Pincel de pintura / base`, `Casco romano / base`) para que puedas concretar; un nombre de variante exacto siempre gana sobre las coincidencias parciales.
