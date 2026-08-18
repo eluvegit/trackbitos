@@ -359,6 +359,16 @@ peso que no tiene sentido versionar en el propio servidor.
   `data-pieza` — mismo `data-buscar` que su fila de pieza, para que el buscador las oculte juntas
   — pero fuera del recuento de "cuántas piezas hay" en la cabecera de cada categoría, que sigue
   contando solo `data-pieza`.
+- **Reordenada la ficha**: versión buena → historial → estadísticas → "Compuesta de" → resto.
+  Antes estadísticas y "Compuesta de" salían justo debajo de la versión buena, antes del propio
+  historial.
+- **"Descargar .blend" pasa por un modal de aviso.** Antes era un enlace directo con una línea de
+  aviso escrita debajo en cada versión del historial ("no queda registrado: para mirar, no para
+  trabajar") — fácil de dejar de leer de puro repetida. Ahora el botón abre un modal
+  (`modalDescargarBlend{id}`) con la advertencia completa (incluye que la carpeta donde se
+  guarde es responsabilidad de quien la baja, no algo que el módulo purgue solo) y el enlace de
+  descarga de verdad dentro. No es una barrera (spec 0: "se niega y explica", no "¿estás
+  seguro?") — sigue siendo una descarga libre, solo obliga a verla una vez antes de cada bajada.
 
 ---
 

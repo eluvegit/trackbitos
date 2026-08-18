@@ -408,13 +408,24 @@ $porQueNo = function (array $v) use ($acciones): array {
                             dice de un vistazo si la versión ya tiene STL o todavía no.
                         -->
                         <div class="d-flex flex-wrap gap-1 mt-2">
-                            <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>"
-                                class="btn btn-sm btn-primary py-0 px-2">
+                            <?php
+                                /**
+                                 * Antes era un enlace directo con el aviso escrito debajo, a
+                                 * secas, en cada versión del historial — fácil de saltarse sin
+                                 * leerlo. Ahora hace falta pasar por el modal para llegar al
+                                 * enlace de verdad: no evita nada (spec 0, "se niega y explica",
+                                 * no "pregunta ¿estás seguro?"), pero sí obliga a ver la
+                                 * advertencia una vez antes de descargar, no solo a convivir con
+                                 * ella de fondo.
+                                 */
+                            ?>
+                            <button type="button" class="btn btn-sm btn-primary py-0 px-2"
+                                data-bs-toggle="modal" data-bs-target="#modalDescargarBlend<?= $v['id'] ?>">
                                 <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
                                 <?php if ($v['tamano_blend'] !== null): ?>
                                     <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
                                 <?php endif; ?>
-                            </a>
+                            </button>
                             <?php if (!empty($v['ruta_stl'])): ?>
                                 <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
                                     class="btn btn-sm btn-primary py-0 px-2">
@@ -448,17 +459,6 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <?php endif; ?>
                         </div>
 
-                        <!--
-                            Aviso, no tooltip (spec 7.1): esta descarga no abre asiento,
-                            así que el sistema no sabe que esa copia existe. Va en una
-                            sola línea a propósito — se repite en cada versión del
-                            historial, y el porqué completo está en "Desde tu máquina".
-                        -->
-                        <div class="text-warning-emphasis small mt-1">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            Ese <code>.blend</code> <strong>no queda registrado</strong>: para mirar, no para trabajar.
-                        </div>
-
                         <div class="d-flex flex-wrap gap-1 mt-2">
                             <!--
                                 Botones siempre visibles, deshabilitados con explicación cuando
@@ -475,6 +475,41 @@ $porQueNo = function (array $v) use ($acciones): array {
                         <?php foreach ($porQueNo($v) as $linea): ?>
                             <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> <?= esc($linea) ?></div>
                         <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!--
+                    Descargar .blend: esta descarga no abre asiento (no pasa por el
+                    cliente, que es el único que sabe identificar la máquina), así que
+                    el sistema no se entera de que esa copia existe. El modal obliga a
+                    ver el porqué una vez antes de descargar, en vez de convivir con un
+                    aviso de fondo que se acaba dejando de leer. Explicación completa en
+                    la tarjeta "Desde tu máquina", más abajo.
+                -->
+                <div class="modal fade" id="modalDescargarBlend<?= $v['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h6 class="modal-title">Descargar <?= $etiqueta($v) ?></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-warning-emphasis small">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Ese <code>.blend</code> <strong>no queda registrado</strong>: sirve para mirarlo o
+                                    para añadirlo como referencia a otra escena, no para trabajar sobre él. El
+                                    sistema no sabe que esta copia existe, así que lo que hagas y subas desde
+                                    aquí no cuadraría con ningún asiento — y en algún momento la carpeta donde la
+                                    guardes será la que borres tú mismo, no algo que el módulo purgue por su cuenta.
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-file-earmark-arrow-down"></i> Descargar
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
