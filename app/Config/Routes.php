@@ -636,6 +636,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // motivo que 'categoria' arriba — es literal, no debe competir con un
     // patrón numérico.
     $routes->GET('papelera', 'Web::papelera');
+    $routes->POST('familia/(:num)/nombre', 'Web::renombrarFamilia/$1');
     $routes->POST('familia/(:num)/borrar', 'Web::borrarFamilia/$1');
     $routes->POST('familia/(:num)/restaurar', 'Web::restaurarFamilia/$1');
 

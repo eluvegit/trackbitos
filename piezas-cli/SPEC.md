@@ -307,6 +307,11 @@ peso que no tiene sentido versionar en el propio servidor.
   nombre suelto — así todo lo que ya lee de ahí (`estado`, `cerrar`, `promocionar`...) queda
   arreglado sin tocarlo aparte. La sugerencia de "empieza de cero: trackbitos abrir …" usa ahora
   el id numérico, no el nombre, para que sea pegable sin ambigüedad.
+- **Renombrar la pieza entera** (`PiezaService::renombrarFamilia`, lápiz en la cabecera de la
+  ficha — mismo modal que ya editaba nombre de variante/SKU/enlace). Hasta ahora solo se podía
+  renombrar la variante (`renombrarVariante`); la pieza en sí no tenía forma de corregirse una
+  vez creada. Sin comprobación de unicidad, igual que `crearFamilia`. Ruta:
+  `POST piezas/familia/{id}/nombre`.
 
 ---
 

@@ -534,6 +534,22 @@ class Web extends BaseController
     }
 
     /**
+     * El nombre de la pieza entera, a diferencia de `renombrarVariante`
+     * (que solo toca la línea de diseño). Se edita desde la ficha, así que
+     * vuelve a ella con la variante que se estaba mirando.
+     */
+    public function renombrarFamilia(int $familiaId)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->renombrarFamilia($familiaId, (string) $this->request->getPost('nombre')),
+            fn($familia) => site_url('piezas/variante/' . $varianteId),
+            fn($familia) => 'Ahora se llama "' . $familia['nombre'] . '".'
+        );
+    }
+
+    /**
      * "Borrar pieza" (invariante 6): no la destruye, la manda a la papelera
      * — desaparece del índice y de la galería, pero se puede restaurar
      * durante 30 días desde /piezas/papelera antes de que `piezas:purgar`

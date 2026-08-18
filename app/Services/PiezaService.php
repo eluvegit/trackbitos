@@ -272,6 +272,28 @@ class PiezaService
     }
 
     /**
+     * El nombre de la pieza entera (a diferencia de `renombrarVariante`, que
+     * solo toca la línea de diseño dentro de ella). Sin comprobación de
+     * unicidad, igual que `crearFamilia`: no la había al crear, así que
+     * exigirla solo al renombrar sería inconsistente.
+     */
+    public function renombrarFamilia(int $familiaId, string $nombre): array
+    {
+        if (!$this->familiaModel->find($familiaId)) {
+            throw new RuntimeException("Pieza {$familiaId} no encontrada.");
+        }
+
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            throw new RuntimeException('La pieza necesita un nombre.');
+        }
+
+        $this->familiaModel->update($familiaId, ['nombre' => $nombre]);
+
+        return $this->familiaModel->find($familiaId);
+    }
+
+    /**
      * "Borrar pieza" (invariante 6, extendida a la familia entera): no la
      * destruye, la marca con la fecha en que se apartó. Desaparece del
      * índice y de la galería, pero se puede restaurar mientras siga en la

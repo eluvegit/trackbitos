@@ -70,7 +70,7 @@ $porQueNo = function (array $v) use ($acciones): array {
             <i class="bi bi-box-arrow-up-right"></i> original
         </a>
     <?php endif; ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre, SKU y enlace al original"
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
         data-bs-toggle="modal" data-bs-target="#modalSku">
         <i class="bi bi-pencil"></i>
     </button>
@@ -85,20 +85,37 @@ $porQueNo = function (array $v) use ($acciones): array {
 
 <?php
 /**
- * Nombre y SKU en el mismo modal pero en DOS formularios, cada uno con su
- * botón: son dos verbos distintos y cada uno puede negarse por su cuenta
- * (un nombre repetido, un SKU que ya tiene otra variante). Con un solo
- * envío, el fallo de uno dejaría al otro aplicado a medias.
+ * Nombre de pieza, nombre de variante, SKU y enlace al original en el mismo
+ * modal pero cada uno en su propio formulario: son verbos distintos y cada
+ * uno puede negarse por su cuenta (un nombre repetido, un SKU que ya tiene
+ * otra variante). Con un solo envío, el fallo de uno dejaría a los demás
+ * aplicados a medias.
  */
 ?>
 <div class="modal fade" id="modalSku" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Editar <?= esc($variante['nombre']) ?></h6>
+                <h6 class="modal-title">Editar <?= esc($familia['nombre']) ?> / <?= esc($variante['nombre']) ?></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <label class="form-label small mb-1">Nombre de la pieza</label>
+                <p class="small text-muted mb-2">
+                    Cómo se llama la pieza entera (<code>Flores</code>, <code>Lupa</code>…), aparte de
+                    cuántas variantes tenga dentro.
+                </p>
+                <form method="post" class="d-flex gap-1 mb-3"
+                    action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/nombre') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                    <input type="text" name="nombre" class="form-control form-control-sm"
+                        value="<?= esc($familia['nombre'], 'attr') ?>" maxlength="150" required>
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <hr>
+
                 <label class="form-label small mb-1">Nombre de la variante</label>
                 <p class="small text-muted mb-2">
                     Cómo se llama esta línea de diseño dentro de <strong><?= esc($familia['nombre']) ?></strong>
