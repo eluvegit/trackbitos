@@ -216,15 +216,7 @@ class Web extends BaseController
         foreach ($this->familiaModel->where('borrado_en', null)->findAll() as $familia) {
             $bytes = 0;
             foreach ($this->varianteModel->where('familia_id', $familia['id'])->findAll() as $variante) {
-                foreach ($this->versionModel->where('variante_id', $variante['id'])->findAll() as $version) {
-                    $bytes += $this->almacen->tamano($version['ruta_blend']) ?? 0;
-                    $bytes += $this->almacen->tamano($version['ruta_stl']) ?? 0;
-                }
-                foreach ($this->ramaModel->where('variante_id', $variante['id'])->findAll() as $rama) {
-                    foreach ($this->sesionModel->where('rama_id', $rama['id'])->findAll() as $sesion) {
-                        $bytes += $this->almacen->tamano($sesion['ruta_blend']) ?? 0;
-                    }
-                }
+                $bytes += $this->pesoDeVariante((int) $variante['id'])['total'];
             }
 
             if ($bytes > 0) {
@@ -238,6 +230,38 @@ class Web extends BaseController
             'totalPapelera' => $this->almacen->tamanoPapelera(),
             'piezas'        => $filas,
         ]);
+    }
+
+    /**
+     * Cuánto pesa una variante en disco: sus versiones (.blend + .stl) y
+     * TODAS sus sesiones, de cualquier rama, abierta o cerrada, purgada o
+     * no — el fichero puede estar ya en la papelera de ficheros, pero sigue
+     * siendo peso que le pertenece a esta variante hasta que se purgue de
+     * verdad. Reutilizado por la ficha (tarjeta de estadísticas) y por
+     * `/piezas/estadisticas` (ranking por pieza).
+     *
+     * @return array{versiones: int, sesiones: int, total: int} bytes
+     */
+    private function pesoDeVariante(int $varianteId): array
+    {
+        $bytesVersiones = 0;
+        foreach ($this->versionModel->where('variante_id', $varianteId)->findAll() as $version) {
+            $bytesVersiones += $this->almacen->tamano($version['ruta_blend']) ?? 0;
+            $bytesVersiones += $this->almacen->tamano($version['ruta_stl']) ?? 0;
+        }
+
+        $bytesSesiones = 0;
+        foreach ($this->ramaModel->where('variante_id', $varianteId)->findAll() as $rama) {
+            foreach ($this->sesionModel->where('rama_id', $rama['id'])->findAll() as $sesion) {
+                $bytesSesiones += $this->almacen->tamano($sesion['ruta_blend']) ?? 0;
+            }
+        }
+
+        return [
+            'versiones' => $bytesVersiones,
+            'sesiones'  => $bytesSesiones,
+            'total'     => $bytesVersiones + $bytesSesiones,
+        ];
     }
 
     // ---- Categorías -----------------------------------------------------
@@ -354,6 +378,22 @@ class Web extends BaseController
         }
         unset($version);
 
+        // Tarjeta de estadísticas de la ficha: tamaño en disco (desglosado,
+        // no solo el total, para saber si el peso está en las versiones que
+        // importan o en sesiones intermedias que ya podrían aligerarse) más
+        // un par de datos que solo tienen sentido mirados por pieza — no
+        // caben en el listado principal sin abarrotarlo.
+        $sesionesTotales = 0;
+        foreach ($this->ramaModel->where('variante_id', $id)->findAll() as $rama) {
+            $sesionesTotales += $this->sesionModel->where('rama_id', $rama['id'])->countAllResults();
+        }
+        $estadisticasPieza = [
+            'peso'      => $this->pesoDeVariante($id),
+            'intentos'  => count(array_filter($versiones, static fn($v) => $v['estado'] !== 'borrador')),
+            'sesiones'  => $sesionesTotales,
+            'dias_vida' => $this->diasDesde($variante['creado_en']),
+        ];
+
         return view('piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
@@ -379,6 +419,7 @@ class Web extends BaseController
             'componentes'           => $this->componentesDe($id),
             'versionesParaComponer' => $this->versionesParaComponer($id),
             'sugerenciaImpresion'   => $sugerenciaImpresion,
+            'estadisticasPieza'     => $estadisticasPieza,
         ]);
     }
 

@@ -325,6 +325,38 @@ $porQueNo = function (array $v) use ($acciones): array {
             </div>
         </div>
 
+        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
+                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
+                        <div class="text-muted small">en disco</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
+                        <div class="text-muted small">intento(s) de impresión</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
+                        <div class="text-muted small">sesión(es) de trabajo</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
+                        <div class="text-muted small">día(s) desde que se creó</div>
+                    </div>
+                </div>
+                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
+                    <div class="small text-muted mt-2">
+                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
+                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
+                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <!--
             "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
             la escena de esta variante. Puramente informativo — no toca
@@ -765,7 +797,7 @@ $porQueNo = function (array $v) use ($acciones): array {
     <div class="col-lg-5">
 
         <!-- Trabajo en curso -->
-        <div class="card shadow-sm mb-3">
+        <div class="card shadow-sm mb-3" id="sesiones-trabajo">
             <div class="card-body p-3">
                 <h6 class="mb-2"><i class="bi bi-tools"></i> Trabajo en curso</h6>
 

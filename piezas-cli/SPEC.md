@@ -342,6 +342,12 @@ peso que no tiene sentido versionar en el propio servidor.
   tres casos distintos cuando no hay validada: **impresa, sin validar** (badge info — se imprimió,
   falta juzgarla) y **última descartada** (badge danger — se intentó y no sirvió, toca rehacerla),
   dejando "sin versión buena" solo para cuando de verdad no se ha llegado a imprimir nada.
+- **Tarjeta de estadísticas en la ficha**, justo debajo de la que dice cuál es la versión buena:
+  tamaño en disco (desglosado entre versiones y sesiones, para saber si el peso está en lo que
+  importa o en trabajo intermedio que ya podría aligerarse), intentos de impresión (versiones
+  que no se quedaron en borrador), sesiones de trabajo totales, y días desde que se creó.
+  `Web::pesoDeVariante()` reutiliza el mismo cálculo que ya usaba `estadisticas()` por familia,
+  ahora también por variante suelta.
 
 ---
 
