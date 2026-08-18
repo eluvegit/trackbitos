@@ -592,6 +592,12 @@ $routes->group('buscapp', ['filter' => 'auth', 'namespace' => 'App\Controllers\B
 $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
     $routes->POST('maquina/registrar', 'Api::registrarMaquina');
 
+    // Cliente CLI: para que "trackbitos actualizar" se reemplace a sí
+    // mismo. Va antes que 'variante/(:num)/...' por el mismo motivo que el
+    // resto de rutas literales de este grupo.
+    $routes->GET('cliente/version', 'Api::clienteVersion');
+    $routes->GET('cliente/descargar', 'Api::clienteDescargar');
+
     // Lectura
     $routes->GET('variantes', 'Api::variantes');
     $routes->GET('variante/(:num)/estado', 'Api::varianteEstado/$1');
@@ -625,6 +631,15 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('familia', 'Web::crearFamilia');
     $routes->POST('variante', 'Web::crearVariante');
 
+    // Papelera de piezas (invariante 6): borrar no destruye, aparta con
+    // fecha; 'papelera' va antes que 'familia/(:num)/...' por el mismo
+    // motivo que 'categoria' arriba — es literal, no debe competir con un
+    // patrón numérico.
+    $routes->GET('papelera', 'Web::papelera');
+    $routes->POST('familia/(:num)/nombre', 'Web::renombrarFamilia/$1');
+    $routes->POST('familia/(:num)/borrar', 'Web::borrarFamilia/$1');
+    $routes->POST('familia/(:num)/restaurar', 'Web::restaurarFamilia/$1');
+
     // Categorías: el nivel por encima de la pieza (spec 11.1). Van antes
     // que 'familia/(:num)/...' porque 'categoria' es literal y no debe
     // competir con ningún patrón numérico.
@@ -638,16 +653,26 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // cliente al registrarse, nunca la web.
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
+    $routes->GET('estadisticas', 'Web::estadisticas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
+    $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');
     $routes->POST('version/(:num)/descartar', 'Web::descartar/$1');
     $routes->POST('version/(:num)/devolver-a-trabajo', 'Web::devolverATrabajo/$1');
     $routes->POST('version/(:num)/derivar', 'Web::derivarVariante/$1');
+
+    // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en la
+    // escena de esta variante. Informativo, aparte de derivarVariante.
+    $routes->POST('variante/(:num)/componente', 'Web::declararComponente/$1');
+    $routes->POST('componente/(:num)/borrar', 'Web::quitarComponente/$1');
+
     $routes->POST('descarga/(:num)/forzar-cierre', 'Web::forzarCierre/$1');
+    $routes->POST('sesion/(:num)/forzar-cierre', 'Web::forzarCierreSesion/$1');
+    $routes->POST('sesion/(:num)/descartar-fichero', 'Web::descartarFicheroSesion/$1');
 
     // Imágenes: referencias (familia) y renders (versión). A diferencia
     // del .blend, se suben y se sirven desde aquí mismo (spec 1.1 +

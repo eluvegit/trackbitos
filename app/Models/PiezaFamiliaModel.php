@@ -18,7 +18,7 @@ class PiezaFamiliaModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['nombre', 'categoria_id', 'notas'];
+    protected $allowedFields = ['nombre', 'categoria_id', 'notas', 'borrado_en'];
 
     protected $validationRules = [
         'nombre' => 'required|max_length[150]',

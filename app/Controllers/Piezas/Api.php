@@ -3,6 +3,7 @@
 namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
+use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaDescargaModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
@@ -78,20 +79,41 @@ class Api extends BaseController
     /**
      * Lista de variantes con estado resumido (spec 7.1: de un vistazo, cuál
      * es la buena y dónde está el trabajo en curso). La consume tanto
-     * "trackbitos estado" (indirectamente) como el nuevo "trackbitos
-     * variantes", que es el catálogo visto desde la terminal.
+     * "trackbitos estado" (indirectamente) como "trackbitos catalogo", que
+     * es el catálogo visto desde la terminal — con categoría incluida para
+     * que se pueda agrupar igual que el índice y la galería web.
+     *
+     * Las piezas en la papelera no aparecen: no son parte del catálogo de
+     * trabajo mientras dura su plazo de gracia (invariante 6), igual que ya
+     * pasa en /piezas y /piezas/galeria.
      */
     public function variantes()
     {
-        $variantes = $this->varianteModel->orderBy('nombre', 'ASC')->findAll();
+        $categoriasOrdenadas = (new PiezaCategoriaModel())->ordenadas();
+        $categorias          = array_column($categoriasOrdenadas, 'nombre', 'id');
 
         $familias = [];
-        foreach ((new PiezaFamiliaModel())->findAll() as $f) {
-            $familias[$f['id']] = $f['nombre'];
+        foreach ((new PiezaFamiliaModel())->where('borrado_en', null)->findAll() as $f) {
+            $categoriaId = $f['categoria_id'] !== null ? (int) $f['categoria_id'] : null;
+
+            $familias[(int) $f['id']] = [
+                'nombre'           => $f['nombre'],
+                'categoria_id'     => $categoriaId,
+                'categoria_nombre' => $categoriaId !== null ? ($categorias[$categoriaId] ?? null) : null,
+            ];
         }
 
+        $variantes = $familias === []
+            ? []
+            : $this->varianteModel->whereIn('familia_id', array_keys($familias))->orderBy('nombre', 'ASC')->findAll();
+
         return $this->response->setJSON([
-            'variantes' => array_map(fn($v) => $this->resumenVariante($v, $familias), $variantes),
+            // El orden en que el usuario colocó sus categorías (spec 11.1),
+            // no el alfabético: es el mismo criterio que ya usan el índice y
+            // la galería, y "trackbitos catalogo" lo necesita para agrupar
+            // igual sin tener que adivinar un orden por su cuenta.
+            'categorias' => array_column($categoriasOrdenadas, 'nombre'),
+            'variantes'  => array_map(fn($v) => $this->resumenVariante($v, $familias), $variantes),
         ]);
     }
 
@@ -332,6 +354,56 @@ class Api extends BaseController
         });
     }
 
+    // ---- Cliente CLI (auto-actualización) --------------------------------
+
+    /**
+     * De dónde lee la versión "oficial" del cliente: el propio
+     * piezas-cli/trackbitos.py desplegado junto al resto de la app, no una
+     * copia aparte. Así solo hay un sitio que mantener — el mismo despliegue
+     * que ya sube el resto del código sube también la versión nueva del
+     * cliente, sin ningún paso extra.
+     */
+    private function rutaClienteCli(): string
+    {
+        return ROOTPATH . 'piezas-cli' . DIRECTORY_SEPARATOR . 'trackbitos.py';
+    }
+
+    /**
+     * "¿Hay una versión más nueva?" — lo que consulta cada ejecución del
+     * cliente (aviso automático, actualización manual: nunca se autoactualiza
+     * sola). La versión se extrae por regex del propio fichero desplegado en
+     * vez de guardarse aparte en la base de datos: un `VERSION = "…"` que se
+     * pudiera desincronizar del fichero real sería peor que no tener versión.
+     */
+    public function clienteVersion()
+    {
+        $ruta = $this->rutaClienteCli();
+        if (!is_file($ruta)) {
+            return $this->response->setJSON(['error' => 'El cliente no está desplegado en este servidor.'])->setStatusCode(404);
+        }
+
+        if (!preg_match('/^VERSION\s*=\s*"([^"]+)"/m', file_get_contents($ruta), $m)) {
+            return $this->response->setJSON(['error' => 'No se pudo leer la versión del cliente desplegado.'])->setStatusCode(500);
+        }
+
+        return $this->response->setJSON(['version' => $m[1]]);
+    }
+
+    /**
+     * El propio fichero, para que "trackbitos actualizar" se reemplace a sí
+     * mismo. Mismo token Bearer que el resto de la API — no hace falta
+     * declarar máquina, esto no toca ningún asiento ni sesión.
+     */
+    public function clienteDescargar()
+    {
+        $ruta = $this->rutaClienteCli();
+        if (!is_file($ruta)) {
+            return $this->response->setJSON(['error' => 'El cliente no está desplegado en este servidor.'])->setStatusCode(404);
+        }
+
+        return $this->response->download($ruta, null, true)->setFileName('trackbitos.py');
+    }
+
     // ---- Plomería -------------------------------------------------------
 
     /**
@@ -358,6 +430,7 @@ class Api extends BaseController
             ->setHeader('X-Descarga-Id', (string) $entrega['descarga']['id'])
             ->setHeader('X-Variante-Id', (string) $entrega['variante']['id'])
             ->setHeader('X-Variante-Nombre', rawurlencode($entrega['variante']['nombre']))
+            ->setHeader('X-Familia-Nombre', rawurlencode($entrega['variante']['familia_nombre'] ?? ''))
             ->setHeader('X-Rama-Id', (string) $entrega['rama']['id'])
             ->setHeader('X-Rama-Nombre', rawurlencode($this->ramaModel->nombre($entrega['rama'])))
             ->setHeader('X-Sesion-Id', (string) ($entrega['sesion_trabajo']['id'] ?? ''))
@@ -491,6 +564,12 @@ class Api extends BaseController
      * @param array<int, string> $familias id => nombre, precargado por el llamador para no
      *                                     consultar la familia una vez por variante.
      */
+    /**
+     * $familias es familia_id => ['nombre', 'categoria_id', 'categoria_nombre']
+     * (construido en variantes(), spec 11.1) — vacío en las llamadas que no
+     * lo necesitan (p.ej. derivarVariante), y entonces estos campos salen
+     * null, igual que antes de tener categoría.
+     */
     private function resumenVariante(array $variante, array $familias = []): array
     {
         $validada = $this->versionModel
@@ -503,11 +582,15 @@ class Api extends BaseController
             ? $this->sesionModel->where('rama_id', $rama['id'])->where('cerrada_en', null)->first()
             : null;
 
+        $familia = $familias[(int) $variante['familia_id']] ?? [];
+
         return [
             'id'                    => (int) $variante['id'],
             'nombre'                => $variante['nombre'],
             'familia_id'            => (int) $variante['familia_id'],
-            'familia_nombre'        => $familias[$variante['familia_id']] ?? null,
+            'familia_nombre'        => $familia['nombre'] ?? null,
+            'categoria_id'          => $familia['categoria_id'] ?? null,
+            'categoria_nombre'      => $familia['categoria_nombre'] ?? null,
             'version_validada'      => $validada ? [
                 'id'     => (int) $validada['id'],
                 'numero' => (int) $validada['numero'],

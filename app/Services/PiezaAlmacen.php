@@ -73,6 +73,65 @@ class PiezaAlmacen
         return $rutaRelativa !== null && $rutaRelativa !== '' && is_file($this->absoluta($rutaRelativa));
     }
 
+    /**
+     * Tamaño de un fichero del almacén, en bytes. Se calcula del disco, no
+     * de una columna de la base de datos: ni las referencias/renders ni las
+     * versiones guardan su tamaño en ninguna tabla, y duplicarlo ahí solo
+     * para esto se desincronizaría en cuanto el fichero cambiase de sitio
+     * (papelera, purga...). `null` si no existe — que no ocupe nada es un
+     * dato válido, no un error.
+     */
+    public function tamano(?string $rutaRelativa): ?int
+    {
+        if (!$this->existe($rutaRelativa)) {
+            return null;
+        }
+
+        $bytes = filesize($this->absoluta($rutaRelativa));
+
+        return $bytes !== false ? $bytes : null;
+    }
+
+    /**
+     * Cuánto ocupa TODO el almacén, papelera incluida (estadísticas, spec
+     * "¿hace falta purgar?"). Recorre el disco de verdad en vez de sumar
+     * columnas: ninguna tabla guarda el tamaño de referencias/renders, y una
+     * suma parcial daría un total que no cuadra con lo que de verdad ocupa
+     * `writable/piezas`.
+     */
+    public function tamanoTotal(): int
+    {
+        return $this->tamanoDirectorio($this->base);
+    }
+
+    /**
+     * Solo la papelera: lo que se liberaría de verdad si se purgara ahora
+     * (`piezas:purgar`), sin esperar a los 30 días.
+     */
+    public function tamanoPapelera(): int
+    {
+        return $this->tamanoDirectorio($this->base . DIRECTORY_SEPARATOR . 'papelera');
+    }
+
+    private function tamanoDirectorio(string $ruta): int
+    {
+        if (!is_dir($ruta)) {
+            return 0;
+        }
+
+        $total = 0;
+        $iterador = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($ruta, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterador as $fichero) {
+            if ($fichero->isFile()) {
+                $total += $fichero->getSize();
+            }
+        }
+
+        return $total;
+    }
+
     public function hash(string $rutaRelativa): string
     {
         $absoluta = $this->absoluta($rutaRelativa);

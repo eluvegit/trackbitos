@@ -11,6 +11,17 @@ $badges = [
 ];
 $etiqueta = fn($v) => 'v' . sprintf('%03d', (int) $v['numero']);
 
+/** KB para lo pequeño, MB con un decimal en cuanto pasa de 1 MB — un .blend de IA en 102400 KB no se lee de un vistazo. */
+$tamanoLegible = function (?int $bytes): string {
+    if ($bytes === null) {
+        return '';
+    }
+
+    return $bytes >= 1024 * 1024
+        ? number_format($bytes / (1024 * 1024), 1) . ' MB'
+        : number_format($bytes / 1024, 0) . ' KB';
+};
+
 /**
  * Por qué esta versión no admite ciertos verbos. Va como texto visible bajo
  * los botones y no como title: un botón deshabilitado no recibe eventos de
@@ -33,7 +44,20 @@ $boton = function (bool $activo, string $color, string $modal, string $texto): s
     );
 };
 
-$porQueNo = function (array $v) use ($acciones): array {
+/**
+ * "Devolver a trabajo" reabre una rama partiendo de esta versión — pero si
+ * la rama ya abierta parte justo de ella (p. ej. recién promocionada, o
+ * "devolver" ya usado antes y todavía sin subir nada), pulsarlo otra vez
+ * cerraría esa rama vacía para abrir una idéntica: nada que devolver, solo
+ * confusión ("¿qué abandono si no hay nada?"). Aparte de $acciones para que
+ * $porQueNo pueda decir POR QUÉ, no solo que no se puede.
+ */
+$puedeDevolver = function (array $v) use ($acciones): bool {
+    return $acciones['puede_devolver']
+        && (int) ($acciones['rama_desde_version_id'] ?? 0) !== (int) $v['id'];
+};
+
+$porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
     $lineas = [];
 
     $lineas[] = match ($v['estado']) {
@@ -45,8 +69,13 @@ $porQueNo = function (array $v) use ($acciones): array {
         default      => '',
     };
 
-    if (!$acciones['puede_devolver'] && isset($acciones['motivos']['devolver'])) {
-        $lineas[] = 'Devolver a trabajo: ' . $acciones['motivos']['devolver'];
+    if (!$puedeDevolver($v)) {
+        if ((int) ($acciones['rama_desde_version_id'] ?? 0) === (int) $v['id']) {
+            $lineas[] = 'Ya tienes la rama de trabajo abierta a partir de esta misma versión — sigue '
+                . 'trabajando ahí (trackbitos abrir/bajar), no hace falta volver a abrirla.';
+        } elseif (isset($acciones['motivos']['devolver'])) {
+            $lineas[] = 'Devolver a trabajo: ' . $acciones['motivos']['devolver'];
+        }
     }
 
     return array_filter($lineas);
@@ -63,7 +92,14 @@ $porQueNo = function (array $v) use ($acciones): array {
     <?php if (!empty($variante['sku'])): ?>
         <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
     <?php endif; ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre y SKU"
+    <?php if (!empty($variante['enlace_original'])): ?>
+        <?php // El máster de máxima calidad vive fuera del tracker (Drive u otro sitio): esto es solo el enlace. ?>
+        <a href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener"
+            class="badge text-bg-light text-muted border text-decoration-none" title="Abrir el original de máxima calidad">
+            <i class="bi bi-box-arrow-up-right"></i> original
+        </a>
+    <?php endif; ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
         data-bs-toggle="modal" data-bs-target="#modalSku">
         <i class="bi bi-pencil"></i>
     </button>
@@ -78,20 +114,37 @@ $porQueNo = function (array $v) use ($acciones): array {
 
 <?php
 /**
- * Nombre y SKU en el mismo modal pero en DOS formularios, cada uno con su
- * botón: son dos verbos distintos y cada uno puede negarse por su cuenta
- * (un nombre repetido, un SKU que ya tiene otra variante). Con un solo
- * envío, el fallo de uno dejaría al otro aplicado a medias.
+ * Nombre de pieza, nombre de variante, SKU y enlace al original en el mismo
+ * modal pero cada uno en su propio formulario: son verbos distintos y cada
+ * uno puede negarse por su cuenta (un nombre repetido, un SKU que ya tiene
+ * otra variante). Con un solo envío, el fallo de uno dejaría a los demás
+ * aplicados a medias.
  */
 ?>
 <div class="modal fade" id="modalSku" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title">Editar <?= esc($variante['nombre']) ?></h6>
+                <h6 class="modal-title">Editar <?= esc($familia['nombre']) ?> / <?= esc($variante['nombre']) ?></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <label class="form-label small mb-1">Nombre de la pieza</label>
+                <p class="small text-muted mb-2">
+                    Cómo se llama la pieza entera (<code>Flores</code>, <code>Lupa</code>…), aparte de
+                    cuántas variantes tenga dentro.
+                </p>
+                <form method="post" class="d-flex gap-1 mb-3"
+                    action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/nombre') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                    <input type="text" name="nombre" class="form-control form-control-sm"
+                        value="<?= esc($familia['nombre'], 'attr') ?>" maxlength="150" required>
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <hr>
+
                 <label class="form-label small mb-1">Nombre de la variante</label>
                 <p class="small text-muted mb-2">
                     Cómo se llama esta línea de diseño dentro de <strong><?= esc($familia['nombre']) ?></strong>
@@ -110,11 +163,28 @@ $porQueNo = function (array $v) use ($acciones): array {
 
                 <label class="form-label small mb-1">SKU</label>
                 <p class="small text-muted mb-2">Referencia manual, para buscar la pieza cuando alguien te la pida por su código.</p>
-                <form method="post" class="d-flex gap-1"
+                <form method="post" class="d-flex gap-1 mb-3"
                     action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/sku') ?>">
                     <?= csrf_field() ?>
                     <input type="text" name="sku" class="form-control form-control-sm"
                         value="<?= esc($variante['sku'] ?? '', 'attr') ?>" placeholder="p. ej. FLOR-001" maxlength="50">
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <hr>
+
+                <label class="form-label small mb-1">Enlace al original</label>
+                <p class="small text-muted mb-2">
+                    Dónde vive el máster de máxima calidad (p. ej. la malla en bruto de una
+                    generación por IA, antes de decimar y limpiar de texturas) — normalmente
+                    fuera de aquí, en Drive o similar. Esto solo guarda el enlace, no el fichero.
+                </p>
+                <form method="post" class="d-flex gap-1"
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/enlace-original') ?>">
+                    <?= csrf_field() ?>
+                    <input type="url" name="enlace_original" class="form-control form-control-sm"
+                        value="<?= esc($variante['enlace_original'] ?? '', 'attr') ?>"
+                        placeholder="https://drive.google.com/..." maxlength="500">
                     <button class="btn btn-sm btn-primary">Guardar</button>
                 </form>
             </div>
@@ -135,16 +205,58 @@ $porQueNo = function (array $v) use ($acciones): array {
     que quedó a medias en la otra máquina.
 -->
 <?php if ($bloqueo): ?>
-    <div class="alert alert-warning py-2 mb-2">
-        <i class="bi bi-lock-fill"></i>
-        <strong>Sesión abierta en <?= esc($bloqueo['maquina']) ?></strong>
-        — sesión <?= $bloqueo['numero'] ?>, desde
-        <?= $bloqueo['dias'] > 0 ? 'hace ' . $bloqueo['dias'] . ' día(s)' : 'hoy' ?>
-        (<?= esc($bloqueo['desde']) ?>).
-        <div class="small mt-1">
-            Esa máquina tiene el bloqueo: hasta que cierre la sesión, no se puede abrir otra ni promocionar.
+    <div class="alert alert-warning py-2 mb-2 d-flex flex-wrap align-items-center gap-2">
+        <div class="flex-grow-1">
+            <i class="bi bi-lock-fill"></i>
+            <strong>Sesión abierta en <?= esc($bloqueo['maquina']) ?></strong>
+            — sesión <?= $bloqueo['numero'] ?>, desde
+            <?= $bloqueo['dias'] > 0 ? 'hace ' . $bloqueo['dias'] . ' día(s)' : 'hoy' ?>
+            (<?= esc($bloqueo['desde']) ?>).
+            <div class="small mt-1">
+                Esa máquina tiene el bloqueo: hasta que cierre la sesión, no se puede abrir otra ni promocionar.
+                <?php if ($bloqueo['forzable']): ?>
+                    Si esa copia ya no existe (se borró la carpeta sin subir ni cerrar), la única salida es forzar el cierre.
+                <?php endif; ?>
+            </div>
         </div>
+        <?php // Solo si no tiene descarga asociada: si la tiene, se cierra desde el aviso de "Descarga sin cerrar" de abajo, que se lleva la sesión por delante. ?>
+        <?php if ($bloqueo['forzable']): ?>
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                data-bs-toggle="modal" data-bs-target="#modalForzarSesion">
+                Forzar cierre
+            </button>
+        <?php endif; ?>
     </div>
+
+    <?php if ($bloqueo['forzable']): ?>
+        <div class="modal fade" id="modalForzarSesion" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" action="<?= site_url('piezas/sesion/' . $bloqueo['id'] . '/forzar-cierre') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Forzar el cierre de la sesión</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small mb-2">
+                            Esto es la válvula de escape para cuando <?= esc($bloqueo['maquina']) ?> ya no puede
+                            cerrarla (disco formateado, carpeta borrada, equipo roto). <strong>No hay prueba de que
+                            no se perdiera trabajo</strong>, y por eso queda registrado como cierre forzado, distinto
+                            de un cierre normal.
+                        </p>
+                        <label class="form-label small">Motivo (obligatorio)</label>
+                        <textarea name="motivo" class="form-control form-control-sm" rows="2"
+                            placeholder="Borré la carpeta sin acordarme de subir" required></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button class="btn btn-sm btn-danger">Forzar cierre</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php foreach ($pendientes as $p): ?>
@@ -305,16 +417,40 @@ $porQueNo = function (array $v) use ($acciones): array {
                             </button>
                         </div>
 
-                        <!-- STL para imprimir: aparte del .blend, inmutable una vez adjuntado -->
+                        <!--
+                            STL para imprimir: aparte del .blend, inmutable una vez adjuntado.
+                            Las dos descargas (blend siempre, STL cuando ya existe) comparten el
+                            mismo azul sólido — es el color de "aquí hay un fichero listo para
+                            bajar". "Adjuntar STL" se queda en gris outline a propósito: es una
+                            acción pendiente, no una descarga, y el contraste de color es lo que
+                            dice de un vistazo si la versión ya tiene STL o todavía no.
+                        -->
                         <div class="d-flex flex-wrap gap-1 mt-2">
-                            <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>"
-                                class="btn btn-sm btn-outline-secondary py-0 px-2">
+                            <?php
+                                /**
+                                 * Antes era un enlace directo con el aviso escrito debajo, a
+                                 * secas, en cada versión del historial — fácil de saltarse sin
+                                 * leerlo. Ahora hace falta pasar por el modal para llegar al
+                                 * enlace de verdad: no evita nada (spec 0, "se niega y explica",
+                                 * no "pregunta ¿estás seguro?"), pero sí obliga a ver la
+                                 * advertencia una vez antes de descargar, no solo a convivir con
+                                 * ella de fondo.
+                                 */
+                            ?>
+                            <button type="button" class="btn btn-sm btn-primary py-0 px-2"
+                                data-bs-toggle="modal" data-bs-target="#modalDescargarBlend<?= $v['id'] ?>">
                                 <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
-                            </a>
+                                <?php if ($v['tamano_blend'] !== null): ?>
+                                    <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
+                                <?php endif; ?>
+                            </button>
                             <?php if (!empty($v['ruta_stl'])): ?>
                                 <a href="<?= site_url('piezas/version/' . $v['id'] . '/stl/descargar') ?>"
-                                    class="btn btn-sm btn-outline-success py-0 px-2">
+                                    class="btn btn-sm btn-primary py-0 px-2">
                                     <i class="bi bi-file-earmark-arrow-down"></i> Descargar STL
+                                    <?php if ($v['tamano_stl'] !== null): ?>
+                                        <span class="opacity-75">(<?= $tamanoLegible($v['tamano_stl']) ?>)</span>
+                                    <?php endif; ?>
                                 </a>
                                 <?php if ($v['estado'] === 'validada'): ?>
                                     <?php if (in_array((int) $v['id'], $carrito, true)): ?>
@@ -341,17 +477,6 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <?php endif; ?>
                         </div>
 
-                        <!--
-                            Aviso, no tooltip (spec 7.1): esta descarga no abre asiento,
-                            así que el sistema no sabe que esa copia existe. Va en una
-                            sola línea a propósito — se repite en cada versión del
-                            historial, y el porqué completo está en "Desde tu máquina".
-                        -->
-                        <div class="text-warning-emphasis small mt-1">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            Ese <code>.blend</code> <strong>no queda registrado</strong>: para mirar, no para trabajar.
-                        </div>
-
                         <div class="d-flex flex-wrap gap-1 mt-2">
                             <!--
                                 Botones siempre visibles, deshabilitados con explicación cuando
@@ -361,13 +486,48 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <?= $boton($v['estado'] === 'borrador', 'info', 'modalImpresa' . $v['id'], 'Marcar impresa') ?>
                             <?= $boton($v['estado'] === 'impresa', 'success', 'modalValidar' . $v['id'], 'Validar') ?>
                             <?= $boton(in_array($v['estado'], ['borrador', 'impresa'], true), 'danger', 'modalDescartar' . $v['id'], 'Descartar') ?>
-                            <?= $boton($acciones['puede_devolver'], 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
+                            <?= $boton($puedeDevolver($v), 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
                             <?= $boton(true, 'primary', 'modalDerivar' . $v['id'], 'Derivar variante') ?>
                         </div>
 
                         <?php foreach ($porQueNo($v) as $linea): ?>
                             <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> <?= esc($linea) ?></div>
                         <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!--
+                    Descargar .blend: esta descarga no abre asiento (no pasa por el
+                    cliente, que es el único que sabe identificar la máquina), así que
+                    el sistema no se entera de que esa copia existe. El modal obliga a
+                    ver el porqué una vez antes de descargar, en vez de convivir con un
+                    aviso de fondo que se acaba dejando de leer. Explicación completa en
+                    la tarjeta "Desde tu máquina", más abajo.
+                -->
+                <div class="modal fade" id="modalDescargarBlend<?= $v['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h6 class="modal-title">Descargar <?= $etiqueta($v) ?></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-warning-emphasis small">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Ese <code>.blend</code> <strong>no queda registrado</strong>: sirve para mirarlo o
+                                    para añadirlo como referencia a otra escena, no para trabajar sobre él. El
+                                    sistema no sabe que esta copia existe, así que lo que hagas y subas desde
+                                    aquí no cuadraría con ningún asiento — y en algún momento la carpeta donde la
+                                    guardes será la que borres tú mismo, no algo que el módulo purgue por su cuenta.
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <a href="<?= site_url('piezas/version/' . $v['id'] . '/blend/descargar') ?>" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-file-earmark-arrow-down"></i> Descargar
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -382,8 +542,14 @@ $porQueNo = function (array $v) use ($acciones): array {
                             </div>
                             <div class="modal-body">
                                 <label class="form-label small">Parámetros de impresión</label>
+                                <?php if (!empty($sugerenciaImpresion)): ?>
+                                    <p class="small text-muted mb-1">
+                                        Precargado con lo que se usó la última vez que se imprimió esta pieza —
+                                        ajusta lo que cambie y deja lo demás igual.
+                                    </p>
+                                <?php endif; ?>
                                 <textarea name="params_impresion" class="form-control form-control-sm" rows="2"
-                                    placeholder="exposición 2.4s, capa 0.05mm, 5 capas base"></textarea>
+                                    placeholder="exposición 2.4s, capa 0.05mm, 5 capas base, posición en la placa: borde derecho, inclinada 45°"><?= esc($sugerenciaImpresion ?? '') ?></textarea>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -557,12 +723,134 @@ $porQueNo = function (array $v) use ($acciones): array {
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
+
+        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
+                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
+                        <div class="text-muted small">en disco</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
+                        <div class="text-muted small">intento(s) de impresión</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
+                        <div class="text-muted small">sesión(es) de trabajo</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
+                        <div class="text-muted small">día(s) desde que se creó</div>
+                    </div>
+                </div>
+                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
+                    <div class="small text-muted mt-2">
+                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
+                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
+                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!--
+            "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
+            la escena de esta variante. Puramente informativo — no toca
+            origen_version_id ni la sincronización.
+        -->
+        <div class="d-flex align-items-center gap-2 mt-3 mb-2">
+            <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Compuesta de</h6>
+            <?php if (!empty($versionesParaComponer)): ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
+                    data-bs-toggle="modal" data-bs-target="#modalComponente" title="Añadir">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            <?php endif; ?>
+        </div>
+
+        <?php if (empty($componentes)): ?>
+            <p class="text-muted small">
+                Nada anotado. Si esta pieza incluye otras en la misma escena — un ensamblaje, o
+                una que dejaste al lado para partir de ella — añádelas aquí.
+            </p>
+        <?php else: ?>
+            <?php
+                $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
+            ?>
+            <ul class="list-group list-group-flush mb-2">
+                <?php foreach ($componentes as $c): ?>
+                    <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
+                    <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
+                        <div class="flex-grow-1">
+                            <?php if ($v && $va && $fa): ?>
+                                <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
+                                    <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
+                                </a>
+                                <?php if (isset($avisoEstado[$v['estado']])): ?>
+                                    <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="text-muted">(esa pieza ya no existe)</span>
+                            <?php endif; ?>
+                            <?php if (!empty($c['notas'])): ?>
+                                <div class="small text-muted"><?= esc($c['notas']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <form method="post" action="<?= site_url('piezas/componente/' . (int) $c['id'] . '/borrar') ?>">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Quitar"><i class="bi bi-x"></i></button>
+                        </form>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+        <?php if (!empty($versionesParaComponer)): ?>
+            <div class="modal fade" id="modalComponente" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <form class="modal-content" method="post"
+                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/componente') ?>">
+                        <?= csrf_field() ?>
+                        <div class="modal-header">
+                            <h6 class="modal-title">Añadir a "Compuesta de"</h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="small text-muted mb-2">
+                                Qué otra pieza (en qué versión) estaba también en esta escena. Es solo
+                                para recordarlo — no afecta a nada del sistema.
+                            </p>
+                            <label class="form-label small">Pieza / versión</label>
+                            <select name="version_componente_id" class="form-select form-select-sm mb-2" required>
+                                <?php foreach ($versionesParaComponer as $v): ?>
+                                    <option value="<?= (int) $v['id'] ?>">
+                                        <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
+                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($v['estado']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label class="form-label small">Notas (opcional)</label>
+                            <input type="text" name="notas" class="form-control form-control-sm"
+                                placeholder="p. ej. para partir de ahí" maxlength="255">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button class="btn btn-sm btn-primary">Añadir</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div class="col-lg-5">
 
         <!-- Trabajo en curso -->
-        <div class="card shadow-sm mb-3">
+        <div class="card shadow-sm mb-3" id="sesiones-trabajo">
             <div class="card-body p-3">
                 <h6 class="mb-2"><i class="bi bi-tools"></i> Trabajo en curso</h6>
 
@@ -606,7 +894,7 @@ $porQueNo = function (array $v) use ($acciones): array {
                                         <div class="text-muted">
                                             subida <?= esc($s['subida_en']) ?>
                                             <?php if (!empty($s['tamano_bytes'])): ?>
-                                                · <?= number_format((int) $s['tamano_bytes'] / 1024, 0) ?> KB
+                                                · <?= $tamanoLegible((int) $s['tamano_bytes']) ?>
                                             <?php endif; ?>
                                         </div>
                                     <?php else: ?>
@@ -614,6 +902,19 @@ $porQueNo = function (array $v) use ($acciones): array {
                                     <?php endif; ?>
                                     <?php if (!empty($s['log'])): ?>
                                         <div class="text-muted fst-italic"><?= esc($s['log']) ?></div>
+                                    <?php endif; ?>
+
+                                    <?php // Cerrada, sin promocionar todavía y sin purgar ya: candidata a liberar sitio a mano (p.ej. una subida de prueba demasiado pesada). ?>
+                                    <?php if (!empty($s['cerrada_en']) && empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
+                                        <form method="post" class="mt-1"
+                                            action="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/descartar-fichero') ?>"
+                                            onsubmit="return confirm('¿Apartar el .blend de la sesión <?= (int) $s['numero'] ?> a la papelera? Sigue en el historial, pero deja de ocupar sitio.');">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Apartar el fichero a la papelera y liberar sitio">
+                                                <i class="bi bi-trash"></i> liberar sitio
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </li>
                             <?php endforeach; ?>

@@ -12,6 +12,11 @@
 | 6 | Interfaz web: ficha de variante y botones de los verbos | ✅ Hecho |
 | 7 | Papelera y purga de sesiones al validar | ✅ Hecho |
 | 8-13 | Imágenes, STL, SKU/galería/placa, descarga web del `.blend`, «Pieza» + variante `base`, categorías y listado | ✅ Hecho (detalle abajo) |
+| 14 | Papelera de piezas (borrar/restaurar/purgar una familia entera) | ✅ Hecho (detalle abajo) |
+| 15 | Auto-actualización del cliente (`trackbitos actualizar`) | ✅ Hecho (detalle abajo) |
+| 16 | `catalogo` por categoría, `variantes <pieza>`, `abrir` ya no pisa ficheros | ✅ Hecho (detalle abajo) |
+| 17 | "Compuesta de": qué otras piezas estaban en la escena de una variante | ✅ Hecho (detalle abajo) |
+| 18 | Enlace al original, liberar sitio de una sesión suelta, y `resolver_variante` más preciso | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -28,7 +33,7 @@ Dónde vive cada cosa:
 **Las siete fases están cerradas.** El módulo funciona de punta a punta: dos máquinas, ficheros
 versionados, asientos que cuadran, web para juzgar versiones y purga automática.
 
-**Fase 8 (añadida tras el cierre, 2026-08-17): imágenes.** `trackbitos variantes` en el cliente
+**Fase 8 (añadida tras el cierre, 2026-08-17): imágenes.** `trackbitos catalogo` en el cliente
 (catálogo desde la terminal, sección 5.1) y referencias/renders en la web (sección 7.4). A
 diferencia del resto del módulo, las imágenes se suben y se sirven directamente desde el
 navegador — no hace falta identidad de máquina para mirar una foto. Migración
@@ -164,6 +169,214 @@ denso agrupado por categoría**, con las quince en una pantalla.
   la pieza entera (1.1), así que se ven iguales desde cualquiera de sus variantes; el formulario
   lleva la variante de vuelta en `volver_a_variante`, y el controlador comprueba que sea de esa
   misma pieza antes de redirigir.
+
+**Fase 14 (2026-08-17/18): papelera de piezas.** Con el catálogo real ya en marcha hacía falta
+poder borrar una pieza que "por lo que sea no convence" — creada de más, duplicada, un
+experimento que no cuajó — sin que fuera un borrado de verdad (invariante 6, extendida ahora a la
+familia entera, no solo a ficheros sueltos).
+
+- Columna `borrado_en` (nullable) en `piezas_familias`: mientras esté vacía la pieza es una pieza
+  normal; en cuanto se pone, desaparece del índice, la galería y `GET /variantes`, y pasa a
+  listarse solo en `/piezas/papelera`.
+- Verbos (`PiezaService`): `borrarFamilia()` — se niega si alguna variante tiene una sesión de
+  trabajo abierta (el bloqueo quedaría huérfano) —, `restaurarFamilia()`, y
+  `purgarFamiliasBorradas($dias = 30)` para el borrado definitivo a los 30 días: aparta a la
+  papelera de ficheros (`PiezaAlmacen::aPapelera`) todo lo que un `.blend`/`.stl`/imagen aún
+  viviera en su sitio original antes de borrar la fila — la cascada de FK se lleva variantes,
+  versiones, ramas, sesiones y descargas.
+- `php spark piezas:purgar` ahora purga las dos papeleras en el mismo paso: primero las piezas
+  (que aparta sus ficheros a la papelera de ficheros), luego la papelera de ficheros por edad —
+  en ese orden, para no purgar por edad un fichero que la purga de piezas acaba de apartar.
+- Web: botón de borrar por fila en el índice (modo «Organizar», con confirmación — como ya hacía
+  borrar categoría), y `/piezas/papelera` con «Restaurar» y los días que quedan antes de la
+  purga.
+
+**Fase 15 (2026-08-17): el cliente se actualiza solo.** `trackbitos.py` vive fuera de este repo,
+copiado a mano en cada máquina (sección 5), así que una mejora en el script no llegaba a las dos
+sin ir a buscarlo. Ahora se avisa solo y se actualiza cuando se le pide, nunca sin pedirlo — el
+principio del módulo es "el sistema se niega y explica", no "el sistema decide por ti".
+
+- **Versión**: constante `VERSION` al principio de `trackbitos.py` (semver simple, `"1.0.0"`).
+  La "oficial" es la que tiene el propio fichero desplegado en el servidor junto al resto de la
+  app — no se guarda aparte en la base de datos, para que no se pueda desincronizar del código
+  real. El servidor la lee por regex de ese mismo fichero (`Api::clienteVersion`).
+- **Aviso automático, actualización manual.** Cada ejecución de `trackbitos` comprueba en
+  silencio si hay versión nueva (`comprobar_version_remota`, timeout corto y propio de 3s) y, si
+  la hay, imprime un aviso de una línea al final — después del comando, nunca antes, para no
+  añadirle latencia a lo que el usuario vino a hacer. Ante cualquier fallo (sin red, sin config
+  todavía, servidor caído) se calla del todo: es un extra, no el motivo de la llamada.
+- **`trackbitos actualizar`** hace la actualización de verdad: compara versiones, descarga
+  `/cliente/descargar` (el mismo fichero, servido por `Api::clienteDescargar`), comprueba que
+  compila como Python antes de tocar nada (una descarga a medias no debe dejar el script roto en
+  disco) y se reemplaza a sí mismo (`Path(__file__).resolve()`). La versión anterior se aparta a
+  la papelera local igual que un `.blend` (invariante 6), no se pisa sin más.
+- **Autenticación**: el mismo token Bearer que el resto de `piezas/api` (filtro `piezasApi`). No
+  hace falta declarar máquina — esto no toca ningún asiento ni sesión, solo lee un fichero.
+
+**Fase 16 (2026-08-18): `catalogo` agrupado por categoría, `variantes <pieza>` nuevo, y "abrir"
+ya no pisa el `.blend` de la pieza anterior.**
+
+- **`trackbitos variantes`** pasó a llamarse **`trackbitos catalogo`** (es lo que ya decía su
+  propia ayuda: "el catálogo completo"). Ahora se sirve agrupado por categoría, en el mismo
+  orden que ya usan el índice y la galería web — `GET /variantes` devuelve además `categorias`
+  (la lista ordenada) y `categoria_id`/`categoria_nombre` por variante. De paso, el endpoint deja
+  de listar variantes de piezas en la papelera (mismo descuido que ya se arregló en `/piezas` y
+  `/piezas/galeria`).
+- **`trackbitos variantes <pieza>`** (nombre libre, reaprovechado): el zoom sobre una pieza
+  concreta — cuántas variantes tiene y cómo se llama cada una. Complementa a `catalogo`, que es
+  la foto completa.
+- **"abrir" apartaba a la papelera el `.blend` sobrante de una pieza anterior — no lo hacía.**
+  Detectado en producción: si se reutiliza una carpeta de trabajo para una pieza distinta sin
+  borrar antes su `.blend` (con `bajar` esto ya no pasaba, el fichero anterior se apartaba solo),
+  `trackbitos subir` encontraba un único fichero — el de la pieza vieja — y lo subía tal cual,
+  **sin avisar**, como si fuera la primera versión de la pieza nueva. Al ser una rama recién
+  estrenada (invariante 8, "rama estrenada") el servidor ni siquiera exige un `hash_padre` que
+  pudiera delatarlo. Arreglado: `abrir` ahora aparta a la papelera cualquier `.blend` que
+  encuentre en la carpeta antes de escribir el `.sesion.json` nuevo, igual que ya hacía `bajar`.
+  La carpeta queda limpia; si se olvida guardar el fichero nuevo, `subir` se niega ("no hay
+  ningún .blend") en vez de subir contenido de otra pieza por error.
+
+**Fase 17 (2026-08-18): "Compuesta de".**
+
+Algunas piezas nuevas son composición de otras ya hechas — un "Mini playmobil" que es varias
+piezas de cuerpo juntas, o una variante que se modela dejando la pieza anterior en la misma
+escena para partir de ella. Hasta ahora no había dónde anotarlo: la única pista era `Completo`
+(sección 11.1), que convive con el problema a base de escribirlo a mano en el `cambio` de cada
+versión — texto libre, nada que se pueda consultar ni que avise si la pieza de la que partiste
+ha cambiado.
+
+- **Tabla `piezas_composiciones`**: `variante_id` (la pieza que compone) → `version_componente_id`
+  (la versión concreta de OTRA pieza que estaba en su escena), con `notas` libre. `UNIQUE
+  (variante_id, version_componente_id)` — no se anota la misma dos veces. `ON DELETE CASCADE` en
+  las dos FK: si la variante o la pieza referenciada se purgan de la papelera, la fila deja de
+  tener sentido y se va sola.
+- **Deliberadamente aparte de `origen_version_id`** (el campo que ya tenía `piezas_variantes`,
+  usado por `derivarVariante` y por la sincronización para la cadena de hashes, spec 4.4 —
+  "tras promocionar"). Ese tiene que seguir siendo uno solo, porque es de qué fichero concreto se
+  partió de verdad. "Compuesta de" es una lista aparte, puramente informativa: no afecta a ningún
+  invariante, no se recalcula, no se promociona ni se fusiona sola — solo dice "esto también
+  estaba en la escena". No hay límite de cuántas piezas se anoten (el caso que la motivó era
+  justo "de muchas a una", que `origen_version_id` no podía cubrir por ser un campo único).
+- **Verbos** (`PiezaService`): `declararComponente(varianteId, versionComponenteId, notas?)` —
+  rechaza auto-referencia (una pieza no puede componerse de una versión de sí misma) y duplicados
+  — y `quitarComponente(composicionId)`.
+- **Ficha de variante**: sección "Compuesta de", con las piezas ya anotadas (enlace a su ficha,
+  notas, y un aviso pasivo si esa versión concreta ya quedó `superada` o `descartada` — nunca se
+  actualiza sola) y un selector para añadir cualquier versión de cualquier otra pieza activa
+  (self-referencia excluida en la propia lista). Rutas: `POST piezas/variante/{id}/componente`,
+  `POST piezas/componente/{id}/borrar`.
+
+**Fase 18 (2026-08-18): enlace al original, liberar sitio de una sesión suelta, y
+`resolver_variante` más preciso.** Motivado por generar piezas con IA (image-to-3D): la malla
+en bruto puede pesar 100 MB frente a los ~350 KB de un modelo hecho a mano (sección 0) — un
+peso que no tiene sentido versionar en el propio servidor.
+
+- **`enlace_original`** (`piezas_variantes`, tras `notas`): dónde vive el máster de máxima
+  calidad — normalmente fuera del tracker, en Drive o similar, porque no necesita bloqueo entre
+  máquinas ni versionado, solo poder volver a él. Solo se guarda el enlace, nunca el fichero.
+  Editable desde la ficha (mismo modal que nombre/SKU); se muestra como badge "original" con
+  enlace directo cuando hay uno. Ruta: `POST piezas/variante/{id}/enlace-original`.
+- **Liberar sitio de una sesión suelta** (`PiezaService::descartarFicheroSesion`): aparta a mano
+  el `.blend` de una sesión ya cerrada y sin promocionar — p. ej. una subida de prueba
+  demasiado pesada que se va a reemplazar por una reducida. Es lo mismo que ya hacía
+  `purgarSesionesDe` al validar (invariante 5), pero disparado antes de ese punto: la rama sigue
+  abierta, así que sin esto el fichero se queda ocupando sitio para siempre (nada en el módulo
+  llega nunca a purgar esa rama si no se promociona). La fila no se borra, solo se marca
+  `purgada` y se mueve el fichero — igual que el resto del módulo (invariante 6). Se niega si la
+  sesión sigue abierta o si tiene una descarga sin cerrar. Botón "liberar sitio" en la ficha,
+  junto a cada sesión cerrada y sin purgar. Ruta: `POST piezas/sesion/{id}/descartar-fichero`.
+- **`resolver_variante` (cliente) más preciso.** Con el catálogo real, el emparejamiento por
+  subcadenas se quedaba corto: escribir `brazo` para abrir la pieza "Brazo" también encajaba con
+  "Brazo integral" y "Brazo y mano" por compartir la palabra, y ni siquiera `"brazo base"`
+  desambiguaba (las tres piezas tienen una variante `base`, y la subcadena "base" aparece en las
+  tres). Ahora el nombre exacto de PIEZA gana sobre cualquiera que solo lo contenga (como ya
+  pasaba con el nombre de variante), y antes de caer al emparejamiento por trozos se prueba
+  "pieza variante" completos y exactos en cualquier corte de palabras — así `"brazo base"`
+  encuentra justo la pieza "Brazo", no las tres.
+- **Listados de coincidencias legibles.** Cuando `resolver_variante` no encuentra nada o
+  encuentra varias, el mensaje ya no es una única línea con todo separado por comas (ilegible
+  pasadas diez piezas) — es el mismo formato agrupado por categoría que usa `catalogo`, una
+  pieza por línea, con "base" (la variante que se crea sola) oculto porque no aporta nada
+  repetido en casi todas las líneas.
+- **Las confirmaciones de `abrir`/`bajar`/`ver` ya identifican la pieza, no solo la variante.**
+  Antes decían solo "base · rama … · sesión … abierta" — indistinguible entre piezas distintas,
+  porque casi todas comparten esa misma variante. El servidor manda ahora también el nombre de
+  la familia en la descarga (cabecera `X-Familia-Nombre`, junto a `X-Variante-Nombre`;
+  `PiezaSyncService::entregar` la añade al buscar la variante), y el cliente guarda la
+  identidad completa (`nombre_completo`: "Pieza / variante") en el `.sesion.json` en vez del
+  nombre suelto — así todo lo que ya lee de ahí (`estado`, `cerrar`, `promocionar`...) queda
+  arreglado sin tocarlo aparte. La sugerencia de "empieza de cero: trackbitos abrir …" usa ahora
+  el id numérico, no el nombre, para que sea pegable sin ambigüedad.
+- **Renombrar la pieza entera** (`PiezaService::renombrarFamilia`, lápiz en la cabecera de la
+  ficha — mismo modal que ya editaba nombre de variante/SKU/enlace). Hasta ahora solo se podía
+  renombrar la variante (`renombrarVariante`); la pieza en sí no tenía forma de corregirse una
+  vez creada. Sin comprobación de unicidad, igual que `crearFamilia`. Ruta:
+  `POST piezas/familia/{id}/nombre`.
+- **Alias cortos en el cliente** (sección 5.1): una letra para los seis comandos de uso diario
+  (`e`, `a`, `b`, `v`, `s`, `c`, `p` para estado/abrir/bajar/ver/subir/cerrar/promocionar) y dos
+  para el resto (`pa`, `ca`, `va`, `ac`), vía `add_parser(..., aliases=[...])` de argparse — el
+  nombre completo se sigue aceptando igual. Cuidado al leer `args.comando` en `main()`: con
+  alias, guarda lo que se escribió de verdad ("ac"), no el nombre canónico ("actualizar"), así
+  que la comprobación de "no comprobar versión nueva tras `actualizar`" compara `args.func`
+  (la función ya resuelta), no la cadena.
+- **"Marcar impresa" sugiere los parámetros de la última vez.** El textarea de exposición/capa/
+  posición en la placa salía siempre en blanco, con solo un ejemplo genérico de placeholder —
+  aunque la posición en la placa rara vez cambia entre reimpresiones de la misma pieza.
+  `Web::variante()` busca ahora el `params_impresion` no vacío más reciente entre TODAS las
+  versiones de la variante (`$sugerenciaImpresion`) y precarga el textarea con él, editable; el
+  placeholder de ejemplo menciona también la posición en la placa, no solo exposición/capa.
+- **Cuánto ocupa cada fichero, y cuánto el módulo entero.** `PiezaAlmacen::tamano()` calcula el
+  tamaño de un fichero del almacén leyendo el disco (ninguna tabla guarda el tamaño de
+  referencias/renders/versiones, así que no hay columna que consultar); se usa en la ficha junto
+  a "Descargar .blend"/"Descargar STL" de cada versión, y las sesiones ya mostraban el suyo.
+  `PiezaAlmacen::tamanoTotal()`/`tamanoPapelera()` recorren `writable/piezas` entero (o solo su
+  subcarpeta `papelera/`) para las estadísticas globales — nueva pantalla `/piezas/estadisticas`
+  (icono en la cabecera del índice): total del almacén, cuánto de eso está en la papelera (lo
+  que se liberaría con `piezas:purgar` sin esperar a los 30 días) y qué piezas concretas pesan
+  más (suma de sus versiones + sesiones, apartadas o no), para saber cuál aligerar primero con
+  el botón "liberar sitio" (Fase 18) en vez de adivinarlo.
+- **El listado principal distingue la línea de vida, no solo "tiene versión buena o no".**
+  Antes, cualquier pieza sin versión validada se veía igual ("sin versión buena"), tanto la que
+  nunca se ha intentado imprimir como la que ya se probó y falló. `Web::resumen()` añade
+  `ultima_version_estado` (el estado de la versión más reciente por número) y el índice pinta
+  tres casos distintos cuando no hay validada: **impresa, sin validar** (badge info — se imprimió,
+  falta juzgarla) y **última descartada** (badge danger — se intentó y no sirvió, toca rehacerla),
+  dejando "sin versión buena" solo para cuando de verdad no se ha llegado a imprimir nada.
+- **Tarjeta de estadísticas en la ficha**, justo debajo de la que dice cuál es la versión buena:
+  tamaño en disco (desglosado entre versiones y sesiones, para saber si el peso está en lo que
+  importa o en trabajo intermedio que ya podría aligerarse), intentos de impresión (versiones
+  que no se quedaron en borrador), sesiones de trabajo totales, y días desde que se creó.
+  `Web::pesoDeVariante()` reutiliza el mismo cálculo que ya usaba `estadisticas()` por familia,
+  ahora también por variante suelta.
+- **El índice pasa de tarjetas con badges que se envuelven a una tabla real.** Con el catálogo ya
+  grande, las filas de `list-group-item` con badges en `flex-wrap` se leían mal: cada fila
+  envolvía en un sitio distinto según cuántos avisos tuviera, sin ninguna columna alineada. Ahora
+  es una única `<table>` para todo el listado (columnas: Pieza, SKU, Estado, Versiones, Aviso, y
+  una de Organizar que solo aparece en ese modo) — un `<table>` no puede llevar un `<div>` como
+  hijo directo, así que cada categoría son dos `<tbody>` consecutivos (uno de cabecera, siempre
+  visible; otro con el `id="cat-N"` de siempre, plegable) en vez del `<div data-grupo>` que las
+  envolvía antes. Las filas de variante (cuando hay más de una) llevan `data-subpieza` en vez de
+  `data-pieza` — mismo `data-buscar` que su fila de pieza, para que el buscador las oculte juntas
+  — pero fuera del recuento de "cuántas piezas hay" en la cabecera de cada categoría, que sigue
+  contando solo `data-pieza`.
+- **Reordenada la ficha**: versión buena → historial → estadísticas → "Compuesta de" → resto.
+  Antes estadísticas y "Compuesta de" salían justo debajo de la versión buena, antes del propio
+  historial.
+- **"Descargar .blend" pasa por un modal de aviso.** Antes era un enlace directo con una línea de
+  aviso escrita debajo en cada versión del historial ("no queda registrado: para mirar, no para
+  trabajar") — fácil de dejar de leer de puro repetida. Ahora el botón abre un modal
+  (`modalDescargarBlend{id}`) con la advertencia completa (incluye que la carpeta donde se
+  guarde es responsabilidad de quien la baja, no algo que el módulo purgue solo) y el enlace de
+  descarga de verdad dentro. No es una barrera (spec 0: "se niega y explica", no "¿estás
+  seguro?") — sigue siendo una descarga libre, solo obliga a verla una vez antes de cada bajada.
+- **"Devolver a trabajo" ya no se ofrece en la versión de la que la rama abierta ya parte.**
+  Detectado en producción: tras promocionar (o tras un "devolver" anterior sin subir nada
+  todavía), la rama abierta ya arranca de esa versión — pulsar "Devolver a trabajo" ahí mismo
+  cerraría esa rama vacía para abrir una idéntica, un no-operación disfrazada de advertencia
+  seria ("¿estás seguro de abandonar…?") sin nada real que abandonar. `Web::accionesDisponibles()`
+  expone ahora `rama_desde_version_id`; la ficha compara cada versión contra ese id
+  (`$puedeDevolver($v)`) y desactiva el botón justo en esa versión con su propio motivo — el resto
+  de versiones (superadas, descartadas de ramas ya cerradas) lo siguen ofreciendo con normalidad.
 
 ---
 
@@ -462,17 +675,23 @@ Configuración en `~/.trackbitos/config.json`: URL base, token de API, **UUID de
 ### 5.1 Comandos
 
 ```
-trackbitos estado          # el más usado — diagnóstico completo          ✅ hecho
-trackbitos abrir <variante>        # sesión sin descargar: variante estrenada  ✅ hecho
-trackbitos bajar [<variante>]                                             ✅ hecho
-trackbitos ver <variante>          # descarga de consulta, sin abrir sesión  ✅ hecho
-trackbitos subir [--log "..."]                                            ✅ hecho
-trackbitos cerrar                                                         ✅ hecho
-trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero  ✅ hecho
-trackbitos promocionar --cambio "..." [--medidas "..."]                   ✅ hecho
-trackbitos papelera                # qué hay apartado y cuándo caduca    ✅ hecho
-trackbitos variantes               # catálogo completo, agrupado por familia ✅ hecho
+trackbitos estado      (e)   # el más usado — diagnóstico completo          ✅ hecho
+trackbitos abrir       (a)   <variante>  # sesión sin descargar: variante estrenada  ✅ hecho
+trackbitos bajar       (b)   [<variante>]                                   ✅ hecho
+trackbitos ver         (v)   <variante>  # descarga de consulta, sin abrir sesión  ✅ hecho
+trackbitos subir       (s)   [--log "..."]                                  ✅ hecho
+trackbitos cerrar      (c)                                                  ✅ hecho
+trackbitos cerrar --sin-cambios   # cierra la descarga sin subir fichero    ✅ hecho
+trackbitos promocionar (p)   --cambio "..." [--medidas "..."]               ✅ hecho
+trackbitos papelera    (pa)  # qué hay apartado y cuándo caduca             ✅ hecho
+trackbitos catalogo    (ca)  # catálogo completo, agrupado por categoría    ✅ hecho
+trackbitos variantes   (va)  <pieza>  # cuántas variantes tiene una pieza y cómo se llaman ✅ hecho
+trackbitos actualizar  (ac)  # comprueba y aplica una versión nueva del cliente  ✅ hecho
 ```
+
+Alias cortos entre paréntesis (`trackbitos a "perro"` = `trackbitos abrir "perro"`): una letra para
+los seis de uso diario, dos para el resto, elegidos para no chocar entre sí. El nombre completo
+sigue funcionando igual — es azúcar, no un modo nuevo.
 
 La papelera local se purga sola a los 30 días, aprovechando cualquier ejecución del script:
 son dos máquinas de escritorio que se encienden a ratos, y un cron en cada una sería una pieza
@@ -525,7 +744,9 @@ Toda escritura declara además la máquina en la cabecera **`X-Maquina-Uuid`** (
 
 ```
 POST /maquina/registrar                  { uuid, hostname, so } → alta o ping        ✅ hecho
-GET  /variantes                          lista con estado resumido                    ✅ hecho
+GET  /cliente/version                    versión del trackbitos.py desplegado         ✅ hecho
+GET  /cliente/descargar                  el propio fichero, para "trackbitos actualizar" ✅ hecho
+GET  /variantes                          lista con estado resumido + categoría          ✅ hecho
 GET  /variante/{id}/estado               rama abierta, última sesión, hash nube,      ✅ hecho
                                          origen de descarga, bloqueo y pendientes
 POST /variante/{id}/sesion/abrir         409 si ya hay sesión abierta                 ✅ hecho
@@ -548,7 +769,7 @@ POST /variante/derivar                   { origen_version_id, nombre }          
 
 El servidor **recalcula el hash** de todo fichero recibido y rechaza la subida (422) si no coincide con el declarado. Es una comprobación distinta e independiente de la del `hash_padre` (409): una responde "¿me ha llegado entero lo que dices?", la otra "¿parte de la copia que yo te entregué?".
 
-Las cabeceras del asiento que devuelve una descarga: `X-Hash-Blend`, `X-Descarga-Id`, `X-Variante-Id`, `X-Variante-Nombre`, `X-Rama-Id`, `X-Rama-Nombre`, `X-Sesion-Id`, `X-Sesion-Numero`, `X-Origen-Tipo`, `X-Origen-Numero`. El cliente las vuelca en su `.sesion.json`.
+Las cabeceras del asiento que devuelve una descarga: `X-Hash-Blend`, `X-Descarga-Id`, `X-Variante-Id`, `X-Variante-Nombre`, `X-Familia-Nombre`, `X-Rama-Id`, `X-Rama-Nombre`, `X-Sesion-Id`, `X-Sesion-Numero`, `X-Origen-Tipo`, `X-Origen-Numero`. El cliente las vuelca en su `.sesion.json`.
 
 Códigos de error: 404 no encontrado, 403 máquina equivocada, 409 el asiento no cuadra (o el verbo no aplica en ese estado), 422 el fichero o los datos no son lo que dicen ser. Que el sistema se niegue no es un 500: es su trabajo.
 

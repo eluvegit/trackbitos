@@ -86,7 +86,9 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 | Comando | Qué hace |
 |---|---|
 | `trackbitos estado` | El más usado: diagnóstico en lenguaje natural de la carpeta actual — qué hacer, sin comparar hashes tú. |
-| `trackbitos variantes` | El catálogo completo desde la terminal, agrupado por pieza: qué hay y por dónde va cada cosa. |
+| `trackbitos catalogo` | El catálogo completo desde la terminal, agrupado por categoría: qué hay y por dónde va cada cosa. |
+| `trackbitos variantes <pieza>` | Zoom sobre una pieza: cuántas variantes tiene y cómo se llama cada una. |
+| `trackbitos actualizar` | Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza a sí mismo. |
 | `trackbitos abrir <pieza>` | Sesión sin descargar nada (variante que aún no tiene `.blend`). |
 | `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión. Se niega si hay cambios sin subir. |
 | `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |

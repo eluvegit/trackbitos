@@ -184,6 +184,14 @@ class PiezaSyncService
         $varianteId = (int) $origen['variante_id'];
         $variante   = $this->varianteModel->find($varianteId);
 
+        // El nombre de la variante solo ("base") no identifica la pieza: se
+        // repite en casi todas. El cliente lo necesita junto al de la
+        // familia para que sus confirmaciones ("bajado X", "sesión Y
+        // abierta"...) digan de qué pieza es de verdad, no solo de qué
+        // variante — ver nombre_completo() en trackbitos.py.
+        $familia  = (new PiezaFamiliaModel())->find($variante['familia_id']);
+        $variante = $variante + ['familia_nombre' => $familia['nombre'] ?? null];
+
         $pendientes = $this->descargaModel->abiertasDeOtrasMaquinas($varianteId, $maquinaId);
         if ($pendientes && !$ignorarPendiente) {
             throw new RuntimeException($this->mensajePendientes($pendientes), 409);
@@ -448,11 +456,26 @@ class PiezaSyncService
         // verificable. En cuanto la rama tiene una subida esta puerta se
         // cierra sola, así que no permite pisar trabajo de la otra máquina.
         $rama = $this->ramaModel->find($sesion['rama_id']);
-        if (!$this->sesionModel->ultimaSubida((int) $sesion['rama_id']) && !empty($rama['desde_version_id'])) {
+        $ultimaSubidaRama = $this->sesionModel->ultimaSubida((int) $sesion['rama_id']);
+        if (!$ultimaSubidaRama && !empty($rama['desde_version_id'])) {
             $version = (new PiezaVersionModel())->find($rama['desde_version_id']);
             if ($version && hash_equals((string) $version['hash_blend'], $hashPadre)) {
                 return;
             }
+        }
+
+        // Se cerró una sesión anterior de esta misma rama sin promocionar y
+        // se reabrió otra para seguir (p.ej. "subir" vuelve a abrir sola una
+        // sesión cuando no hay ninguna viva en el directorio). Sin `bajar` de
+        // por medio no hay descarga que cuadrar, pero la cadena es igual de
+        // verificable: el hash_padre declarado coincide con la última subida
+        // real de la rama, que es de lo único que se pudo partir. Si no
+        // coincidiera sería la fila 4 de la tabla 4.3 (divergencia) y
+        // seguiría rechazándose más abajo — esto no relaja esa comprobación,
+        // solo reconoce una cadena que antes no tenía por dónde entrar.
+        if ($ultimaSubidaRama && (int) $ultimaSubidaRama['id'] !== (int) $sesion['id']
+            && hash_equals((string) $ultimaSubidaRama['hash_blend'], $hashPadre)) {
+            return;
         }
 
         throw new RuntimeException(
@@ -460,6 +483,60 @@ class PiezaSyncService
             . 'Si tienes ese fichero de otra descarga anterior, ciérrala o baja de nuevo antes de subir.',
             409
         );
+    }
+
+    /**
+     * Cierre forzado de una sesión que nunca pasó por una descarga (spec
+     * 4.4, extendido): "trackbitos abrir" en una variante estrenada, o el
+     * reabrir-sola que hace "subir" cuando no hay sesión viva en el
+     * directorio, no crean ningún asiento — así que si el disco que la
+     * abrió desaparece (se borra la carpeta de trabajo sin subir ni
+     * cerrar), `forzarCierre` no tiene ningún `descargaId` al que agarrarse
+     * y el bloqueo (invariante 3) se quedaría para siempre sin válvula de
+     * escape. Esto es esa válvula para ese caso: mismo criterio que el
+     * cierre forzado de una descarga (motivo obligatorio, sin prueba de
+     * que no se perdiera trabajo), pero sobre la sesión directamente.
+     *
+     * Se niega si la sesión sí tiene una descarga abierta: esa descarga
+     * necesita su propio cierre (con su propio `cerrada_por`), y cerrar la
+     * sesión por aquí la dejaría huérfana, abierta para siempre sin nada
+     * que la referencie.
+     */
+    public function forzarCierreSesion(int $sesionId, string $motivo): array
+    {
+        if (trim($motivo) === '') {
+            throw new RuntimeException(
+                'El cierre forzado exige un motivo escrito: es la única constancia de por qué se cerró sin prueba.',
+                422
+            );
+        }
+
+        $sesion = $this->sesionModel->find($sesionId);
+        if (!$sesion) {
+            throw new RuntimeException("Sesión {$sesionId} no encontrada.", 404);
+        }
+        if (!empty($sesion['cerrada_en'])) {
+            throw new RuntimeException("La sesión {$sesionId} ya está cerrada.", 409);
+        }
+
+        $descargaAbierta = $this->descargaModel->where('sesion_id', $sesionId)->where('cerrada', 0)->first();
+        if ($descargaAbierta) {
+            throw new RuntimeException(
+                "Esta sesión tiene la descarga {$descargaAbierta['id']} sin cerrar. Usa el cierre forzado de esa "
+                . 'descarga: se lleva la sesión por delante y deja un único registro, no dos sueltos.',
+                409
+            );
+        }
+
+        return $this->transaccion('forzar el cierre de la sesión', function () use ($sesion, $motivo) {
+            $this->sesionModel->update($sesion['id'], [
+                'cerrada_en' => date('Y-m-d H:i:s'),
+                'log'        => trim(($sesion['log'] ? $sesion['log'] . "\n" : '')
+                    . 'Cerrada por cierre forzado (sin descarga asociada): ' . trim($motivo)),
+            ]);
+
+            return $this->sesionModel->find($sesion['id']);
+        });
     }
 
     private function cerrarSesionAsociada(array $descarga, string $nota): ?array

@@ -39,6 +39,19 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 PAPELERA_DIR = CONFIG_DIR / "papelera"
 DIAS_PAPELERA = 30
 
+# Se sube junto al resto de este fichero: cada mejora que se despliegue en el
+# servidor viene con la versión que le corresponde. "trackbitos actualizar"
+# la compara con la que sirve el servidor (GET /cliente/version, leída del
+# propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
+VERSION = "1.4.0"
+
+# Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
+# pone sola a la primera variante de cada pieza. Se usa solo para no
+# repetirlo en los listados (_listado_agrupado) — si el servidor cambiara
+# ese nombre, lo peor que pasa aquí es que deje de ocultarse, no que rompa
+# nada.
+PIEZA_VARIANTE_BASE = "base"
+
 
 # --------------------------------------------------------------------------
 # Ficheros locales
@@ -269,6 +282,7 @@ def api_descargar(config: dict, ruta: str, destino_temporal: Path) -> dict:
         "descarga_id": int(cab.get("X-Descarga-Id") or 0) or None,
         "variante_id": int(cab.get("X-Variante-Id") or 0) or None,
         "variante": urllib.parse.unquote(cab.get("X-Variante-Nombre") or ""),
+        "familia": urllib.parse.unquote(cab.get("X-Familia-Nombre") or ""),
         "rama_id": int(cab.get("X-Rama-Id") or 0) or None,
         "rama": urllib.parse.unquote(cab.get("X-Rama-Nombre") or ""),
         "sesion_id": int(cab.get("X-Sesion-Id") or 0) or None,
@@ -308,6 +322,34 @@ def nombre_completo(variante: dict) -> str:
     return f"{familia} / {variante['nombre']}" if familia else variante["nombre"]
 
 
+def _listado_agrupado(variantes: list, categorias_orden: list) -> str:
+    """
+    Una pieza por línea, agrupada por categoría — el mismo orden que ya usa
+    "catalogo" (spec 11.1) — en vez de la única línea larguísima separada
+    por comas que había antes. "base" (la variante que se crea sola con
+    cada pieza) no se muestra: repetida en casi todas las líneas no dice
+    nada. Si una pieza tiene además otras variantes con nombre propio, esas
+    sí se listan entre paréntesis, que es justo lo que distingue una de otra.
+    """
+    por_categoria: dict = {}
+    for v in variantes:
+        pieza = v.get("familia_nombre") or v["nombre"]
+        por_categoria.setdefault(v.get("categoria_nombre"), {}).setdefault(pieza, []).append(v["nombre"])
+
+    lineas = []
+    for categoria in categorias_orden + [None]:
+        piezas = por_categoria.pop(categoria, None)
+        if not piezas:
+            continue
+
+        lineas.append(f"  {categoria or 'Sin clasificar'}:")
+        for pieza in sorted(piezas, key=str.lower):
+            nombres = sorted(n for n in piezas[pieza] if n != PIEZA_VARIANTE_BASE)
+            lineas.append(f"    {pieza}" + (f" ({', '.join(nombres)})" if nombres else ""))
+
+    return "\n".join(lineas)
+
+
 def resolver_variante(config: dict, texto: str) -> dict:
     """
     Acepta el id, el nombre de la pieza, el de la variante, o trozos de
@@ -317,9 +359,11 @@ def resolver_variante(config: dict, texto: str) -> dict:
     el nombre real ("Pincel de pintura") y la variante suele ser
     una etiqueta genérica ("estandar") que por sí sola no dice qué es.
     """
-    variantes = api_get(config, "/variantes").get("variantes", [])
+    respuesta = api_get(config, "/variantes")
+    variantes = respuesta.get("variantes", [])
     if not variantes:
         raise RuntimeError("no hay ninguna variante todavía. Créala en la web.")
+    categorias_orden = respuesta.get("categorias", [])
 
     def buscable(v: dict) -> str:
         return f"{v.get('familia_nombre') or ''} {v['nombre']}".lower()
@@ -327,23 +371,53 @@ def resolver_variante(config: dict, texto: str) -> dict:
     if texto.isdigit():
         exactas = [v for v in variantes if v["id"] == int(texto)]
     else:
-        # El nombre exacto de variante gana siempre: si tienes una variante
-        # llamada "estandar" y escribes "estandar", es esa, aunque el texto
-        # también aparezca dentro del nombre de otras piezas.
-        exactas = [v for v in variantes if v["nombre"].lower() == texto.lower()]
+        texto_l = texto.lower()
+
+        # 1) El nombre exacto de variante gana siempre: si tienes una
+        # variante llamada "estandar" y escribes "estandar", es esa, aunque
+        # el texto también aparezca dentro del nombre de otras piezas.
+        exactas = [v for v in variantes if v["nombre"].lower() == texto_l]
+
+        # 2) El nombre exacto de PIEZA gana sobre cualquiera que solo lo
+        # contenga como subcadena: escribir "Brazo" no debe traer también
+        # "Brazo integral" o "Brazo y mano" solo por compartir la palabra.
         if not exactas:
-            palabras = texto.lower().split()
+            exactas = [v for v in variantes if (v.get("familia_nombre") or "").lower() == texto_l]
+
+        # 3) "pieza variante" completos y exactos, en ese orden — para
+        # cuando la pieza exacta (paso 2) tiene más de una variante, p. ej.
+        # "Brazo base" con "Brazo integral" y "Brazo y mano" también en el
+        # catálogo: sin este paso, el 4 los mezclaría a los tres por
+        # compartir la palabra "brazo".
+        if not exactas:
+            palabras = texto_l.split()
+            for corte in range(1, len(palabras)):
+                familia_txt  = " ".join(palabras[:corte])
+                variante_txt = " ".join(palabras[corte:])
+                exactas = [
+                    v for v in variantes
+                    if (v.get("familia_nombre") or "").lower() == familia_txt
+                    and v["nombre"].lower() == variante_txt
+                ]
+                if exactas:
+                    break
+
+        # 4) Por trozos, el último recurso: cualquiera cuyo nombre
+        # combinado (pieza + variante) contenga todas las palabras escritas.
+        if not exactas:
             exactas = [v for v in variantes if all(p in buscable(v) for p in palabras)]
 
     if len(exactas) == 1:
         return exactas[0]
     if not exactas:
-        disponibles = ", ".join(nombre_completo(v) for v in variantes)
-        raise RuntimeError(f"no hay ninguna variante que sea '{texto}'. Hay: {disponibles}")
+        raise RuntimeError(
+            f"no hay ninguna variante que sea '{texto}'. Piezas disponibles:\n\n"
+            f"{_listado_agrupado(variantes, categorias_orden)}\n"
+        )
 
-    ambiguas = ", ".join(nombre_completo(v) for v in exactas)
     raise RuntimeError(
-        f"'{texto}' encaja con varias: {ambiguas}.\n"
+        f"'{texto}' encaja con varias:\n\n"
+        f"{_listado_agrupado(exactas, categorias_orden)}\n\n"
         "    Concreta añadiendo la pieza, p.ej.: trackbitos abrir \"pincel base\""
     )
 
@@ -592,15 +666,31 @@ def cmd_abrir(args) -> int:
     asegurar_maquina(config)
 
     variante = resolver_variante(config, args.variante)
+
+    # Si la carpeta se reutiliza de una pieza anterior y queda un .blend
+    # suelto, "subir" lo encontraría como único fichero y lo subiría tal
+    # cual — sin avisar, como si fuera la primera versión de ESTA pieza.
+    # Se aparta a la papelera igual que ya hace "bajar": la carpeta debe
+    # quedar limpia antes de empezar a trabajar en algo distinto.
+    sobrante = encontrar_blend(directorio)
+    if sobrante:
+        apartado = a_papelera(sobrante)
+        print(f"  · Había un .blend suelto de otra pieza en esta carpeta: se apartó a {apartado}")
+
     respuesta = api_post(config, f"/variante/{variante['id']}/sesion/abrir")
     sesion = respuesta["sesion"]
 
     estado_api = api_get(config, f"/variante/{variante['id']}/estado")
     rama = (estado_api.get("rama") or {})
 
+    # nombre_completo, no variante["nombre"] a secas: "base" (la que se crea
+    # sola con cada pieza) no dice de qué pieza es — sin esto, la
+    # confirmación de "abrir" era indistinguible entre piezas distintas.
+    identidad = nombre_completo(variante)
+
     escribir_sentinel(directorio, {
         "variante_id": variante["id"],
-        "variante": variante["nombre"],
+        "variante": identidad,
         "rama_id": rama.get("id"),
         "rama": rama.get("nombre"),
         "sesion_id": sesion["id"],
@@ -612,7 +702,7 @@ def cmd_abrir(args) -> int:
         "descargado_en": datetime.now().astimezone().isoformat(timespec="seconds"),
     })
 
-    print(f"\n{variante['nombre']} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta\n")
+    print(f"\n{identidad} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta\n")
     print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
     return 0
 
@@ -627,7 +717,9 @@ def _bajar(args, motivo: str) -> int:
 
     if args.variante:
         variante = resolver_variante(config, args.variante)
-        variante_id, variante_nombre = variante["id"], variante["nombre"]
+        # nombre_completo: "base" a secas no dice de qué pieza es (spec:
+        # abrir/bajar deben confirmar SIN AMBIGÜEDAD qué se acaba de tocar).
+        variante_id, variante_nombre = variante["id"], nombre_completo(variante)
     elif sentinel and sentinel.get("variante_id"):
         variante_id, variante_nombre = sentinel["variante_id"], sentinel.get("variante", "?")
     else:
@@ -663,7 +755,10 @@ def _bajar(args, motivo: str) -> int:
     origen = estado_api.get("origen_descarga")
     if not origen:
         print(f"\n{variante_nombre}: no hay ningún fichero subido todavía, no hay nada que bajar.")
-        print(f"\n  → Empieza de cero: trackbitos abrir {variante_nombre}\n")
+        # El id, no el nombre, para que se pueda pegar tal cual: con varias
+        # piezas que comparten "base" el nombre por sí solo no reabriría
+        # necesariamente la misma.
+        print(f"\n  → Empieza de cero: trackbitos abrir {variante_id}\n")
         return 1
 
     ruta = f"/{origen['tipo']}/{origen['id']}/descargar?motivo={motivo}"
@@ -692,9 +787,14 @@ def _bajar(args, motivo: str) -> int:
     finally:
         temporal.unlink(missing_ok=True)
 
+    # Pieza + variante, no la variante a secas ("base" no distingue nada):
+    # es lo que va a la confirmación de abajo y a todo lo que luego lea
+    # este sentinel (estado, cerrar, promocionar...).
+    identidad = f"{asiento['familia']} / {asiento['variante']}" if asiento.get("familia") else asiento["variante"]
+
     escribir_sentinel(directorio, {
         "variante_id": asiento["variante_id"] or variante_id,
-        "variante": asiento["variante"] or variante_nombre,
+        "variante": identidad or variante_nombre,
         "rama_id": asiento["rama_id"],
         "rama": asiento["rama"],
         "sesion_id": asiento["sesion_id"],
@@ -707,7 +807,7 @@ def _bajar(args, motivo: str) -> int:
         "maquina": maquina.get("nombre"),
     })
 
-    print(f"\n{asiento['variante']} · rama {asiento['rama']}"
+    print(f"\n{identidad or variante_nombre} · rama {asiento['rama']}"
           + (f" · sesión {asiento['sesion']} abierta" if asiento["sesion"] else " · solo consulta") + "\n")
     print(f"  ✓ {destino.name} listo en {directorio}")
     if motivo == "trabajo":
@@ -841,28 +941,45 @@ def cmd_papelera(args) -> int:
     return 0
 
 
-def cmd_variantes(args) -> int:
+def cmd_catalogo(args) -> int:
     """
     El catálogo completo desde la terminal — la misma foto que la portada
     web (/piezas), para cuando se trabaja por SSH o simplemente no se
     quiere abrir el navegador para saber "¿qué tengo y por dónde voy?".
+
+    Agrupado por categoría, en el mismo orden que ya usan el índice y la
+    galería web (spec 11.1) — son las carpetas que el usuario ya tiene en la
+    cabeza, y agrupar así evita tener que abrir el navegador solo para saber
+    en qué carpeta anda cada pieza. Dentro de cada categoría, una línea por
+    variante con el nombre completo (nombre_completo: "pieza variante"),
+    sin una cabecera aparte por pieza: con el catálogo real (quince y
+    subiendo) sería el doble de líneas para la misma información, y el
+    nombre completo ya dice de qué pieza es cada una.
     """
     config = cargar_config()
     asegurar_maquina(config)
 
-    variantes = api_get(config, "/variantes").get("variantes", [])
+    respuesta = api_get(config, "/variantes")
+    variantes = respuesta.get("variantes", [])
     if not variantes:
         print("\nTodavía no hay ninguna variante. Créala en la web.\n")
         return 0
 
-    por_familia: dict = {}
+    por_categoria: dict = {}
     for v in variantes:
-        por_familia.setdefault(v.get("familia_nombre") or "(sin pieza)", []).append(v)
+        por_categoria.setdefault(v.get("categoria_nombre"), []).append(v)
+
+    # None = sin clasificar; va al final, igual que en el índice web.
+    orden_categorias = respuesta.get("categorias", []) + [None]
 
     print()
-    for familia in sorted(por_familia):
-        print(f"{familia}")
-        for v in sorted(por_familia[familia], key=lambda v: v["nombre"]):
+    for categoria in orden_categorias:
+        de_esta_categoria = por_categoria.pop(categoria, [])
+        if not de_esta_categoria:
+            continue
+
+        print(categoria or "Sin clasificar")
+        for v in sorted(de_esta_categoria, key=lambda v: nombre_completo(v).lower()):
             if v["version_validada"]:
                 buena = f"v{v['version_validada']['numero']:03d} ✓"
             else:
@@ -874,11 +991,63 @@ def cmd_variantes(args) -> int:
             if v["descargas_pendientes"]:
                 avisos.append(f"{v['descargas_pendientes']} descarga(s) sin cerrar")
 
-            linea = f"  {v['nombre']:<28} {buena:<16} {v['versiones']} versión(es)"
+            linea = f"  {nombre_completo(v):<30} {buena:<16} {v['versiones']} versión(es)"
             if avisos:
                 linea += "  ⚠ " + " · ".join(avisos)
             print(linea)
         print()
+
+    return 0
+
+
+def cmd_variantes(args) -> int:
+    """
+    El zoom sobre una pieza concreta: cuántas variantes tiene y cómo se
+    llama cada una. "catalogo" es la foto completa; esto es para cuando ya
+    sabes qué pieza quieres mirar y no hace falta barrer las demás —
+    "¿cuántas líneas de diseño tiene ya la Silla, y cómo se llaman?".
+    """
+    config = cargar_config()
+    asegurar_maquina(config)
+
+    todas = api_get(config, "/variantes").get("variantes", [])
+    if not todas:
+        print("\nTodavía no hay ninguna variante. Créala en la web.\n")
+        return 0
+
+    familias = sorted({v["familia_nombre"] for v in todas if v.get("familia_nombre")})
+    texto = args.pieza.lower()
+
+    # Mismo criterio que resolver_variante: el nombre exacto gana siempre
+    # (para que "silla" no se ambigüe consigo misma), y si no hay exacto se
+    # prueba por trozos del nombre.
+    exactas = [f for f in familias if f.lower() == texto]
+    if not exactas:
+        exactas = [f for f in familias if texto in f.lower()]
+
+    if not exactas:
+        raise RuntimeError(f"no hay ninguna pieza que sea '{args.pieza}'. Hay: {', '.join(familias)}")
+    if len(exactas) > 1:
+        raise RuntimeError(f"'{args.pieza}' encaja con varias piezas: {', '.join(exactas)}. Concreta más.")
+
+    familia = exactas[0]
+    suyas = sorted((v for v in todas if v.get("familia_nombre") == familia), key=lambda v: v["nombre"])
+
+    print(f"\n{familia} — {len(suyas)} variante(s)\n")
+    for v in suyas:
+        buena = f"v{v['version_validada']['numero']:03d} ✓" if v["version_validada"] else "sin versión buena"
+
+        avisos = []
+        if v["sesion_abierta"]:
+            avisos.append(f"sesión abierta en {v.get('sesion_maquina') or '?'}")
+        if v["descargas_pendientes"]:
+            avisos.append(f"{v['descargas_pendientes']} descarga(s) sin cerrar")
+
+        linea = f"  {v['nombre']:<20} {buena:<16} {v['versiones']} versión(es)"
+        if avisos:
+            linea += "  ⚠ " + " · ".join(avisos)
+        print(linea)
+    print()
 
     return 0
 
@@ -920,6 +1089,84 @@ def cmd_promocionar(args) -> int:
 
 
 # --------------------------------------------------------------------------
+# Auto-actualización
+# --------------------------------------------------------------------------
+
+def _version_tupla(v: str) -> tuple:
+    """"1.2.10" -> (1, 2, 10), para comparar sin los líos de comparar texto ("1.9" > "1.10")."""
+    try:
+        return tuple(int(p) for p in v.strip().split("."))
+    except ValueError:
+        return (0,)
+
+
+def comprobar_version_remota(config: dict) -> Optional[str]:
+    """
+    Un vistazo silencioso a si hay versión nueva. Aviso automático,
+    actualización manual (nunca se autoactualiza sola): esto solo mira y
+    devuelve la versión si es más nueva, o None ante cualquier tropiezo — sin
+    red, sin config todavía, servidor caído. Timeout corto y propio (no el de
+    _abrir/api_get) a propósito: esto es un extra, y no puede ser lo que deje
+    esperando al comando que el usuario vino a ejecutar de verdad. Si de
+    verdad hace falta quejarse de que no se pudo comprobar, ya se queja
+    "trackbitos actualizar", que sí es una petición explícita.
+    """
+    try:
+        peticion = urllib.request.Request(
+            config["url_base"].rstrip("/") + "/cliente/version", headers=_cabeceras(config)
+        )
+        with urllib.request.urlopen(peticion, timeout=3) as resp:
+            remota = json.loads(resp.read().decode("utf-8")).get("version")
+    except Exception:
+        return None
+
+    if remota and _version_tupla(remota) > _version_tupla(VERSION):
+        return remota
+    return None
+
+
+def cmd_actualizar(args) -> int:
+    config = cargar_config()
+
+    remota = api_get(config, "/cliente/version").get("version")
+    if not remota:
+        raise RuntimeError("el servidor no ha devuelto ninguna versión.")
+
+    if _version_tupla(remota) <= _version_tupla(VERSION):
+        print(f"\nYa tienes la última versión (v{VERSION}).\n")
+        return 0
+
+    print(f"\nHay una versión nueva: v{VERSION} → v{remota}. Descargando...")
+
+    peticion = urllib.request.Request(
+        config["url_base"].rstrip("/") + "/cliente/descargar", headers=_cabeceras(config)
+    )
+    with _abrir(peticion, config) as resp:
+        contenido_nuevo = resp.read()
+
+    # No se reemplaza nada sin comprobar antes que es Python válido: una
+    # descarga a medias o un fallo del servidor no debe dejar el script roto
+    # en disco, que es peor que quedarse en la versión vieja.
+    try:
+        compile(contenido_nuevo, "trackbitos.py", "exec")
+    except SyntaxError as e:
+        raise RuntimeError(f"lo descargado no es un trackbitos.py válido, no se toca nada: {e}")
+
+    ruta_actual = Path(__file__).resolve()
+
+    # Nada se pierde (invariante 6, igual que con los .blend): la versión que
+    # tenías se aparta a la papelera antes de escribir la nueva, por si hay
+    # que volver atrás a mano.
+    apartada = a_papelera(ruta_actual)
+    ruta_actual.write_bytes(contenido_nuevo)
+
+    print(f"\n  ✓ Actualizado a v{remota}.")
+    print(f"    La versión anterior quedó en {apartada}")
+    print("\n  → Vuelve a ejecutar el comando: los cambios se aplican desde la próxima ejecución.\n")
+    return 0
+
+
+# --------------------------------------------------------------------------
 
 def main(argv: Optional[list] = None) -> int:
     # En Windows, la consola por defecto no suele estar en UTF-8 y print()
@@ -937,43 +1184,54 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--dir", default=".", help="Directorio de trabajo (por defecto, el actual).")
         return p
 
-    p = con_dir(subs.add_parser("estado", help="Diagnóstico del directorio de trabajo actual."))
+    # Alias cortos (spec: una letra para los de uso diario, dos para el
+    # resto, sin que ninguno choque con otro): "trackbitos a <pieza>" en vez
+    # de "trackbitos abrir <pieza>". El nombre completo se sigue aceptando
+    # igual — esto es azúcar, no un reemplazo.
+    p = con_dir(subs.add_parser("estado", aliases=["e"], help="Diagnóstico del directorio de trabajo actual. (alias: e)"))
     p.set_defaults(func=cmd_estado)
 
-    p = con_dir(subs.add_parser("abrir", help="Abre sesión sin descargar (variante que aún no tiene .blend)."))
+    p = con_dir(subs.add_parser("abrir", aliases=["a"], help="Abre sesión sin descargar (variante que aún no tiene .blend). (alias: a)"))
     p.add_argument("variante", help="Nombre o id de la variante.")
     p.set_defaults(func=cmd_abrir)
 
-    p = con_dir(subs.add_parser("bajar", help="Descarga la mesa de trabajo y abre sesión."))
+    p = con_dir(subs.add_parser("bajar", aliases=["b"], help="Descarga la mesa de trabajo y abre sesión. (alias: b)"))
     p.add_argument("variante", nargs="?", help="Nombre o id; si ya hay .sesion.json, se deduce.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente",
                    help="Continuar aunque haya una descarga sin cerrar en otra máquina.")
     p.set_defaults(func=cmd_bajar)
 
-    p = con_dir(subs.add_parser("ver", help="Descarga solo para mirar: no abre sesión."))
+    p = con_dir(subs.add_parser("ver", aliases=["v"], help="Descarga solo para mirar: no abre sesión. (alias: v)"))
     p.add_argument("variante", nargs="?", help="Nombre o id de la variante.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente")
     p.set_defaults(func=cmd_ver)
 
-    p = con_dir(subs.add_parser("subir", help="Sube el .blend de este directorio a su sesión."))
+    p = con_dir(subs.add_parser("subir", aliases=["s"], help="Sube el .blend de este directorio a su sesión. (alias: s)"))
     p.add_argument("--log", help='Nota de la sesión (p.ej. "guardado sin cambios de geometría").')
     p.set_defaults(func=cmd_subir)
 
-    p = con_dir(subs.add_parser("cerrar", help="Cierra la sesión (o la descarga, con --sin-cambios)."))
+    p = con_dir(subs.add_parser("cerrar", aliases=["c"], help="Cierra la sesión (o la descarga, con --sin-cambios). (alias: c)"))
     p.add_argument("--sin-cambios", action="store_true", dest="sin_cambios",
                    help="Cierra la descarga sin subir: exige que el fichero siga siendo el entregado.")
     p.set_defaults(func=cmd_cerrar)
 
-    p = con_dir(subs.add_parser("promocionar", help="Congela la última sesión subida como versión nueva."))
+    p = con_dir(subs.add_parser("promocionar", aliases=["p"], help="Congela la última sesión subida como versión nueva. (alias: p)"))
     p.add_argument("--cambio", help="Obligatorio: qué se modificó, en una línea.")
     p.add_argument("--medidas", help="Cotas de calibre relevantes.")
     p.set_defaults(func=cmd_promocionar)
 
-    p = subs.add_parser("papelera", help="Qué hay apartado y cuándo caduca.")
+    p = subs.add_parser("papelera", aliases=["pa"], help="Qué hay apartado y cuándo caduca. (alias: pa)")
     p.set_defaults(func=cmd_papelera)
 
-    p = subs.add_parser("variantes", help="El catálogo completo: qué piezas hay y por dónde va cada una.")
+    p = subs.add_parser("catalogo", aliases=["ca"], help="El catálogo completo: qué piezas hay y por dónde va cada una. (alias: ca)")
+    p.set_defaults(func=cmd_catalogo)
+
+    p = subs.add_parser("variantes", aliases=["va"], help="Cuántas variantes tiene una pieza y cómo se llama cada una. (alias: va)")
+    p.add_argument("pieza", help="Nombre o parte del nombre de la pieza.")
     p.set_defaults(func=cmd_variantes)
+
+    p = subs.add_parser("actualizar", aliases=["ac"], help="Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza. (alias: ac)")
+    p.set_defaults(func=cmd_actualizar)
 
     args = parser.parse_args(argv)
 
@@ -983,10 +1241,27 @@ def main(argv: Optional[list] = None) -> int:
     purgar_papelera()
 
     try:
-        return args.func(args)
+        resultado = args.func(args)
     except RuntimeError as e:
         print(f"\n  ⚠ {e}\n", file=sys.stderr)
-        return 2
+        resultado = 2
+
+    # Aviso automático, actualización manual: se comprueba después del
+    # comando (nunca antes, para no añadirle latencia a lo que el usuario
+    # vino a hacer de verdad) y en silencio ante cualquier fallo. "actualizar"
+    # (o su alias "ac") se salta esto porque ya acaba de comprobarlo por su
+    # cuenta. Se compara la función resuelta, no args.comando: con alias,
+    # args.comando guarda lo que se escribió de verdad ("ac"), no el nombre
+    # canónico, así que comparar contra la cadena "actualizar" se rompería.
+    if args.func is not cmd_actualizar:
+        try:
+            nueva = comprobar_version_remota(cargar_config())
+            if nueva:
+                print(f"  · Versión nueva de trackbitos disponible (v{VERSION} → v{nueva}): trackbitos actualizar\n")
+        except Exception:
+            pass
+
+    return resultado
 
 
 if __name__ == "__main__":

@@ -33,3 +33,11 @@ coverage/
 .cache/
 .env
 .env
+
+# Python (piezas-cli/trackbitos.py)
+__pycache__/
+*.pyc
+
+# Claude Code: worktrees son checkouts git aparte (repos anidados), nunca deben
+# trackearse desde el repo principal
+.claude/worktrees/
