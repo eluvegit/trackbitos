@@ -1381,6 +1381,11 @@ class Web extends BaseController
             'puede_promocionar' => !isset($motivos['promocionar']),
             'puede_devolver'    => !isset($motivos['devolver']),
             'motivos'           => $motivos,
+            // La versión de la que ya parte la rama abierta (spec: "Devolver
+            // a trabajo" en ESA versión sería cerrar esa misma rama para
+            // abrir una idéntica — nada que devolver, solo confusión). Las
+            // demás versiones sí pueden ofrecerlo con normalidad.
+            'rama_desde_version_id' => $estado['rama']['desde_version_id'] ?? null,
         ];
     }
 

@@ -369,6 +369,14 @@ peso que no tiene sentido versionar en el propio servidor.
   guarde es responsabilidad de quien la baja, no algo que el módulo purgue solo) y el enlace de
   descarga de verdad dentro. No es una barrera (spec 0: "se niega y explica", no "¿estás
   seguro?") — sigue siendo una descarga libre, solo obliga a verla una vez antes de cada bajada.
+- **"Devolver a trabajo" ya no se ofrece en la versión de la que la rama abierta ya parte.**
+  Detectado en producción: tras promocionar (o tras un "devolver" anterior sin subir nada
+  todavía), la rama abierta ya arranca de esa versión — pulsar "Devolver a trabajo" ahí mismo
+  cerraría esa rama vacía para abrir una idéntica, un no-operación disfrazada de advertencia
+  seria ("¿estás seguro de abandonar…?") sin nada real que abandonar. `Web::accionesDisponibles()`
+  expone ahora `rama_desde_version_id`; la ficha compara cada versión contra ese id
+  (`$puedeDevolver($v)`) y desactiva el botón justo en esa versión con su propio motivo — el resto
+  de versiones (superadas, descartadas de ramas ya cerradas) lo siguen ofreciendo con normalidad.
 
 ---
 

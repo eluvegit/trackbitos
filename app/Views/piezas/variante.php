@@ -44,7 +44,20 @@ $boton = function (bool $activo, string $color, string $modal, string $texto): s
     );
 };
 
-$porQueNo = function (array $v) use ($acciones): array {
+/**
+ * "Devolver a trabajo" reabre una rama partiendo de esta versión — pero si
+ * la rama ya abierta parte justo de ella (p. ej. recién promocionada, o
+ * "devolver" ya usado antes y todavía sin subir nada), pulsarlo otra vez
+ * cerraría esa rama vacía para abrir una idéntica: nada que devolver, solo
+ * confusión ("¿qué abandono si no hay nada?"). Aparte de $acciones para que
+ * $porQueNo pueda decir POR QUÉ, no solo que no se puede.
+ */
+$puedeDevolver = function (array $v) use ($acciones): bool {
+    return $acciones['puede_devolver']
+        && (int) ($acciones['rama_desde_version_id'] ?? 0) !== (int) $v['id'];
+};
+
+$porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
     $lineas = [];
 
     $lineas[] = match ($v['estado']) {
@@ -56,8 +69,13 @@ $porQueNo = function (array $v) use ($acciones): array {
         default      => '',
     };
 
-    if (!$acciones['puede_devolver'] && isset($acciones['motivos']['devolver'])) {
-        $lineas[] = 'Devolver a trabajo: ' . $acciones['motivos']['devolver'];
+    if (!$puedeDevolver($v)) {
+        if ((int) ($acciones['rama_desde_version_id'] ?? 0) === (int) $v['id']) {
+            $lineas[] = 'Ya tienes la rama de trabajo abierta a partir de esta misma versión — sigue '
+                . 'trabajando ahí (trackbitos abrir/bajar), no hace falta volver a abrirla.';
+        } elseif (isset($acciones['motivos']['devolver'])) {
+            $lineas[] = 'Devolver a trabajo: ' . $acciones['motivos']['devolver'];
+        }
     }
 
     return array_filter($lineas);
@@ -468,7 +486,7 @@ $porQueNo = function (array $v) use ($acciones): array {
                             <?= $boton($v['estado'] === 'borrador', 'info', 'modalImpresa' . $v['id'], 'Marcar impresa') ?>
                             <?= $boton($v['estado'] === 'impresa', 'success', 'modalValidar' . $v['id'], 'Validar') ?>
                             <?= $boton(in_array($v['estado'], ['borrador', 'impresa'], true), 'danger', 'modalDescartar' . $v['id'], 'Descartar') ?>
-                            <?= $boton($acciones['puede_devolver'], 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
+                            <?= $boton($puedeDevolver($v), 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
                             <?= $boton(true, 'primary', 'modalDerivar' . $v['id'], 'Derivar variante') ?>
                         </div>
 
