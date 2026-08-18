@@ -325,128 +325,6 @@ $porQueNo = function (array $v) use ($acciones): array {
             </div>
         </div>
 
-        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
-        <div class="card shadow-sm mb-3">
-            <div class="card-body p-3">
-                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
-                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
-                        <div class="text-muted small">en disco</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
-                        <div class="text-muted small">intento(s) de impresión</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
-                        <div class="text-muted small">sesión(es) de trabajo</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
-                        <div class="text-muted small">día(s) desde que se creó</div>
-                    </div>
-                </div>
-                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
-                    <div class="small text-muted mt-2">
-                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
-                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
-                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!--
-            "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
-            la escena de esta variante. Puramente informativo — no toca
-            origen_version_id ni la sincronización.
-        -->
-        <div class="d-flex align-items-center gap-2 mt-3 mb-2">
-            <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Compuesta de</h6>
-            <?php if (!empty($versionesParaComponer)): ?>
-                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
-                    data-bs-toggle="modal" data-bs-target="#modalComponente" title="Añadir">
-                    <i class="bi bi-plus-lg"></i>
-                </button>
-            <?php endif; ?>
-        </div>
-
-        <?php if (empty($componentes)): ?>
-            <p class="text-muted small">
-                Nada anotado. Si esta pieza incluye otras en la misma escena — un ensamblaje, o
-                una que dejaste al lado para partir de ella — añádelas aquí.
-            </p>
-        <?php else: ?>
-            <?php
-                $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
-            ?>
-            <ul class="list-group list-group-flush mb-2">
-                <?php foreach ($componentes as $c): ?>
-                    <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
-                    <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
-                        <div class="flex-grow-1">
-                            <?php if ($v && $va && $fa): ?>
-                                <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
-                                    <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
-                                </a>
-                                <?php if (isset($avisoEstado[$v['estado']])): ?>
-                                    <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <span class="text-muted">(esa pieza ya no existe)</span>
-                            <?php endif; ?>
-                            <?php if (!empty($c['notas'])): ?>
-                                <div class="small text-muted"><?= esc($c['notas']) ?></div>
-                            <?php endif; ?>
-                        </div>
-                        <form method="post" action="<?= site_url('piezas/componente/' . (int) $c['id'] . '/borrar') ?>">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
-                            <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Quitar"><i class="bi bi-x"></i></button>
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
-
-        <?php if (!empty($versionesParaComponer)): ?>
-            <div class="modal fade" id="modalComponente" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered">
-                    <form class="modal-content" method="post"
-                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/componente') ?>">
-                        <?= csrf_field() ?>
-                        <div class="modal-header">
-                            <h6 class="modal-title">Añadir a "Compuesta de"</h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="small text-muted mb-2">
-                                Qué otra pieza (en qué versión) estaba también en esta escena. Es solo
-                                para recordarlo — no afecta a nada del sistema.
-                            </p>
-                            <label class="form-label small">Pieza / versión</label>
-                            <select name="version_componente_id" class="form-select form-select-sm mb-2" required>
-                                <?php foreach ($versionesParaComponer as $v): ?>
-                                    <option value="<?= (int) $v['id'] ?>">
-                                        <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
-                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($v['estado']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <label class="form-label small">Notas (opcional)</label>
-                            <input type="text" name="notas" class="form-control form-control-sm"
-                                placeholder="p. ej. para partir de ahí" maxlength="255">
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button class="btn btn-sm btn-primary">Añadir</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        <?php endif; ?>
-
         <!-- Historial de versiones, en orden inverso -->
         <h6 class="mb-2"><i class="bi bi-clock-history"></i> Historial</h6>
 
@@ -791,6 +669,128 @@ $porQueNo = function (array $v) use ($acciones): array {
                     </div>
                 </div>
             <?php endforeach; ?>
+        <?php endif; ?>
+
+        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
+                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
+                        <div class="text-muted small">en disco</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
+                        <div class="text-muted small">intento(s) de impresión</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
+                        <div class="text-muted small">sesión(es) de trabajo</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
+                        <div class="text-muted small">día(s) desde que se creó</div>
+                    </div>
+                </div>
+                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
+                    <div class="small text-muted mt-2">
+                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
+                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
+                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!--
+            "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
+            la escena de esta variante. Puramente informativo — no toca
+            origen_version_id ni la sincronización.
+        -->
+        <div class="d-flex align-items-center gap-2 mt-3 mb-2">
+            <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Compuesta de</h6>
+            <?php if (!empty($versionesParaComponer)): ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
+                    data-bs-toggle="modal" data-bs-target="#modalComponente" title="Añadir">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            <?php endif; ?>
+        </div>
+
+        <?php if (empty($componentes)): ?>
+            <p class="text-muted small">
+                Nada anotado. Si esta pieza incluye otras en la misma escena — un ensamblaje, o
+                una que dejaste al lado para partir de ella — añádelas aquí.
+            </p>
+        <?php else: ?>
+            <?php
+                $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
+            ?>
+            <ul class="list-group list-group-flush mb-2">
+                <?php foreach ($componentes as $c): ?>
+                    <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
+                    <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
+                        <div class="flex-grow-1">
+                            <?php if ($v && $va && $fa): ?>
+                                <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
+                                    <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
+                                </a>
+                                <?php if (isset($avisoEstado[$v['estado']])): ?>
+                                    <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="text-muted">(esa pieza ya no existe)</span>
+                            <?php endif; ?>
+                            <?php if (!empty($c['notas'])): ?>
+                                <div class="small text-muted"><?= esc($c['notas']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <form method="post" action="<?= site_url('piezas/componente/' . (int) $c['id'] . '/borrar') ?>">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Quitar"><i class="bi bi-x"></i></button>
+                        </form>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+        <?php if (!empty($versionesParaComponer)): ?>
+            <div class="modal fade" id="modalComponente" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <form class="modal-content" method="post"
+                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/componente') ?>">
+                        <?= csrf_field() ?>
+                        <div class="modal-header">
+                            <h6 class="modal-title">Añadir a "Compuesta de"</h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="small text-muted mb-2">
+                                Qué otra pieza (en qué versión) estaba también en esta escena. Es solo
+                                para recordarlo — no afecta a nada del sistema.
+                            </p>
+                            <label class="form-label small">Pieza / versión</label>
+                            <select name="version_componente_id" class="form-select form-select-sm mb-2" required>
+                                <?php foreach ($versionesParaComponer as $v): ?>
+                                    <option value="<?= (int) $v['id'] ?>">
+                                        <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
+                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($v['estado']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label class="form-label small">Notas (opcional)</label>
+                            <input type="text" name="notas" class="form-control form-control-sm"
+                                placeholder="p. ej. para partir de ahí" maxlength="255">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button class="btn btn-sm btn-primary">Añadir</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         <?php endif; ?>
     </div>
 
