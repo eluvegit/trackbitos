@@ -91,6 +91,31 @@ Crea la carpeta con el nombre de la pieza (`pincel-de-pintura`) donde estés, ba
 
 Es `bajar` con los pasos de alrededor, no un camino distinto: se niega exactamente en los mismos casos (copia viva en la otra máquina, impresión sin juzgar, cambios sin subir aquí), y si se niega no abre nada.
 
+**`trabajar` no puede hacer que tu terminal "entre" en la carpeta que crea** — un proceso hijo no puede cambiar el directorio del shell que lo lanzó, es una limitación del sistema operativo, no un descuido de este script. Lo que sí hace es dejar escrita esa carpeta en `~/.trackbitos/ultimo_directorio`, para que una **función de shell** (no un alias normal — un alias no puede ejecutar un `cd` después de llamar al programa) la lea y haga el `cd` de verdad.
+
+Configúrala una vez, en `~/.zshrc` (macOS) — sustituye la ruta por donde tengas guardado `trackbitos.py`:
+
+```bash
+trackbitos() {
+    python3 "$HOME/bin/trackbitos.py" "$@"
+    local codigo=$?
+
+    if { [ "$1" = "trabajar" ] || [ "$1" = "t" ]; } && [ -f "$HOME/.trackbitos/ultimo_directorio" ]; then
+        cd "$(cat "$HOME/.trackbitos/ultimo_directorio")" || true
+    fi
+
+    return $codigo
+}
+```
+
+Recarga la terminal (`source ~/.zshrc` o ábrela de nuevo) y ya está: `trackbitos trabajar pincel` te deja **dentro** de la carpeta, con Blender ya abierto. De paso, esto resuelve también lo de escribir `.././trackbitos.py` cada vez — la función te deja llamar `trackbitos <lo que sea>` desde cualquier carpeta, para cualquier comando, no solo `trabajar`.
+
+Si prefieres no tener una función (por ejemplo en Windows, donde esto no aplica igual), un alias normal sigue sirviendo para lo primero — solo no hará el `cd` automático:
+
+```bash
+alias trackbitos="python3 $HOME/bin/trackbitos.py"
+```
+
 ---
 
 ### Recoger la mesa cuando terminas

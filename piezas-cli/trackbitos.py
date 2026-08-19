@@ -43,11 +43,16 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 PAPELERA_DIR = CONFIG_DIR / "papelera"
 DIAS_PAPELERA = 30
 
+# Dónde "trabajar" deja escrita la carpeta que resolvió (fase 26), para que
+# una función de shell pueda leerla y hacer `cd` de verdad — ver
+# _recordar_directorio() más abajo y la sección 3 del TUTORIAL.
+ULTIMO_DIRECTORIO_PATH = CONFIG_DIR / "ultimo_directorio"
+
 # Se sube junto al resto de este fichero: cada mejora que se despliegue en el
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -936,6 +941,26 @@ def cmd_bajar(args) -> int:
     return _bajar(args, "trabajo")
 
 
+def _recordar_directorio(ruta: Path) -> None:
+    """
+    Un proceso hijo no puede cambiar el directorio del shell que lo lanzó —
+    es una limitación del sistema, no un descuido de este script: `trabajar`
+    puede crear la carpeta y trabajar dentro, pero no puede hacer que tu
+    terminal "entre" en ella. Esto dice dónde, para que una función de shell
+    (no un simple alias — un alias no puede ejecutar un `cd` después de
+    llamar al programa) lo lea y haga el `cd` de verdad. Ver la sección 3
+    del TUTORIAL.
+
+    Si falla al escribir, no pasa nada grave: es un atajo de comodidad, no
+    el resultado real del comando.
+    """
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        ULTIMO_DIRECTORIO_PATH.write_text(str(ruta.resolve()), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def cmd_trabajar(args) -> int:
     """
     De "quiero seguir con el pincel" a tenerlo abierto en Blender, en un
@@ -966,6 +991,11 @@ def cmd_trabajar(args) -> int:
         creada = not carpeta.exists()
         carpeta.mkdir(parents=True, exist_ok=True)
         print(f"\n  {'✓ carpeta creada' if creada else '· carpeta ya existente'}: {carpeta}")
+
+    # Se guarda aquí, no al final: aunque "bajar" se niegue después (copia
+    # viva en la otra máquina, impresión sin juzgar...), sigue siendo la
+    # carpeta a la que querrías ir para resolverlo a mano.
+    _recordar_directorio(carpeta)
 
     # El id, no el texto que escribió el usuario: ya está resuelto, y volver
     # a buscarlo dentro de _bajar podría dar "varias coincidencias" otra vez.

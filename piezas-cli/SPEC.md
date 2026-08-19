@@ -24,6 +24,8 @@
 | 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
 | 24 | Papelera también por variante suelta (no solo la pieza entera) | ✅ Hecho (detalle abajo) |
 | 25 | Directorio vacío ya no confunde con "corrupto", y sesiones activas en el índice | ✅ Hecho (detalle abajo) |
+| 26 | `trackbitos trabajar`/`limpiar`, vocabulario del índice, deshacer un juicio | ✅ Hecho (detalle abajo) |
+| 27 | `trabajar` deja dicho el directorio para que el shell pueda entrar de verdad | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -679,6 +681,23 @@ delante las demás.
   mirando, todos sus botones de estado están apagados con razón: se sigue desde el cliente. Antes
   eso lo decía una frase gris que remitía a otra caja al final de la página; ahora esa misma
   tarjeta lleva el `trackbitos bajar "<pieza> <variante>"` listo para copiar.
+
+**Fase 27 (2026-08-19): `trabajar` deja dicho dónde, para que el shell pueda entrar de verdad.**
+`trackbitos trabajar` (fase 26 de la otra sesión) crea la carpeta y lanza Blender, pero no puede
+hacer que la terminal "entre" en ella — un proceso hijo no puede cambiar el directorio del shell
+que lo lanzó, es una limitación del sistema operativo, no un descuido del script.
+
+- **`ULTIMO_DIRECTORIO_PATH` (`~/.trackbitos/ultimo_directorio`) y `_recordar_directorio()`**:
+  `cmd_trabajar` escribe ahí la carpeta que resolvió, justo después de resolverla — antes de
+  llamar a `_bajar`, no después, para que quede dicho el sitio aunque `bajar` acabe negándose
+  (copia viva en la otra máquina, impresión sin juzgar...) y haya que ir a resolverlo a mano. Un
+  fallo escribiendo no tumba el comando: es una comodidad aparte, no el resultado real.
+- **Por qué hace falta una función de shell, no un alias.** Un alias sustituye el texto del
+  comando antes de ejecutarlo; no puede ejecutar un `cd` DESPUÉS de que termine. Se documenta en
+  el TUTORIAL (sección "Empezar de un golpe") una función de shell para `~/.zshrc` que llama al
+  script y, si el comando era `trabajar`/`t`, lee ese fichero y hace el `cd` de verdad. De paso
+  resuelve la otra mitad del mismo problema: la función expone `trackbitos` como comando desde
+  cualquier carpeta, sin tener que escribir la ruta relativa al script cada vez.
 
 ---
 
