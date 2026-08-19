@@ -526,14 +526,28 @@ class Web extends BaseController
         }
 
         foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->findAll() as $variante) {
-            $validada = $this->versionModel
+            $version = $this->versionModel
                 ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
-            if (!$validada) {
+
+            if (!$version) {
+                // Sin validada todavía: la candidata es la más reciente que
+                // siga siendo "para imprimir" (borrador) o "impresa,
+                // pendiente de juzgar" — este apartado es para meter STL en
+                // placas, y esas dos ya pueden tener uno adjunto aunque el
+                // resultado físico no esté juzgado. Ni "descartada" ni
+                // "superada" cuentan: de esas ya se sabe que no sirven.
+                $version = $this->versionModel
+                    ->where('variante_id', $variante['id'])
+                    ->whereIn('estado', ['borrador', 'impresa'])
+                    ->orderBy('numero', 'DESC')->first();
+            }
+
+            if (!$version) {
                 continue;
             }
 
             $render = $this->renderModel
-                ->where('version_id', $validada['id'])->orderBy('subida_en', 'DESC')->first();
+                ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->first();
             $miniatura = $render ? site_url('piezas/render/' . $render['id'] . '/imagen') : null;
 
             if (!$miniatura) {
@@ -548,10 +562,12 @@ class Web extends BaseController
                 'variante'        => $variante,
                 'familiaNombre'   => $nombresFamilia[$familiaId] ?? '?',
                 'variosVariantes' => ($conteoVariantes[$familiaId] ?? 0) > 1,
-                'validada'        => $validada,
+                // La versión que se ofrece para la placa: validada si la
+                // hay, si no la más reciente "para imprimir"/"sin validar".
+                'version'         => $version,
                 // Cuántos trozos hay que imprimir (fase 21): la galería solo
                 // necesita saber si hay alguno y cuántos, no cuáles.
-                'stls'            => count($this->servicio->stlsDe((int) $validada['id'])),
+                'stls'            => count($this->servicio->stlsDe((int) $version['id'])),
                 'miniatura'       => $miniatura,
                 // Mismo campo que espera agruparPorCategoria() para las
                 // filas del índice: se reutiliza tal cual, sin duplicar la

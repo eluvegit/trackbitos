@@ -26,6 +26,7 @@
 | 25 | Directorio vacío ya no confunde con "corrupto", y sesiones activas en el índice | ✅ Hecho (detalle abajo) |
 | 26 | `trackbitos trabajar`/`limpiar`, vocabulario del índice, deshacer un juicio | ✅ Hecho (detalle abajo) |
 | 27 | `trabajar` deja dicho el directorio para que el shell pueda entrar de verdad | ✅ Hecho (detalle abajo) |
+| 28 | La galería también admite piezas "para imprimir"/"sin validar", no solo validadas | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -698,6 +699,27 @@ que lo lanzó, es una limitación del sistema operativo, no un descuido del scri
   script y, si el comando era `trabajar`/`t`, lee ese fichero y hace el `cd` de verdad. De paso
   resuelve la otra mitad del mismo problema: la función expone `trackbitos` como comando desde
   cualquier carpeta, sin tener que escribir la ruta relativa al script cada vez.
+- **Aplicado y probado en el Mac** (no hay copia personal de `trackbitos.py` en esa máquina — se
+  ejecuta directo desde el checkout, de ahí que hiciera falta la función). Snippet de PowerShell
+  para Windows dejado en el TUTORIAL, pendiente de aplicar ahí (falta confirmar la ruta real del
+  script en esa máquina).
+
+**Fase 28 (2026-08-19): la galería también admite "para imprimir" y "sin validar", no solo
+validadas.** Esta pantalla es para meter STL en placas, no para juzgar qué está terminado — y
+una versión "para imprimir" (borrador) o "impresa, pendiente de juzgar" ya puede tener un STL
+adjunto (spec fase 9: adjuntar STL es aparte de promocionar) aunque el resultado físico no esté
+decidido todavía. Antes esas piezas eran invisibles aquí hasta validar, aunque ya hubiera algo
+que imprimir.
+
+- **`Web::galeria()`**: si la variante no tiene versión validada, busca ahora la más reciente en
+  estado `borrador` o `impresa` (nunca `descartada` ni `superada` — de esas ya se sabe que no
+  sirven) y la ofrece en su lugar. Sigue sin mostrar nada si no hay ninguna versión en absoluto:
+  sin versión no hay a qué adjuntar un STL.
+- **Badge de estado en la tarjeta**, mismo vocabulario y estilo que `$badgeMadurez` del índice
+  (spec fase 26) para no decir dos cosas distintas de lo mismo según la pantalla: verde "vNNN ✓"
+  para la validada, azul "sin validar" para la impresa, gris "para imprimir" para la borrador.
+- El carrito y la descarga en `.zip` (`carritoAgregar`/`carritoDescargar`) ya trabajaban por id
+  de versión sin comprobar su estado — no hicieron falta cambios ahí.
 
 ---
 

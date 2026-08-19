@@ -29,14 +29,36 @@
 <?php endif; ?>
 
 <p class="text-muted small">
-    Solo piezas con versión validada. Añade a la placa las que quieras imprimir juntas y descarga
-    todos los STL de golpe en un .zip para el laminador.
+    Piezas validadas, y también las que ya tienen una versión "para imprimir" o "impresa, sin
+    validar" — esta pantalla es para meter STL en placas, y esas dos ya pueden tener uno adjunto
+    aunque el resultado físico no esté juzgado todavía. Añade a la placa las que quieras imprimir
+    juntas y descarga todos los STL de golpe en un .zip para el laminador.
 </p>
+
+<?php
+/**
+ * Qué le falta a la versión que se ofrece, cuando no es la validada — mismo
+ * vocabulario y estilo que `$badgeMadurez` del índice, para no decir dos
+ * cosas distintas de lo mismo según la pantalla.
+ */
+$badgeEstadoVersion = static function (array $version): string {
+    if ($version['estado'] === 'impresa') {
+        return '<span class="badge text-bg-primary" title="Impresa, pendiente de juzgar el resultado">'
+            . '<i class="bi bi-printer-fill"></i> sin validar</span>';
+    }
+    if ($version['estado'] === 'borrador') {
+        return '<span class="badge text-bg-secondary" title="Promocionada, pendiente de imprimir de prueba">'
+            . '<i class="bi bi-printer"></i> para imprimir</span>';
+    }
+
+    return '';
+};
+?>
 
 <?php $total = array_sum(array_map(fn($g) => count($g['piezas']), $grupos)); ?>
 
 <?php if ($total === 0): ?>
-    <p class="text-muted">Todavía no hay ninguna versión validada. En cuanto valides una aparecerá aquí.</p>
+    <p class="text-muted">Todavía no hay ninguna versión validada, ni ninguna "para imprimir". En cuanto promociones o valides una aparecerá aquí.</p>
 <?php else: ?>
     <?php foreach ($grupos as $grupo): ?>
         <?php if (empty($grupo['piezas'])) continue; // Categoría vacía: aquí no aporta nada, a diferencia del índice. ?>
@@ -61,8 +83,9 @@
                     <?php foreach ($grupo['piezas'] as $p): ?>
                         <?php
                             $variante = $p['variante'];
-                            $validada = $p['validada'];
-                            $enCarrito = in_array((int) $validada['id'], $carrito, true);
+                            $version  = $p['version'];
+                            $esValidada = $version['estado'] === 'validada';
+                            $enCarrito = in_array((int) $version['id'], $carrito, true);
                             $stls      = (int) ($p['stls'] ?? 0);
                             $tieneStl  = $stls > 0;
                         ?>
@@ -87,30 +110,37 @@
                                     <?php if ($p['variosVariantes']): ?>
                                         <div class="text-muted small text-truncate"><?= esc($variante['nombre']) ?></div>
                                     <?php endif; ?>
-                                    <div class="text-muted small">
-                                        v<?= sprintf('%03d', (int) $validada['numero']) ?>
+                                    <div class="text-muted small d-flex align-items-center flex-wrap gap-1">
+                                        <?php if ($esValidada): ?>
+                                            <span class="badge text-bg-success">
+                                                <i class="bi bi-check-circle-fill"></i> v<?= sprintf('%03d', (int) $version['numero']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span>v<?= sprintf('%03d', (int) $version['numero']) ?></span>
+                                            <?= $badgeEstadoVersion($version) ?>
+                                        <?php endif; ?>
                                         <?php if (!empty($variante['sku'])): ?>
-                                            · <?= esc($variante['sku']) ?>
+                                            <span><?= esc($variante['sku']) ?></span>
                                         <?php endif; ?>
                                         <?php // Se imprime en trozos: saberlo aquí evita mandar a la placa media pieza creyendo que va entera. ?>
                                         <?php if ($stls > 1): ?>
-                                            · <span title="Se imprime en <?= $stls ?> trozos"><i class="bi bi-boxes"></i> <?= $stls ?></span>
+                                            <span title="Se imprime en <?= $stls ?> trozos"><i class="bi bi-boxes"></i> <?= $stls ?></span>
                                         <?php endif; ?>
                                     </div>
 
                                     <?php if (!$tieneStl): ?>
                                         <div class="small text-muted mt-1">
-                                            <i class="bi bi-exclamation-circle"></i> sin STL
+                                            <i class="bi bi-exclamation-circle"></i> sin STL — adjúntalo desde la ficha
                                         </div>
                                     <?php elseif ($enCarrito): ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . (int) $validada['id']) ?>" class="mt-1">
+                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . (int) $version['id']) ?>" class="mt-1">
                                             <?= csrf_field() ?>
                                             <button class="btn btn-sm btn-success w-100 py-0">
                                                 <i class="bi bi-check-lg"></i> En la placa
                                             </button>
                                         </form>
                                     <?php else: ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . (int) $validada['id']) ?>" class="mt-1">
+                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . (int) $version['id']) ?>" class="mt-1">
                                             <?= csrf_field() ?>
                                             <button class="btn btn-sm btn-outline-primary w-100 py-0">
                                                 <i class="bi bi-plus-lg"></i> Añadir a la placa
