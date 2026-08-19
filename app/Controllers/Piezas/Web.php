@@ -62,6 +62,10 @@ class Web extends BaseController
     private const TAMANO_MAX_IMAGEN = 20 * 1024 * 1024; // 20 MB: fotos de móvil, no hace falta más.
     private const TAMANO_MAX_STL    = 50 * 1024 * 1024; // 50 MB: piezas pequeñas, pero con margen.
 
+    /** Solo para renders (vista previa): las referencias se guardan tal cual. */
+    private const RENDER_LADO_MAXIMO = 1024;
+    private const RENDER_PESO_MAXIMO = 300 * 1024; // 300 KB
+
     private PiezaCategoriaModel $categoriaModel;
     private PiezaMaquinaModel $maquinaModel;
     private PiezaFamiliaModel $familiaModel;
@@ -1164,7 +1168,7 @@ class Web extends BaseController
         return $this->verboDeVersion(
             $versionId,
             function () use ($versionId, $version) {
-                $extension = $this->validarImagen($this->request->getFile('imagen'));
+                $this->validarImagen($this->request->getFile('imagen'));
 
                 $id = $this->renderModel->insert([
                     'version_id'  => $versionId,
@@ -1176,8 +1180,15 @@ class Web extends BaseController
                     throw new RuntimeException('No se pudo registrar el render: ' . implode(' ', $this->renderModel->errors()));
                 }
 
-                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, $extension);
-                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+                // Es una vista previa, no el máster (eso sigue siendo el .blend) —
+                // se recomprime siempre a JPEG sin importar el formato de origen.
+                $temporalComprimido = $this->comprimirRender($this->request->getFile('imagen')->getTempName());
+
+                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, 'jpg');
+                $this->almacen->guardar($temporalComprimido, $ruta);
+                if (is_file($temporalComprimido)) {
+                    @unlink($temporalComprimido);
+                }
 
                 $this->renderModel->update($id, [
                     'ruta_imagen'  => $ruta,
@@ -1392,6 +1403,63 @@ class Web extends BaseController
         }
 
         return self::MIMES_IMAGEN[$mime];
+    }
+
+    /**
+     * Redimensiona a un máximo de 1024x1024 (nunca amplía) y va bajando la
+     * calidad JPEG hasta quedarse por debajo de 300 KB, o hasta el suelo de
+     * calidad si la foto no da más de sí. Solo para renders: son vista
+     * previa, no el original — las referencias (spec fase 9) se guardan tal
+     * cual porque de ahí se parte para modelar y ahí sí importa el detalle.
+     * Devuelve la ruta absoluta de un fichero temporal nuevo; quien llame es
+     * responsable de moverlo o borrarlo.
+     */
+    private function comprimirRender(string $rutaOrigenAbsoluta): string
+    {
+        $contenido = file_get_contents($rutaOrigenAbsoluta);
+        $original  = $contenido !== false ? @imagecreatefromstring($contenido) : false;
+        if ($original === false) {
+            throw new RuntimeException('No se pudo leer la imagen para comprimirla.');
+        }
+
+        $anchoOriginal = imagesx($original);
+        $altoOriginal  = imagesy($original);
+        $escala = min(1, self::RENDER_LADO_MAXIMO / max($anchoOriginal, $altoOriginal));
+        $destino = $rutaOrigenAbsoluta . '-comprimida.jpg';
+
+        // Primero se prueba a bajar solo la calidad JPEG; si una foto es
+        // tan ruidosa que ni al suelo de calidad entra en 300 KB (raro con
+        // fotos reales de móvil, pero posible), se va reduciendo también el
+        // tamaño hasta que quepa o hasta un mínimo razonable para no dejar
+        // una vista previa irreconocible.
+        for ($intento = 0; $intento < 6; $intento++) {
+            $ancho = max(1, (int) round($anchoOriginal * $escala));
+            $alto  = max(1, (int) round($altoOriginal * $escala));
+
+            // Se aplana a fondo blanco tanto si se redimensiona como si no:
+            // un PNG con transparencia necesita perder el canal alfa
+            // igualmente para poder guardarse como JPEG.
+            $plana = imagecreatetruecolor($ancho, $alto);
+            imagefill($plana, 0, 0, imagecolorallocate($plana, 255, 255, 255));
+            imagecopyresampled($plana, $original, 0, 0, 0, 0, $ancho, $alto, $anchoOriginal, $altoOriginal);
+
+            $calidad = 85;
+            do {
+                imagejpeg($plana, $destino, $calidad);
+                $calidad -= 10;
+            } while (filesize($destino) > self::RENDER_PESO_MAXIMO && $calidad >= 35);
+
+            imagedestroy($plana);
+
+            if (filesize($destino) <= self::RENDER_PESO_MAXIMO || min($ancho, $alto) <= 200) {
+                break;
+            }
+            $escala *= 0.85;
+        }
+
+        imagedestroy($original);
+
+        return $destino;
     }
 
     // ---- Plomería -------------------------------------------------------

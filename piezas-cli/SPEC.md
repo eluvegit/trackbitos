@@ -28,6 +28,7 @@
 | 27 | `trabajar` deja dicho el directorio para que el shell pueda entrar de verdad | ✅ Hecho (detalle abajo) |
 | 28 | La galería también admite piezas "para imprimir"/"sin validar", no solo validadas | ✅ Hecho (detalle abajo) |
 | 29 | Filtro combinable en galería (estado + con/sin STL) y tarjetas más pequeñas | ✅ Hecho (detalle abajo) |
+| 30 | Los renders se recomprimen al subirlos (máx. 1024x1024, máx. 300 KB) | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -738,6 +739,25 @@ es la pregunta real que se hace el usuario.
   cero. Aviso "Ninguna pieza coincide con los filtros" si el cruce vacía la lista entera.
 - **Tarjetas ~25% más pequeñas**: la rejilla pasa de `row-cols-2/3/4/5` a `row-cols-3/4/5/6` según
   el ancho (y `g-3` a `g-2`), para ver más piezas de un vistazo al trabajar con placas.
+
+**Fase 30 (2026-08-19): los renders se recomprimen al subirlos.** Un render es una vista previa
+del resultado impreso, no un máster que haya que conservar con detalle — así que no tenía sentido
+guardar fotos de móvil de varios MB cuando solo se van a ver como miniatura o en la ficha.
+
+- **Solo afecta a `Web::subirRender()`** (renders de una versión concreta). Las **referencias**
+  (`subirReferencia()`, tabla `piezas_referencias`) se guardan tal cual, sin tocar — son el
+  material de partida para modelar y ahí sí importa el detalle.
+- **`Web::comprimirRender()`**: redimensiona a un máximo de 1024×1024 (nunca amplía una foto más
+  pequeña) y siempre reconvierte a JPEG, aplanando a fondo blanco si el origen era un PNG con
+  transparencia. Baja la calidad JPEG en pasos de 10 (de 85 a 35) hasta bajar de 300 KB; si una
+  foto es tan ruidosa que ni al suelo de calidad entra (no ocurre con fotos reales de móvil, solo
+  con ruido sintético en pruebas), reduce también el tamaño en pasos del 15% hasta caber o hasta
+  un mínimo de 200 px de lado. Usa GD (`imagecreatefromstring`/`imagejpeg`, ya disponible en el
+  servidor, sin librerías nuevas).
+- El fichero se guarda siempre con extensión `.jpg` independientemente del formato de origen
+  (JPEG/PNG/WEBP), porque el contenido real ya es JPEG tras la recompresión.
+- Probado con una foto realista de 4032×3024 (los ~641 KB típicos de un móvil): sale en
+  1024×768 y ~31 KB, muy por debajo del límite.
 
 ---
 
