@@ -479,6 +479,12 @@ class Web extends BaseController
             // variantes, y es aquí — no en el índice — donde se miran.
             'referencias' => $this->referenciaModel
                 ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->findAll(),
+            // Renders sueltos (fase 31): de esta variante pero sin versión
+            // concreta todavía — antes de la primera promoción es la única
+            // clase de render que puede existir. Los que sí tienen versión
+            // ya se ven en su historial (arriba, dentro de $versiones).
+            'rendersSueltos' => $this->renderModel
+                ->where('variante_id', $id)->where('version_id', null)->orderBy('subida_en', 'DESC')->findAll(),
             'origen'    => $this->versionDeOrigen($variante),
             'versiones' => $versiones,
             'validada'  => $this->versionModel->where('variante_id', $id)->where('estado', 'validada')->first(),
@@ -1158,20 +1164,34 @@ class Web extends BaseController
         return redirect()->to($destino)->with('success', 'Referencia apartada a la papelera.');
     }
 
-    public function subirRender(int $versionId)
+    /**
+     * `version_id` es opcional (fase 31): un render cuelga siempre de la
+     * variante (el ancla que existe desde la creación de la pieza), y
+     * además de una versión concreta cuando se sube desde el historial de
+     * esa versión — ahí sigue significando "así salió esa iteración". Sin
+     * `version_id` es una foto de progreso suelta, útil antes de la
+     * primera promoción, cuando todavía no hay ninguna versión que elegir.
+     */
+    public function subirRender(int $varianteId)
     {
-        $version = $this->versionModel->find($versionId);
-        if (!$version) {
-            return redirect()->to(site_url('piezas'))->with('error', 'Esa versión no existe.');
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa variante no existe.');
         }
 
-        return $this->verboDeVersion(
-            $versionId,
-            function () use ($versionId, $version) {
+        $versionId = (int) ($this->request->getPost('version_id') ?: 0);
+        $version   = $versionId > 0 ? $this->versionModel->find($versionId) : null;
+        if ($versionId > 0 && (!$version || (int) $version['variante_id'] !== $varianteId)) {
+            return redirect()->to(site_url('piezas/variante/' . $varianteId))->with('error', 'Esa versión no es de esta variante.');
+        }
+
+        return $this->ejecutar(
+            function () use ($varianteId, $versionId) {
                 $this->validarImagen($this->request->getFile('imagen'));
 
                 $id = $this->renderModel->insert([
-                    'version_id'  => $versionId,
+                    'variante_id' => $varianteId,
+                    'version_id'  => $versionId > 0 ? $versionId : null,
                     'ruta_imagen' => '',
                     'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
                     'subida_en'   => date('Y-m-d H:i:s'),
@@ -1184,7 +1204,9 @@ class Web extends BaseController
                 // se recomprime siempre a JPEG sin importar el formato de origen.
                 $temporalComprimido = $this->comprimirRender($this->request->getFile('imagen')->getTempName());
 
-                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, 'jpg');
+                $ruta = $versionId > 0
+                    ? $this->almacen->rutaRender($varianteId, $versionId, $id, 'jpg')
+                    : $this->almacen->rutaRenderSuelto($varianteId, $id, 'jpg');
                 $this->almacen->guardar($temporalComprimido, $ruta);
                 if (is_file($temporalComprimido)) {
                     @unlink($temporalComprimido);
@@ -1196,9 +1218,12 @@ class Web extends BaseController
                     'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
                 ]);
 
-                return $version;
+                return $varianteId;
             },
-            fn() => sprintf('Render añadido a v%03d.', (int) $version['numero'])
+            fn() => site_url('piezas/variante/' . $varianteId),
+            fn() => $version
+                ? sprintf('Render añadido a v%03d.', (int) $version['numero'])
+                : 'Render añadido.'
         );
     }
 

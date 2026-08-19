@@ -29,6 +29,7 @@
 | 28 | La galería también admite piezas "para imprimir"/"sin validar", no solo validadas | ✅ Hecho (detalle abajo) |
 | 29 | Filtro combinable en galería (estado + con/sin STL) y tarjetas más pequeñas | ✅ Hecho (detalle abajo) |
 | 30 | Los renders se recomprimen al subirlos (máx. 1024x1024, máx. 300 KB) | ✅ Hecho (detalle abajo) |
+| 31 | Renders y referencias, subibles en cualquier momento (antes exigía haber promocionado) | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -758,6 +759,35 @@ guardar fotos de móvil de varios MB cuando solo se van a ver como miniatura o e
   (JPEG/PNG/WEBP), porque el contenido real ya es JPEG tras la recompresión.
 - Probado con una foto realista de 4032×3024 (los ~641 KB típicos de un móvil): sale en
   1024×768 y ~31 KB, muy por debajo del límite.
+
+**Fase 31 (2026-08-19): renders subibles en cualquier momento, no solo tras promocionar.** Las
+referencias (`subirReferencia`, cuelgan de `familia_id`) ya se podían subir siempre — existe desde
+que se crea la pieza. Los renders (`subirRender`) no: colgaban de `version_id`, y antes de la
+primera promoción no existe ninguna fila en `piezas_versiones`, así que no había dónde subir una
+foto de progreso del modelo. Era el hueco real detrás de "hasta que no promocionan no puedo subir
+nada".
+
+- **Migración `AllowRendersWithoutVersion`**: `piezas_renders` gana `variante_id` (se rellena en
+  los renders existentes a partir de su versión) y `version_id` pasa a admitir `NULL`. `variante_id`
+  es ahora el ancla real — como `familia_id` en las referencias — y `version_id` queda como dato
+  opcional para cuando el render sí es "el resultado visual de esa iteración concreta".
+- **`Web::subirRender(int $varianteId)`**: cambia de firma (antes `$versionId`). La ruta pasa de
+  `POST version/(:num)/render` a `POST variante/(:num)/render`. Si el formulario manda
+  `version_id` (el modal de "Añadir render" dentro del historial de una versión lo lleva oculto),
+  se valida que esa versión sea de esta variante y el render queda ligado a ella igual que antes;
+  si no lo manda, es un "render suelto" — solo `variante_id`, sin versión.
+- **Nueva tarjeta "Renders" en la ficha**, siempre visible junto a "Referencias" (antes y después
+  de promocionar), para los renders sin versión concreta — el mismo patrón visual que Referencias,
+  con su propio botón y modal de alta. Los renders que sí son de una versión se siguen viendo en
+  su historial, sin duplicarse aquí.
+- **`PiezaAlmacen::rutaRenderSuelto()`**: `variante-{id}/render-{id}.{ext}`, hermano de
+  `variante-{id}/version-{id}/render-{id}.{ext}` para los que sí tienen versión.
+- **Papelera (invariante 6)**: `PiezaService::purgarVariantesBorradas()` y
+  `purgarFamiliasBorradas()` recorrían los renders por versión — un render suelto (sin versión) se
+  les escapaba y su fichero se habría quedado huérfano al purgar. Añadido un barrido aparte por
+  `variante_id` con `version_id IS NULL` en los dos sitios.
+- **Pendiente de aplicar**: esta fase necesita `php spark migrate` en el servidor antes de
+  funcionar — la columna `variante_id` no existe todavía en la tabla real.
 
 ---
 
