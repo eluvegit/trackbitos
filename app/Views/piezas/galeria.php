@@ -114,8 +114,10 @@ foreach ($piezasTodas as $p) {
         <?php $categoria = $grupo['categoria']; ?>
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <div class="mb-3" data-grupo>
-            <?php // Igual que en el índice: pliega toda la línea, no solo la flecha. ?>
-            <div class="d-flex align-items-center gap-2 border-bottom pb-1 mb-2 user-select-none"
+            <?php // Igual que en el índice: pliega toda la línea, no solo la flecha. Fondo
+                  // sólido (gris suave, adaptado al tema oscuro) para distinguirla de un
+                  // vistazo de las tarjetas que trae debajo, en vez de un simple borde. ?>
+            <div class="d-flex align-items-center gap-2 bg-body-secondary rounded px-2 py-2 mb-2 user-select-none"
                 style="cursor: pointer" data-plegar="<?= $idGrupo ?>">
                 <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
                     aria-controls="<?= $idGrupo ?>" aria-expanded="true">

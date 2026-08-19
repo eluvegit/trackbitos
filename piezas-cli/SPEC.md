@@ -31,6 +31,7 @@
 | 30 | Los renders se recomprimen al subirlos (máx. 1024x1024, máx. 300 KB) | ✅ Hecho (detalle abajo) |
 | 31 | Renders y referencias, subibles en cualquier momento (antes exigía haber promocionado) | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 | 32 | Añadir/quitar/vaciar la placa en la galería ya no recarga la página (se perdía el filtro) | ✅ Hecho (detalle abajo) |
+| 33 | Cabeceras de categoría con fondo sólido en índice y galería, para distinguirlas del contenido | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -807,6 +808,20 @@ el que estabas — justo lo que hace falta para ir eligiendo varias "para imprim
   desaparecer del DOM. "Vaciar placa" sigue el mismo patrón, con su `confirm()` de siempre.
 - Nada de esto toca el filtro: al no haber recarga, `filtroEstado`/`filtroStl` (variables en
   memoria, fase 29) sencillamente no se tocan.
+
+**Fase 33 (2026-08-19): cabeceras de categoría con fondo sólido.** En índice y galería, la línea
+de cabecera de cada categoría (nombre, contador, flecha de plegar) solo se distinguía de las
+piezas de debajo por un `border-bottom` fino — poco visible de un vistazo, sobre todo con la app
+siempre en tema oscuro (`data-bs-theme="dark"` fijo en el layout, sin alternancia claro/oscuro).
+
+- **Índice**: la `<tr>` de cabecera pasa a `table-secondary` — la clase contextual de Bootstrap
+  pensada justo para esto (un gris suave con el texto y los bordes ya pareados, y que además
+  respeta el tema oscuro fijo de la app, a diferencia de forzar un color a mano).
+- **Galería**: al no ser una tabla, el `<div>` de cabecera cambia el `border-bottom` por
+  `bg-body-secondary` (superficie "secundaria" de Bootstrap, gris suave y también adaptada al
+  tema) más `rounded px-2 py-2`, para que quede como una franja sólida en vez de un simple filete.
+- Solo cambian clases de estilo — ningún id, atributo `data-*` ni estructura tocados, así que el
+  plegado (fase previa) y los contadores siguen funcionando igual.
 
 ---
 
