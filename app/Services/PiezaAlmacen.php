@@ -60,6 +60,12 @@ class PiezaAlmacen
         return sprintf('variante-%d/version-%d/render-%d.%s', $varianteId, $versionId, $renderId, $extension);
     }
 
+    /** Render sin versión concreta todavía (fase 31): sube directo a la variante. */
+    public function rutaRenderSuelto(int $varianteId, int $renderId, string $extension): string
+    {
+        return sprintf('variante-%d/render-%d.%s', $varianteId, $renderId, $extension);
+    }
+
     public function absoluta(string $rutaRelativa): string
     {
         // Las rutas las construye siempre esta clase a partir de IDs, pero

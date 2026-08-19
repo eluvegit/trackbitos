@@ -679,13 +679,15 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('sesion/(:num)/forzar-cierre', 'Web::forzarCierreSesion/$1');
     $routes->POST('sesion/(:num)/descartar-fichero', 'Web::descartarFicheroSesion/$1');
 
-    // Imágenes: referencias (familia) y renders (versión). A diferencia
-    // del .blend, se suben y se sirven desde aquí mismo (spec 1.1 +
-    // excepción documentada en la cabecera de Web.php).
+    // Imágenes: referencias (familia) y renders (variante, opcionalmente
+    // también de una versión concreta — fase 31, antes exigía versión
+    // promocionada y no había dónde subir nada antes de la primera
+    // promoción). A diferencia del .blend, se suben y se sirven desde
+    // aquí mismo (spec 1.1 + excepción documentada en la cabecera de Web.php).
     $routes->POST('familia/(:num)/referencia', 'Web::subirReferencia/$1');
     $routes->POST('referencia/(:num)/borrar', 'Web::borrarReferencia/$1');
     $routes->GET('referencia/(:num)/imagen', 'Web::imagenReferencia/$1');
-    $routes->POST('version/(:num)/render', 'Web::subirRender/$1');
+    $routes->POST('variante/(:num)/render', 'Web::subirRender/$1');
     $routes->POST('render/(:num)/borrar', 'Web::borrarRender/$1');
     $routes->GET('render/(:num)/imagen', 'Web::imagenRender/$1');
 

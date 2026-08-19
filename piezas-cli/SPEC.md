@@ -24,6 +24,14 @@
 | 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
 | 24 | Papelera también por variante suelta (no solo la pieza entera) | ✅ Hecho (detalle abajo) |
 | 25 | Directorio vacío ya no confunde con "corrupto", y sesiones activas en el índice | ✅ Hecho (detalle abajo) |
+| 26 | `trackbitos trabajar`/`limpiar`, vocabulario del índice, deshacer un juicio | ✅ Hecho (detalle abajo) |
+| 27 | `trabajar` deja dicho el directorio para que el shell pueda entrar de verdad | ✅ Hecho (detalle abajo) |
+| 28 | La galería también admite piezas "para imprimir"/"sin validar", no solo validadas | ✅ Hecho (detalle abajo) |
+| 29 | Filtro combinable en galería (estado + con/sin STL) y tarjetas más pequeñas | ✅ Hecho (detalle abajo) |
+| 30 | Los renders se recomprimen al subirlos (máx. 1024x1024, máx. 300 KB) | ✅ Hecho (detalle abajo) |
+| 31 | Renders y referencias, subibles en cualquier momento (antes exigía haber promocionado) | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
+| 32 | Añadir/quitar/vaciar la placa en la galería ya no recarga la página (se perdía el filtro) | ✅ Hecho (detalle abajo) |
+| 33 | Cabeceras de categoría con fondo sólido en índice y galería, para distinguirlas del contenido | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -679,6 +687,147 @@ delante las demás.
   mirando, todos sus botones de estado están apagados con razón: se sigue desde el cliente. Antes
   eso lo decía una frase gris que remitía a otra caja al final de la página; ahora esa misma
   tarjeta lleva el `trackbitos bajar "<pieza> <variante>"` listo para copiar.
+
+**Fase 27 (2026-08-19): `trabajar` deja dicho dónde, para que el shell pueda entrar de verdad.**
+`trackbitos trabajar` (fase 26 de la otra sesión) crea la carpeta y lanza Blender, pero no puede
+hacer que la terminal "entre" en ella — un proceso hijo no puede cambiar el directorio del shell
+que lo lanzó, es una limitación del sistema operativo, no un descuido del script.
+
+- **`ULTIMO_DIRECTORIO_PATH` (`~/.trackbitos/ultimo_directorio`) y `_recordar_directorio()`**:
+  `cmd_trabajar` escribe ahí la carpeta que resolvió, justo después de resolverla — antes de
+  llamar a `_bajar`, no después, para que quede dicho el sitio aunque `bajar` acabe negándose
+  (copia viva en la otra máquina, impresión sin juzgar...) y haya que ir a resolverlo a mano. Un
+  fallo escribiendo no tumba el comando: es una comodidad aparte, no el resultado real.
+- **Por qué hace falta una función de shell, no un alias.** Un alias sustituye el texto del
+  comando antes de ejecutarlo; no puede ejecutar un `cd` DESPUÉS de que termine. Se documenta en
+  el TUTORIAL (sección "Empezar de un golpe") una función de shell para `~/.zshrc` que llama al
+  script y, si el comando era `trabajar`/`t`, lee ese fichero y hace el `cd` de verdad. De paso
+  resuelve la otra mitad del mismo problema: la función expone `trackbitos` como comando desde
+  cualquier carpeta, sin tener que escribir la ruta relativa al script cada vez.
+- **Aplicado y probado en el Mac** (no hay copia personal de `trackbitos.py` en esa máquina — se
+  ejecuta directo desde el checkout, de ahí que hiciera falta la función). Snippet de PowerShell
+  para Windows dejado en el TUTORIAL, pendiente de aplicar ahí (falta confirmar la ruta real del
+  script en esa máquina).
+
+**Fase 28 (2026-08-19): la galería también admite "para imprimir" y "sin validar", no solo
+validadas.** Esta pantalla es para meter STL en placas, no para juzgar qué está terminado — y
+una versión "para imprimir" (borrador) o "impresa, pendiente de juzgar" ya puede tener un STL
+adjunto (spec fase 9: adjuntar STL es aparte de promocionar) aunque el resultado físico no esté
+decidido todavía. Antes esas piezas eran invisibles aquí hasta validar, aunque ya hubiera algo
+que imprimir.
+
+- **`Web::galeria()`**: si la variante no tiene versión validada, busca ahora la más reciente en
+  estado `borrador` o `impresa` (nunca `descartada` ni `superada` — de esas ya se sabe que no
+  sirven) y la ofrece en su lugar. Sigue sin mostrar nada si no hay ninguna versión en absoluto:
+  sin versión no hay a qué adjuntar un STL.
+- **Badge de estado en la tarjeta**, mismo vocabulario y estilo que `$badgeMadurez` del índice
+  (spec fase 26) para no decir dos cosas distintas de lo mismo según la pantalla: verde "vNNN ✓"
+  para la validada, azul "sin validar" para la impresa, gris "para imprimir" para la borrador.
+- El carrito y la descarga en `.zip` (`carritoAgregar`/`carritoDescargar`) ya trabajaban por id
+  de versión sin comprobar su estado — no hicieron falta cambios ahí.
+
+**Fase 29 (2026-08-19): filtro combinable en la galería y tarjetas más pequeñas.** Con las tres
+familias de estado mezcladas (fase 28) hacía falta poder aislarlas, y cruzarlas con si ya tienen
+STL o no — esa pantalla es justo para decidir qué exportar, así que "para imprimir" + "sin STL"
+es la pregunta real que se hace el usuario.
+
+- **Dos barras de filtro, no una**: estado (Todas / Validada / Sin validar / Para imprimir) y STL
+  (Con STL / Sin STL), cada botón con su contador y deshabilitado si ese grupo está vacío. A
+  diferencia del filtro único del índice, aquí las dos facetas se combinan entre sí con Y lógico
+  — es lo que pedía el caso de uso, no una single-select como en el índice.
+- Cada tarjeta lleva `data-estado` y `data-stl` en su `.col`; el JS aplica ambos filtros a la vez,
+  esconde con `d-none` las tarjetas que no cumplen, actualiza el contador de cada categoría a lo
+  que queda visible y reutiliza `pintar()` (la misma función del plegado) para abrir de oficio
+  las categorías que sí tienen resultado y esconder la cabecera entera de las que se quedan a
+  cero. Aviso "Ninguna pieza coincide con los filtros" si el cruce vacía la lista entera.
+- **Tarjetas ~25% más pequeñas**: la rejilla pasa de `row-cols-2/3/4/5` a `row-cols-3/4/5/6` según
+  el ancho (y `g-3` a `g-2`), para ver más piezas de un vistazo al trabajar con placas.
+
+**Fase 30 (2026-08-19): los renders se recomprimen al subirlos.** Un render es una vista previa
+del resultado impreso, no un máster que haya que conservar con detalle — así que no tenía sentido
+guardar fotos de móvil de varios MB cuando solo se van a ver como miniatura o en la ficha.
+
+- **Solo afecta a `Web::subirRender()`** (renders de una versión concreta). Las **referencias**
+  (`subirReferencia()`, tabla `piezas_referencias`) se guardan tal cual, sin tocar — son el
+  material de partida para modelar y ahí sí importa el detalle.
+- **`Web::comprimirRender()`**: redimensiona a un máximo de 1024×1024 (nunca amplía una foto más
+  pequeña) y siempre reconvierte a JPEG, aplanando a fondo blanco si el origen era un PNG con
+  transparencia. Baja la calidad JPEG en pasos de 10 (de 85 a 35) hasta bajar de 300 KB; si una
+  foto es tan ruidosa que ni al suelo de calidad entra (no ocurre con fotos reales de móvil, solo
+  con ruido sintético en pruebas), reduce también el tamaño en pasos del 15% hasta caber o hasta
+  un mínimo de 200 px de lado. Usa GD (`imagecreatefromstring`/`imagejpeg`, ya disponible en el
+  servidor, sin librerías nuevas).
+- El fichero se guarda siempre con extensión `.jpg` independientemente del formato de origen
+  (JPEG/PNG/WEBP), porque el contenido real ya es JPEG tras la recompresión.
+- Probado con una foto realista de 4032×3024 (los ~641 KB típicos de un móvil): sale en
+  1024×768 y ~31 KB, muy por debajo del límite.
+
+**Fase 31 (2026-08-19): renders subibles en cualquier momento, no solo tras promocionar.** Las
+referencias (`subirReferencia`, cuelgan de `familia_id`) ya se podían subir siempre — existe desde
+que se crea la pieza. Los renders (`subirRender`) no: colgaban de `version_id`, y antes de la
+primera promoción no existe ninguna fila en `piezas_versiones`, así que no había dónde subir una
+foto de progreso del modelo. Era el hueco real detrás de "hasta que no promocionan no puedo subir
+nada".
+
+- **Migración `AllowRendersWithoutVersion`**: `piezas_renders` gana `variante_id` (se rellena en
+  los renders existentes a partir de su versión) y `version_id` pasa a admitir `NULL`. `variante_id`
+  es ahora el ancla real — como `familia_id` en las referencias — y `version_id` queda como dato
+  opcional para cuando el render sí es "el resultado visual de esa iteración concreta".
+- **`Web::subirRender(int $varianteId)`**: cambia de firma (antes `$versionId`). La ruta pasa de
+  `POST version/(:num)/render` a `POST variante/(:num)/render`. Si el formulario manda
+  `version_id` (el modal de "Añadir render" dentro del historial de una versión lo lleva oculto),
+  se valida que esa versión sea de esta variante y el render queda ligado a ella igual que antes;
+  si no lo manda, es un "render suelto" — solo `variante_id`, sin versión.
+- **Nueva tarjeta "Renders" en la ficha**, siempre visible junto a "Referencias" (antes y después
+  de promocionar), para los renders sin versión concreta — el mismo patrón visual que Referencias,
+  con su propio botón y modal de alta. Los renders que sí son de una versión se siguen viendo en
+  su historial, sin duplicarse aquí.
+- **`PiezaAlmacen::rutaRenderSuelto()`**: `variante-{id}/render-{id}.{ext}`, hermano de
+  `variante-{id}/version-{id}/render-{id}.{ext}` para los que sí tienen versión.
+- **Papelera (invariante 6)**: `PiezaService::purgarVariantesBorradas()` y
+  `purgarFamiliasBorradas()` recorrían los renders por versión — un render suelto (sin versión) se
+  les escapaba y su fichero se habría quedado huérfano al purgar. Añadido un barrido aparte por
+  `variante_id` con `version_id IS NULL` en los dos sitios.
+- **Pendiente de aplicar**: esta fase necesita `php spark migrate` en el servidor antes de
+  funcionar — la columna `variante_id` no existe todavía en la tabla real.
+
+**Fase 32 (2026-08-19): la placa de la galería ya no recarga la página.** "Añadir/quitar de la
+placa" eran `<form>` normales: cada clic recargaba y se perdía el filtro estado+STL (fase 29) en
+el que estabas — justo lo que hace falta para ir eligiendo varias "para imprimir" de un vistazo.
+
+- **`Web::carritoAgregar()`/`carritoQuitar()`/`carritoVaciar()`**: sin cambiar su comportamiento
+  de siempre (formulario normal → redirect con flash), ahora responden con JSON
+  (`{ok, enCarrito, total}`) cuando la llegada es por AJAX (`$this->request->isAJAX()`). La ficha
+  de variante sigue usando el `<form>` de toda la vida, que no tiene este problema.
+- **Galería**: el botón de cada tarjeta pasa de `<form>` a un botón suelto con
+  `data-carrito-boton`/`data-version-id`/`data-en-carrito`, movido por `fetch()` con el token CSRF
+  en la cabecera `X-CSRF-TOKEN` (el hash vale para toda la sesión — `Security::$regenerate` está a
+  `false` — así que basta leerlo una vez de un input oculto en la página). Al responder el
+  servidor, solo se repinta ese botón (clase, icono, texto) y el contador de la cabecera
+  ("Descargar placa (N)"), que ahora se muestra/oculta con `d-none` en vez de aparecer y
+  desaparecer del DOM. "Vaciar placa" sigue el mismo patrón, con su `confirm()` de siempre.
+- Nada de esto toca el filtro: al no haber recarga, `filtroEstado`/`filtroStl` (variables en
+  memoria, fase 29) sencillamente no se tocan.
+
+**Fase 33 (2026-08-19): cabeceras de categoría con fondo sólido.** En índice y galería, la línea
+de cabecera de cada categoría (nombre, contador, flecha de plegar) solo se distinguía de las
+piezas de debajo por un `border-bottom` fino — poco visible de un vistazo, sobre todo con la app
+siempre en tema oscuro (`data-bs-theme="dark"` fijo en el layout, sin alternancia claro/oscuro).
+
+- **Índice**: la `<tr>` de cabecera pasa a `table-secondary` — la clase contextual de Bootstrap
+  pensada justo para esto (un gris suave con el texto y los bordes ya pareados, y que además
+  respeta el tema oscuro fijo de la app, a diferencia de forzar un color a mano).
+- **Galería**: al no ser una tabla, el `<div>` de cabecera cambia el `border-bottom` por
+  `bg-body-secondary` (superficie "secundaria" de Bootstrap, gris suave y también adaptada al
+  tema) más `rounded px-2 py-2`, para que quede como una franja sólida en vez de un simple filete.
+- Solo cambian clases de estilo — ningún id, atributo `data-*` ni estructura tocados, así que el
+  plegado (fase previa) y los contadores siguen funcionando igual.
+- **Corrección en la misma fase**: `table-secondary` en la `<tr>` del índice salía en un gris
+  distinto al `bg-body-secondary` de la galería (son variantes de Bootstrap distintas, pensadas
+  cada una para su propio caso). Cambiado el índice a `bg-body-secondary` también, puesto en el
+  `<td>` (que ya lleva `colspan="7"`, es toda la fila) en vez de en la `<tr>` — así no depende de
+  cómo resuelve Bootstrap las variables de color de tabla, y el gris queda igual en las dos
+  pantallas.
 
 ---
 

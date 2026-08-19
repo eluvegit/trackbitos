@@ -62,6 +62,10 @@ class Web extends BaseController
     private const TAMANO_MAX_IMAGEN = 20 * 1024 * 1024; // 20 MB: fotos de móvil, no hace falta más.
     private const TAMANO_MAX_STL    = 50 * 1024 * 1024; // 50 MB: piezas pequeñas, pero con margen.
 
+    /** Solo para renders (vista previa): las referencias se guardan tal cual. */
+    private const RENDER_LADO_MAXIMO = 1024;
+    private const RENDER_PESO_MAXIMO = 300 * 1024; // 300 KB
+
     private PiezaCategoriaModel $categoriaModel;
     private PiezaMaquinaModel $maquinaModel;
     private PiezaFamiliaModel $familiaModel;
@@ -475,6 +479,12 @@ class Web extends BaseController
             // variantes, y es aquí — no en el índice — donde se miran.
             'referencias' => $this->referenciaModel
                 ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->findAll(),
+            // Renders sueltos (fase 31): de esta variante pero sin versión
+            // concreta todavía — antes de la primera promoción es la única
+            // clase de render que puede existir. Los que sí tienen versión
+            // ya se ven en su historial (arriba, dentro de $versiones).
+            'rendersSueltos' => $this->renderModel
+                ->where('variante_id', $id)->where('version_id', null)->orderBy('subida_en', 'DESC')->findAll(),
             'origen'    => $this->versionDeOrigen($variante),
             'versiones' => $versiones,
             'validada'  => $this->versionModel->where('variante_id', $id)->where('estado', 'validada')->first(),
@@ -526,14 +536,28 @@ class Web extends BaseController
         }
 
         foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->findAll() as $variante) {
-            $validada = $this->versionModel
+            $version = $this->versionModel
                 ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
-            if (!$validada) {
+
+            if (!$version) {
+                // Sin validada todavía: la candidata es la más reciente que
+                // siga siendo "para imprimir" (borrador) o "impresa,
+                // pendiente de juzgar" — este apartado es para meter STL en
+                // placas, y esas dos ya pueden tener uno adjunto aunque el
+                // resultado físico no esté juzgado. Ni "descartada" ni
+                // "superada" cuentan: de esas ya se sabe que no sirven.
+                $version = $this->versionModel
+                    ->where('variante_id', $variante['id'])
+                    ->whereIn('estado', ['borrador', 'impresa'])
+                    ->orderBy('numero', 'DESC')->first();
+            }
+
+            if (!$version) {
                 continue;
             }
 
             $render = $this->renderModel
-                ->where('version_id', $validada['id'])->orderBy('subida_en', 'DESC')->first();
+                ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->first();
             $miniatura = $render ? site_url('piezas/render/' . $render['id'] . '/imagen') : null;
 
             if (!$miniatura) {
@@ -548,10 +572,12 @@ class Web extends BaseController
                 'variante'        => $variante,
                 'familiaNombre'   => $nombresFamilia[$familiaId] ?? '?',
                 'variosVariantes' => ($conteoVariantes[$familiaId] ?? 0) > 1,
-                'validada'        => $validada,
+                // La versión que se ofrece para la placa: validada si la
+                // hay, si no la más reciente "para imprimir"/"sin validar".
+                'version'         => $version,
                 // Cuántos trozos hay que imprimir (fase 21): la galería solo
                 // necesita saber si hay alguno y cuántos, no cuáles.
-                'stls'            => count($this->servicio->stlsDe((int) $validada['id'])),
+                'stls'            => count($this->servicio->stlsDe((int) $version['id'])),
                 'miniatura'       => $miniatura,
                 // Mismo campo que espera agruparPorCategoria() para las
                 // filas del índice: se reutiliza tal cual, sin duplicar la
@@ -570,17 +596,32 @@ class Web extends BaseController
         ]);
     }
 
+    /**
+     * La galería llama a estos tres por fetch() para no perder el filtro
+     * en el que está trabajando (estado/STL, fase 29) con una recarga
+     * completa — de ahí la rama AJAX en los tres. `variante.php` sigue
+     * usando el formulario normal de toda la vida, que no tiene ese problema.
+     */
     public function carritoAgregar(int $versionId)
     {
         $version = $this->versionModel->find($versionId);
         if (!$version || $this->servicio->stlsDe($versionId) === []) {
-            return redirect()->back()->with('error', 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.');
+            $mensaje = 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.';
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
         }
 
         $carrito = $this->carritoActual();
         if (!in_array($versionId, $carrito, true)) {
             $carrito[] = $versionId;
             $this->carritoGuardar($carrito);
+        }
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'enCarrito' => true, 'total' => count($this->carritoActual())]);
         }
 
         return redirect()->back()->with('success', 'Añadida a la placa.');
@@ -590,12 +631,20 @@ class Web extends BaseController
     {
         $this->carritoGuardar(array_values(array_diff($this->carritoActual(), [$versionId])));
 
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'enCarrito' => false, 'total' => count($this->carritoActual())]);
+        }
+
         return redirect()->back()->with('success', 'Quitada de la placa.');
     }
 
     public function carritoVaciar()
     {
         $this->carritoGuardar([]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'total' => 0]);
+        }
 
         return redirect()->to(site_url('piezas/galeria'))->with('success', 'Placa vaciada.');
     }
@@ -1138,20 +1187,34 @@ class Web extends BaseController
         return redirect()->to($destino)->with('success', 'Referencia apartada a la papelera.');
     }
 
-    public function subirRender(int $versionId)
+    /**
+     * `version_id` es opcional (fase 31): un render cuelga siempre de la
+     * variante (el ancla que existe desde la creación de la pieza), y
+     * además de una versión concreta cuando se sube desde el historial de
+     * esa versión — ahí sigue significando "así salió esa iteración". Sin
+     * `version_id` es una foto de progreso suelta, útil antes de la
+     * primera promoción, cuando todavía no hay ninguna versión que elegir.
+     */
+    public function subirRender(int $varianteId)
     {
-        $version = $this->versionModel->find($versionId);
-        if (!$version) {
-            return redirect()->to(site_url('piezas'))->with('error', 'Esa versión no existe.');
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa variante no existe.');
         }
 
-        return $this->verboDeVersion(
-            $versionId,
-            function () use ($versionId, $version) {
-                $extension = $this->validarImagen($this->request->getFile('imagen'));
+        $versionId = (int) ($this->request->getPost('version_id') ?: 0);
+        $version   = $versionId > 0 ? $this->versionModel->find($versionId) : null;
+        if ($versionId > 0 && (!$version || (int) $version['variante_id'] !== $varianteId)) {
+            return redirect()->to(site_url('piezas/variante/' . $varianteId))->with('error', 'Esa versión no es de esta variante.');
+        }
+
+        return $this->ejecutar(
+            function () use ($varianteId, $versionId) {
+                $this->validarImagen($this->request->getFile('imagen'));
 
                 $id = $this->renderModel->insert([
-                    'version_id'  => $versionId,
+                    'variante_id' => $varianteId,
+                    'version_id'  => $versionId > 0 ? $versionId : null,
                     'ruta_imagen' => '',
                     'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
                     'subida_en'   => date('Y-m-d H:i:s'),
@@ -1160,8 +1223,17 @@ class Web extends BaseController
                     throw new RuntimeException('No se pudo registrar el render: ' . implode(' ', $this->renderModel->errors()));
                 }
 
-                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, $extension);
-                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+                // Es una vista previa, no el máster (eso sigue siendo el .blend) —
+                // se recomprime siempre a JPEG sin importar el formato de origen.
+                $temporalComprimido = $this->comprimirRender($this->request->getFile('imagen')->getTempName());
+
+                $ruta = $versionId > 0
+                    ? $this->almacen->rutaRender($varianteId, $versionId, $id, 'jpg')
+                    : $this->almacen->rutaRenderSuelto($varianteId, $id, 'jpg');
+                $this->almacen->guardar($temporalComprimido, $ruta);
+                if (is_file($temporalComprimido)) {
+                    @unlink($temporalComprimido);
+                }
 
                 $this->renderModel->update($id, [
                     'ruta_imagen'  => $ruta,
@@ -1169,9 +1241,12 @@ class Web extends BaseController
                     'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
                 ]);
 
-                return $version;
+                return $varianteId;
             },
-            fn() => sprintf('Render añadido a v%03d.', (int) $version['numero'])
+            fn() => site_url('piezas/variante/' . $varianteId),
+            fn() => $version
+                ? sprintf('Render añadido a v%03d.', (int) $version['numero'])
+                : 'Render añadido.'
         );
     }
 
@@ -1376,6 +1451,63 @@ class Web extends BaseController
         }
 
         return self::MIMES_IMAGEN[$mime];
+    }
+
+    /**
+     * Redimensiona a un máximo de 1024x1024 (nunca amplía) y va bajando la
+     * calidad JPEG hasta quedarse por debajo de 300 KB, o hasta el suelo de
+     * calidad si la foto no da más de sí. Solo para renders: son vista
+     * previa, no el original — las referencias (spec fase 9) se guardan tal
+     * cual porque de ahí se parte para modelar y ahí sí importa el detalle.
+     * Devuelve la ruta absoluta de un fichero temporal nuevo; quien llame es
+     * responsable de moverlo o borrarlo.
+     */
+    private function comprimirRender(string $rutaOrigenAbsoluta): string
+    {
+        $contenido = file_get_contents($rutaOrigenAbsoluta);
+        $original  = $contenido !== false ? @imagecreatefromstring($contenido) : false;
+        if ($original === false) {
+            throw new RuntimeException('No se pudo leer la imagen para comprimirla.');
+        }
+
+        $anchoOriginal = imagesx($original);
+        $altoOriginal  = imagesy($original);
+        $escala = min(1, self::RENDER_LADO_MAXIMO / max($anchoOriginal, $altoOriginal));
+        $destino = $rutaOrigenAbsoluta . '-comprimida.jpg';
+
+        // Primero se prueba a bajar solo la calidad JPEG; si una foto es
+        // tan ruidosa que ni al suelo de calidad entra en 300 KB (raro con
+        // fotos reales de móvil, pero posible), se va reduciendo también el
+        // tamaño hasta que quepa o hasta un mínimo razonable para no dejar
+        // una vista previa irreconocible.
+        for ($intento = 0; $intento < 6; $intento++) {
+            $ancho = max(1, (int) round($anchoOriginal * $escala));
+            $alto  = max(1, (int) round($altoOriginal * $escala));
+
+            // Se aplana a fondo blanco tanto si se redimensiona como si no:
+            // un PNG con transparencia necesita perder el canal alfa
+            // igualmente para poder guardarse como JPEG.
+            $plana = imagecreatetruecolor($ancho, $alto);
+            imagefill($plana, 0, 0, imagecolorallocate($plana, 255, 255, 255));
+            imagecopyresampled($plana, $original, 0, 0, 0, 0, $ancho, $alto, $anchoOriginal, $altoOriginal);
+
+            $calidad = 85;
+            do {
+                imagejpeg($plana, $destino, $calidad);
+                $calidad -= 10;
+            } while (filesize($destino) > self::RENDER_PESO_MAXIMO && $calidad >= 35);
+
+            imagedestroy($plana);
+
+            if (filesize($destino) <= self::RENDER_PESO_MAXIMO || min($ancho, $alto) <= 200) {
+                break;
+            }
+            $escala *= 0.85;
+        }
+
+        imagedestroy($original);
+
+        return $destino;
     }
 
     // ---- Plomería -------------------------------------------------------

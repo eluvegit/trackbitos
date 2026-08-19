@@ -446,6 +446,12 @@ class PiezaService
                 }
             }
 
+            // Renders sueltos (fase 31): sin version_id, así que no salen
+            // del bucle de arriba — hay que apartarlos aparte.
+            foreach ($renderModel->where('variante_id', $varianteId)->where('version_id', null)->findAll() as $render) {
+                $almacen->aPapelera($render['ruta_imagen']);
+            }
+
             foreach ($this->ramaModel->where('variante_id', $varianteId)->findAll() as $rama) {
                 foreach ($this->sesionModel->where('rama_id', $rama['id'])->where('purgada', 0)->findAll() as $sesion) {
                     if (!empty($sesion['ruta_blend'])) {
@@ -514,6 +520,12 @@ class PiezaService
                     foreach ($renderModel->where('version_id', $version['id'])->findAll() as $render) {
                         $almacen->aPapelera($render['ruta_imagen']);
                     }
+                }
+
+                // Renders sueltos (fase 31): sin version_id, así que no
+                // salen del bucle de arriba — hay que apartarlos aparte.
+                foreach ($renderModel->where('variante_id', $varianteId)->where('version_id', null)->findAll() as $render) {
+                    $almacen->aPapelera($render['ruta_imagen']);
                 }
 
                 foreach ($this->ramaModel->where('variante_id', $varianteId)->findAll() as $rama) {
