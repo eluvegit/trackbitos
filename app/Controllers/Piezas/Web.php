@@ -596,17 +596,32 @@ class Web extends BaseController
         ]);
     }
 
+    /**
+     * La galería llama a estos tres por fetch() para no perder el filtro
+     * en el que está trabajando (estado/STL, fase 29) con una recarga
+     * completa — de ahí la rama AJAX en los tres. `variante.php` sigue
+     * usando el formulario normal de toda la vida, que no tiene ese problema.
+     */
     public function carritoAgregar(int $versionId)
     {
         $version = $this->versionModel->find($versionId);
         if (!$version || $this->servicio->stlsDe($versionId) === []) {
-            return redirect()->back()->with('error', 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.');
+            $mensaje = 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.';
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
+            }
+
+            return redirect()->back()->with('error', $mensaje);
         }
 
         $carrito = $this->carritoActual();
         if (!in_array($versionId, $carrito, true)) {
             $carrito[] = $versionId;
             $this->carritoGuardar($carrito);
+        }
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'enCarrito' => true, 'total' => count($this->carritoActual())]);
         }
 
         return redirect()->back()->with('success', 'Añadida a la placa.');
@@ -616,12 +631,20 @@ class Web extends BaseController
     {
         $this->carritoGuardar(array_values(array_diff($this->carritoActual(), [$versionId])));
 
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'enCarrito' => false, 'total' => count($this->carritoActual())]);
+        }
+
         return redirect()->back()->with('success', 'Quitada de la placa.');
     }
 
     public function carritoVaciar()
     {
         $this->carritoGuardar([]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'total' => 0]);
+        }
 
         return redirect()->to(site_url('piezas/galeria'))->with('success', 'Placa vaciada.');
     }

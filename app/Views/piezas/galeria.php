@@ -1,24 +1,25 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<!-- Token para los fetch() de la placa (añadir/quitar/vaciar sin recargar,
+     así no se pierde el filtro de la galería — fase 32). Con
+     $config->regenerate = false el hash vale para toda la sesión: basta
+     leerlo una vez aquí. -->
+<input type="hidden" id="piezasCsrfToken" name="<?= csrf_token() ?>" value="<?= csrf_hash() ?>"
+    data-carrito-base="<?= site_url('piezas/carrito/') ?>">
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-grid-3x3-gap text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Galería</strong>
 
-    <?php if (!empty($carrito)): ?>
-        <div class="ms-auto d-flex gap-2">
-            <form method="post" action="<?= site_url('piezas/carrito/vaciar') ?>">
-                <?= csrf_field() ?>
-                <button class="btn btn-sm btn-outline-secondary"
-                    onclick="return confirm('¿Vaciar la placa?');">Vaciar placa</button>
-            </form>
-            <a href="<?= site_url('piezas/carrito/descargar') ?>" class="btn btn-sm btn-success">
-                <i class="bi bi-file-earmark-zip"></i> Descargar placa (<?= count($carrito) ?>)
-            </a>
-        </div>
-    <?php endif; ?>
+    <div class="ms-auto d-flex gap-2 <?= empty($carrito) ? 'd-none' : '' ?>" id="cabeceraCarrito">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="botonVaciarPlaca">Vaciar placa</button>
+        <a href="<?= site_url('piezas/carrito/descargar') ?>" class="btn btn-sm btn-success">
+            <i class="bi bi-file-earmark-zip"></i> Descargar placa (<span id="contadorPlaca"><?= count($carrito) ?></span>)
+        </a>
+    </div>
 </h5>
 
 <?php if (session('success')): ?>
@@ -181,20 +182,17 @@ foreach ($piezasTodas as $p) {
                                         <div class="small text-muted mt-1">
                                             <i class="bi bi-exclamation-circle"></i> sin STL — adjúntalo desde la ficha
                                         </div>
-                                    <?php elseif ($enCarrito): ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . (int) $version['id']) ?>" class="mt-1">
-                                            <?= csrf_field() ?>
-                                            <button class="btn btn-sm btn-success w-100 py-0">
-                                                <i class="bi bi-check-lg"></i> En la placa
-                                            </button>
-                                        </form>
                                     <?php else: ?>
-                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . (int) $version['id']) ?>" class="mt-1">
-                                            <?= csrf_field() ?>
-                                            <button class="btn btn-sm btn-outline-primary w-100 py-0">
-                                                <i class="bi bi-plus-lg"></i> Añadir a la placa
-                                            </button>
-                                        </form>
+                                        <?php // Botón único con estado, movido por fetch() (fase 32): un
+                                              // <form> con recarga completa perdía el filtro en el que
+                                              // estabas trabajando cada vez que añadías una pieza. ?>
+                                        <button type="button" class="btn btn-sm w-100 py-0 mt-1
+                                            <?= $enCarrito ? 'btn-success' : 'btn-outline-primary' ?>"
+                                            data-carrito-boton data-version-id="<?= (int) $version['id'] ?>"
+                                            data-en-carrito="<?= $enCarrito ? '1' : '0' ?>">
+                                            <i class="bi <?= $enCarrito ? 'bi-check-lg' : 'bi-plus-lg' ?>"></i>
+                                            <?= $enCarrito ? 'En la placa' : 'Añadir a la placa' ?>
+                                        </button>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -318,6 +316,80 @@ foreach ($piezasTodas as $p) {
         function () { return filtroEstado; }, function (v) { filtroEstado = v; });
     engancharFacet(cajaStl, 'data-filtro-stl',
         function () { return filtroStl; }, function (v) { filtroStl = v; });
+
+    // ---- Placa: añadir/quitar/vaciar sin recargar la página --------------
+    // Con <form> normal, cada "Añadir a la placa" recargaba y se perdía el
+    // filtro (fase 29) en el que estabas trabajando. Con fetch() la página
+    // no se mueve de sitio.
+    var tokenCampo = document.getElementById('piezasCsrfToken');
+    var baseCarrito = tokenCampo ? tokenCampo.dataset.carritoBase : '';
+    var cabeceraCarrito = document.getElementById('cabeceraCarrito');
+    var contadorPlaca = document.getElementById('contadorPlaca');
+
+    function pintarBotonPlaca(boton, enCarrito) {
+        boton.setAttribute('data-en-carrito', enCarrito ? '1' : '0');
+        boton.classList.toggle('btn-success', enCarrito);
+        boton.classList.toggle('btn-outline-primary', !enCarrito);
+        var icono = boton.querySelector('i');
+        if (icono) {
+            icono.classList.toggle('bi-check-lg', enCarrito);
+            icono.classList.toggle('bi-plus-lg', !enCarrito);
+        }
+        boton.lastChild.textContent = enCarrito ? ' En la placa' : ' Añadir a la placa';
+    }
+
+    function actualizarContadorPlaca(total) {
+        if (contadorPlaca) contadorPlaca.textContent = total;
+        if (cabeceraCarrito) cabeceraCarrito.classList.toggle('d-none', total === 0);
+    }
+
+    function llamadaPlaca(url) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': tokenCampo ? tokenCampo.value : ''
+            }
+        }).then(function (r) { return r.json(); });
+    }
+
+    document.addEventListener('click', function (e) {
+        var boton = e.target.closest('[data-carrito-boton]');
+        if (!boton) return;
+
+        var versionId = boton.getAttribute('data-version-id');
+        var enCarrito = boton.getAttribute('data-en-carrito') === '1';
+        var url = baseCarrito + (enCarrito ? 'quitar/' : 'agregar/') + versionId;
+
+        boton.disabled = true;
+        llamadaPlaca(url).then(function (datos) {
+            boton.disabled = false;
+            if (!datos.ok) {
+                alert(datos.mensaje || 'No se pudo actualizar la placa.');
+                return;
+            }
+            pintarBotonPlaca(boton, datos.enCarrito);
+            actualizarContadorPlaca(datos.total);
+        }).catch(function () {
+            boton.disabled = false;
+            alert('No se pudo hablar con el servidor.');
+        });
+    });
+
+    var botonVaciar = document.getElementById('botonVaciarPlaca');
+    if (botonVaciar) {
+        botonVaciar.addEventListener('click', function () {
+            if (!confirm('¿Vaciar la placa?')) return;
+
+            llamadaPlaca(baseCarrito + 'vaciar').then(function (datos) {
+                if (!datos.ok) return;
+                document.querySelectorAll('[data-carrito-boton]').forEach(function (b) {
+                    pintarBotonPlaca(b, false);
+                });
+                actualizarContadorPlaca(0);
+            });
+        });
+    }
 })();
 </script>
 

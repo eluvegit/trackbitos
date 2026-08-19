@@ -30,6 +30,7 @@
 | 29 | Filtro combinable en galería (estado + con/sin STL) y tarjetas más pequeñas | ✅ Hecho (detalle abajo) |
 | 30 | Los renders se recomprimen al subirlos (máx. 1024x1024, máx. 300 KB) | ✅ Hecho (detalle abajo) |
 | 31 | Renders y referencias, subibles en cualquier momento (antes exigía haber promocionado) | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
+| 32 | Añadir/quitar/vaciar la placa en la galería ya no recarga la página (se perdía el filtro) | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -788,6 +789,24 @@ nada".
   `variante_id` con `version_id IS NULL` en los dos sitios.
 - **Pendiente de aplicar**: esta fase necesita `php spark migrate` en el servidor antes de
   funcionar — la columna `variante_id` no existe todavía en la tabla real.
+
+**Fase 32 (2026-08-19): la placa de la galería ya no recarga la página.** "Añadir/quitar de la
+placa" eran `<form>` normales: cada clic recargaba y se perdía el filtro estado+STL (fase 29) en
+el que estabas — justo lo que hace falta para ir eligiendo varias "para imprimir" de un vistazo.
+
+- **`Web::carritoAgregar()`/`carritoQuitar()`/`carritoVaciar()`**: sin cambiar su comportamiento
+  de siempre (formulario normal → redirect con flash), ahora responden con JSON
+  (`{ok, enCarrito, total}`) cuando la llegada es por AJAX (`$this->request->isAJAX()`). La ficha
+  de variante sigue usando el `<form>` de toda la vida, que no tiene este problema.
+- **Galería**: el botón de cada tarjeta pasa de `<form>` a un botón suelto con
+  `data-carrito-boton`/`data-version-id`/`data-en-carrito`, movido por `fetch()` con el token CSRF
+  en la cabecera `X-CSRF-TOKEN` (el hash vale para toda la sesión — `Security::$regenerate` está a
+  `false` — así que basta leerlo una vez de un input oculto en la página). Al responder el
+  servidor, solo se repinta ese botón (clase, icono, texto) y el contador de la cabecera
+  ("Descargar placa (N)"), que ahora se muestra/oculta con `d-none` en vez de aparecer y
+  desaparecer del DOM. "Vaciar placa" sigue el mismo patrón, con su `confirm()` de siempre.
+- Nada de esto toca el filtro: al no haber recarga, `filtroEstado`/`filtroStl` (variables en
+  memoria, fase 29) sencillamente no se tocan.
 
 ---
 
