@@ -822,6 +822,12 @@ siempre en tema oscuro (`data-bs-theme="dark"` fijo en el layout, sin alternanci
   tema) más `rounded px-2 py-2`, para que quede como una franja sólida en vez de un simple filete.
 - Solo cambian clases de estilo — ningún id, atributo `data-*` ni estructura tocados, así que el
   plegado (fase previa) y los contadores siguen funcionando igual.
+- **Corrección en la misma fase**: `table-secondary` en la `<tr>` del índice salía en un gris
+  distinto al `bg-body-secondary` de la galería (son variantes de Bootstrap distintas, pensadas
+  cada una para su propio caso). Cambiado el índice a `bg-body-secondary` también, puesto en el
+  `<td>` (que ya lleva `colspan="7"`, es toda la fila) en vez de en la `<tr>` — así no depende de
+  cómo resuelve Bootstrap las variables de color de tabla, y el gris queda igual en las dos
+  pantallas.
 
 ---
 

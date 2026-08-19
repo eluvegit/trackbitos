@@ -410,16 +410,17 @@ foreach ($grupos as $grupo) {
         <?php $categoria = $grupo['categoria']; ?>
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
-            <tr class="table-secondary">
-                <td colspan="7" class="py-1">
+            <tr>
+                <td colspan="7" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
                           // su clic burbujea hasta aquí, así que la acción se ejecuta una vez.
                           //
-                          // Fondo sólido (table-secondary, gris suave y adaptado al tema oscuro
-                          // de la app) para que la cabecera se distinga de un vistazo de las
-                          // filas de piezas que trae debajo. ?>
+                          // Fondo sólido (bg-body-secondary, mismo gris que la cabecera de
+                          // categoría de la galería) para que se distinga de un vistazo de las
+                          // filas de piezas que trae debajo. En el <td>, no en la <tr>: así no
+                          // depende de cómo Bootstrap resuelva las variables de color de tabla. ?>
                     <div class="d-flex align-items-center gap-2 user-select-none" style="cursor: pointer"
                         data-plegar="<?= $idGrupo ?>">
                         <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body"
