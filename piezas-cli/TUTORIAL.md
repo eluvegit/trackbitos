@@ -91,13 +91,16 @@ Crea la carpeta con el nombre de la pieza (`pincel-de-pintura`) donde estés, ba
 
 Es `bajar` con los pasos de alrededor, no un camino distinto: se niega exactamente en los mismos casos (copia viva en la otra máquina, impresión sin juzgar, cambios sin subir aquí), y si se niega no abre nada.
 
-**`trabajar` no puede hacer que tu terminal "entre" en la carpeta que crea** — un proceso hijo no puede cambiar el directorio del shell que lo lanzó, es una limitación del sistema operativo, no un descuido de este script. Lo que sí hace es dejar escrita esa carpeta en `~/.trackbitos/ultimo_directorio`, para que una **función de shell** (no un alias normal — un alias no puede ejecutar un `cd` después de llamar al programa) la lea y haga el `cd` de verdad.
+**`trabajar` no puede hacer que tu terminal "entre" en la carpeta que crea** — un proceso hijo no puede cambiar el directorio del shell que lo lanzó, es una limitación del sistema operativo, no un descuido de este script. Lo que sí hace es dejar escrita esa carpeta en `~/.trackbitos/ultimo_directorio`, para que una **función de shell** (no un alias normal — un alias no puede ejecutar un `cd`/`Set-Location` después de llamar al programa) la lea y haga el `cd` de verdad. Mismo mecanismo en los dos sistemas, solo cambia la sintaxis del shell.
 
-Configúrala una vez, en `~/.zshrc` (macOS) — sustituye la ruta por donde tengas guardado `trackbitos.py`:
+#### macOS (Terminal, zsh) — ya configurado en esta máquina
+
+En `~/.zshrc`, apuntando al `trackbitos.py` real (el del checkout, no una copia aparte —
+en esta máquina no hay ninguna otra):
 
 ```bash
 trackbitos() {
-    python3 "$HOME/bin/trackbitos.py" "$@"
+    python3 "/Applications/ServBay/www/trackbitos/piezas-cli/trackbitos.py" "$@"
     local codigo=$?
 
     if { [ "$1" = "trabajar" ] || [ "$1" = "t" ]; } && [ -f "$HOME/.trackbitos/ultimo_directorio" ]; then
@@ -108,13 +111,30 @@ trackbitos() {
 }
 ```
 
-Recarga la terminal (`source ~/.zshrc` o ábrela de nuevo) y ya está: `trackbitos trabajar pincel` te deja **dentro** de la carpeta, con Blender ya abierto. De paso, esto resuelve también lo de escribir `.././trackbitos.py` cada vez — la función te deja llamar `trackbitos <lo que sea>` desde cualquier carpeta, para cualquier comando, no solo `trabajar`.
+Recarga la terminal (`source ~/.zshrc` o ábrela de nuevo) y ya está: `trackbitos trabajar pincel`
+(o `trackbitos t pincel`) te deja **dentro** de la carpeta, con Blender ya abierto. De paso,
+resuelve también lo de escribir `.././trackbitos.py` cada vez — la función deja llamar
+`trackbitos <lo que sea>` desde cualquier carpeta, para cualquier comando, no solo `trabajar`.
 
-Si prefieres no tener una función (por ejemplo en Windows, donde esto no aplica igual), un alias normal sigue sirviendo para lo primero — solo no hará el `cd` automático:
+#### Windows (PowerShell) — pendiente de aplicar esa máquina
 
-```bash
-alias trackbitos="python3 $HOME/bin/trackbitos.py"
+Mismo patrón, en el `$PROFILE` de PowerShell (`notepad $PROFILE`, se crea si no existe).
+**Sustituye la ruta por dónde esté `trackbitos.py` en esa máquina** — a diferencia del Mac, no
+se ha confirmado todavía cuál es:
+
+```powershell
+function trackbitos {
+    python "C:\ruta\a\trackbitos.py" @args
+    if (($args[0] -eq "trabajar") -or ($args[0] -eq "t")) {
+        $marker = "$HOME\.trackbitos\ultimo_directorio"
+        if (Test-Path $marker) {
+            Set-Location (Get-Content $marker -Raw).Trim()
+        }
+    }
+}
 ```
+
+Recarga la terminal (`. $PROFILE` o ábrela de nuevo).
 
 ---
 
