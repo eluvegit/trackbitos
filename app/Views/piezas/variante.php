@@ -74,7 +74,7 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
     if (!$puedeDevolver($v)) {
         if ((int) ($acciones['rama_desde_version_id'] ?? 0) === (int) $v['id']) {
             $lineas[] = 'Ya tienes la rama de trabajo abierta a partir de esta misma versión — sigue '
-                . 'trabajando ahí (trackbitos abrir/bajar), no hace falta volver a abrirla.';
+                . 'trabajando ahí (trackbitos bajar), no hace falta volver a abrirla.';
         } elseif (isset($acciones['motivos']['devolver'])) {
             $lineas[] = 'Devolver a trabajo: ' . $acciones['motivos']['devolver'];
         }
@@ -105,6 +105,14 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
         data-bs-toggle="modal" data-bs-target="#modalSku">
         <i class="bi bi-pencil"></i>
     </button>
+    <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacto. ?>
+    <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>"
+        onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+        <?= csrf_field() ?>
+        <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar esta variante">
+            <i class="bi bi-trash"></i>
+        </button>
+    </form>
 
     <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
         <i class="bi bi-grid-3x3-gap"></i> Galería

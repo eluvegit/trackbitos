@@ -1,6 +1,32 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?php
+/**
+ * Quién está trabajando en qué, ahora mismo — arriba del todo, antes que
+ * cualquier otra cosa. Función compartida por el pintado inicial (PHP) y el
+ * refresco parcial cada 20s (JS más abajo, mismo aspecto en los dos casos).
+ */
+$filaSesionActiva = static function (array $s): string {
+    $dias = (int) $s['dias'];
+
+    return '<div class="alert alert-info py-2 mb-2 d-flex align-items-center gap-2">'
+        . '<i class="bi bi-circle-fill text-success" style="font-size:.5rem;"></i>'
+        . '<div class="flex-grow-1">'
+        . '<strong>' . esc($s['maquina']) . '</strong> está trabajando en '
+        . '<a href="' . site_url('piezas/variante/' . (int) $s['variante_id']) . '" class="alert-link">'
+        . esc($s['familia']) . ' / ' . esc($s['variante']) . '</a>'
+        . ($dias > 0 ? ' <span class="text-muted small">(desde hace ' . $dias . ' día(s))</span>' : '')
+        . '</div></div>';
+};
+?>
+
+<div id="sesionesActivas">
+    <?php foreach ($sesionesActivas as $s): ?>
+        <?= $filaSesionActiva($s) ?>
+    <?php endforeach; ?>
+</div>
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-box text-primary"></i>
     <?php // Sin "Dashboard" delante: galería y ficha empiezan por "Piezas", y tenerlo
@@ -303,7 +329,16 @@ $textoBuscable = static function (array $familia): string {
                             <td><?= $colStl($v) ?></td>
                             <td class="text-muted small text-end"><?= (int) $v['versiones'] ?> vers.</td>
                             <td><?= $colAviso($v) ?></td>
-                            <td class="zona-organizar d-none"></td>
+                            <td class="zona-organizar d-none">
+                                <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>
+                                <form method="post" class="text-end" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/borrar') ?>"
+                                    onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $v['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar variante">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -437,6 +472,66 @@ $textoBuscable = static function (array $familia): string {
 
 <script>
 (function () {
+    // ---- Sesiones activas: refresco parcial cada 20s -------------------
+    // Solo repinta esta franja, no la página entera: recargar borraría lo
+    // que hay escrito en el buscador o apagaría el modo "Organizar". Se
+    // detiene solo si la pestaña está en segundo plano (Page Visibility
+    // API) — no tiene sentido gastar peticiones en algo que no se ve.
+    var cajaSesiones = document.getElementById('sesionesActivas');
+
+    function pintarSesionActiva(s) {
+        var div = document.createElement('div');
+        div.className = 'alert alert-info py-2 mb-2 d-flex align-items-center gap-2';
+
+        var punto = document.createElement('i');
+        punto.className = 'bi bi-circle-fill text-success';
+        punto.style.fontSize = '.5rem';
+        div.appendChild(punto);
+
+        var cuerpo = document.createElement('div');
+        cuerpo.className = 'flex-grow-1';
+
+        var maquina = document.createElement('strong');
+        maquina.textContent = s.maquina;
+        cuerpo.appendChild(maquina);
+        cuerpo.appendChild(document.createTextNode(' está trabajando en '));
+
+        var enlace = document.createElement('a');
+        enlace.href = '<?= site_url('piezas/variante/') ?>' + encodeURIComponent(s.variante_id);
+        enlace.className = 'alert-link';
+        enlace.textContent = s.familia + ' / ' + s.variante;
+        cuerpo.appendChild(enlace);
+
+        if (s.dias > 0) {
+            var dias = document.createElement('span');
+            dias.className = 'text-muted small';
+            dias.textContent = ' (desde hace ' + s.dias + ' día(s))';
+            cuerpo.appendChild(dias);
+        }
+
+        div.appendChild(cuerpo);
+        return div;
+    }
+
+    function refrescarSesionesActivas() {
+        if (!cajaSesiones || document.hidden) return;
+
+        fetch('<?= site_url('piezas/sesiones-activas') ?>', { headers: { 'Accept': 'application/json' } })
+            .then(function (resp) { return resp.ok ? resp.json() : null; })
+            .then(function (datos) {
+                if (!datos) return;
+                cajaSesiones.innerHTML = '';
+                datos.sesiones.forEach(function (s) {
+                    cajaSesiones.appendChild(pintarSesionActiva(s));
+                });
+            })
+            .catch(function () { /* red caída o lo que sea: se calla y lo intenta en el próximo ciclo */ });
+    }
+
+    if (cajaSesiones) {
+        setInterval(refrescarSesionesActivas, 20000);
+    }
+
     // ---- Plegar categorías -------------------------------------------
     // A mano en vez de con Collapse de Bootstrap: el buscador necesita
     // abrirlas y volver a dejarlas como estaban, y con clases propias eso

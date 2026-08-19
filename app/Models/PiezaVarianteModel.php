@@ -18,7 +18,7 @@ class PiezaVarianteModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['familia_id', 'nombre', 'sku', 'origen_version_id', 'notas', 'enlace_original'];
+    protected $allowedFields = ['familia_id', 'nombre', 'sku', 'origen_version_id', 'notas', 'enlace_original', 'borrado_en'];
 
     protected $validationRules = [
         'familia_id'      => 'required|integer',

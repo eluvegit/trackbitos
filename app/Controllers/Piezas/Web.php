@@ -112,18 +112,83 @@ class Web extends BaseController
         foreach ($familias as &$familia) {
             $familia['variantes'] = array_map(
                 fn($v) => $this->resumen($v),
-                $this->varianteModel->where('familia_id', $familia['id'])->orderBy('nombre', 'ASC')->findAll()
+                $this->varianteModel->where('familia_id', $familia['id'])->where('borrado_en', null)
+                    ->orderBy('nombre', 'ASC')->findAll()
             );
         }
         unset($familia);
 
         return view('piezas/index', [
-            'categorias'    => $this->categoriaModel->ordenadas(),
-            'grupos'        => $this->agruparPorCategoria($familias),
-            'familias'      => $familias,
-            'carritoCount'  => count($this->carritoActual()),
-            'papeleraCount' => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults(),
+            'categorias'       => $this->categoriaModel->ordenadas(),
+            'grupos'           => $this->agruparPorCategoria($familias),
+            'familias'         => $familias,
+            'carritoCount'     => count($this->carritoActual()),
+            'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
+                + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
+            'sesionesActivas'  => $this->calcularSesionesActivas(),
         ]);
+    }
+
+    /**
+     * JSON de las sesiones abiertas ahora mismo, para el refresco parcial
+     * del aviso del índice (cada 20s, spec: "arriba del todo si hay una
+     * sesión activa"). Aparte de `index()` para que el JS pueda repintar
+     * solo esa franja sin recargar la página entera — perdería el
+     * buscador escrito o el modo "Organizar" encendido.
+     */
+    public function sesionesActivas()
+    {
+        return $this->response->setJSON(['sesiones' => $this->calcularSesionesActivas()]);
+    }
+
+    /**
+     * Quién está trabajando en qué, ahora mismo, en toda la pieza. Puede
+     * haber más de una a la vez (las dos máquinas en piezas distintas), así
+     * que no vale con mirar una variante — hay que barrer todas las
+     * sesiones abiertas y remontar de vuelta a su variante y familia.
+     */
+    private function calcularSesionesActivas(): array
+    {
+        $sesiones = $this->sesionModel->where('cerrada_en', null)->orderBy('abierta_en', 'ASC')->findAll();
+        if ($sesiones === []) {
+            return [];
+        }
+
+        $ramas           = $this->ramaModel->whereIn('id', array_column($sesiones, 'rama_id'))->findAll();
+        $varianteDeRama  = array_column($ramas, 'variante_id', 'id');
+
+        $variantes          = $this->varianteModel->whereIn('id', array_values($varianteDeRama))->findAll();
+        $familiaDeVariante  = array_column($variantes, 'familia_id', 'id');
+        $nombreDeVariante   = array_column($variantes, 'nombre', 'id');
+
+        $nombreDeFamilia = array_column(
+            $this->familiaModel->whereIn('id', array_values($familiaDeVariante))->findAll(),
+            'nombre',
+            'id'
+        );
+
+        $resultado = [];
+        foreach ($sesiones as $sesion) {
+            $varianteId = $varianteDeRama[$sesion['rama_id']] ?? null;
+            // Datos huérfanos (rama o variante ya no existe) no deberían
+            // pasar, pero si pasan, mejor omitir esa sesión que romper el
+            // aviso entero por una fila suelta.
+            if ($varianteId === null || !isset($nombreDeVariante[$varianteId])) {
+                continue;
+            }
+            $familiaId = $familiaDeVariante[$varianteId];
+
+            $resultado[] = [
+                'variante_id' => $varianteId,
+                'familia'     => $nombreDeFamilia[$familiaId] ?? '?',
+                'variante'    => $nombreDeVariante[$varianteId],
+                'maquina'     => $this->sync->nombreDeMaquina((int) $sesion['maquina_id']) ?? 'máquina desconocida',
+                'desde'       => $sesion['abierta_en'],
+                'dias'        => $this->diasDesde($sesion['abierta_en']),
+            ];
+        }
+
+        return $resultado;
     }
 
     /**
@@ -455,12 +520,12 @@ class Web extends BaseController
         // siempre se llama "base", el nombre no dice nada). La tarjeta debe
         // leerse como la pieza, no como una variante suelta sin dueño.
         $conteoVariantes = [];
-        foreach ($this->varianteModel->whereIn('familia_id', $activas)->select('familia_id')->findAll() as $v) {
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->select('familia_id')->findAll() as $v) {
             $fid = (int) $v['familia_id'];
             $conteoVariantes[$fid] = ($conteoVariantes[$fid] ?? 0) + 1;
         }
 
-        foreach ($this->varianteModel->whereIn('familia_id', $activas)->findAll() as $variante) {
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->findAll() as $variante) {
             $validada = $this->versionModel
                 ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
             if (!$validada) {
@@ -701,17 +766,53 @@ class Web extends BaseController
     }
 
     /**
+     * "Borrar variante" (invariante 6, ahora también suelta): igual que
+     * borrarFamilia, pero para una sola línea de diseño de la pieza — el
+     * resto sigue intacto. Vuelve al índice, no a la ficha que se acaba de
+     * borrar.
+     */
+    public function borrarVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->borrarVariante($varianteId),
+            fn() => site_url('piezas'),
+            fn($variante) => 'Variante "' . $variante['nombre'] . '" movida a la papelera. Se puede restaurar en los próximos 30 días.'
+        );
+    }
+
+    /**
      * La papelera de piezas: lo que se borró y todavía está a tiempo de
      * volver. Ordenada por fecha de borrado, la más reciente primero —
-     * es la que con más probabilidad se quiere deshacer.
+     * es la que con más probabilidad se quiere deshacer. Familias y
+     * variantes sueltas se listan aparte: son dos verbos distintos
+     * (`borrarFamilia`/`borrarVariante`), aunque compartan la misma idea.
      */
     public function papelera()
     {
+        $variantes = $this->varianteModel
+            ->where('borrado_en IS NOT NULL')
+            ->orderBy('borrado_en', 'DESC')
+            ->findAll();
+
+        $nombresFamilia = [];
+        if ($variantes !== []) {
+            $nombresFamilia = array_column(
+                $this->familiaModel->whereIn('id', array_column($variantes, 'familia_id'))->findAll(),
+                'nombre',
+                'id'
+            );
+        }
+        foreach ($variantes as &$variante) {
+            $variante['familia_nombre'] = $nombresFamilia[$variante['familia_id']] ?? '?';
+        }
+        unset($variante);
+
         return view('piezas/papelera', [
             'familias' => $this->familiaModel
                 ->where('borrado_en IS NOT NULL')
                 ->orderBy('borrado_en', 'DESC')
                 ->findAll(),
+            'variantes' => $variantes,
         ]);
     }
 
@@ -721,6 +822,15 @@ class Web extends BaseController
             fn() => $this->servicio->restaurarFamilia($familiaId),
             fn() => site_url('piezas/papelera'),
             fn($familia) => 'Pieza "' . $familia['nombre'] . '" restaurada.'
+        );
+    }
+
+    public function restaurarVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->restaurarVariante($varianteId),
+            fn() => site_url('piezas/papelera'),
+            fn($variante) => 'Variante "' . $variante['nombre'] . '" restaurada.'
         );
     }
 
@@ -1409,7 +1519,8 @@ class Web extends BaseController
 
         $nombresFamilia = array_column($this->familiaModel->whereIn('id', $activas)->findAll(), 'nombre', 'id');
 
-        $variantes = $this->varianteModel->whereIn('familia_id', $activas)->where('id !=', $varianteExcluidaId)->findAll();
+        $variantes = $this->varianteModel->whereIn('familia_id', $activas)
+            ->where('borrado_en', null)->where('id !=', $varianteExcluidaId)->findAll();
         if ($variantes === []) {
             return [];
         }

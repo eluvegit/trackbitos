@@ -21,27 +21,64 @@
     se las lleva de verdad — la fila y sus ficheros.
 </p>
 
-<?php if (empty($familias)): ?>
+<?php
+/** Días hasta la purga automática (30 desde el borrado), listos para pintar. */
+$diasRestantes = static function (string $borradoEn): int {
+    return max(0, 30 - (int) floor((time() - strtotime($borradoEn)) / 86400));
+};
+?>
+
+<?php if (empty($familias) && empty($variantes)): ?>
     <p class="text-muted">La papelera está vacía.</p>
-<?php else: ?>
+<?php endif; ?>
+
+<?php if (!empty($familias)): ?>
+    <h6 class="mb-2">Piezas enteras</h6>
     <?php foreach ($familias as $f): ?>
-        <?php
-            $borradaEn = strtotime($f['borrado_en']);
-            $diasRestantes = max(0, 30 - (int) floor((time() - $borradaEn) / 86400));
-        ?>
+        <?php $dias = $diasRestantes($f['borrado_en']); ?>
         <div class="card shadow-sm mb-2">
             <div class="card-body p-3 d-flex align-items-center gap-3 flex-wrap">
                 <strong class="flex-grow-1 text-truncate"><?= esc($f['nombre']) ?></strong>
 
                 <span class="text-muted small" title="<?= esc($f['borrado_en'], 'attr') ?>">
-                    borrada el <?= esc(date('d/m/Y', $borradaEn)) ?>
+                    borrada el <?= esc(date('d/m/Y', strtotime($f['borrado_en']))) ?>
                 </span>
 
-                <span class="badge <?= $diasRestantes <= 3 ? 'text-bg-danger' : 'text-bg-secondary' ?>">
-                    <?= $diasRestantes > 0 ? "purga en {$diasRestantes} día(s)" : 'purga en cualquier momento' ?>
+                <span class="badge <?= $dias <= 3 ? 'text-bg-danger' : 'text-bg-secondary' ?>">
+                    <?= $dias > 0 ? "purga en {$dias} día(s)" : 'purga en cualquier momento' ?>
                 </span>
 
                 <form method="post" action="<?= site_url('piezas/familia/' . (int) $f['id'] . '/restaurar') ?>">
+                    <?= csrf_field() ?>
+                    <button class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-counterclockwise"></i> Restaurar
+                    </button>
+                </form>
+            </div>
+        </div>
+    <?php endforeach; ?>
+<?php endif; ?>
+
+<?php if (!empty($variantes)): ?>
+    <h6 class="mb-2 mt-3">Variantes sueltas</h6>
+    <p class="text-muted small">
+        El resto de la pieza sigue intacto — solo esta línea de diseño se apartó.
+    </p>
+    <?php foreach ($variantes as $v): ?>
+        <?php $dias = $diasRestantes($v['borrado_en']); ?>
+        <div class="card shadow-sm mb-2">
+            <div class="card-body p-3 d-flex align-items-center gap-3 flex-wrap">
+                <strong class="flex-grow-1 text-truncate"><?= esc($v['familia_nombre']) ?> / <?= esc($v['nombre']) ?></strong>
+
+                <span class="text-muted small" title="<?= esc($v['borrado_en'], 'attr') ?>">
+                    borrada el <?= esc(date('d/m/Y', strtotime($v['borrado_en']))) ?>
+                </span>
+
+                <span class="badge <?= $dias <= 3 ? 'text-bg-danger' : 'text-bg-secondary' ?>">
+                    <?= $dias > 0 ? "purga en {$dias} día(s)" : 'purga en cualquier momento' ?>
+                </span>
+
+                <form method="post" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/restaurar') ?>">
                     <?= csrf_field() ?>
                     <button class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-arrow-counterclockwise"></i> Restaurar
