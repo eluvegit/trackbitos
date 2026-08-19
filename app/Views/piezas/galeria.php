@@ -53,13 +53,61 @@ $badgeEstadoVersion = static function (array $version): string {
 
     return '';
 };
+
+/** Todas las tarjetas en un único array, para contar sin recorrer $grupos dos veces distinto cada vez. */
+$piezasTodas = array_merge(...array_map(fn($g) => $g['piezas'], $grupos));
+
+$cuentaEstado = ['validada' => 0, 'impresa' => 0, 'borrador' => 0];
+$cuentaStl    = ['con' => 0, 'sin' => 0];
+foreach ($piezasTodas as $p) {
+    $cuentaEstado[$p['version']['estado']] = ($cuentaEstado[$p['version']['estado']] ?? 0) + 1;
+    $cuentaStl[$p['stls'] > 0 ? 'con' : 'sin']++;
+}
 ?>
 
-<?php $total = array_sum(array_map(fn($g) => count($g['piezas']), $grupos)); ?>
+<?php $total = count($piezasTodas); ?>
 
 <?php if ($total === 0): ?>
     <p class="text-muted">Todavía no hay ninguna versión validada, ni ninguna "para imprimir". En cuanto promociones o valides una aparecerá aquí.</p>
 <?php else: ?>
+    <?php // Dos preguntas distintas (qué estado, si tiene STL) que sí se combinan entre sí — a diferencia
+          // del filtro único del índice, aquí interesa cruzarlas ("para imprimir" + "sin STL" = qué exportar ya). ?>
+    <div class="d-flex flex-wrap gap-1 mb-1" id="filtrosEstadoGaleria">
+        <button type="button" class="btn btn-sm btn-outline-secondary active" data-filtro-estado=""
+            title="Quitar el filtro de estado">
+            Todas <span class="badge text-bg-secondary"><?= $total ?></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-success" data-filtro-estado="validada"
+            title="Solo las validadas" <?= $cuentaEstado['validada'] === 0 ? 'disabled' : '' ?>>
+            <i class="bi bi-check-circle-fill"></i> Validada
+            <span class="badge text-bg-<?= $cuentaEstado['validada'] === 0 ? 'secondary' : 'success' ?>"><?= $cuentaEstado['validada'] ?></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-filtro-estado="impresa"
+            title="Impresas, pendientes de juzgar el resultado" <?= $cuentaEstado['impresa'] === 0 ? 'disabled' : '' ?>>
+            <i class="bi bi-printer-fill"></i> Sin validar
+            <span class="badge text-bg-<?= $cuentaEstado['impresa'] === 0 ? 'secondary' : 'primary' ?>"><?= $cuentaEstado['impresa'] ?></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-estado="borrador"
+            title="Promocionadas, pendientes de imprimir de prueba" <?= $cuentaEstado['borrador'] === 0 ? 'disabled' : '' ?>>
+            <i class="bi bi-printer"></i> Para imprimir
+            <span class="badge text-bg-secondary"><?= $cuentaEstado['borrador'] ?></span>
+        </button>
+    </div>
+    <div class="d-flex flex-wrap gap-1 mb-3" id="filtrosStlGaleria">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-stl="con"
+            title="Solo las que ya tienen STL adjunto" <?= $cuentaStl['con'] === 0 ? 'disabled' : '' ?>>
+            <i class="bi bi-file-earmark-check"></i> Con STL
+            <span class="badge text-bg-secondary"><?= $cuentaStl['con'] ?></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-stl="sin"
+            title="Solo las que todavía no tienen ningún STL" <?= $cuentaStl['sin'] === 0 ? 'disabled' : '' ?>>
+            <i class="bi bi-exclamation-circle"></i> Sin STL
+            <span class="badge text-bg-secondary"><?= $cuentaStl['sin'] ?></span>
+        </button>
+    </div>
+
+    <p class="text-muted small d-none" id="sinResultadosGaleria">Ninguna pieza coincide con los filtros.</p>
+
     <?php foreach ($grupos as $grupo): ?>
         <?php if (empty($grupo['piezas'])) continue; // Categoría vacía: aquí no aporta nada, a diferencia del índice. ?>
         <?php $categoria = $grupo['categoria']; ?>
@@ -79,7 +127,7 @@ $badgeEstadoVersion = static function (array $version): string {
             </div>
 
             <div id="<?= $idGrupo ?>">
-                <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3">
+                <div class="row row-cols-3 row-cols-sm-4 row-cols-md-5 row-cols-lg-6 g-2">
                     <?php foreach ($grupo['piezas'] as $p): ?>
                         <?php
                             $variante = $p['variante'];
@@ -89,7 +137,8 @@ $badgeEstadoVersion = static function (array $version): string {
                             $stls      = (int) ($p['stls'] ?? 0);
                             $tieneStl  = $stls > 0;
                         ?>
-                        <div class="col">
+                        <div class="col" data-tarjeta data-estado="<?= esc($version['estado'], 'attr') ?>"
+                            data-stl="<?= $tieneStl ? 'con' : 'sin' ?>">
                             <div class="card shadow-sm h-100">
                                 <a href="<?= site_url('piezas/variante/' . (int) $variante['id']) ?>">
                                     <?php if ($p['miniatura']): ?>
@@ -98,7 +147,7 @@ $badgeEstadoVersion = static function (array $version): string {
                                     <?php else: ?>
                                         <div class="d-flex align-items-center justify-content-center bg-body-secondary text-muted"
                                             style="aspect-ratio: 1;">
-                                            <i class="bi bi-box" style="font-size: 2rem;"></i>
+                                            <i class="bi bi-box" style="font-size: 1.5rem;"></i>
                                         </div>
                                     <?php endif; ?>
                                 </a>
@@ -200,6 +249,75 @@ $badgeEstadoVersion = static function (array $version): string {
             pintar(id, estabaCerrada);
         });
     });
+
+    // ---- Filtros: estado y STL, se combinan entre sí ---------------------
+    // A diferencia del filtro único del índice, aquí interesa cruzarlos:
+    // "para imprimir" + "sin STL" es justo la pregunta de "qué me falta
+    // exportar ya".
+    var cajaEstado = document.getElementById('filtrosEstadoGaleria');
+    var cajaStl = document.getElementById('filtrosStlGaleria');
+    var sinResultados = document.getElementById('sinResultadosGaleria');
+    var filtroEstado = '';
+    var filtroStl = '';
+
+    function aplicarFiltrosGaleria() {
+        var recortando = filtroEstado !== '' || filtroStl !== '';
+        var encontradas = 0;
+
+        document.querySelectorAll('[data-tarjeta]').forEach(function (tarjeta) {
+            var visible = (filtroEstado === '' || tarjeta.getAttribute('data-estado') === filtroEstado)
+                && (filtroStl === '' || tarjeta.getAttribute('data-stl') === filtroStl);
+            tarjeta.classList.toggle('d-none', !visible);
+            if (visible) encontradas++;
+        });
+
+        // Igual que el plegado: la cabecera de cada categoría vive en el
+        // mismo <div data-grupo> que el cuerpo con el id "cat-N".
+        document.querySelectorAll('[data-grupo]').forEach(function (grupo) {
+            var cuerpo = grupo.querySelector('[id^="cat-"]');
+            if (!cuerpo) return;
+            var visibles = cuerpo.querySelectorAll('[data-tarjeta]:not(.d-none)').length;
+            var contador = grupo.querySelector('.badge');
+
+            if (!recortando) {
+                grupo.classList.remove('d-none');
+                if (contador) contador.textContent = cuerpo.querySelectorAll('[data-tarjeta]').length;
+                pintar(cuerpo.id, cerradas().indexOf(cuerpo.id) === -1);
+                return;
+            }
+
+            grupo.classList.toggle('d-none', visibles === 0);
+            if (contador) contador.textContent = visibles;
+            // Abre el grupo si tiene algo que enseñar mientras se filtra; si
+            // no tiene nada, la cabecera entera se esconde y su flecha da igual.
+            pintar(cuerpo.id, visibles > 0);
+        });
+
+        if (sinResultados) sinResultados.classList.toggle('d-none', !recortando || encontradas > 0);
+    }
+
+    function engancharFacet(caja, atributo, obtenerValor, fijarValor) {
+        if (!caja) return;
+        caja.addEventListener('click', function (e) {
+            var boton = e.target.closest('[' + atributo + ']');
+            if (!boton || boton.disabled) return;
+
+            var pedido = boton.getAttribute(atributo);
+            var nuevo = (pedido === obtenerValor()) ? '' : pedido;
+            fijarValor(nuevo);
+
+            caja.querySelectorAll('[' + atributo + ']').forEach(function (b) {
+                b.classList.toggle('active', b.getAttribute(atributo) === nuevo);
+            });
+
+            aplicarFiltrosGaleria();
+        });
+    }
+
+    engancharFacet(cajaEstado, 'data-filtro-estado',
+        function () { return filtroEstado; }, function (v) { filtroEstado = v; });
+    engancharFacet(cajaStl, 'data-filtro-stl',
+        function () { return filtroStl; }, function (v) { filtroStl = v; });
 })();
 </script>
 

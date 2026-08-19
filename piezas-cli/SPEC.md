@@ -27,6 +27,7 @@
 | 26 | `trackbitos trabajar`/`limpiar`, vocabulario del índice, deshacer un juicio | ✅ Hecho (detalle abajo) |
 | 27 | `trabajar` deja dicho el directorio para que el shell pueda entrar de verdad | ✅ Hecho (detalle abajo) |
 | 28 | La galería también admite piezas "para imprimir"/"sin validar", no solo validadas | ✅ Hecho (detalle abajo) |
+| 29 | Filtro combinable en galería (estado + con/sin STL) y tarjetas más pequeñas | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -720,6 +721,23 @@ que imprimir.
   para la validada, azul "sin validar" para la impresa, gris "para imprimir" para la borrador.
 - El carrito y la descarga en `.zip` (`carritoAgregar`/`carritoDescargar`) ya trabajaban por id
   de versión sin comprobar su estado — no hicieron falta cambios ahí.
+
+**Fase 29 (2026-08-19): filtro combinable en la galería y tarjetas más pequeñas.** Con las tres
+familias de estado mezcladas (fase 28) hacía falta poder aislarlas, y cruzarlas con si ya tienen
+STL o no — esa pantalla es justo para decidir qué exportar, así que "para imprimir" + "sin STL"
+es la pregunta real que se hace el usuario.
+
+- **Dos barras de filtro, no una**: estado (Todas / Validada / Sin validar / Para imprimir) y STL
+  (Con STL / Sin STL), cada botón con su contador y deshabilitado si ese grupo está vacío. A
+  diferencia del filtro único del índice, aquí las dos facetas se combinan entre sí con Y lógico
+  — es lo que pedía el caso de uso, no una single-select como en el índice.
+- Cada tarjeta lleva `data-estado` y `data-stl` en su `.col`; el JS aplica ambos filtros a la vez,
+  esconde con `d-none` las tarjetas que no cumplen, actualiza el contador de cada categoría a lo
+  que queda visible y reutiliza `pintar()` (la misma función del plegado) para abrir de oficio
+  las categorías que sí tienen resultado y esconder la cabecera entera de las que se quedan a
+  cero. Aviso "Ninguna pieza coincide con los filtros" si el cruce vacía la lista entera.
+- **Tarjetas ~25% más pequeñas**: la rejilla pasa de `row-cols-2/3/4/5` a `row-cols-3/4/5/6` según
+  el ancho (y `g-3` a `g-2`), para ver más piezas de un vistazo al trabajar con placas.
 
 ---
 
