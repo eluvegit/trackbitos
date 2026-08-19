@@ -71,9 +71,33 @@ mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
    - **Validar** → es la buena. La anterior validada (si la había) pasa a "superada" sola.
    - **Descartar** → no sirve, con el motivo. No se borra nunca.
 
+   ¿Y si le das al botón que no era, o escribes mal el motivo? **Deshacer** devuelve la versión a borrador (solo desde "impresa" y "descartada") y vuelves a empezar ese paso. Es para arreglar un error tuyo, no para cambiar de opinión sobre una pieza que ya tienes en la mano: para eso están validar y descartar.
+
    > **Este paso no se puede saltar.** Mientras una versión siga en "impresa" sin juzgar, la pieza queda parada: `trackbitos bajar` y "Devolver a trabajo" se niegan. Seguir modelando encima sería partir de algo que no sabes si funciona. Si ya sabes que no vale, descártala con el motivo y sigue desde ahí.
 
 10. Si sigues iterando: `trackbitos bajar` te trae el punto de partida de la rama nueva (el `.blend` de la versión que acabas de promocionar), editas, `subir`, `promocionar` otra vez para `v002`, y repites desde el paso 3.
+
+---
+
+### Empezar de un golpe
+
+Para retomar una pieza sin preparar nada a mano:
+
+```
+trackbitos trabajar "pincel"
+```
+
+Crea la carpeta con el nombre de la pieza (`pincel-de-pintura`) donde estés, baja dentro el `.blend`, abre la sesión y lanza Blender. Si ya estás dentro de esa carpeta, trabaja ahí en vez de anidar otra. Si el nombre encaja con varias piezas, te las lista y **no crea ninguna carpeta** hasta que concretes. `--no-abrir` hace todo menos lanzar el programa.
+
+Es `bajar` con los pasos de alrededor, no un camino distinto: se niega exactamente en los mismos casos (copia viva en la otra máquina, impresión sin juzgar, cambios sin subir aquí), y si se niega no abre nada.
+
+---
+
+### Recoger la mesa cuando terminas
+
+Cuando ya has subido, cerrado y `trackbitos estado` dice **"Al día"**, la copia de tu disco no aporta nada: lo que vale está en el servidor. `trackbitos limpiar` la aparta a la papelera local (30 días para arrepentirse, `trackbitos papelera` para verla) y se lleva también el `.sesion.json`, así que la carpeta queda limpia de verdad.
+
+Si falta cualquier cosa —algo sin subir, la sesión abierta, una descarga sin cerrar, la nube más adelantada, o ni siquiera se puede preguntar al servidor— **no toca nada** y te dice qué falta, con el mismo diagnóstico de `estado`. No hay `--forzar`: si de verdad quieres tirar algo sin subirlo, eso se borra a mano.
 
 ---
 
@@ -91,11 +115,13 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 | `trackbitos catalogo` | El catálogo completo desde la terminal, agrupado por categoría: qué hay y por dónde va cada cosa. |
 | `trackbitos variantes <pieza>` | Zoom sobre una pieza: cuántas variantes tiene y cómo se llama cada una. |
 | `trackbitos actualizar` | Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza a sí mismo. |
+| `trackbitos trabajar <pieza>` | **El atajo del día a día**: crea la carpeta, baja dentro y abre el `.blend` en Blender, todo de un golpe. |
 | `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión — o, si la pieza es nueva y no hay nada que descargar, solo abre sesión. Se niega si hay cambios sin subir. |
 | `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |
 | `trackbitos subir [--log "..."]` | Sube el `.blend` de la carpeta actual. |
 | `trackbitos cerrar [--sin-cambios]` | Cierra la sesión, o la descarga sin subir fichero. |
 | `trackbitos promocionar --cambio "..." [--medidas "..."]` | Congela la última sesión subida como versión nueva. |
+| `trackbitos limpiar` | Recoge la mesa: aparta el `.blend` de esta carpeta a la papelera **si ya está todo subido y cerrado**. Si falta algo, no toca nada y te dice qué. |
 | `trackbitos papelera` | Qué hay apartado localmente y cuándo caduca (30 días). |
 
 Todos aceptan `--dir` (por defecto, la carpeta actual). `bajar`/`ver` aceptan `--ignorar-pendiente` para saltarse el aviso de copia viva en la otra máquina.
@@ -117,7 +143,9 @@ Se busca sobre pieza + variante porque es como se piensa: la pieza lleva el nomb
 
 ## 6. La web, por secciones
 
-- **`/piezas`** — catálogo: cada pieza con sus variantes, en qué punto está (versión validada, o "sin versión" / "versión sin imprimir" / "sin validar" / "no sirve") y si además hay trabajo encima sin promocionar ("modificando"), más los avisos de sesión abierta o descargas pendientes. Aquí también se dan de alta piezas y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la pieza).
+- **`/piezas`** — catálogo: cada pieza con sus variantes, en qué punto está (versión validada, o "sin empezar" / "sin versión" / "para imprimir" / "sin validar" / "no sirve") y si además hay trabajo encima sin promocionar ("modificando"), más los avisos de sesión abierta o descargas pendientes. Aquí también se dan de alta piezas y variantes, y se suben **referencias** (fotos del original con medidas de calibre, comunes a toda la pieza).
+
+  Sobre la tabla hay una fila de **filtros**, con cuántas piezas hay en cada uno: *Definitivas*, *Imprimir · con STL*, *Imprimir · falta STL*, *Sin STL*, *Sin validar*, *No sirven*, *Modificando* y *Sin empezar*. Se pulsa uno cada vez (volver a pulsarlo lo quita) y se combina con el buscador. Los dos de imprimir están separados a propósito porque lo siguiente que hay que hacer es distinto: una va a la impresora, la otra hay que exportarla antes — y en esas filas el icono de descarga de al lado te baja el `.blend` (copia de solo lectura) para hacerlo.
 - **Ficha de variante** (`/piezas/variante/{id}`) — historial completo de versiones con sus **renders** (imágenes por versión, para ver la evolución), botones de los verbos (marcar impresa, validar, descartar, devolver a trabajo, derivar variante), los **STL** de cada versión (uno por trozo a imprimir), y una caja "Desde tu máquina" con los comandos ya escritos con el nombre exacto, listos para copiar.
 
 ---

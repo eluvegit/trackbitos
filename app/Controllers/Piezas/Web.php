@@ -980,6 +980,28 @@ class Web extends BaseController
         );
     }
 
+    /**
+     * Deshacer un botón mal pulsado (impresa/descartada -> borrador). El
+     * mensaje se elige antes de tocar nada: después ya está en borrador y no
+     * se sabría de dónde venía.
+     */
+    public function deshacer(int $versionId)
+    {
+        $antes = $this->versionModel->find($versionId);
+        $desde = $antes['estado'] ?? '';
+
+        return $this->verboDeVersion(
+            $versionId,
+            fn() => $this->servicio->devolverABorrador($versionId),
+            fn($version) => sprintf(
+                $desde === 'descartada'
+                    ? 'Descarte deshecho: v%03d vuelve a borrador, sin el motivo. Márcala impresa cuando toque.'
+                    : 'v%03d vuelve a borrador. Los parámetros de impresión se han borrado: vuelve a marcarla impresa con los buenos.',
+                (int) $version['numero']
+            )
+        );
+    }
+
     public function devolverATrabajo(int $versionId)
     {
         return $this->verboDeVersion(
@@ -1403,7 +1425,7 @@ class Web extends BaseController
             'bloqueo'       => $this->descripcionBloqueo($estado['sesion_abierta']),
             'pendientes'    => $this->descripcionPendientes($estado['descargas_pendientes']),
             // Sin esto, todo lo que no fuera una versión validada se veía
-            // igual en el listado: "sin versión", "versión sin imprimir",
+            // igual en el listado: "sin versión", "para imprimir",
             // "impresa, pendiente de juzgar" y "la última se descartó" son
             // cuatro sitios muy distintos de la vida de una pieza.
             'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
@@ -1425,17 +1447,22 @@ class Web extends BaseController
     }
 
     /**
-     * @return array{aplica: bool, trozos: int}  aplica=false si no hay
-     *         ninguna versión todavía: no es que falte el STL, es que aún no
-     *         hay nada que exportar.
+     * @return array{aplica: bool, trozos: int, version_id: int|null}
+     *         aplica=false si no hay ninguna versión todavía: no es que falte
+     *         el STL, es que aún no hay nada que exportar. El id es de esa
+     *         misma versión, para poder ofrecer su .blend desde el índice.
      */
     private function estadoStl(?array $version): array
     {
         if (!$version) {
-            return ['aplica' => false, 'trozos' => 0];
+            return ['aplica' => false, 'trozos' => 0, 'version_id' => null];
         }
 
-        return ['aplica' => true, 'trozos' => count($this->servicio->stlsDe((int) $version['id']))];
+        return [
+            'aplica'     => true,
+            'trozos'     => count($this->servicio->stlsDe((int) $version['id'])),
+            'version_id' => (int) $version['id'],
+        ];
     }
 
     private function versionDeOrigen(array $variante): ?array

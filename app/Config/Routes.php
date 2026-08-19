@@ -666,6 +666,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');
     $routes->POST('version/(:num)/descartar', 'Web::descartar/$1');
     $routes->POST('version/(:num)/devolver-a-trabajo', 'Web::devolverATrabajo/$1');
+    // Arreglar un botón mal pulsado: impresa/descartada -> borrador.
+    $routes->POST('version/(:num)/deshacer', 'Web::deshacer/$1');
     $routes->POST('version/(:num)/derivar', 'Web::derivarVariante/$1');
 
     // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en la

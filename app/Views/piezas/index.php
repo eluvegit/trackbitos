@@ -122,14 +122,28 @@ $badgeMadurez = static function (array $v): string {
             . '<i class="bi bi-x-circle-fill"></i> no sirve</span>';
     }
     // Sin ninguna versión promocionada no hay "versión" de la que hablar:
-    // el trabajo aún está en la sesión, no ha llegado al historial.
+    // el trabajo aún está en la sesión, no ha llegado al historial. Pero eso
+    // son dos sitios muy distintos que antes se veían igual: la pieza que se
+    // dio de alta y sigue siendo un hueco vacío, y la que ya tiene .blend
+    // encima esperando a promocionarse. La primera no está "pendiente de"
+    // nada tuyo en la web: está sin abrir Blender.
     if ($v['ultima_version_estado'] === null) {
+        if (empty($v['trabajo_en_curso'])) {
+            return '<span class="badge text-bg-dark border" title="La pieza está dada de alta, pero todavía no se ha subido ningún .blend: no hay nada dentro">'
+                . '<i class="bi bi-circle"></i> sin empezar</span>';
+        }
+
         return '<span class="badge text-bg-secondary" title="Todavía no se ha promocionado ninguna versión">'
             . '<i class="bi bi-dash-circle"></i> sin versión</span>';
     }
+    // "Para imprimir", no "sin imprimir": lo mismo por fuera, pero uno nombra
+    // una carencia y el otro lo siguiente que hay que hacer — que es lo que se
+    // viene a mirar aquí. Además es la misma palabra que el filtro de arriba.
+    // Sin el "versión" delante: en una columna que solo habla de versiones no
+    // añadía nada y era la etiqueta más larga de todas.
     if ($v['ultima_version_estado'] === 'borrador') {
         return '<span class="badge text-bg-secondary" title="Promocionada, pendiente de imprimir de prueba">'
-            . '<i class="bi bi-printer"></i> versión sin imprimir</span>';
+            . '<i class="bi bi-printer"></i> para imprimir</span>';
     }
 
     // Solo llega aquí una "superada" como última sin haber ninguna validada
@@ -175,9 +189,24 @@ $colStl = static function (array $v): string {
     }
 
     if ((int) $stl['trozos'] === 0) {
-        return '<span class="badge border border-warning text-warning-emphasis fw-normal"'
+        $html = '<span class="badge border border-warning text-warning-emphasis fw-normal"'
             . ' title="Esta versión no tiene STL: no se puede imprimir ni añadir a la placa">'
             . '<i class="bi bi-file-earmark-x"></i> sin STL</span>';
+
+        // Lo que falta aquí es exportar, y para exportar hace falta el .blend.
+        // Puesto en la propia fila para poder bajarlos de una tacada filtrando
+        // por "Imprimir · falta STL", en vez de entrar y salir de cada ficha.
+        // El fichero llega con el sufijo "solo-lectura" en el nombre: esta
+        // descarga no pasa por el cliente, así que nadie registra esa copia y
+        // lo que se edite ahí no vuelve.
+        if (!empty($stl['version_id'])) {
+            $html .= ' <a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/blend/descargar') . '"'
+                . ' class="text-body-secondary text-decoration-none"'
+                . ' title="Bajar el .blend de esta versión (copia de solo lectura) para exportar el STL">'
+                . '<i class="bi bi-download"></i></a>';
+        }
+
+        return $html;
     }
 
     $trozos = (int) $stl['trozos'];
@@ -218,7 +247,163 @@ $textoBuscable = static function (array $familia): string {
 
     return mb_strtolower(implode(' ', $partes));
 };
+
+/**
+ * Los filtros son las preguntas que uno se hace de verdad mirando esto
+ * ("¿qué me falta exportar?", "¿qué tengo pendiente de imprimir?"), no una
+ * lista de los estados internos. Por eso cada uno mira a la vez la madurez y
+ * el STL, y por eso "por imprimir" y "falta STL" son dos: la respuesta —
+ * exportar o encender la impresora — es distinta.
+ *
+ * Cada entrada: etiqueta, icono, color (el mismo que su badge en la tabla,
+ * para que el filtro se reconozca en la columna) y para qué sirve.
+ */
+$filtros = [
+    'definitiva'  => ['Definitivas', 'bi-check-circle-fill', 'success', 'Tienen una versión validada: la buena'],
+    // Marca de posición: aquí va el desplegable de abajo, no un chip suelto.
+    '@imprimir'   => null,
+    'falta-stl'   => ['Sin STL', 'bi-file-earmark-x', 'warning', 'Todo lo que no tiene STL adjunto, esté en el estado que esté — incluye las de «Imprimir · falta STL» y también una validada a la que se le olvidó'],
+    'sin-validar' => ['Sin validar', 'bi-printer-fill', 'primary', 'Impresas y sin decir todavía si sirven'],
+    'no-sirve'    => ['No sirven', 'bi-x-circle-fill', 'danger', 'La última versión se descartó'],
+    'modificando' => ['Modificando', 'bi-pencil', 'secondary', 'Con trabajo encima todavía sin promocionar'],
+    // Secondary y no dark: sobre el tema oscuro, btn-outline-dark pinta negro
+    // sobre negro y del chip solo se veía flotando su contador.
+    'sin-empezar' => ['Sin empezar', 'bi-circle', 'secondary', 'Dadas de alta y sin ningún .blend'],
+];
+
+/**
+ * "Pendiente de imprimir" en un desplegable en vez de dos chips sueltos:
+ * unas veces la pregunta es "¿qué me queda por imprimir?" (da igual el STL) y
+ * otras "¿cuál puedo mandar hoy?" o "¿cuál tengo que exportar?". Con dos
+ * chips separados la primera pregunta no tenía respuesta, y con uno solo
+ * faltaban las otras dos.
+ */
+$filtrosImprimir = [
+    'imprimir'         => ['Todas', 'Pendientes de sacar la prueba, tengan STL o no'],
+    'imprimir-con-stl' => ['Con STL', 'Con el STL ya puesto: se pueden mandar a la impresora hoy'],
+    'imprimir-sin-stl' => ['Falta STL', 'Antes hay que exportar el STL desde Blender'],
+];
+
+/**
+ * En qué cajones cae una variante. Varios a la vez a propósito: una pieza
+ * validada que además se está retocando sale en "Definitivas" y en
+ * "Modificando", que es justo lo que pasa.
+ *
+ * El STL se lee tal cual lo pinta $colStl (la versión validada si la hay, la
+ * última si no): filtrar por algo distinto de lo que se ve en la columna
+ * daría resultados que parecen un error.
+ */
+$tokensDe = static function (array $v): array {
+    $tokens = [];
+    $estado = $v['ultima_version_estado'];
+    $stl    = $v['stl'] ?? ['aplica' => false, 'trozos' => 0];
+    $conStl = !empty($stl['aplica']) && (int) $stl['trozos'] > 0;
+
+    if ($v['validada']) {
+        $tokens[] = 'definitiva';
+    }
+    // Pendiente de imprimir se parte en dos porque lo siguiente que hay que
+    // hacer es distinto: una va a la impresora, la otra hay que exportarla
+    // antes. Verlas juntas obligaba a abrir pieza por pieza para saber cuál
+    // de las dos cosas tocaba.
+    if ($estado === 'borrador') {
+        $tokens[] = 'imprimir';
+        $tokens[] = $conStl ? 'imprimir-con-stl' : 'imprimir-sin-stl';
+    }
+    if ($estado === 'impresa') {
+        $tokens[] = 'sin-validar';
+    }
+    if (!empty($stl['aplica']) && (int) $stl['trozos'] === 0) {
+        $tokens[] = 'falta-stl';
+    }
+    if ($estado === 'descartada') {
+        $tokens[] = 'no-sirve';
+    }
+    if (!empty($v['trabajo_en_curso'])) {
+        $tokens[] = 'modificando';
+    }
+    if ($estado === null && empty($v['trabajo_en_curso'])) {
+        $tokens[] = 'sin-empezar';
+    }
+
+    return $tokens;
+};
+
+/** Los de todas sus variantes juntos: la fila de la pieza representa a las de dentro. */
+$tokensDeFamilia = static function (array $familia) use ($tokensDe): array {
+    $tokens = [];
+    foreach ($familia['variantes'] as $v) {
+        $tokens = array_merge($tokens, $tokensDe($v));
+    }
+
+    return array_values(array_unique($tokens));
+};
+
+// El número de cada chip: se cuentan piezas, no variantes, porque es lo que
+// se ve en la tabla y lo que uno tiene en la cabeza ("me faltan 6 STL").
+$cuentaFiltros = array_fill_keys(array_merge(array_keys($filtros), array_keys($filtrosImprimir)), 0);
+$totalPiezas   = 0;
+foreach ($grupos as $grupo) {
+    foreach ($grupo['piezas'] as $familia) {
+        $totalPiezas++;
+        foreach ($tokensDeFamilia($familia) as $token) {
+            $cuentaFiltros[$token]++;
+        }
+    }
+}
 ?>
+
+<?php if (!empty($familias)): ?>
+    <?php // Uno cada vez, no casillas: son preguntas distintas ("qué me falta
+          // exportar", "qué hay para imprimir"), no facetas que se sumen. Con
+          // el buscador sí se combinan (y = las dos cosas). ?>
+    <div class="d-flex flex-wrap gap-1 mb-3" id="filtrosPiezas">
+        <button type="button" class="btn btn-sm btn-outline-secondary active" data-filtro=""
+            title="Quitar el filtro">
+            Todas <span class="badge text-bg-secondary"><?= (int) $totalPiezas ?></span>
+        </button>
+        <?php foreach ($filtros as $token => $definicion): ?>
+            <?php if ($token === '@imprimir'): ?>
+                <?php $nImprimir = (int) $cuentaFiltros['imprimir']; ?>
+                <?php // Botón partido: la mitad izquierda filtra "todas las que quedan por
+                      // imprimir" de un clic — que es la pregunta más frecuente — y la flecha
+                      // abre las dos de detalle. Así lo normal no cuesta dos gestos. ?>
+                <div class="btn-group" data-grupo="imprimir">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro="imprimir"
+                        title="<?= esc($filtrosImprimir['imprimir'][1], 'attr') ?>" <?= $nImprimir === 0 ? 'disabled' : '' ?>>
+                        <i class="bi bi-printer"></i> <span data-etiqueta>Imprimir</span>
+                        <span class="badge text-bg-secondary" data-cuenta><?= $nImprimir ?></span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle dropdown-toggle-split"
+                        data-bs-toggle="dropdown" aria-expanded="false" <?= $nImprimir === 0 ? 'disabled' : '' ?>>
+                        <span class="visually-hidden">Ver por STL</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <?php foreach ($filtrosImprimir as $sub => [$etiquetaSub, $ayudaSub]): ?>
+                            <?php $nSub = (int) $cuentaFiltros[$sub]; ?>
+                            <li>
+                                <button type="button" class="dropdown-item small d-flex align-items-center gap-2"
+                                    data-filtro="<?= $sub ?>" title="<?= esc($ayudaSub, 'attr') ?>"
+                                    <?= $nSub === 0 ? 'disabled' : '' ?>>
+                                    <span class="flex-grow-1"><?= esc($etiquetaSub) ?></span>
+                                    <span class="badge text-bg-secondary"><?= $nSub ?></span>
+                                </button>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php else: ?>
+                <?php [$etiqueta, $icono, $color, $ayuda] = $definicion; ?>
+                <?php $n = (int) $cuentaFiltros[$token]; ?>
+                <button type="button" class="btn btn-sm btn-outline-<?= $color ?>" data-filtro="<?= $token ?>"
+                    title="<?= esc($ayuda, 'attr') ?>" <?= $n === 0 ? 'disabled' : '' ?>>
+                    <i class="bi <?= $icono ?>"></i> <?= esc($etiqueta) ?>
+                    <span class="badge text-bg-<?= $n === 0 ? 'secondary' : $color ?>"><?= $n ?></span>
+                </button>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
 
 <table class="table table-sm align-middle mb-2" id="tablaPiezas">
     <?php foreach ($grupos as $indice => $grupo): ?>
@@ -267,7 +452,7 @@ $textoBuscable = static function (array $familia): string {
 
             <?php foreach ($grupo['piezas'] as $familia): ?>
                 <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
-                <tr data-pieza data-buscar="<?= $buscar ?>">
+                <tr data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
                     <td>
                         <?php if (count($variantes) === 1): ?>
                             <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
@@ -319,7 +504,7 @@ $textoBuscable = static function (array $familia): string {
                 <?php if (count($variantes) > 1): ?>
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
-                        <tr data-subpieza data-buscar="<?= $buscar ?>">
+                        <tr data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
                             <td class="ps-4">
                                 <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
                                     class="text-decoration-none text-body">↳ <?= esc($v['nombre']) ?></a>
@@ -347,7 +532,7 @@ $textoBuscable = static function (array $familia): string {
     <?php endforeach; ?>
 </table>
 
-<p class="text-muted small d-none" id="sinResultados">Ninguna pieza coincide con la búsqueda.</p>
+<p class="text-muted small d-none" id="sinResultados">Ninguna pieza coincide.</p>
 
 <!-- Gestión de categorías: las carpetas en las que se reparten las piezas -->
 <div class="modal fade" id="modalCategorias" tabindex="-1">
@@ -601,35 +786,48 @@ $textoBuscable = static function (array $familia): string {
         });
     }
 
-    // ---- Buscador ------------------------------------------------------
+    // ---- Buscador y filtros --------------------------------------------
+    // Los dos recortan la misma tabla, así que hay un único sitio que decide
+    // qué fila se ve: si fueran dos pasadas independientes, la segunda
+    // desharía a la primera.
     var buscador = document.getElementById('buscadorPiezas');
-    if (!buscador) return;
+    var cajaFiltros = document.getElementById('filtrosPiezas');
+    if (!buscador && !cajaFiltros) return;
     var sinResultados = document.getElementById('sinResultados');
+    var filtro = '';
 
-    buscador.addEventListener('input', function () {
-        var q = buscador.value.trim().toLowerCase();
+    function aplicarFiltros() {
+        var q = buscador ? buscador.value.trim().toLowerCase() : '';
         var encontradas = 0;
+        var recortando = q !== '' || filtro !== '';
 
         // Filas de pieza (una por familia) y de variante (subfilas, cuando
-        // hay más de una): comparten el mismo data-buscar, así que se
-        // muestran/ocultan juntas sin más que iterar las dos.
+        // hay más de una): comparten el mismo data-buscar, así que la
+        // búsqueda las muestra/oculta juntas. Los tokens sí son propios de
+        // cada fila — la de la pieza lleva la unión de los de sus variantes,
+        // para que aparezca la cabecera cuando encaja cualquiera de ellas.
         document.querySelectorAll('[data-pieza], [data-subpieza]').forEach(function (fila) {
             var visible = fila.getAttribute('data-buscar').indexOf(q) !== -1;
+
+            if (visible && filtro !== '') {
+                visible = (fila.getAttribute('data-tokens') || '').split(' ').indexOf(filtro) !== -1;
+            }
+
             fila.classList.toggle('d-none', !visible);
             if (fila.hasAttribute('data-pieza') && visible) encontradas++;
         });
 
         // Un grupo cerrado escondería resultados sin decirlo: mientras se
-        // busca se abren todos, y al vaciar el campo se restaura el plegado
-        // que el usuario había dejado. La cabecera de cada categoría es el
-        // <tbody> justo antes del que lleva el id "cat-N" (mismo orden en
-        // que los pinta el bucle de PHP).
+        // recorta se abren todos, y al soltar el filtro y el texto se
+        // restaura el plegado que el usuario había dejado. La cabecera de
+        // cada categoría es el <tbody> justo antes del que lleva el id
+        // "cat-N" (mismo orden en que los pinta el bucle de PHP).
         document.querySelectorAll('tbody[id]').forEach(function (cuerpo) {
             var cabecera = cuerpo.previousElementSibling;
             var visibles = cuerpo.querySelectorAll('[data-pieza]:not(.d-none)').length;
             var contador = cabecera ? cabecera.querySelector('[data-contador]') : null;
 
-            if (q === '') {
+            if (!recortando) {
                 if (cabecera) cabecera.classList.remove('d-none');
                 if (contador) contador.textContent = cuerpo.querySelectorAll('[data-pieza]').length;
                 pintar(cuerpo.id, cerradas().indexOf(cuerpo.id) === -1);
@@ -644,8 +842,68 @@ $textoBuscable = static function (array $familia): string {
             pintar(cuerpo.id, visibles > 0);
         });
 
-        if (sinResultados) sinResultados.classList.toggle('d-none', q === '' || encontradas > 0);
-    });
+        if (sinResultados) sinResultados.classList.toggle('d-none', !recortando || encontradas > 0);
+    }
+
+    if (buscador) buscador.addEventListener('input', aplicarFiltros);
+
+    if (cajaFiltros) {
+        // El botón partido de "Imprimir" tiene que enseñar con el menú cerrado
+        // cuál de sus tres opciones está puesta; si no, la mitad de los filtros
+        // quedan escondidos detrás de una flecha y no se sabe qué se está viendo.
+        var grupos = Array.prototype.slice.call(cajaFiltros.querySelectorAll('[data-grupo]'));
+
+        function pintarGrupos() {
+            grupos.forEach(function (grupo) {
+                var prefijo = grupo.getAttribute('data-grupo');
+                var dentro = filtro.indexOf(prefijo) === 0;
+
+                grupo.querySelectorAll('.btn').forEach(function (boton) {
+                    boton.classList.toggle('active', dentro);
+                });
+
+                var etiqueta = grupo.querySelector('[data-etiqueta]');
+                var cuenta = grupo.querySelector('[data-cuenta]');
+                var elegido = dentro ? grupo.querySelector('.dropdown-item[data-filtro="' + filtro + '"]') : null;
+
+                if (!etiqueta || !cuenta) return;
+
+                if (elegido && filtro !== prefijo) {
+                    etiqueta.textContent = etiqueta.getAttribute('data-base') + ' · '
+                        + elegido.querySelector('span').textContent;
+                    cuenta.textContent = elegido.querySelector('.badge').textContent;
+                } else {
+                    etiqueta.textContent = etiqueta.getAttribute('data-base');
+                    cuenta.textContent = cuenta.getAttribute('data-base');
+                }
+            });
+        }
+
+        // El texto y el número de partida, para poder volver a ellos.
+        grupos.forEach(function (grupo) {
+            var etiqueta = grupo.querySelector('[data-etiqueta]');
+            var cuenta = grupo.querySelector('[data-cuenta]');
+            if (etiqueta) etiqueta.setAttribute('data-base', etiqueta.textContent.trim());
+            if (cuenta) cuenta.setAttribute('data-base', cuenta.textContent.trim());
+        });
+
+        cajaFiltros.addEventListener('click', function (e) {
+            var chip = e.target.closest('[data-filtro]');
+            if (!chip) return;
+
+            // Volver a pulsar el que ya está puesto lo quita: es el gesto que
+            // sale solo cuando quieres ver todo otra vez.
+            var pedido = chip.getAttribute('data-filtro');
+            filtro = (pedido === filtro) ? '' : pedido;
+
+            cajaFiltros.querySelectorAll('[data-filtro]').forEach(function (uno) {
+                uno.classList.toggle('active', uno.getAttribute('data-filtro') === filtro);
+            });
+            pintarGrupos();
+
+            aplicarFiltros();
+        });
+    }
 })();
 </script>
 

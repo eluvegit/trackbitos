@@ -927,13 +927,20 @@ class PiezaService
                 ->where('subida_en IS NOT NULL')
                 ->findAll());
 
-            throw new RuntimeException(sprintf(
-                'La rama "%s" sigue abierta con %d sesión(es) subida(s) sin promocionar. Volver a la v%03d '
-                . 'la cerraría sin convertirla en versión: ese trabajo quedaría solo en el historial.',
-                $this->ramaModel->nombre($ramaAbierta),
-                $subidas,
-                (int) $version['numero']
-            ));
+            // Sin ninguna subida no hay nada que perder: la rama abierta está
+            // vacía (recién promocionada, o abierta y nunca usada) y cerrarla
+            // no tira ningún trabajo. Antes también aquí se pedía confirmar,
+            // con un aviso que decía "0 sesión(es) subida(s) sin promocionar"
+            // — un obstáculo delante de una puerta que no daba a ningún sitio.
+            if ($subidas > 0) {
+                throw new RuntimeException(sprintf(
+                    'La rama "%s" sigue abierta con %d sesión(es) subida(s) sin promocionar. Volver a la v%03d '
+                    . 'la cerraría sin convertirla en versión: ese trabajo quedaría solo en el historial.',
+                    $this->ramaModel->nombre($ramaAbierta),
+                    $subidas,
+                    (int) $version['numero']
+                ));
+            }
         }
 
         return $this->transaccion('devolver a trabajo', function () use ($ramaAbierta, $varianteId, $versionId) {
@@ -1162,6 +1169,38 @@ class PiezaService
         $this->sesionModel->update($sesionId, $datos);
 
         return $this->sesionModel->find($sesionId);
+    }
+
+    /**
+     * Deshacer un juicio: vuelve la versión a borrador, como estaba recién
+     * promocionada. Solo desde `impresa` y `descartada`, y solo para arreglar
+     * un error tuyo — te equivocaste de botón, o escribiste mal el motivo o
+     * los parámetros de impresión.
+     *
+     * No es una vía para "cambiar de opinión" sobre una pieza física: si la
+     * imprimiste y no sirve, eso es descartar; si sirve, validar. Por eso
+     * `validada` y `superada` se quedan fuera — ahí ya hay una cadena montada
+     * encima (invariante 1) que esto desharía en silencio.
+     *
+     * Se limpia el texto que acompañaba al estado (el motivo del descarte,
+     * los parámetros de la impresión que se deshace) porque describía un
+     * juicio que ya no existe; los `params_impresion` sí sobreviven a deshacer
+     * un descarte, que no era lo que estaba mal.
+     */
+    public function devolverABorrador(int $versionId): array
+    {
+        $version = $this->exigirEstado($versionId, ['impresa', 'descartada'], 'deshacer');
+
+        $datos = ['estado' => 'borrador'];
+        if ($version['estado'] === 'descartada') {
+            $datos['resultado'] = null;
+        } else {
+            $datos['params_impresion'] = null;
+        }
+
+        $this->versionModel->update($versionId, $datos);
+
+        return $this->versionModel->find($versionId);
     }
 
     /**

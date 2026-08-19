@@ -21,10 +21,14 @@ import argparse
 import hashlib
 import json
 import mimetypes
+import os
 import platform
+import re
 import shutil
 import socket
+import subprocess
 import sys
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -43,7 +47,7 @@ DIAS_PAPELERA = 30
 # servidor viene con la versión que le corresponde. "trackbitos actualizar"
 # la compara con la que sirve el servidor (GET /cliente/version, leída del
 # propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.7.1"
+VERSION = "1.9.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -115,6 +119,48 @@ def a_papelera(ruta: Path) -> Path:
     destino = PAPELERA_DIR / f"{datetime.now():%Y%m%d-%H%M%S}-{ruta.name}"
     shutil.move(str(ruta), str(destino))
     return destino
+
+
+def carpeta_para(variante: dict) -> str:
+    """
+    Nombre de carpeta para una pieza: "Pincel de pintura" → "pincel-de-pintura".
+    Sin acentos ni espacios porque esa ruta acaba escrita a mano en la terminal
+    y pegada en rutas de Blender, y porque las dos máquinas son Windows y
+    macOS: lo que aquí es legal allí puede no serlo.
+
+    La variante solo se añade cuando no es la `base` — igual que en los
+    listados: "base" está en todas las piezas y no distingue nada, así que
+    como sufijo de carpeta sería ruido en casi todas.
+    """
+    nombre = nombre_completo(variante) if variante.get("nombre") != PIEZA_VARIANTE_BASE \
+        else (variante.get("familia_nombre") or variante["nombre"])
+
+    plano = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode()
+    plano = re.sub(r"[^A-Za-z0-9]+", "-", plano).strip("-").lower()
+
+    return plano or "pieza"
+
+
+def abrir_en_el_sistema(ruta: Path) -> bool:
+    """
+    Abre el fichero (o la carpeta) con lo que el sistema tenga asociado: en
+    Windows lo mismo que hace `ii` en PowerShell, en macOS `open`, y en Linux
+    `xdg-open` por si algún día. Devuelve si se pudo.
+
+    No revienta el comando si falla: llegado ahí el trabajo importante —bajar
+    y abrir la sesión— ya está hecho, y no poder lanzar Blender es un
+    inconveniente, no un motivo para dar por fracasada la descarga.
+    """
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(str(ruta))  # noqa: S606  (solo existe en Windows)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(ruta)], check=True)
+        else:
+            subprocess.run(["xdg-open", str(ruta)], check=True)
+        return True
+    except Exception:
+        return False
 
 
 def purgar_papelera(dias: int = DIAS_PAPELERA) -> list:
@@ -343,7 +389,7 @@ def estado_de_version(variante: dict) -> str:
     if estado is None:
         return "sin versión"
     if estado == "borrador":
-        return "versión sin imprimir"
+        return "para imprimir"
     if estado == "descartada":
         return "no sirve"
 
@@ -612,7 +658,7 @@ def imprimir_veredicto(directorio: Path, sentinel: Optional[dict], resultado: di
     print(f"  origen {signo_nube} nube     {marca_nube} {etiqueta_nube}")
 
     acciones = {
-        "borrable": "Al día. Puedes borrar la copia local con seguridad.",
+        "borrable": "Al día. Ya no hace falta esta copia: trackbitos limpiar la aparta a la papelera.",
         "cerrar_sesion": "Todo subido, pero la sesión sigue abierta y bloquea el otro equipo. Ejecuta: trackbitos cerrar",
         "cerrar_sin_cambios": "No has tocado nada. Ejecuta: trackbitos cerrar --sin-cambios",
         "descargar": "Descarga la sesión nueva. Es seguro: no tienes cambios locales que perder.",
@@ -667,22 +713,25 @@ def _exigir_sentinel(directorio: Path) -> dict:
     return sentinel
 
 
-def cmd_estado(args) -> int:
-    directorio = _directorio(args)
+def _diagnostico(directorio: Path, avisar: bool = True) -> tuple:
+    """
+    Los tres hashes y el veredicto de la tabla 4.3. Lo comparten `estado` y
+    `limpiar`: los dos tienen que entender por "está todo en su sitio"
+    exactamente lo mismo, y con dos copias del cálculo esa igualdad dura
+    hasta el primer cambio en una de ellas.
+
+    Devuelve (sentinel, blend, resultado). `resultado` es None cuando esto ni
+    siquiera es una mesa de trabajo.
+    """
     sentinel = cargar_json(directorio / SENTINEL_NAME)
     blend = encontrar_blend(directorio)
 
     # Ni .sesion.json ni .blend: no es que algo se haya corrompido, es que
     # esto nunca fue una mesa de trabajo. Antes caía en evaluar() con todo
     # a None y salía como "estado corrupto" — alarmante y engañoso para lo
-    # que en realidad es un directorio vacío cualquiera. Mismo mensaje que
-    # ya da _exigir_sentinel() (subir/cerrar/promocionar), para no decir
-    # dos cosas distintas de la misma situación según el comando.
+    # que en realidad es un directorio vacío cualquiera.
     if not sentinel and not blend:
-        print(f"\n{directorio}\n")
-        print(f"  · No es un directorio de trabajo: no hay {SENTINEL_NAME} ni ningún .blend aquí.")
-        print("\n  → Empieza con: trackbitos bajar <variante>\n")
-        return 1
+        return sentinel, blend, None
 
     hash_local = sha256_de(blend) if blend else None
     hash_origen = sentinel.get("hash_origen") if sentinel else None
@@ -696,8 +745,9 @@ def cmd_estado(args) -> int:
             maquina = asegurar_maquina(config)
             estado_api = api_get(config, f"/variante/{sentinel['variante_id']}/estado")
             hash_nube = estado_api.get("hash_nube")
-            print()
-            imprimir_avisos(estado_api, config, maquina.get("id"))
+            if avisar:
+                print()
+                imprimir_avisos(estado_api, config, maquina.get("id"))
         except RuntimeError as e:
             print(f"  ⚠ No se pudo consultar la nube: {e}\n", file=sys.stderr)
 
@@ -712,6 +762,22 @@ def cmd_estado(args) -> int:
             resultado["accion"] = "cerrar_sin_cambios"
         elif sentinel.get("sesion_id"):
             resultado["accion"] = "cerrar_sesion"
+
+    return sentinel, blend, resultado
+
+
+def cmd_estado(args) -> int:
+    directorio = _directorio(args)
+    sentinel, blend, resultado = _diagnostico(directorio)
+
+    if resultado is None:
+        # Mismo mensaje que ya da _exigir_sentinel() (subir/cerrar/promocionar),
+        # para no decir dos cosas distintas de la misma situación según el
+        # comando.
+        print(f"\n{directorio}\n")
+        print(f"  · No es un directorio de trabajo: no hay {SENTINEL_NAME} ni ningún .blend aquí.")
+        print("\n  → Empieza con: trackbitos bajar <variante>\n")
+        return 1
 
     imprimir_veredicto(directorio, sentinel, resultado)
 
@@ -870,6 +936,60 @@ def cmd_bajar(args) -> int:
     return _bajar(args, "trabajo")
 
 
+def cmd_trabajar(args) -> int:
+    """
+    De "quiero seguir con el pincel" a tenerlo abierto en Blender, en un
+    comando: crea la carpeta si hace falta, baja dentro, abre la sesión y
+    lanza el fichero.
+
+    Es `bajar` con los tres pasos de alrededor, no un camino distinto —
+    delega en el mismo `_bajar`, así que las negativas (copia viva en la otra
+    máquina, impresión sin juzgar, cambios sin subir aquí) son exactamente
+    las mismas. Si `bajar` se niega, aquí no se abre nada.
+    """
+    base = _directorio(args)
+    config = cargar_config()
+
+    # Se resuelve el nombre ANTES de crear ningún directorio: si escribiste
+    # algo ambiguo, resolver_variante lista las opciones y no queremos haber
+    # dejado por el camino una carpeta vacía con un nombre a medias.
+    variante = resolver_variante(config, args.variante)
+    identidad = nombre_completo(variante)
+
+    # Si ya estás dentro de la mesa de esa misma pieza, se trabaja aquí: si
+    # no, cada vez que la retomaras acabarías con pincel/pincel/pincel.
+    sentinel = cargar_json(base / SENTINEL_NAME)
+    if sentinel and int(sentinel.get("variante_id") or 0) == int(variante["id"]):
+        carpeta = base
+    else:
+        carpeta = base / carpeta_para(variante)
+        creada = not carpeta.exists()
+        carpeta.mkdir(parents=True, exist_ok=True)
+        print(f"\n  {'✓ carpeta creada' if creada else '· carpeta ya existente'}: {carpeta}")
+
+    # El id, no el texto que escribió el usuario: ya está resuelto, y volver
+    # a buscarlo dentro de _bajar podría dar "varias coincidencias" otra vez.
+    args.dir = str(carpeta)
+    args.variante = str(variante["id"])
+
+    codigo = _bajar(args, "trabajo")
+    if codigo != 0:
+        return codigo
+
+    if getattr(args, "no_abrir", False):
+        return 0
+
+    # Sin .blend (pieza recién estrenada) se abre la carpeta: es donde hay
+    # que guardar el fichero que todavía no existe.
+    objetivo = encontrar_blend(carpeta) or carpeta
+    if abrir_en_el_sistema(objetivo):
+        print(f"  → Abriendo {objetivo.name}...\n")
+    else:
+        print(f"  ⚠ No se pudo abrir {objetivo} solo. Ábrelo tú; lo demás ya está hecho.\n")
+
+    return 0
+
+
 def cmd_ver(args) -> int:
     return _bajar(args, "consulta")
 
@@ -985,6 +1105,54 @@ def cmd_cerrar(args) -> int:
     return 0
 
 
+def cmd_limpiar(args) -> int:
+    """
+    Recoge la mesa: aparta el .blend local a la papelera cuando ya no aporta
+    nada — todo subido, sesión cerrada y la nube donde la dejaste.
+
+    Existe porque el veredicto de `estado` ya decía "puedes borrar la copia
+    local con seguridad" y borrarla a mano en el explorador es justo el gesto
+    en el que uno se equivoca: basta con que quedara algo sin subir para
+    perderlo, y ahí no hay papelera del sistema que valga si el fichero pesa
+    más que la cuota.
+
+    Solo actúa con el veredicto "borrable" exacto. Cualquier otra cosa
+    —cambios sin subir, sesión abierta, descarga sin cerrar, la nube más
+    adelantada, o ni siquiera poder preguntárselo a la nube— y no toca nada:
+    dice qué falta y se va. No hay --forzar a propósito; si de verdad quieres
+    tirar algo sin subirlo, eso es un borrado a mano, con su decisión detrás.
+    """
+    directorio = _directorio(args)
+    sentinel, blend, resultado = _diagnostico(directorio)
+
+    if resultado is None:
+        print(f"\n{directorio}\n")
+        print(f"  · Aquí no hay nada que recoger: ni {SENTINEL_NAME} ni ningún .blend.\n")
+        return 1
+
+    if resultado["accion"] != "borrable":
+        print("\n  ⚠ No se toca nada: esta copia todavía hace falta.")
+        imprimir_veredicto(directorio, sentinel, resultado)
+        return 1
+
+    apartados = [a_papelera(blend)]
+
+    # El sentinel se va con él: sin .blend al lado, un .sesion.json huérfano
+    # haría que el siguiente `estado` cantara "falta el .blend, estado
+    # corrupto" sobre un directorio que se recogió a propósito.
+    sentinel_path = directorio / SENTINEL_NAME
+    if sentinel_path.is_file():
+        apartados.append(a_papelera(sentinel_path))
+
+    print(f"\n{sentinel.get('variante', directorio.name) if sentinel else directorio.name} · mesa recogida\n")
+    for ruta in apartados:
+        print(f"  ✓ {ruta.name}")
+    print(f"\n  El trabajo está en el servidor; esto era la copia de trabajo.")
+    print(f"  Sigue en {PAPELERA_DIR} durante {DIAS_PAPELERA} días (trackbitos papelera).")
+    print("\n  → Para volver a esta pieza: trackbitos bajar \"<pieza>\"\n")
+    return 0
+
+
 def cmd_papelera(args) -> int:
     """Qué hay apartado y cuánto le queda antes de caducar."""
     if not PAPELERA_DIR.is_dir():
@@ -1052,10 +1220,10 @@ def cmd_catalogo(args) -> int:
 
             avisos = avisos_de(v)
 
-            # 21, no 16: es lo que mide "versión sin imprimir" más el espacio
-            # de separación. Con 16 la columna de la derecha se descolocaba
-            # en cada pieza cuyo estado fuese más largo que eso.
-            linea = f"  {nombre_completo(v):<30} {buena:<21} {v['versiones']} versión(es)"
+            # 14: lo que mide la etiqueta más larga ("para imprimir") más
+            # el espacio de separación. Con menos, la columna de la derecha se
+            # descolocaba en cada pieza cuyo estado fuese más largo que eso.
+            linea = f"  {nombre_completo(v):<30} {buena:<14} {v['versiones']} versión(es)"
             if avisos:
                 linea += "  ⚠ " + " · ".join(avisos)
             print(linea)
@@ -1283,6 +1451,17 @@ def main(argv: Optional[list] = None) -> int:
                    help="Continuar aunque haya una descarga sin cerrar en otra máquina.")
     p.set_defaults(func=cmd_bajar)
 
+    p = con_dir(subs.add_parser(
+        "trabajar", aliases=["t"],
+        help="Todo de un golpe: crea la carpeta, baja dentro y abre el .blend. (alias: t)"
+    ))
+    p.add_argument("variante", help="Nombre o id de la pieza con la que vas a trabajar.")
+    p.add_argument("--no-abrir", action="store_true", dest="no_abrir",
+                   help="Prepara la carpeta y baja, pero no lanza el programa.")
+    p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente",
+                   help="Continuar aunque haya una descarga sin cerrar en otra máquina.")
+    p.set_defaults(func=cmd_trabajar)
+
     p = con_dir(subs.add_parser("ver", aliases=["v"], help="Descarga solo para mirar: no abre sesión. (alias: v)"))
     p.add_argument("variante", nargs="?", help="Nombre o id de la variante.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente")
@@ -1301,6 +1480,12 @@ def main(argv: Optional[list] = None) -> int:
     p.add_argument("--cambio", help="Obligatorio: qué se modificó, en una línea.")
     p.add_argument("--medidas", help="Cotas de calibre relevantes.")
     p.set_defaults(func=cmd_promocionar)
+
+    p = con_dir(subs.add_parser(
+        "limpiar", aliases=["l"],
+        help="Aparta a la papelera el .blend de este directorio, si ya está todo subido y cerrado. (alias: l)"
+    ))
+    p.set_defaults(func=cmd_limpiar)
 
     p = subs.add_parser("papelera", aliases=["pa"], help="Qué hay apartado y cuándo caduca. (alias: pa)")
     p.set_defaults(func=cmd_papelera)

@@ -13,6 +13,17 @@ $badges = [
 ];
 $etiqueta = fn($v) => 'v' . sprintf('%03d', (int) $v['numero']);
 
+/**
+ * El estado, dicho para quien lee el historial. "borrador" es el nombre del
+ * ENUM y no dice nada de lo que toca hacer: esa versión está congelada y
+ * esperando a que la imprimas y digas si sirve. Los demás ya se explican
+ * solos, así que no se tocan — traducir por traducir alejaría el texto de
+ * la base de datos sin ganar nada.
+ */
+$nombreEstado = static fn(string $estado): string => [
+    'borrador' => 'para imprimir y evaluar',
+][$estado] ?? $estado;
+
 /** KB para lo pequeño, MB con un decimal en cuanto pasa de 1 MB — un .blend de IA en 102400 KB no se lee de un vistazo. */
 $tamanoLegible = function (?int $bytes): string {
     if ($bytes === null) {
@@ -82,6 +93,15 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
 
     return array_filter($lineas);
 };
+
+/**
+ * Cómo se llama esta variante para el CLI: familia + variante, entrecomillado.
+ * El nombre de la variante solo es único dentro de su familia ("base" se
+ * repite en cuanto hay dos piezas) y esto es para copiar y pegar — tiene que
+ * funcionar tal cual, no la mitad de las veces. Se usa en dos sitios: la
+ * tarjeta "Desde tu máquina" del final y el atajo de cada versión.
+ */
+$refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 ?>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
@@ -395,7 +415,7 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                             <span class="badge <?= $badges[$v['estado']] ?? 'text-bg-secondary' ?>"><?= $etiqueta($v) ?></span>
-                            <span class="text-muted small"><?= esc($v['estado']) ?></span>
+                            <span class="text-muted small"><?= esc($nombreEstado($v['estado'])) ?></span>
                             <span class="text-muted small ms-auto"><?= esc($v['promocionada_en']) ?></span>
                         </div>
 
@@ -404,8 +424,10 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                         <?php if ($v['pendiente_de_juicio']): ?>
                             <div class="alert alert-secondary py-1 px-2 small my-2">
                                 <i class="bi bi-hourglass-split"></i>
+                                <?php // Sin el nombre del estado incrustado en la frase: con la etiqueta
+                                      // larga ("para imprimir y evaluar") la oración dejaba de leerse. ?>
                                 Lleva <?= (int) floor((time() - strtotime($v['promocionada_en'])) / 86400) ?> días
-                                en <?= esc($v['estado']) ?> sin resolverse. ¿Se imprimió? ¿Sirvió?
+                                sin resolverse. ¿Se imprimió? ¿Sirvió?
                             </div>
                         <?php endif; ?>
 
@@ -563,6 +585,11 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                             <?= $boton($v['estado'] === 'borrador', 'info', 'modalImpresa' . $v['id'], 'Marcar impresa') ?>
                             <?= $boton($v['estado'] === 'impresa', 'success', 'modalValidar' . $v['id'], 'Validar') ?>
                             <?= $boton(in_array($v['estado'], ['borrador', 'impresa'], true), 'danger', 'modalDescartar' . $v['id'], 'Descartar') ?>
+                            <?php // Solo aparece donde sirve de algo: un botón "Deshacer" apagado en
+                                  // todas las tarjetas invitaría a leerlo como que se puede deshacer todo. ?>
+                            <?php if (in_array($v['estado'], ['impresa', 'descartada'], true)): ?>
+                                <?= $boton(true, 'warning', 'modalDeshacer' . $v['id'], 'Deshacer') ?>
+                            <?php endif; ?>
                             <?= $boton($puedeDevolver($v), 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
                             <?= $boton(true, 'primary', 'modalDerivar' . $v['id'], 'Derivar variante') ?>
                         </div>
@@ -570,6 +597,19 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                         <?php foreach ($porQueNo($v) as $linea): ?>
                             <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> <?= esc($linea) ?></div>
                         <?php endforeach; ?>
+
+                        <?php // Cuando la rama abierta ya parte de esta versión, todos los botones de
+                              // estado se apagan y la ficha parece un callejón sin salida. No lo es: el
+                              // camino sigue en la terminal, así que el comando va aquí mismo, listo
+                              // para copiar, en vez de en una frase que remite a otra caja de la página. ?>
+                        <?php if ((int) ($acciones['rama_desde_version_id'] ?? 0) === (int) $v['id']): ?>
+                            <div class="mt-2 p-2 rounded border bg-body-tertiary">
+                                <div class="small text-body-secondary mb-1">
+                                    <i class="bi bi-terminal"></i> Sigue desde tu máquina:
+                                </div>
+                                <pre class="small mb-0 user-select-all"><code>trackbitos bajar "<?= esc($refCli) ?>"</code></pre>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -686,6 +726,42 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                         </form>
                     </div>
                 </div>
+
+                <?php if (in_array($v['estado'], ['impresa', 'descartada'], true)): ?>
+                    <div class="modal fade" id="modalDeshacer<?= $v['id'] ?>" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <form class="modal-content" method="post" action="<?= site_url('piezas/version/' . $v['id'] . '/deshacer') ?>">
+                                <?= csrf_field() ?>
+                                <div class="modal-header">
+                                    <h6 class="modal-title">Deshacer <?= $etiqueta($v) ?></h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="small mb-2">
+                                        Vuelve a <strong>borrador</strong>, como estaba recién promocionada. Esto es para
+                                        arreglar un botón mal pulsado o un texto mal escrito, no para cambiar de opinión
+                                        sobre una pieza que ya imprimiste.
+                                    </p>
+                                    <?php if ($v['estado'] === 'descartada'): ?>
+                                        <div class="alert alert-warning py-2 small mb-0">
+                                            Se pierde el motivo del descarte:
+                                            <em><?= esc($v['resultado'] ?: '(sin motivo)') ?></em>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="alert alert-warning py-2 small mb-0">
+                                            Se pierden los parámetros de impresión<?= empty($v['params_impresion']) ? '' : ': <em>' . esc($v['params_impresion']) . '</em>' ?>.
+                                            Vuelve a marcarla impresa con los buenos.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button class="btn btn-sm btn-warning">Volver a borrador</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <div class="modal fade" id="modalDevolver<?= $v['id'] ?>" tabindex="-1">
                     <div class="modal-dialog modal-dialog-centered">
@@ -917,7 +993,7 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                                 <?php foreach ($versionesParaComponer as $v): ?>
                                     <option value="<?= (int) $v['id'] ?>">
                                         <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
-                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($v['estado']) ?>)
+                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($nombreEstado($v['estado'])) ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -1132,13 +1208,6 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
                     Lo que sí puedes bajar del navegador es el <code>.blend</code> de una versión ya cerrada,
                     pero solo para mirarlo: esa copia no queda registrada.
                 </p>
-                <?php
-                    // Familia + variante, entrecomillado: el nombre de la variante
-                    // solo es único dentro de su familia ("estandar" se repite en
-                    // cuanto hay dos piezas) y este comando es para copiar y pegar
-                    // — tiene que funcionar tal cual, no la mitad de las veces.
-                    $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
-                ?>
                 <pre class="small mb-0 user-select-all"><code>trackbitos bajar "<?= esc($refCli) ?>"
 
 trackbitos estado

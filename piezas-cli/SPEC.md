@@ -396,11 +396,11 @@ marcha.
 |---|---|---|
 | Hay versión validada | `v001 ✓` | success |
 | Ninguna versión promocionada todavía | **`sin versión`** | secondary |
-| Promocionada, aún sin imprimir (`borrador`) | **`versión sin imprimir`** | secondary |
+| Promocionada, aún sin imprimir (`borrador`) | **`para imprimir`** | secondary |
 | Impresa, pendiente de juzgar | `sin validar` | primary |
 | La última se descartó | **`no sirve`** | danger |
 
-- **`sin versión` vs `versión sin imprimir`** es la distinción nueva, y no es cosmética: la
+- **`sin versión` vs `para imprimir`** es la distinción nueva, y no es cosmética: la
   primera dice que el trabajo sigue en la sesión y todavía no ha llegado al historial (lo que
   toca es `promocionar`); la segunda, que ya hay una versión congelada esperando a la impresora
   (lo que toca es imprimirla y marcarla impresa). Antes las dos se veían igual.
@@ -601,6 +601,85 @@ delante las demás.
   de máquina o de pieza. Se detiene sola si la pestaña está en segundo plano (Page Visibility
   API) — no gasta peticiones en algo que no se ve.
 
+**Fase 26 (2026-08-19): el índice contesta preguntas, y un botón mal pulsado se deshace.**
+
+- **Vocabulario: lo siguiente que hay que hacer, no lo que falta.** `borrador` se lee ahora
+  **`para imprimir`** en el índice (era "versión sin imprimir") y **`para imprimir y evaluar`** en
+  el historial de la ficha, donde antes salía el nombre crudo del ENUM. Es lo mismo por fuera,
+  pero "sin imprimir" nombra una carencia y "para imprimir" nombra la acción — que es a lo que se
+  viene. El resto de estados no se traducen: ya se explican solos, y alejarlos del nombre de la
+  base de datos por gusto no gana nada. En el CLI, `estado_de_version()` dice lo mismo (v1.7.2) —
+  web y terminal no pueden llamar de dos maneras distintas al mismo sitio.
+- **"Sin empezar"**, badge nuevo en la columna Estado: una pieza dada de alta y sin ningún
+  `.blend` no está "sin versión" como la que tiene trabajo encima esperando a promocionarse —
+  está sin abrir Blender. Nunca convive con "modificando": en cuanto hay sesión abierta o algo
+  subido, vuelve a ser "sin versión" (si no, la celda se contradiría a sí misma).
+- **Filtros del índice**, una barra de chips sobre la tabla con el contador de piezas de cada
+  uno: Definitivas, Imprimir, Sin STL, Sin validar, No sirven, Modificando, Sin empezar. Son las
+  preguntas que uno se hace de verdad ("¿qué me falta exportar?", "¿qué mando a la impresora
+  hoy?"), no la lista de estados internos. **"Imprimir" es un botón partido**: la mitad
+  izquierda filtra todas las pendientes de imprimir de un clic (la pregunta más frecuente) y la
+  flecha abre *Todas / Con STL / Falta STL*, porque lo siguiente que hay que hacer no es lo mismo
+  en los dos casos — una va a la impresora, la otra hay que exportarla antes. Con el menú cerrado
+  el botón enseña cuál de las tres está puesta ("Imprimir · Con STL") y su contador; si no, la
+  mitad de los filtros quedarían escondidos detrás de una flecha. Uno cada vez (no facetas que se
+  sumen), se combinan con el buscador en Y, y no persisten
+  entre recargas: un filtro pegado de la sesión anterior se lee como piezas perdidas. Los tokens
+  de cada fila (`data-tokens`) salen de lo que **se ve** en la columna STL, no de un cálculo
+  paralelo: filtrar por algo distinto de lo pintado parecería un error. La fila de una pieza con
+  varias variantes lleva la unión de los tokens de todas, para que aparezca cuando encaje
+  cualquiera de ellas.
+- **El `.blend` a mano, desde la propia fila.** Junto al badge "sin STL" hay un icono de descarga
+  (`GET version/{id}/blend/descargar`, el mismo de la ficha, con su sufijo `solo-lectura` en el
+  nombre): lo que falta ahí es exportar, y para exportar hace falta el fichero. Filtrando por
+  "Imprimir · falta STL" se bajan todos de una tacada en vez de entrar y salir de cada ficha.
+  Solo aparece donde falta el STL — en las demás filas sería ruido, y esta descarga no queda
+  registrada (no pasa por el cliente), así que no conviene ofrecerla más de lo necesario.
+- **Deshacer** (verbo `devolverABorrador`, tabla de la sección 7.1): descartar era irreversible,
+  así que equivocarse de botón dejaba la versión descartada para siempre — y con `descartada`
+  fuera de todas las transiciones, la ficha parecía un callejón sin salida.
+- **`trackbitos trabajar <pieza>` (cliente v1.9.0)**: de "quiero seguir con el pincel" a tenerlo
+  abierto en Blender, en un comando — crea la carpeta, baja dentro, abre la sesión y lanza el
+  fichero. Los tres pasos de alrededor de `bajar` eran manuales y se repetían cada vez.
+
+  **Delega en el mismo `_bajar`**, así que las negativas son exactamente las de siempre (copia
+  viva en la otra máquina, invariante 9, cambios sin subir aquí) y si `bajar` se niega no se abre
+  nada. El nombre se resuelve **antes** de crear ningún directorio: si encaja con varias piezas,
+  `resolver_variante` las lista y no queda por el camino una carpeta vacía a medio nombrar.
+  Estando ya dentro de la mesa de esa misma variante se trabaja ahí, en vez de anidar
+  `pincel/pincel/pincel`.
+
+  `carpeta_para()` da el nombre: sin acentos ni espacios (esa ruta se escribe a mano y se pega en
+  rutas de Blender, y lo legal en Windows y en macOS no coincide), y sin el sufijo de la variante
+  cuando es la `base` — está en todas las piezas y no distingue nada, igual que en los listados.
+
+  `abrir_en_el_sistema()` usa la asociación del sistema: `os.startfile` en Windows (lo mismo que
+  `ii` en PowerShell), `open` en macOS, `xdg-open` en el resto. Si falla no tumba el comando: lo
+  importante —bajar y abrir sesión— ya está hecho, y se dice que lo abra a mano. Sin `.blend`
+  (pieza recién estrenada) abre la carpeta, que es donde hay que guardar el fichero que aún no
+  existe.
+- **`trackbitos limpiar` (cliente v1.8.0)**: recoge la mesa de trabajo — aparta el `.blend` local
+  (y su `.sesion.json`) a la papelera del cliente. El veredicto de `estado` ya decía desde la
+  fase 4 "puedes borrar la copia local con seguridad" (`accion: "borrable"`), pero borrarla
+  quedaba como gesto manual en el explorador, que es justo donde uno se equivoca: basta con que
+  quedara algo sin subir para perderlo.
+
+  **Solo actúa con el veredicto `borrable` exacto**, ya corregido con las dos salvedades que
+  aplica `estado` (sesión abierta → `cerrar_sesion`; descarga sin cerrar → `cerrar_sin_cambios`).
+  Cualquier otra cosa —cambios sin subir, la nube más adelantada, o no poder consultarla siquiera—
+  y no toca nada: imprime el mismo diagnóstico que `estado` y sale con 1. **Sin `--forzar` a
+  propósito**: tirar algo sin subirlo es una decisión, no un flag. Para que las dos órdenes no
+  puedan discrepar sobre qué es "estar en su sitio", el cálculo de los tres hashes se extrajo a
+  `_diagnostico()`, compartido por `cmd_estado` y `cmd_limpiar`.
+
+  El `.sesion.json` se va con el `.blend` porque un sentinel huérfano haría que el siguiente
+  `estado` cantara "falta el .blend, estado corrupto" sobre un directorio que se recogió a
+  propósito; recogido del todo, dice lo que toca ("empieza con trackbitos bajar").
+- **El comando, donde hace falta.** Cuando la rama abierta ya parte de la versión que estás
+  mirando, todos sus botones de estado están apagados con razón: se sigue desde el cliente. Antes
+  eso lo decía una frase gris que remitía a otra caja al final de la página; ahora esa misma
+  tarjeta lleva el `trackbitos bajar "<pieza> <variante>"` listo para copiar.
+
 ---
 
 ## 0. Contexto
@@ -743,11 +822,14 @@ Cada uno es una transacción atómica que debe fallar entera si viola un invaria
 | **Marcar impresa** | `borrador → impresa`, con `params_impresion`. |
 | **Validar** | `impresa → validada`. Degrada la anterior validada a `superada`. Habilita la purga de sesiones de la rama que cerró esa versión. |
 | **Descartar** | Pasa a `descartada` exigiendo motivo en `resultado`. |
+| **Deshacer** | `impresa`/`descartada → borrador`. Solo para arreglar un botón mal pulsado o un texto mal escrito, no para cambiar de opinión sobre una pieza ya impresa. Borra el texto del juicio que deshace (`resultado` al deshacer un descarte, `params_impresion` al deshacer una impresión); los `params_impresion` sobreviven a deshacer un descarte, que no era lo que estaba mal. `validada` y `superada` quedan fuera: encima de ellas ya hay cadena montada (invariante 1) que esto desharía en silencio. |
 | **Derivar variante** | Crea variante nueva con `origen_version_id` apuntando a la versión de partida. Numeración propia desde v001. No copia ficheros ni referencias. |
 
-Implementados en `PiezaService` (fase 2) como: `crearFamilia`, `crearVariante`, `abrirSesion`, `subirSesion`, `cerrarSesion`, `promocionar`, `devolverATrabajo`, `marcarImpresa`, `validar`, `descartar`, `derivarVariante`.
+Implementados en `PiezaService` (fase 2) como: `crearFamilia`, `crearVariante`, `abrirSesion`, `subirSesion`, `cerrarSesion`, `promocionar`, `devolverATrabajo`, `marcarImpresa`, `validar`, `descartar`, `devolverABorrador`, `derivarVariante`.
 
 **Corrección de "devolver a trabajo" (descubierta en la fase 6).** Tal como estaba, el verbo no podía ejecutarse nunca: siempre hay una rama abierta (promocionar cierra una y abre otra), y el invariante 2 no admite una segunda. Retomar una versión antigua implica por fuerza abandonar la línea en curso, así que el verbo ahora cierra la rama abierta —sin versión que la cierre, porque no se promociona— y abre la nueva. Al ser destructivo, por defecto **se niega y explica** cuántas sesiones subidas quedarían sin promocionar; solo procede con confirmación explícita (`abandonar_rama`), que en la web es una casilla que nombra la consecuencia. Las sesiones no se pierden: quedan colgando de la rama cerrada.
+
+**Matiz (fase 26): la rama vacía no se defiende.** Esa negativa solo tiene sentido si hay algo dentro. Con cero sesiones subidas —el caso normal justo después de promocionar— el aviso decía literalmente "0 sesión(es) subida(s) sin promocionar": un obstáculo delante de una puerta que no daba a ningún sitio. Ahora solo salta con `$subidas > 0`.
 
 ---
 
