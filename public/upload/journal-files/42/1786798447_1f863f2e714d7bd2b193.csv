@@ -1,0 +1,423 @@
+# Proyecto "Busca / Telegrama" — Informe de concepto y plan de ejecución
+
+**Fecha:** 2 de agosto de 2026
+**Autor de la idea:** Jesús
+**Estado:** Concepto — pendiente de decisión de vía de arranque
+
+---
+
+## 1. Resumen ejecutivo
+
+La idea es una herramienta de comunicación mínima que recupera dos conceptos clásicos y los moderniza:
+
+- **El busca (buscapersonas):** en lugar de llamar directamente, envías una *solicitud de llamada*. El receptor recibe una notificación insistente y clara: "Jesús quiere que le llames".
+- **El telegrama:** la solicitud puede llevar un mensaje corto, con propósito y acción esperada. Ejemplo: *"Mañana tienes que ir a la ITV, ¿quieres que te acompañe? Llámame"*.
+
+No es una app de mensajería. Es deliberadamente lo contrario: sin chats, sin historial conversacional, sin "escribiendo…", sin grupos, sin stickers. Solo avisos accionables que piden una cosa concreta (normalmente, una llamada).
+
+**Propuesta de valor frente a WhatsApp:** un aviso que no se pierde entre 40 chats, con nivel de urgencia explícito, respuesta de un toque y caducidad automática. La limitación es la gracia.
+
+---
+
+## 2. El problema que resuelve
+
+1. Llamar en frío interrumpe. Mucha gente ya no coge llamadas no anunciadas.
+2. El "toque" (llamada perdida intencionada) es ambiguo: no dice si es urgente ni de qué va.
+3. El "llámame cuando puedas" por WhatsApp se pierde entre decenas de conversaciones y no distingue urgencia.
+4. No existe en el mercado una app de consumo dedicada a esto (verificado agosto 2026): lo más parecido son sistemas de callback para call centers y funciones parciales (recordatorio al rechazar llamada en iPhone, avisos de Slack/Teams en entorno laboral).
+
+**Riesgo principal (no técnico):** efecto red. La app solo sirve si el otro la tiene. Estrategia: empezar por círculos cerrados (pareja, familia, equipo de trabajo) donde la adopción se decide de una vez para todos, no usuario a usuario.
+
+---
+
+## 3. Definición del producto (MVP)
+
+### 3.1 Funcionalidad núcleo
+
+1. **Solicitud de llamada simple:** seleccionar contacto → botón "Búscalo" → al receptor le llega notificación de alta prioridad "Jesús te ha buscado. Llámale".
+2. **Telegrama:** solicitud + mensaje corto (límite deliberado: 200 caracteres) + acción esperada.
+3. **Acciones esperadas (tipos de telegrama):**
+   - `LLAMAME` — pide llamada (botón que abre el marcador con el número).
+   - `CONFIRMA` — pide sí/no (dos botones en la propia notificación).
+   - `INFO` — solo para que lo sepas (botón "Visto").
+4. **Niveles de urgencia:** Normal / Urgente / Antes de las HH:MM.
+5. **Respuestas de un toque desde la notificación:** "Te llamo ahora", "En 10 min", "Estoy liado, luego", "Sí", "No", "Visto".
+6. **Caducidad:** un telegrama con hora límite se autodestruye al vencer (TTL nativo de FCM). Si no lo viste, ya no molesta.
+7. **Confirmación de entrega:** el emisor ve si el telegrama fue entregado y qué respondió el receptor.
+
+### 3.1 bis Escasez por diseño (principio rector del producto)
+
+Esto **no es mensajería continua** y las reglas lo garantizan por construcción. La razón: el busca y el telegrama funcionaban porque recibir uno *pesaba*. La escasez es la propuesta de valor frente a WhatsApp: aquí un aviso no puede ser ruido.
+
+1. **Una solicitud pendiente por contacto:** no se puede enviar un nuevo busca a alguien mientras tenga uno pendiente (sin responder y sin caducar). Para cambiar el mensaje: cancelar el pendiente y enviar otro.
+2. **Cancelación / anulación:** el emisor puede retirar un telegrama no visto. Si ya fue notificado, el receptor ve estado "anulado" (para no dejar intriga).
+3. **Cupo diario:** p. ej. 5 buscas/día en total por usuario (cifra a validar en Fase 0). Si alguien necesita más, su caso de uso es un chat o una llamada, no esta app.
+4. **Urgente racionado:** máximo 1–2 urgentes/día. La urgencia solo significa algo si es rara; protege la credibilidad del modo llamada-a-pantalla-completa.
+5. **Sin conversación:** las respuestas son de un toque (botones); no hay campo de texto libre de réplica en el MVP.
+
+Implementación: contadores por usuario/día y restricción de unicidad (emisor, receptor, estado='enviado|entregado') en `telegramas`.
+
+### 3.2 Fuera del MVP (deliberadamente)
+
+- Chats o hilos de conversación.
+- Adjuntos, fotos, audios.
+- Versión iOS (posible v2/v3).
+
+(Los grupos salen de esta lista: se diseñan desde el principio —ver §3.5— aunque su implementación llegue justo después del MVP individual.)
+
+### 3.3 Plantillas (pilar de accesibilidad: envío y respuesta en 1–2 toques)
+
+Pensadas para que cualquiera —especialmente mayores o gente a la que no le gusta el móvil— emita y responda sin escribir nada.
+
+**Plantillas de emisión** (globales + personalizables):
+- "Llámame cuando puedas" · "Llámame, es urgente" · "Llámame antes de las ___" · "¿Sí o no? ___"
+- **Por contacto:** cada contacto puede tener sus propias plantillas prioritarias (a mamá siempre se le mandan las mismas 3 cosas). La pantalla del contacto muestra directamente sus botones → contacto + plantilla = 2 toques y enviado.
+
+**Plantillas de respuesta** (novedad — personalizables):
+- Por defecto: "Te llamo ahora" / "En 10 min" / "Estoy liado, luego" / "Sí" / "No" / "Visto".
+- Cada usuario define las suyas ("Estoy bien", "Ven cuando puedas", "Llámame tú"). Siguen siendo botones-estado, no texto libre: la filosofía anti-chat se mantiene porque el vocabulario se configura en frío (ajustes), no se improvisa en caliente.
+- Técnica: las respuestas propias viajan en el payload del push o se sirven al registrar el contacto; la API las trata como `respuesta` con texto asociado.
+
+**Modo sencillo (interfaz para mayores, activable):**
+- Máximo 4 contactos, foto grande, botones enormes con sus plantillas, letra gigante, sin menús.
+- Lo configura un familiar (modelo de adopción: el hijo instala y monta el panel; el mayor solo usa).
+- Es candidato a ser el posicionamiento principal del producto: "la app para que tus padres te avisen con un botón".
+
+### 3.5 Grupos ("círculos": familia, colegas…)
+
+Origen del proyecto: una familia con necesidades concretas. Un grupo aquí **no es un chat grupal**: es un círculo de destinatarios con sus propias plantillas. Dos semánticas de emisión, separadas a propósito:
+
+1. **Despacho ("que me llame alguien"):** suena a todos los miembros; el primero que responde "me encargo" reclama el aviso y **se anula automáticamente en el resto** ("Esther ya se encarga"). Caso estrella: coordinación familiar en cuidado de mayores.
+2. **Circular ("aviso a todos", tipo CONFIRMA/INFO):** cada miembro responde individualmente con su botón; el emisor ve un panel de estados (mamá ✓ sí · papá pendiente · Juan ✗ no). Sin conversación.
+
+Reglas de escasez aplicadas a grupos:
+- Un envío a grupo consume **1** del cupo diario (es una intención, no N).
+- El **despacho urgente** (N móviles en modo alerta a la vez) tiene límite propio, más estricto aún que el urgente individual.
+
+Personalización: plantillas propias por grupo ("¿Quién recoge a los niños?" en Familia; "¿Quién cubre el turno?" en Colegas).
+
+Implementación: aunque los grupos lleguen tras el MVP individual, el modelo de datos se diseña ya con `telegrama_destinos` (estado por destinatario) — ver §5.2. El envío individual es el caso particular de grupo-de-uno; así no hay migración después.
+
+---
+
+## 4. Opciones de implementación y valoración
+
+### Opción A — Bot de Telegram (MVP exprés)
+
+**Qué es:** un bot al que le mandas `/buscar @esther urgente` o `/tel @esther Mañana ITV, ¿te acompaño? Llámame`. El receptor recibe el mensaje del bot con botones inline ("Te llamo ahora" / "En 10 min" / "Luego").
+
+| Criterio | Valoración |
+|---|---|
+| Esfuerzo | Muy bajo: una tarde–un fin de semana |
+| Coste | 0 € (bot gratuito, puede correr en el hosting actual con webhooks) |
+| Alcance | Solo usuarios de Telegram |
+| Experiencia | Buena pero limitada: la notificación es la de Telegram, sin sonar como llamada |
+| Riesgo | Casi nulo |
+
+**Veredicto:** ideal como validación. El 90 % del valor con el 5 % del esfuerzo. Sinergia directa con la infraestructura y conocimiento de Braintogram (mismo stack de bots).
+
+### Opción B — App Android nativa (Kotlin) ★ recomendada como objetivo
+
+**Qué es:** app propia con FCM para push de alta prioridad, notificaciones estilo llamada (CallStyle, pantalla completa, tono insistente), integración con el marcador.
+
+| Criterio | Valoración |
+|---|---|
+| Esfuerzo | MVP en 1–2 semanas de ratos con asistencia de Claude Code; pulida para Play Store: 1–2 meses |
+| Coste | 25 $ (alta única en Play Console) + hosting ya disponible; FCM gratuito |
+| Alcance | Cualquier Android; requiere que ambos la instalen |
+| Experiencia | La mejor: es la única vía para que "suene como un busca de verdad" |
+| Riesgo | Curva de aprendizaje Android (Kotlin, ciclo de vida, permisos de notificación en Android 13+) |
+
+### Opción C — App multiplataforma (Flutter)
+
+Igual que B pero con Dart/Flutter, dejando la puerta abierta a iOS con el mismo código.
+
+| Criterio | Valoración |
+|---|---|
+| Esfuerzo | Similar a B para Android; iOS añade cuenta de desarrollador Apple (99 $/año) y limitaciones de push |
+| Riesgo | Las notificaciones estilo llamada y alta prioridad son más limitadas fuera de nativo; en iOS, mucho más restringidas |
+
+**Veredicto:** solo si iOS es objetivo a corto plazo. Para la visión "busca de verdad", nativo Android (B) da mejor resultado.
+
+### Opción D — PWA (web app instalable)
+
+Descartada como vía principal: los push web en Android funcionan, pero sin alta prioridad real, sin CallStyle y con fiabilidad inferior (ahorro de batería agresivo de los fabricantes). Puede servir como visor/emisor secundario de escritorio en el futuro.
+
+### Recomendación de estrategia: A → B
+
+1. **Semana 1:** bot de Telegram para validar el concepto en el círculo real (Esther / familia). Medir: ¿se usa? ¿qué plantillas se repiten? ¿qué falta?
+2. **Después:** si el uso confirma la idea, construir la app Android nativa reutilizando el mismo backend, y mantener el bot como "cliente alternativo" (quien no instale la app puede recibir los telegramas por Telegram — esto además mitiga el problema del efecto red).
+
+---
+
+## 5. Arquitectura técnica (Opción B, reutilizable desde A)
+
+### 5.1 Piezas
+
+```
+[App Android emisor] ──HTTPS──▶ [Backend PHP (CodeIgniter) + MySQL en Hostinger]
+                                        │
+                                        ├──▶ Firebase Cloud Messaging (push alta prioridad)
+                                        │            │
+                                        │            ▼
+                                        │    [App Android receptor] ── notificación CallStyle
+                                        │            │
+                                        ◀────────────┘ respuesta (visto / te llamo / sí / no)
+                                        │
+                                        └──▶ (opcional) Bot Telegram como canal alternativo
+```
+
+- **Backend:** PHP 8 + CodeIgniter 4 + MySQL en el hosting actual. Stack ya dominado; no hace falta aprender nada nuevo en servidor. Alternativa: Firebase completo (Firestore + Cloud Functions), pero añade curva de aprendizaje sin ventaja clara dado el hosting disponible.
+- **Push:** FCM con la API HTTP v1 (autenticación con cuenta de servicio; la API legacy está retirada). Mensajes `data` de alta prioridad; la app construye la notificación localmente para controlar sonido, CallStyle y botones.
+- **App:** Kotlin + Jetpack Compose. Mínimo SDK 26 (Android 8), target el vigente que exija Play.
+
+### 5.2 Modelo de datos (MySQL)
+
+```sql
+usuarios (
+  id, telefono_e164 UNIQUE, nombre, avatar_url,
+  fcm_token, telegram_chat_id NULL,
+  creado_en, ultimo_acceso
+)
+
+contactos (
+  usuario_id, contacto_id,          -- relación bidireccional aceptada
+  alias, estado ENUM('pendiente','aceptado','bloqueado'),
+  creado_en
+)
+
+telegramas (
+  id, uuid_cliente UNIQUE,           -- idempotencia (reintentos sin duplicar)
+  emisor_id,
+  grupo_id NULL,                     -- NULL = envío individual
+  modo ENUM('individual','despacho','circular'),
+  tipo ENUM('LLAMAME','CONFIRMA','INFO'),
+  mensaje VARCHAR(200) NULL,
+  urgencia ENUM('normal','urgente'),
+  caduca_en DATETIME NULL,           -- TTL; también se pasa a FCM
+  enviado_en
+)
+
+telegrama_destinos (                 -- estado POR DESTINATARIO (individual = grupo de 1)
+  telegrama_id, receptor_id,
+  canal ENUM('fcm','telegram'),
+  estado ENUM('enviado','entregado','visto','respondido','anulado_por_despacho','caducado'),
+  respuesta VARCHAR(50) NULL,
+  entregado_en, respondido_en
+)
+
+grupos (
+  id, creador_id, nombre, creado_en
+)
+
+grupo_miembros (
+  grupo_id, usuario_id, alias, unido_en
+)
+
+plantillas (
+  id, usuario_id NULL, grupo_id NULL,   -- de usuario, de contacto o de grupo
+  contacto_id NULL,
+  ambito ENUM('emision','respuesta'),
+  texto, tipo, orden
+)
+```
+
+### 5.3 Endpoints mínimos (API REST)
+
+```
+POST /api/registro            teléfono + verificación (SMS u OTP por llamada perdida)
+POST /api/token               actualizar fcm_token del dispositivo
+GET  /api/contactos           lista de contactos aceptados
+POST /api/contactos/invitar   por teléfono o código de invitación
+POST /api/telegramas          crear y disparar push {receptor, tipo, mensaje, urgencia, caduca_en}
+POST /api/telegramas/{id}/respuesta   respuesta de un toque desde la notificación
+GET  /api/telegramas          historial breve (últimos 30 días; el resto se purga)
+```
+
+### 5.4 Estructura del push (FCM, mensaje de datos)
+
+```json
+{
+  "message": {
+    "token": "<fcm_token_receptor>",
+    "android": { "priority": "HIGH", "ttl": "3600s" },
+    "data": {
+      "telegrama_id": "123",
+      "tipo": "LLAMAME",
+      "emisor_nombre": "Jesús",
+      "emisor_telefono": "+34600000000",
+      "mensaje": "Mañana ITV, ¿te acompaño? Llámame",
+      "urgencia": "urgente",
+      "caduca_en": "2026-08-03T18:00:00+02:00"
+    }
+  }
+}
+```
+
+La app receptora, al recibirlo, construye una notificación con:
+- **CallStyle / full-screen intent** si `urgencia = urgente` (suena y ocupa pantalla como llamada entrante).
+- Notificación de alta prioridad estándar si `urgencia = normal`.
+- Botones según `tipo`: LLAMAME → \[Llamar ahora] \[En 10 min] \[Luego]; CONFIRMA → \[Sí] \[No]; INFO → \[Visto].
+- "Llamar ahora" abre `Intent(ACTION_DIAL, tel:...)` — la llamada real va por la red telefónica normal, la app no gestiona voz.
+
+### 5.5 Puntos técnicos delicados (a resolver en el desarrollo)
+
+1. **Permisos Android 13+:** `POST_NOTIFICATIONS` es de petición explícita; `USE_FULL_SCREEN_INTENT` requiere justificación (caso de uso tipo llamada, encaja).
+2. **Ahorro de batería de fabricantes** (Xiaomi, Samsung…): documentar cómo excluir la app de la optimización para garantizar la entrega. FCM alta prioridad ayuda pero no es infalible.
+3. **Verificación de teléfono:** SMS OTP tiene coste; alternativa gratuita: registro por código de invitación entre contactos (suficiente para MVP de círculo cerrado).
+4. **Privacidad/GDPR:** datos mínimos (teléfono, nombre, tokens), purga de telegramas a 30 días, política de privacidad publicada (obligatoria en Play Store). Experiencia previa con GDPR en Sterclicks aplicable directamente.
+
+---
+
+### 5.6 Notificación "modo alerta" (requisito de producto)
+
+Inspiración: alertas de protección civil (ES-Alert) — presencia total, tono amable. Cada busca debe ser **imposible de no ver** y exigir acción para desaparecer. Coherencia con §3.1 bis: solo es tolerable porque los envíos son escasos.
+
+Tres niveles según estado del dispositivo:
+
+1. **Bloqueado / en reposo (garantizado):** full-screen intent (mecanismo de llamadas entrantes/alarmas) — enciende la pantalla y muestra UI completa con botones de respuesta. Permiso `USE_FULL_SCREEN_INTENT` (justificable: caso de uso tipo llamada).
+2. **En uso (por defecto):** notificación heads-up de alta prioridad sobre la app activa, con sonido.
+3. **En uso ("modo alerta total", opt-in):** con permiso "mostrar sobre otras apps" (`SYSTEM_ALERT_WINDOW`, concesión manual del usuario, estilo Truecaller), toma de pantalla completa incluso usando el móvil. No por defecto: Google lo escruta en revisión de Play; ofrecerlo como opción en ajustes.
+
+**Persistencia obligatoria:** notificación `ongoing` (no deslizable). Solo desaparece por: respuesta de un toque, anulación explícita del receptor, o caducidad TTL. El emisor ve el estado resultante (respondido / anulado / caducado).
+
+**Tono:** presencia de alerta, sonido de busca clásico (bip-bip) amable; sonido más insistente reservado exclusivamente a los urgentes racionados. Estética de pantalla completa: LCD retro (coherente con §6.1).
+
+---
+
+### 5.7 Capa de entrega multicanal (decisión clave de arquitectura)
+
+La API es el cerebro; app y bot de Telegram son solo canales de entrada/salida intercambiables. Lo que viaja de vuelta del receptor **no es un mensaje libre: es un estado** (botón pulsado). Regla de enrutado por destinatario:
+
+1. Tiene `fcm_token` → entrega por push FCM (experiencia completa, modo alerta).
+2. Solo tiene `telegram_chat_id` → entrega por bot de Telegram con botones inline.
+3. Tiene ambos → FCM primero; **si no hay acuse de entrega en X min, reintento por Telegram** (cubre además los móviles que matan notificaciones: Xiaomi, etc.).
+
+Consecuencias:
+- Los 4 cruces funcionan igual (app→app, app→Telegram, Telegram→app, Telegram→Telegram); el emisor recibe el estado por su propio canal.
+- **Desactiva el efecto red:** se puede buscar a alguien sin la app — solo necesita dar a "start" al bot una vez. La app queda como experiencia premium a la que se migra después.
+- El bot de la Fase 0 no se tira: se convierte en el canal alternativo definitivo sobre la misma API, tablas y estados.
+
+---
+
+## 6. Diseño y UX
+
+### 6.1 Principios
+
+- **Un gesto, un envío.** Pantalla principal = lista de contactos frecuentes con botón grande por contacto. Mantener pulsado = busca simple; toque = elegir plantilla/telegrama.
+- **Apta para quien odia el móvil.** Todo debe poder hacerse sin escribir: plantillas de emisión y respuesta (§3.3) y "modo sencillo" para mayores. Público estrella candidato: personas mayores y sus familias — su forma natural de comunicarse es la llamada, y el busca retro lo entienden sin manual.
+- **La notificación es el producto.** El 80 % del uso ocurre en la notificación del receptor, no dentro de la app. Todo el esfuerzo de diseño va ahí.
+- **Estética "busca retro":** guiño visual a los buscapersonas de los 90 — pantalla LCD verde/ámbar, tipografía de segmentos para la vista previa del telegrama. Diferenciación inmediata frente a apps de mensajería genéricas. (Encaja con la línea visual trabajada para Sterclicks: fondo oscuro + un color de acento.)
+
+### 6.2 Pantallas del MVP (solo 4)
+
+1. **Inicio:** contactos frecuentes + botón "buscar a alguien".
+2. **Componer telegrama:** contacto → plantillas → texto libre (contador 200) → urgencia → enviar.
+3. **Historial:** enviados/recibidos últimos 30 días con estado (entregado/visto/respondido).
+4. **Ajustes:** perfil, plantillas propias, sonido del busca, invitaciones.
+
+### 6.3 Naming (estado: candidata principal elegida, pendiente verificación)
+
+**Candidata nº 1: `Buscapp`** — fusión busca+app al estilo WhatsApp. Descriptiva (quien la lee entiende el producto), sonora ("buscap") y con historia fundacional privada: el acrónimo BUSCA-P.P. ("Busca Personas Perdidas"). **Nota importante:** ese acrónimo es un chiste interno de origen del nombre; **nunca aparece en descripciones, ficha de Play Store, eslóganes ni material público** (además evita rozar el territorio de apps de personas desaparecidas reales). La ficha pública siempre describe: avisos/solicitudes de llamada.
+
+**Alternativas de reserva:** `Silbo` (dar un silbido para avisar; referencia al silbo gomero; más "marca", menos descriptiva) · `Buska` (busca con K, registrable, estética LCD) · `Toki`.
+
+**Descartadas:** `Bipi` (startup española de suscripción de coches, filial de RCI Banque/Renault) · `Ringapp` (conflicto con Ring/Amazon) · `Telebusca` (suena a teletienda) · `1TOKE`/`Toke` (argot de porro + arranca con número) · `Uantoq` (ilegible/inescribible) · `UnToque` (frase, no marca).
+
+**Pendiente antes de cerrar:** disponibilidad en Play Store, dominios (buscapp.app / buscapp.es) y consulta de marca en OEPM (clases 9 y 38).
+
+---
+
+## 7. Plan de ejecución por fases
+
+### Fase 0 — Validación con bot de Telegram (1 fin de semana)
+
+- Bot con comandos `/buscar` y `/tel`, botones inline de respuesta.
+- Corre como webhook PHP en el hosting actual; tabla mínima en MySQL.
+- Usuarios: círculo cercano real (2–6 personas).
+- **Criterio de éxito:** ≥ 3 usos/semana por usuario durante 3 semanas → luz verde a Fase 1.
+
+### Fase 1 — Backend definitivo (1 semana de ratos)
+
+- Proyecto CodeIgniter 4 nuevo (o módulo separado), tablas de §5.2, endpoints de §5.3.
+- Proyecto Firebase + cuenta de servicio + envío FCM v1 desde PHP.
+- Repositorio Git con la misma disciplina de despliegue ya usada en Sterclicks (tags + backup rsync + rollout por etapas).
+
+### Fase 2 — App Android MVP (2–3 semanas de ratos)
+
+- Kotlin + Compose, con Claude Code como copiloto.
+- Registro por invitación, lista de contactos, envío de telegrama, recepción con notificación de alta prioridad y botones.
+- Instalación por APK directa en el círculo de prueba (sin pasar aún por Play).
+
+### Fase 3 — Experiencia "busca de verdad" (1–2 semanas)
+
+- CallStyle / full-screen intent para urgentes, sonido de busca característico, caducidad TTL, respuestas rápidas completas, historial y estados.
+- Guía anti-ahorro-de-batería por fabricante dentro de la app.
+
+### Fase 3.5 — Grupos/círculos (1–2 semanas)
+
+- Despacho con reclamación y anulación automática en el resto; circular con panel de estados; plantillas por grupo (§3.5). El modelo de datos ya lo soporta desde Fase 1.
+
+### Fase 4 — Publicación en Google Play (2–4 semanas, mucha espera)
+
+- Alta en Play Console (25 $), ficha, capturas, política de privacidad, formulario de seguridad de datos, prueba cerrada (Google exige un período de testeo con testers antes de producción para cuentas personales nuevas — verificar requisitos vigentes al llegar aquí).
+
+### Fase 5 — Crecimiento (abierto)
+
+- Invitaciones con deep link ("Jesús quiere poder buscarte — instala X").
+- Canal Telegram como receptor alternativo para quien no instale la app (mitiga efecto red).
+- v2: iOS (evaluar Flutter/KMP entonces), widget de pantalla de inicio, Wear OS (un busca en la muñeca es conceptualmente perfecto).
+
+---
+
+## 8. Estimación de esfuerzo y costes
+
+| Concepto | Estimación |
+|---|---|
+| Fase 0 (bot) | 6–10 h |
+| Fases 1–3 (backend + app funcional) | 40–70 h repartidas en 4–6 semanas de ratos |
+| Fase 4 (publicación) | 10–15 h + esperas de revisión |
+| Coste monetario | 25 $ Play Console (única vez) + 0 € FCM + hosting ya contratado |
+| Coste opcional | SMS OTP si se quiere verificación por SMS (~0,05 €/SMS); dominio del proyecto (~10 €/año) |
+
+---
+
+## 9. Riesgos y mitigaciones
+
+| Riesgo | Impacto | Mitigación |
+|---|---|---|
+| Efecto red (nadie la instala) | Alto | Círculos cerrados primero; canal Telegram como receptor alternativo; validar con Fase 0 antes de invertir |
+| Notificaciones no llegan (batería/fabricantes) | Alto | FCM alta prioridad + guía por fabricante + reintento vía Telegram/SMS si no hay acuse en X min (v2) |
+| WhatsApp "ya vale" | Medio | Apostarlo todo a la experiencia de notificación (CallStyle, urgencia, caducidad) — lo que WhatsApp no hace ni hará |
+| Curva Android | Medio | Claude Code + alcance mínimo (4 pantallas) + APK directa antes de Play |
+| Requisitos cambiantes de Play Store | Bajo | Verificar políticas vigentes al iniciar Fase 4 |
+
+---
+
+## 10. Información necesaria / decisiones pendientes
+
+1. **¿Fase 0 sí o no?** (Recomendado: sí. Coste casi nulo, valida la idea con uso real.)
+2. **Nombre:** candidata elegida `Buscapp` (reservas: Silbo, Buska) — falta verificar Play Store, dominio y OEPM.
+2 bis. **Cifras de escasez:** validar en Fase 0 el cupo diario (¿5?) y el límite de urgentes (¿1–2?).
+3. **Registro:** ¿código de invitación (gratis, círculo cerrado) o teléfono verificado (coste SMS, escalable)? → MVP: invitación.
+4. **Backend:** ¿CodeIgniter en Hostinger (recomendado, stack conocido) o Firebase completo?
+5. **¿Kotlin nativo o Flutter?** → si iOS no es prioridad en 12 meses: Kotlin.
+6. **Alcance de la v1 de urgencia:** ¿incluir "antes de las HH:MM" desde el principio o solo Normal/Urgente?
+
+---
+
+## 11. Primer paso concreto sugerido
+
+Crear el bot de Telegram de Fase 0. Trabajo de una sesión:
+
+1. Crear bot con @BotFather → token.
+2. Webhook PHP en el hosting (`/braintogram-busca/webhook.php` o proyecto aparte).
+3. Tabla `telegramas_bot` mínima.
+4. Comandos: `/buscar <alias>`, `/tel <alias> <mensaje>`, `/alta <alias>` (vincular chat_id).
+5. Botones inline: Te llamo ahora / En 10 min / Luego → notificación de respuesta al emisor.
+
+Con eso, la idea deja de ser idea y empieza a generar datos de uso reales.
+
+---
+
+*Documento de trabajo — v1. Generado el 02/08/2026.*

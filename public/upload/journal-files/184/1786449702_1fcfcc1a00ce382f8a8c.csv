@@ -1,0 +1,120 @@
+# Sistema de catálogo de piezas, SKU e inventario — Sterclicks
+
+## Contexto del proyecto
+
+Sterclicks vende figuras tipo Playmobil personalizadas. Además de los muñecos completos (producto actual en la tienda), ahora se van a catalogar e imprimir en resina (Elegoo Saturn 4 Ultra 16K) piezas individuales que también se venderán sueltas:
+
+- Partes del cuerpo (cabezas, torsos, piernas, manos, peinados)
+- Accesorios de ropa (sombreros, capas, cinturones, mochilas, calzado)
+- Accesorios de mano (armas, herramientas, instrumentos)
+- Objetos varios (props pequeños, comida, animales)
+- Escenografía / diorama (mobiliario, paredes, suelos)
+
+Cada pieza tiene un archivo STL descargable/almacenado para reimprimir bajo demanda, y necesita un identificador único (SKU) para pedir "cuál y cuántos" sin ambigüedad.
+
+## Formato de SKU
+
+```
+SC-[Letra categoría][3 dígitos]-[Variante opcional]
+```
+
+| Letra | Categoría |
+|---|---|
+| C | Cuerpo |
+| R | Ropa |
+| M | Accesorios de Mano |
+| O | Objetos varios |
+| E | Escenografía |
+
+Ejemplos:
+- `SC-C001-A` → Cabeza modelo 1, variante A (piel clara)
+- `SC-M005` → Accesorio de mano nº5, sin variantes (un único color/acabado)
+
+La variante (`-A`, `-B`...) solo se añade si existe una diferencia real de color/acabado del mismo molde. Si la pieza no tiene variantes, el SKU no lleva sufijo.
+
+## Convención de nombre de archivo STL
+
+El SKU va siempre primero (para que ordene alfabéticamente por categoría en el explorador de archivos), seguido de un slug legible del nombre:
+
+```
+SC-M005-A_hacha.stl
+SC-C001-B_cabeza-sonriente.stl
+```
+
+La ruta/nombre real del archivo se guarda tal cual en la base de datos (columna `ruta_stl`), **no se recalcula a partir del nombre visible del producto**, para que renombrar el producto en la tienda no rompa el enlace al archivo.
+
+Los STL se guardan en filesystem (no como BLOB en BD), preferiblemente fuera del webroot público por seguridad, ya que no todos deben ser descargables directamente.
+
+## Esquema de base de datos (CodeIgniter 4 / MySQL)
+
+### Tabla nueva: `piezas_catalogo`
+
+Maestro técnico de cada pieza física/imprimible.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | INT AUTO_INCREMENT PK | |
+| `sku` | VARCHAR(20) UNIQUE | ej. `SC-C001-A` |
+| `categoria` | ENUM('C','R','M','O','E') | |
+| `nombre` | VARCHAR(100) | nombre legible, ej. "Cabeza sonriente hombre" |
+| `variante` | VARCHAR(10) NULL | "A", "B"... o null |
+| `ruta_stl` | VARCHAR(255) | nombre/ruta real del archivo guardado |
+| `tiempo_impresion_min` | INT NULL | estimado en la Saturn 4 Ultra |
+| `estado` | ENUM('modelando','listo_imprimir','en_catalogo','descatalogado') | |
+| `stock_actual` | INT DEFAULT 0 | |
+| `stock_minimo` | INT DEFAULT 0 | para alertas de reimpresión |
+| `notas` | TEXT NULL | ajustes de exposición, orientación en plato, etc. |
+| `created_at` / `updated_at` | DATETIME | |
+
+### Tabla existente: `productos` → ALTER
+
+Añadir columna para poder vender una pieza suelta directamente como producto de tienda:
+
+```sql
+ALTER TABLE productos ADD COLUMN pieza_sku VARCHAR(20) NULL;
+-- FK → piezas_catalogo.sku
+```
+
+- Muñeco normal → `pieza_sku` vacío (producto "compuesto" normal, sin cambios de comportamiento).
+- Pieza suelta vendida como producto (ej. el hacha) → fila en `productos` con `pieza_sku = SC-M005-A`, con su precio/fotos/descripción de tienda normales, pero el sistema sabe que hay un STL detrás.
+
+### Tabla nueva: `producto_piezas` (tabla puente, para kits/muñecos compuestos)
+
+Permite decir "este muñeco lleva estas piezas" sin duplicar datos.
+
+| Campo | Tipo |
+|---|---|
+| `producto_id` | INT, FK → productos.id |
+| `pieza_sku` | VARCHAR(20), FK → piezas_catalogo.sku |
+| `cantidad` | INT |
+
+### Tabla existente de movimientos de inventario → ALTER
+
+Se reutiliza la tabla de movimientos ya existente (alta/baja con fecha y motivo), ampliándola para que sirva tanto a productos como a piezas:
+
+```sql
+ALTER TABLE movimientos_inventario ADD COLUMN pieza_sku VARCHAR(20) NULL;
+-- FK → piezas_catalogo.sku
+-- producto_id ya existe y sigue usándose igual
+```
+
+Regla: cada fila de movimiento usa **o bien** `producto_id` **o bien** `pieza_sku`, nunca los dos a la vez.
+
+## Lógica de negocio: descuento de stock en cascada
+
+Cuando se vende un muñeco compuesto de piezas catalogadas, el stock debe bajar tanto en el producto como en cada pieza componente. Esto se implementa en el modelo de CodeIgniter (no como trigger de MySQL), para poder:
+- Registrar motivos legibles en el historial de movimientos.
+- Controlar errores si falta stock de alguna pieza antes de confirmar la venta.
+
+Flujo:
+1. Se vende el muñeco → baja en `productos.stock` + movimiento con `producto_id`, motivo tipo "venta pedido #123".
+2. El sistema consulta `producto_piezas` para saber qué SKUs y cantidades lleva ese muñeco.
+3. Por cada pieza componente → baja en `piezas_catalogo.stock_actual` (cantidad de la pieza × unidades vendidas del muñeco) + movimiento con `pieza_sku`, motivo tipo "incluido en venta de producto #123".
+
+Esto permite filtrar el historial de una pieza suelta (ej. `SC-M005-A`) y ver tanto sus ventas directas como las bajas derivadas de muñecos que la incluyen.
+
+## Pendiente de confirmar antes de implementar
+
+- Nombre y columnas reales de la tabla `productos` existente (para no romper nada al hacer el ALTER).
+- Nombre y columnas reales de la tabla de movimientos de inventario existente.
+- Si el sistema debe alertar (email/panel) cuando `stock_actual < stock_minimo` en una pieza.

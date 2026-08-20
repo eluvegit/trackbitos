@@ -1,0 +1,113 @@
+FILTROS GMAIL - ORDENADOS Y CLASIFICADOS (máx. 5 remitentes por línea)
+========================================================================
+
+CORRECCIONES REALIZADAS:
+- from:Jesús -> eliminado (es tu propio nombre, no una tienda)
+- from:Bienvenido -> eliminado (parecía un asunto de email mal capturado, no un remitente real)
+- from:samashing -> corregido a from:smashing (typo)
+- Duplicados dentro de una misma categoría -> consolidados
+- from:"disney+" -> puesto entre comillas por el símbolo +
+- Términos cortos/genéricos a revisar (pueden capturar correos que no quieres borrar):
+  ing, make, ink, qr, ryan, trading, big
+
+========================================================================
+CATEGORY:PROMOTIONS
+========================================================================
+
+--- Compras y servicios ---
+
+category:promotions from:dehancer | from:pccomponentes | from:mediamarkt | from:MOO | from:game -is:starred
+category:promotions from:saal | from:Leroy | from:Flexispot | from:Carrete | from:fnac -is:starred
+category:promotions from:general | from:Universe | from:symphony | from:liz | from:blurb -is:starred
+category:promotions from:sony | from:phototag | from:travel | from:tiffen | from:emma -is:starred
+category:promotions from:deeplearning.ai | from:ulanzi | from:shutterstock | from:visualmind | from:nintendo -is:starred
+category:promotions from:trivago | from:alexa | from:IKEA | from:fotoprecios | from:paypal -is:starred
+category:promotions from:fronda | from:evoto | from:phlearn | from:blender | from:mara -is:starred
+category:promotions from:ryanair | from:ebay | from:calibrite | from:playstation | from:wallapop -is:starred
+category:promotions from:stocksy | from:patata | from:chefsteps | from:"corte inglés" | from:adobe -is:starred
+category:promotions from:logitravel | from:Meike | from:Etsy | from:Tripadvisor | from:waylet -is:starred
+category:promotions from:sklum | from:360imprimir | from:Repsol | from:Grover | from:Formula -is:starred
+category:promotions from:EscapadaRural | from:CodePen | from:BEVISGEAR | from:Battle.net | from:Peerspace -is:starred
+category:promotions from:Design.com | from:Diversual | from:AlphaMasters | from:Milbby | from:DJI -is:starred
+category:promotions from:oier | from:scoolinary | from:PolarPro | from:Dean | from:Stockeros -is:starred
+category:promotions from:Animation | from:SIRUI | from:domestika | from:bigschool | from:reblum -is:starred
+category:promotions from:elsalopez | from:farrés | from:arnau | from:flexicar | from:lovable -is:starred
+category:promotions from:zorali | from:viajero | from:norma | from:hipercor | from:fujifilm -is:starred
+category:promotions from:musa | from:hotmart | from:warhol | from:somoza | from:cvp -is:starred
+category:promotions from:gaming | from:yuka | from:barkibu | from:big | from:peibolearn -is:starred
+category:promotions from:pampling | from:g2a | from:gopro | from:freeletics | from:artlist -is:starred
+category:promotions from:"kike arnaiz" | from:"primer video" | from:moman | from:aotomos | from:"las anotinas" -is:starred
+category:promotions from:justin | from:"amazon music" -is:starred
+
+--- Pinterest ---
+
+category:promotions from:pinterest -is:starred
+
+--- Amazon ---
+
+category:promotions from:amazon.es -is:starred
+
+--- Getty Images ---
+
+category:promotions from:gettyimages -is:starred
+
+--- Streaming ---
+
+category:promotions from:netflix | from:"disney+" | from:skyshowtime | from:max | from:crunchyroll -is:starred
+category:promotions from:filmin -is:starred
+
+--- Enseñanza ---
+
+category:promotions from:patata | from:phlearn | from:blender | from:g-raf -is:starred
+
+========================================================================
+CATEGORY:UPDATES
+========================================================================
+
+--- Notificaciones / Apps ---
+
+category:updates from:maniak | from:github | from:stockeros | from:samsung | from:photopills -is:starred
+category:updates from:arnaiz | from:waqas | from:fal | from:visualmind | from:smashing -is:starred
+category:updates from:club | from:keepa | from:freewell | from:barkibu | from:animum -is:starred
+category:updates from:"google maps" | from:godox | from:gumroad | from:cdkeys | from:"disney+" -is:starred
+category:updates from:dehancer | from:riverside | from:"carlos molina" | from:repsol | from:autohero -is:starred
+category:updates from:"rv strength" | from:7x7 | from:litmind | from:autodoc | from:big -is:starred
+category:updates from:pixieset | from:liz | from:diversual | from:ryan | from:dean -is:starred
+category:updates from:apple | from:welsch | from:cullen | from:woo | from:culturadegym -is:starred
+category:updates from:trainer | from:cosas | from:ink | from:miro | from:aradilla -is:starred
+category:updates from:narrative | from:dino | from:villar | from:make | from:endado -is:starred
+category:updates from:raventos | from:uppbeat | from:monday | from:trading | from:yuka -is:starred
+category:updates from:apify | from:qr | from:dinonews | from:stills | from:meletrix -is:starred
+category:updates from:gelt | from:makers | from:frame.io | from:chatgpt | from:spline -is:starred
+category:updates from:dribbble | from:institutowebinar | from:javiersomoza | from:temu | from:papermonsters -is:starred
+category:updates from:holygrain | from:partner360 | from:conquerlanguages | from:glasp | from:sincroguia -is:starred
+category:updates from:jaimiejacobs | from:peibolearn | from:riffusion | from:vueling | from:booking.com -is:starred
+category:updates from:bree -is:starred
+
+--- Importantes ---
+
+category:updates from:fal | from:ing | from:amazon | from:godaddy -is:starred
+
+--- Wallapop ---
+
+category:updates from:wallapop -is:starred
+
+--- Personas ---
+
+category:updates from:mara | from:RBG | from:marcodimio | from:mago | from:flores -is:starred
+category:updates from:castro | from:vivedistinto | from:g-raf | from:patata | from:cleverpoly -is:starred
+category:updates from:Oier -is:starred
+
+--- Getty Images ---
+
+category:updates from:gettyimages | from:paypal -is:starred
+
+--- Adobe ---
+
+category:updates from:adobe -is:starred
+
+========================================================================
+NOTA: Si además de promos quieres borrar los avisos (category:updates) de
+las mismas tiendas del bloque "Compras y servicios", coge cualquiera de
+esas líneas y cambia category:promotions por category:updates.
+========================================================================

@@ -32,6 +32,9 @@
 | 31 | Renders y referencias, subibles en cualquier momento (antes exigía haber promocionado) | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 | 32 | Añadir/quitar/vaciar la placa en la galería ya no recarga la página (se perdía el filtro) | ✅ Hecho (detalle abajo) |
 | 33 | Cabeceras de categoría con fondo sólido en índice y galería, para distinguirlas del contenido | ✅ Hecho (detalle abajo) |
+| 34 | .blend en naranja y STL en azul, en dos columnas con texto negro en la ficha | ✅ Hecho (detalle abajo) |
+| 35 | Copia de seguridad descargable (Estadísticas): .blend de referencia + historial en texto | ✅ Hecho (detalle abajo) |
+| 36 | Histórico de placas (tablas nuevas) + filtro "en placa/sin placa" en galería | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -790,6 +793,11 @@ nada".
   `variante_id` con `version_id IS NULL` en los dos sitios.
 - **Pendiente de aplicar**: esta fase necesita `php spark migrate` en el servidor antes de
   funcionar — la columna `variante_id` no existe todavía en la tabla real.
+- **Corrección posterior (2026-08-19)**: la miniatura de `Web::galeria()` buscaba el render por
+  `version_id` y, si no había, saltaba directa a la referencia — se le escapaba el caso de un
+  render suelto (sin `version_id`) de esa misma variante, que es justo el que puede existir gracias
+  a esta fase. Ahora primero prueba por `version_id`, luego por `variante_id` con `version_id IS
+  NULL`, y solo si ninguno existe cae a la referencia.
 
 **Fase 32 (2026-08-19): la placa de la galería ya no recarga la página.** "Añadir/quitar de la
 placa" eran `<form>` normales: cada clic recargaba y se perdía el filtro estado+STL (fase 29) en
@@ -828,6 +836,69 @@ siempre en tema oscuro (`data-bs-theme="dark"` fijo en el layout, sin alternanci
   `<td>` (que ya lleva `colspan="7"`, es toda la fila) en vez de en la `<tr>` — así no depende de
   cómo resuelve Bootstrap las variables de color de tabla, y el gris queda igual en las dos
   pantallas.
+
+**Fase 34 (2026-08-19): el .blend se distingue del STL en la ficha, por color y por espacio.** En
+el historial de cada versión, "Descargar .blend" y "Descargar .STL" compartían el mismo azul
+(`btn-primary`) y estaban seguidos en la misma fila — un vistazo rápido no bastaba para saber cuál
+era cuál, y menos con varios trozos de STL de por medio.
+
+- **Color**: el botón de `.blend` pasa a naranja (`btn-orange`, `#fd7e14` — el naranja de la
+  paleta de Bootstrap, que no trae una variante `btn-orange` de serie, así que se define a mano en
+  `public/assets/css/style.css`). Los STL se quedan en azul, sin cambios — son el fichero que
+  importa para imprimir, y el máster (`.blend`) es otra cosa.
+- **Espacio**: en vez de dos filas apiladas, `.blend` y STL van en **dos columnas** (`row g-2` con
+  `col-6` cada una) dentro del historial de cada versión — separación más clara de un vistazo que
+  un simple salto de línea.
+- **Texto en negro** (`btn-texto-negro`, también en `style.css`) en los dos botones en vez del
+  blanco por defecto de Bootstrap: se lee mejor tanto sobre el naranja como sobre el azul claro de
+  `btn-primary`. Va después de `.btn-orange` en el CSS a propósito, para ganarle el color cuando
+  un botón lleva las dos clases.
+- No toca `index.php`: el enlace de "descargar .blend de solo lectura" que aparece ahí junto al
+  aviso de "sin STL" no es un botón con color, es un icono de texto plano — fuera del alcance de
+  este cambio.
+
+**Fase 35 (2026-08-20): copia de seguridad descargable desde Estadísticas.** Fotografía de este
+instante, no un histórico completo — pensada para desastre, no para archivo: si se pierde todo,
+lo caro de rehacer es el modelado 3D, no el resto.
+
+- **`Web::backupDescargar()`** (`GET piezas/estadisticas/backup`): recorre familias/variantes
+  activas (sin papelera) y arma un `.zip` con una carpeta por categoría → pieza → variante.
+- **Por variante**: el `.blend` de la versión **validada** (o si no hay, la más reciente en
+  cualquier estado — "último estado" tal como se pidió, mejor que nada) más una `ficha.md` con
+  SKU, notas, enlace al original, historial completo de versiones y "compuesta de".
+- **A propósito NO incluye** STL, referencias ni renders — se pueden regenerar o rehacer sin
+  drama; lo único irremplazable es el máster de Blender. La `ficha.md` sí deja constancia de
+  cuántos había, para saber qué se dejó fuera.
+- Mismo patrón que `carritoDescargar()` (zip en `WRITEPATH/piezas/tmp`, `register_shutdown_function`
+  para borrar el temporal tras servirlo): sin cola de trabajo ni pantalla de espera — el volumen es
+  texto + un `.blend` por variante, no toda una colección de sesiones. `set_time_limit(300)` por si
+  el catálogo crece mucho.
+
+**Fase 36 (2026-08-20): histórico de placas + filtro "en placa/sin placa" en galería.** El
+carrito de la placa (sesión) siempre fue efímero — se vaciaba y no quedaba rastro de qué se había
+mandado a imprimir junto, ni forma de repetir la misma combinación sin rehacerla a mano.
+
+- **Tablas nuevas** (`CreatePiezasPlacas`): `piezas_placas` (id, nombre, creado_en) y
+  `piezas_placas_versiones` (placa_id, version_id, ambas con `ON DELETE CASCADE` — si la variante
+  se purga a los 30 días, invariante 6, no tiene sentido conservar la referencia).
+- **Se registra sola al descargar**: `Web::carritoDescargar()` sigue funcionando igual, pero
+  además inserta una fila en `piezas_placas` con nombre autogenerado ("Placa dd/mm/aaaa hh:mm",
+  editable después) y una fila por versión en `piezas_placas_versiones`.
+- **"Guardar para después" (corrección, mismo día)**: no siempre se elige la placa para bajar el
+  zip en el momento — a veces es solo apuntar qué se quiere imprimir más adelante, como una lista
+  de la compra. `Web::carritoGuardarPlaca()` (`POST carrito/guardar`) hace el mismo registro que
+  la descarga, pero sin generar ningún zip; `registrarPlacaDesdeCarrito()` queda como el helper
+  compartido por las dos rutas.
+- **`GET piezas/placas`**: histórico completo, con cada pieza resuelta (nombre, versión, si el STL
+  sigue disponible en el almacén). Por placa: **descargar de nuevo** (rehace el zip con lo que
+  haya ahora — reutiliza `construirZipDePlaca()`, extraído de la lógica que antes solo vivía en
+  `carritoDescargar()`), **cargar en la placa actual** (sustituye el carrito de sesión, no lo
+  suma), **renombrar**, **borrar** (solo el registro del histórico — invariante 6 es para
+  ficheros, esto no toca ningún STL ni versión).
+- **Filtro "En placa" / "Sin placa"** en la galería, mismo patrón que estado/STL (fase 29): se
+  combina con los otros dos. La tarjeta lleva su propio `data-placa` (no solo el botón), y el
+  fetch() de añadir/quitar/vaciar (fase 32) lo mantiene al día sin recargar, para que el filtro no
+  se quede desfasado tras tocar la placa.
 
 ---
 

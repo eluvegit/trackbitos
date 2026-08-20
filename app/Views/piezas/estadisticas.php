@@ -16,6 +16,11 @@ $maximo = $piezas === [] ? 0 : max(array_column($piezas, 'bytes'));
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Estadísticas</strong>
+
+    <a href="<?= site_url('piezas/estadisticas/backup') ?>" class="btn btn-sm btn-outline-secondary ms-auto"
+        title="Fotografía de ahora mismo: el .blend de referencia de cada pieza (validada, o si no hay la más reciente) más su historial en texto. Sin STL ni fotos — se pueden rehacer.">
+        <i class="bi bi-download"></i> Copia de seguridad
+    </a>
 </h5>
 
 <p class="text-muted small">

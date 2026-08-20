@@ -34,43 +34,58 @@ $filaSesionActiva = static function (array $s): string {
           // al dashboard está el logo de la barra de arriba, que sí está en todas. ?>
     <strong class="fw-semibold">Piezas</strong>
 
-    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
+    <?php
+        /**
+         * Solo Galería y "+ Pieza" fuera, sueltos — son los dos que se usan
+         * a diario. El resto (Organizar, Categorías, Máquinas, Estadísticas,
+         * Papelera) es de uso ocasional y va agrupado en el desplegable, en
+         * vez de sumar seis botones sueltos a la cabecera. "+ Variante" no
+         * va ni ahí: se quita — crear una variante nace de una pieza
+         * concreta, así que su sitio natural es la ficha, no un selector
+         * suelto de "elige la pieza" aquí en el índice.
+         */
+    ?>
+    <div class="dropdown ms-auto">
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-three-dots"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <?php if (!empty($familias)): ?>
+                <?php // Colocar piezas es una tarea aparte de mirarlas: los selectores solo estorban el resto del tiempo. ?>
+                <li>
+                    <button type="button" class="dropdown-item" id="btnOrganizar">
+                        <i class="bi bi-arrows-move"></i> Organizar
+                    </button>
+                </li>
+            <?php endif; ?>
+            <li>
+                <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalCategorias">
+                    <i class="bi bi-folder"></i> Categorías
+                </button>
+            </li>
+            <li><a class="dropdown-item" href="<?= site_url('piezas/maquinas') ?>"><i class="bi bi-pc-display"></i> Máquinas</a></li>
+            <li><a class="dropdown-item" href="<?= site_url('piezas/estadisticas') ?>"><i class="bi bi-hdd-stack"></i> Estadísticas</a></li>
+            <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
+            <?php if (!empty($papeleraCount)): ?>
+                <li>
+                    <a class="dropdown-item" href="<?= site_url('piezas/papelera') ?>">
+                        <i class="bi bi-trash"></i> Papelera
+                        <span class="badge text-bg-secondary"><?= (int) $papeleraCount ?></span>
+                    </a>
+                </li>
+            <?php endif; ?>
+        </ul>
+    </div>
+
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-grid-3x3-gap"></i> Galería
         <?php if (!empty($carritoCount)): ?>
             <span class="badge text-bg-primary"><?= (int) $carritoCount ?></span>
         <?php endif; ?>
     </a>
-    <?php if (!empty($familias)): ?>
-        <?php // Colocar piezas es una tarea aparte de mirarlas: los selectores solo estorban el resto del tiempo. ?>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnOrganizar">
-            <i class="bi bi-arrows-move"></i> Organizar
-        </button>
-    <?php endif; ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalCategorias">
-        <i class="bi bi-folder"></i> Categorías
-    </button>
-    <?php // Solo icono: aquí se entra una vez por equipo, el día que se estrena. ?>
-    <a href="<?= site_url('piezas/maquinas') ?>" class="btn btn-sm btn-outline-secondary" title="Máquinas">
-        <i class="bi bi-pc-display"></i>
-    </a>
-    <a href="<?= site_url('piezas/estadisticas') ?>" class="btn btn-sm btn-outline-secondary" title="Cuánto ocupa el módulo">
-        <i class="bi bi-hdd-stack"></i>
-    </a>
-    <?php // Solo aparece cuando hay algo dentro: no tiene sentido un icono a una papelera vacía. ?>
-    <?php if (!empty($papeleraCount)): ?>
-        <a href="<?= site_url('piezas/papelera') ?>" class="btn btn-sm btn-outline-secondary" title="Papelera">
-            <i class="bi bi-trash"></i>
-            <span class="badge text-bg-secondary"><?= (int) $papeleraCount ?></span>
-        </a>
-    <?php endif; ?>
     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia">
         <i class="bi bi-plus-lg"></i> Pieza
     </button>
-    <?php if (!empty($familias)): ?>
-        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalVariante">
-            <i class="bi bi-plus-lg"></i> Variante
-        </button>
-    <?php endif; ?>
 </h5>
 
 <?php if (session('success')): ?>
@@ -98,10 +113,12 @@ $filaSesionActiva = static function (array $s): string {
 /**
  * Tabla, no tarjetas con badges que se envuelven: con quince piezas de
  * un vistazo hay que poder leer columna por columna (nombre, SKU, estado,
- * versiones, aviso), no perseguir cada dato en un sitio distinto de cada
- * fila. Estos tres devuelven el HTML de una celda (nunca texto de usuario
- * sin `esc()`), para no repetir la misma condición en la fila de pieza
- * única y en cada subfila de variante.
+ * STL, aviso), no perseguir cada dato en un sitio distinto de cada fila.
+ * Sin columna de "cuántas versiones": el número de la última ya sale en el
+ * propio badge de estado (p. ej. "v005 ✓"), así que era un dato repetido.
+ * Estos cuatro devuelven el HTML de una celda (nunca texto de usuario sin
+ * `esc()`), para no repetir la misma condición en la fila de pieza única y
+ * en cada subfila de variante.
  */
 /**
  * Qué tiene la pieza terminado. Antes esto era validada-o-no, y todo lo
@@ -177,44 +194,59 @@ $colEstado = static function (array $v) use ($badgeMadurez): string {
 /**
  * ¿Está lista para mandar a imprimir? Adjuntar el STL es un paso aparte de
  * promocionar, así que se olvida — y sin esto había que entrar pieza por
- * pieza a comprobarlo. Verde: hay STL. Naranja: falta, y es lo único que
- * separa a esa pieza de la impresora.
+ * pieza a comprobarlo. Azul (mismo primary que el STL en la ficha): hay STL,
+ * y el propio icono ES la descarga, no un icono aparte al lado — con un solo
+ * STL baja directo; con varios trozos manda a la ficha a elegir cuál (o
+ * bajarlos todos), en vez de intentar adivinar aquí cuál hace falta. Naranja
+ * (igual que el .blend en la ficha): el máster, siempre descargable si hay
+ * versión, tenga o no STL — sirve para coger piezas sueltas para montar en
+ * otra escena, no solo para exportar.
  */
 $colStl = static function (array $v): string {
-    $stl = $v['stl'] ?? ['aplica' => false, 'trozos' => 0];
+    $stl = $v['stl'] ?? ['aplica' => false, 'trozos' => 0, 'version_id' => null, 'stl_id' => null];
 
-    // Sin ninguna versión promocionada no falta el STL: falta la versión.
+    // Sin ninguna versión promocionada no falta el STL: falta la versión, y
+    // tampoco hay .blend de esa versión que ofrecer.
     if (empty($stl['aplica'])) {
         return '';
     }
 
-    if ((int) $stl['trozos'] === 0) {
-        $html = '<span class="badge border border-warning text-warning-emphasis fw-normal"'
-            . ' title="Esta versión no tiene STL: no se puede imprimir ni añadir a la placa">'
-            . '<i class="bi bi-file-earmark-x"></i> sin STL</span>';
-
-        // Lo que falta aquí es exportar, y para exportar hace falta el .blend.
-        // Puesto en la propia fila para poder bajarlos de una tacada filtrando
-        // por "Imprimir · falta STL", en vez de entrar y salir de cada ficha.
-        // El fichero llega con el sufijo "solo-lectura" en el nombre: esta
-        // descarga no pasa por el cliente, así que nadie registra esa copia y
-        // lo que se edite ahí no vuelve.
-        if (!empty($stl['version_id'])) {
-            $html .= ' <a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/blend/descargar') . '"'
-                . ' class="text-body-secondary text-decoration-none"'
-                . ' title="Bajar el .blend de esta versión (copia de solo lectura) para exportar el STL">'
-                . '<i class="bi bi-download"></i></a>';
-        }
-
-        return $html;
-    }
-
     $trozos = (int) $stl['trozos'];
 
-    return '<span class="text-success" title="' . ($trozos === 1 ? 'STL adjunto' : $trozos . ' STL adjuntos (se imprime en trozos)') . '">'
-        . '<i class="bi bi-file-earmark-check-fill"></i>'
-        . ($trozos > 1 ? ' <span class="small">' . $trozos . '</span>' : '')
-        . '</span>';
+    // El .blend va primero, no el STL: es siempre el mismo icono de ancho
+    // fijo, así que la columna arranca en el mismo sitio en todas las
+    // filas. El STL detrás cambia de ancho según el caso (icono suelto,
+    // icono con número si hay varios trozos, o el badge más ancho de "sin
+    // STL"), y puesto en segundo lugar ese vaivén ya no descuadra la
+    // columna de un vistazo.
+    $html = '';
+
+    // El fichero llega con el sufijo "solo-lectura" en el nombre: esta
+    // descarga no pasa por el cliente, así que nadie registra esa copia y lo
+    // que se edite ahí no vuelve (spec 8).
+    if (!empty($stl['version_id'])) {
+        $html .= '<a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/blend/descargar') . '"'
+            . ' class="text-orange text-decoration-none"'
+            . ' title="Bajar el .blend de esta versión (copia de solo lectura)">'
+            . '<i class="bi bi-download"></i></a> ';
+    }
+
+    if ($trozos === 0) {
+        $html .= '<span class="badge border border-warning text-warning-emphasis fw-normal"'
+            . ' title="Esta versión no tiene STL: no se puede imprimir ni añadir a la placa">'
+            . '<i class="bi bi-file-earmark-x"></i> sin STL</span>';
+    } elseif ($trozos === 1 && !empty($stl['stl_id'])) {
+        $html .= '<a href="' . site_url('piezas/stl/' . (int) $stl['stl_id'] . '/descargar') . '"'
+            . ' class="text-primary text-decoration-none" title="Bajar el STL">'
+            . '<i class="bi bi-file-earmark-check-fill"></i></a>';
+    } else {
+        $html .= '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '"'
+            . ' class="text-primary text-decoration-none"'
+            . ' title="' . $trozos . ' STL adjuntos (se imprime en trozos) — bájalos desde la ficha">'
+            . '<i class="bi bi-file-earmark-check-fill"></i> <span class="small">' . $trozos . '</span></a>';
+    }
+
+    return $html;
 };
 
 $colAviso = static function (array $v): string {
@@ -354,10 +386,22 @@ foreach ($grupos as $grupo) {
 ?>
 
 <?php if (!empty($familias)): ?>
+    <?php // Plegados por defecto: son de consulta puntual ("¿qué me falta
+          // exportar?"), no algo que se mira cada vez que se entra — mejor
+          // pedirlos con un clic que tenerlos siempre a la vista. Se recuerda
+          // si se han dejado abiertos (localStorage, ver el script de abajo). ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="btnFiltros"
+        aria-controls="filtrosPiezas" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filtros
+    </button>
+
     <?php // Uno cada vez, no casillas: son preguntas distintas ("qué me falta
           // exportar", "qué hay para imprimir"), no facetas que se sumen. Con
-          // el buscador sí se combinan (y = las dos cosas). ?>
-    <div class="d-flex flex-wrap gap-1 mb-3" id="filtrosPiezas">
+          // el buscador sí se combinan (y = las dos cosas). Colores retirados
+          // a propósito (antes cada chip tenía el suyo — verde, amarillo,
+          // azul, rojo — y quedaba recargado): todos en gris neutro, el
+          // icono ya dice de qué trata cada uno. ?>
+    <div class="d-flex flex-wrap gap-1 mb-3 d-none" id="filtrosPiezas">
         <button type="button" class="btn btn-sm btn-outline-secondary active" data-filtro=""
             title="Quitar el filtro">
             Todas <span class="badge text-bg-secondary"><?= (int) $totalPiezas ?></span>
@@ -393,12 +437,12 @@ foreach ($grupos as $grupo) {
                     </ul>
                 </div>
             <?php else: ?>
-                <?php [$etiqueta, $icono, $color, $ayuda] = $definicion; ?>
+                <?php [$etiqueta, $icono, , $ayuda] = $definicion; ?>
                 <?php $n = (int) $cuentaFiltros[$token]; ?>
-                <button type="button" class="btn btn-sm btn-outline-<?= $color ?>" data-filtro="<?= $token ?>"
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro="<?= $token ?>"
                     title="<?= esc($ayuda, 'attr') ?>" <?= $n === 0 ? 'disabled' : '' ?>>
                     <i class="bi <?= $icono ?>"></i> <?= esc($etiqueta) ?>
-                    <span class="badge text-bg-<?= $n === 0 ? 'secondary' : $color ?>"><?= $n ?></span>
+                    <span class="badge text-bg-secondary"><?= $n ?></span>
                 </button>
             <?php endif; ?>
         <?php endforeach; ?>
@@ -411,7 +455,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="7" class="py-1 bg-body-secondary">
+                <td colspan="6" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -452,7 +496,7 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="7" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="6" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php foreach ($grupo['piezas'] as $familia): ?>
@@ -473,9 +517,6 @@ foreach ($grupos as $grupo) {
                     <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
-                    <td class="text-muted small text-end">
-                        <?= count($variantes) === 1 ? (int) $variantes[0]['versiones'] . ' vers.' : '' ?>
-                    </td>
                     <td><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
                     <td class="zona-organizar d-none">
                         <div class="d-flex gap-1 justify-content-end">
@@ -517,7 +558,6 @@ foreach ($grupos as $grupo) {
                             <td><?= $colSku($v) ?></td>
                             <td><?= $colEstado($v) ?></td>
                             <td><?= $colStl($v) ?></td>
-                            <td class="text-muted small text-end"><?= (int) $v['versiones'] ?> vers.</td>
                             <td><?= $colAviso($v) ?></td>
                             <td class="zona-organizar d-none">
                                 <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>
@@ -621,40 +661,6 @@ foreach ($grupos as $grupo) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button class="btn btn-sm btn-success">Crear</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Alta de variante -->
-<div class="modal fade" id="modalVariante" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content" method="post" action="<?= site_url('piezas/variante') ?>">
-            <?= csrf_field() ?>
-            <div class="modal-header">
-                <h6 class="modal-title">Variante nueva</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <label class="form-label small">Pieza</label>
-                <select name="familia_id" class="form-select form-select-sm mb-2" required>
-                    <?php foreach ($familias as $familia): ?>
-                        <option value="<?= (int) $familia['id'] ?>"><?= esc($familia['nombre']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <label class="form-label small">Nombre</label>
-                <input type="text" name="nombre" class="form-control form-control-sm mb-2" placeholder="torso-recto, pose-futbolista..." maxlength="150" required>
-                <label class="form-label small">SKU (opcional)</label>
-                <input type="text" name="sku" class="form-control form-control-sm mb-2" placeholder="el código de tu tienda, si ya lo tienes" maxlength="50">
-                <label class="form-label small">Notas</label>
-                <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
-                <p class="text-muted small mt-2 mb-0">
-                    Nace con su rama de trabajo abierta y numeración propia desde v001.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-sm btn-primary">Crear</button>
             </div>
         </form>
     </div>
@@ -778,6 +784,29 @@ foreach ($grupos as $grupo) {
         if (btnOrganizar) btnOrganizar.classList.toggle('active', encendido);
         document.querySelectorAll('.zona-organizar').forEach(function (zona) {
             zona.classList.toggle('d-none', !encendido);
+        });
+    }
+
+    // ---- Mostrar/ocultar filtros ----------------------------------------
+    // Plegados por defecto (spec: consulta puntual, no algo que se mira cada
+    // vez). Se recuerda si se han dejado abiertos, igual que "Organizar".
+    var FILTROS_ABIERTOS = 'piezas_filtros_abiertos';
+    var btnFiltros = document.getElementById('btnFiltros');
+    var cajaFiltrosToggle = document.getElementById('filtrosPiezas');
+
+    function pintarFiltros(abierto) {
+        if (btnFiltros) btnFiltros.classList.toggle('active', abierto);
+        if (cajaFiltrosToggle) cajaFiltrosToggle.classList.toggle('d-none', !abierto);
+        if (btnFiltros) btnFiltros.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    }
+
+    pintarFiltros(localStorage.getItem(FILTROS_ABIERTOS) === '1');
+
+    if (btnFiltros) {
+        btnFiltros.addEventListener('click', function () {
+            var abrir = !cajaFiltrosToggle || cajaFiltrosToggle.classList.contains('d-none');
+            localStorage.setItem(FILTROS_ABIERTOS, abrir ? '1' : '0');
+            pintarFiltros(abrir);
         });
     }
 

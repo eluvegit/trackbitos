@@ -7,6 +7,8 @@ use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaComposicionModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
+use App\Models\PiezaPlacaModel;
+use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
@@ -76,6 +78,8 @@ class Web extends BaseController
     private PiezaReferenciaModel $referenciaModel;
     private PiezaRenderModel $renderModel;
     private PiezaComposicionModel $composicionModel;
+    private PiezaPlacaModel $placaModel;
+    private PiezaPlacaVersionModel $placaVersionModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
@@ -92,6 +96,8 @@ class Web extends BaseController
         $this->referenciaModel  = new PiezaReferenciaModel();
         $this->renderModel      = new PiezaRenderModel();
         $this->composicionModel = new PiezaComposicionModel();
+        $this->placaModel       = new PiezaPlacaModel();
+        $this->placaVersionModel = new PiezaPlacaVersionModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
@@ -299,6 +305,195 @@ class Web extends BaseController
             'totalPapelera' => $this->almacen->tamanoPapelera(),
             'piezas'        => $filas,
         ]);
+    }
+
+    /**
+     * Fotografía de este instante, no un histórico completo: por variante,
+     * el `.blend` de la versión validada (o si no hay, el de la más
+     * reciente en el estado que sea) más una ficha en texto con el
+     * historial entero. Ni STL ni renders/referencias — se pueden
+     * regenerar o rehacer sin drama; lo que de verdad hay que salvar de un
+     * desastre es el máster de 3D, porque perderlo es repetir el modelado
+     * desde cero. Carpetas por categoría → pieza, igual que se ven en el
+     * índice, para que la copia sea reconocible sin tener que abrir cada
+     * ficha.
+     */
+    public function backupDescargar()
+    {
+        $carpetaTmp = WRITEPATH . 'piezas/tmp';
+        if (!is_dir($carpetaTmp) && !mkdir($carpetaTmp, 0775, true) && !is_dir($carpetaTmp)) {
+            throw new RuntimeException('No se pudo crear la carpeta temporal para la copia de seguridad.');
+        }
+        $rutaZip = $carpetaTmp . '/piezas-backup-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($rutaZip, \ZipArchive::CREATE) !== true) {
+            throw new RuntimeException('No se pudo crear el zip de la copia de seguridad.');
+        }
+
+        // Puede haber bastantes .blend que copiar: el límite por defecto de
+        // PHP se queda corto para una colección grande. Si el hosting tiene
+        // esta función deshabilitada, sigue con el límite que haya.
+        @set_time_limit(300);
+
+        $categorias = array_column($this->categoriaModel->ordenadas(), null, 'id');
+
+        $lineasCategorias = ['Categorías (orden del índice):', ''];
+        foreach ($categorias as $categoria) {
+            $lineasCategorias[] = '- ' . $categoria['nombre'];
+        }
+        $zip->addFromString('categorias.txt', implode("\n", $lineasCategorias) . "\n");
+
+        foreach ($this->familiaModel->where('borrado_en', null)->orderBy('nombre', 'ASC')->findAll() as $familia) {
+            $carpetaCategoria = !empty($familia['categoria_id']) && isset($categorias[$familia['categoria_id']])
+                ? $this->paraNombreDeArchivo($categorias[$familia['categoria_id']]['nombre'])
+                : 'sin-categoria';
+            $carpetaFamilia = $this->paraNombreDeArchivo($familia['nombre']) ?: ('pieza-' . $familia['id']);
+
+            foreach ($this->varianteModel->where('familia_id', $familia['id'])->where('borrado_en', null)
+                ->orderBy('nombre', 'ASC')->findAll() as $variante) {
+                $this->empaquetarVarianteEnBackup($zip, $carpetaCategoria . '/' . $carpetaFamilia, $familia, $variante);
+            }
+        }
+
+        $zip->close();
+
+        // El fichero tiene que seguir existiendo cuando DownloadResponse lo
+        // lea durante send(), que ocurre después de que este método
+        // retorne — por eso el borrado va en un shutdown function, no aquí
+        // (mismo patrón que carritoDescargar).
+        register_shutdown_function(static function () use ($rutaZip) {
+            @unlink($rutaZip);
+        });
+
+        return $this->response->download($rutaZip, null, true);
+    }
+
+    /**
+     * Una variante = una carpeta con su ficha en texto y, si hay a qué
+     * apuntar, el `.blend` de la versión de referencia. El nombre de fichero
+     * lleva el número de versión para que quede claro de qué momento es la
+     * fotografía si algún día se compara con una copia más reciente.
+     */
+    private function empaquetarVarianteEnBackup(\ZipArchive $zip, string $carpetaBase, array $familia, array $variante): void
+    {
+        $carpeta = $carpetaBase . '/' . ($this->paraNombreDeArchivo($variante['nombre']) ?: ('variante-' . $variante['id']));
+
+        $versiones = $this->versionModel->where('variante_id', $variante['id'])->orderBy('numero', 'DESC')->findAll();
+        $validada  = null;
+        foreach ($versiones as $version) {
+            if ($version['estado'] === 'validada') {
+                $validada = $version;
+                break;
+            }
+        }
+        // Sin validada, la más reciente en cualquier estado — es el último
+        // punto en el que se dejó el trabajo, mejor que nada.
+        $referencia = $validada ?: ($versiones[0] ?? null);
+
+        if ($referencia && $this->almacen->existe($referencia['ruta_blend'])) {
+            $zip->addFile(
+                $this->almacen->absoluta($referencia['ruta_blend']),
+                $carpeta . '/' . $this->nombreArchivo($variante, $referencia, 'blend')
+            );
+        }
+
+        $zip->addFromString($carpeta . '/ficha.md', $this->fichaMarkdown($familia, $variante, $versiones, $referencia, $validada !== null));
+    }
+
+    private function fichaMarkdown(array $familia, array $variante, array $versiones, ?array $referencia, bool $esValidada): string
+    {
+        $l = [];
+        $l[] = '# ' . $familia['nombre'] . ' — ' . $variante['nombre'];
+        $l[] = '';
+        if (!empty($variante['sku'])) {
+            $l[] = '- SKU: ' . $variante['sku'];
+        }
+        if (!empty($variante['enlace_original'])) {
+            $l[] = '- Enlace al original: ' . $variante['enlace_original'];
+        }
+        if (!empty($familia['notas'])) {
+            $l[] = '- Notas de la pieza: ' . $familia['notas'];
+        }
+        if (!empty($variante['notas'])) {
+            $l[] = '- Notas de la variante: ' . $variante['notas'];
+        }
+        $l[] = '';
+
+        $l[] = '## Versión de referencia de esta copia';
+        if (!$referencia) {
+            $l[] = '';
+            $l[] = 'Sin ninguna versión promocionada todavía: no hay `.blend` que incluir.';
+        } else {
+            $l[] = '';
+            $l[] = sprintf(
+                '**v%03d** · %s%s · %s',
+                (int) $referencia['numero'],
+                $referencia['estado'],
+                $esValidada ? ' (la buena)' : ' (sin validar todavía — no había ninguna validada)',
+                $referencia['promocionada_en']
+            );
+            if (!empty($referencia['cambio'])) {
+                $l[] = '';
+                $l[] = $referencia['cambio'];
+            }
+            if (!empty($referencia['medidas'])) {
+                $l[] = '';
+                $l[] = 'Medidas: ' . $referencia['medidas'];
+            }
+            if (!empty($referencia['resultado'])) {
+                $l[] = '';
+                $l[] = 'Resultado: ' . $referencia['resultado'];
+            }
+        }
+        $l[] = '';
+
+        $l[] = '## Historial completo';
+        $l[] = '';
+        if (empty($versiones)) {
+            $l[] = 'Sin versiones.';
+        } else {
+            foreach ($versiones as $v) {
+                $l[] = sprintf('- v%03d · %s · %s · %s', (int) $v['numero'], $v['estado'], $v['promocionada_en'], $v['cambio']);
+            }
+        }
+        $l[] = '';
+
+        $componentes = $this->componentesDe((int) $variante['id']);
+        if (!empty($componentes)) {
+            $l[] = '## Compuesta de';
+            $l[] = '';
+            foreach ($componentes as $c) {
+                if (!$c['version'] || !$c['variante'] || !$c['familia']) {
+                    continue;
+                }
+                $l[] = sprintf(
+                    '- %s / %s · v%03d%s',
+                    $c['familia']['nombre'],
+                    $c['variante']['nombre'],
+                    (int) $c['version']['numero'],
+                    !empty($c['notas']) ? ' — ' . $c['notas'] : ''
+                );
+            }
+            $l[] = '';
+        }
+
+        // Cuenta, no ficheros: esta copia es solo texto + el .blend de
+        // referencia (ver cabecera de backupDescargar). Sirve para saber
+        // qué se dejó fuera sin tener que adivinarlo.
+        $nReferencias = $this->referenciaModel->where('familia_id', $familia['id'])->countAllResults();
+        $nRenders     = $this->renderModel->where('variante_id', $variante['id'])->countAllResults();
+        $nStl         = $referencia ? count($this->servicio->stlsDe((int) $referencia['id'])) : 0;
+        $l[] = '## No incluido en esta copia';
+        $l[] = '';
+        $l[] = sprintf(
+            '%d referencia(s) de la pieza, %d render(es) de esta variante, %d STL de la versión de referencia.',
+            $nReferencias,
+            $nRenders,
+            $nStl
+        );
+
+        return implode("\n", $l) . "\n";
     }
 
     /**
@@ -556,15 +751,7 @@ class Web extends BaseController
                 continue;
             }
 
-            $render = $this->renderModel
-                ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->first();
-            $miniatura = $render ? site_url('piezas/render/' . $render['id'] . '/imagen') : null;
-
-            if (!$miniatura) {
-                $referencia = $this->referenciaModel
-                    ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->first();
-                $miniatura = $referencia ? site_url('piezas/referencia/' . $referencia['id'] . '/imagen') : null;
-            }
+            $miniatura = $this->miniaturaDe($version, $variante);
 
             $familiaId = (int) $variante['familia_id'];
 
@@ -594,6 +781,35 @@ class Web extends BaseController
             'grupos'  => $this->agruparPorCategoria($piezas),
             'carrito' => $this->carritoActual(),
         ]);
+    }
+
+    /**
+     * Foto representativa de una versión concreta: su propio render si lo
+     * tiene, si no un render suelto de la variante (fase 31 — puede que se
+     * subiera antes de la primera promoción, o sin ligar a ninguna versión
+     * en concreto, y sigue siendo más fiel que la referencia), y si tampoco
+     * hay eso, la referencia del original como último recurso. Compartido
+     * por la galería y por el histórico de placas.
+     */
+    private function miniaturaDe(array $version, array $variante): ?string
+    {
+        $render = $this->renderModel
+            ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->first();
+
+        if (!$render) {
+            $render = $this->renderModel
+                ->where('variante_id', $variante['id'])->where('version_id', null)
+                ->orderBy('subida_en', 'DESC')->first();
+        }
+
+        if ($render) {
+            return site_url('piezas/render/' . $render['id'] . '/imagen');
+        }
+
+        $referencia = $this->referenciaModel
+            ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->first();
+
+        return $referencia ? site_url('piezas/referencia/' . $referencia['id'] . '/imagen') : null;
     }
 
     /**
@@ -662,9 +878,81 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/galeria'))->with('error', 'La placa está vacía.');
         }
 
-        // Una versión puede aportar varios STL a la placa (fase 21): si la
-        // pieza se imprime en trozos, los trozos van todos o no va ninguno.
-        $versiones = $this->versionModel->whereIn('id', $carrito)->findAll();
+        $rutaZip = $this->construirZipDePlaca($carrito);
+        if (!$rutaZip) {
+            return redirect()->to(site_url('piezas/galeria'))
+                ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
+        }
+
+        $this->registrarPlacaDesdeCarrito($carrito);
+
+        // El fichero tiene que seguir existiendo cuando DownloadResponse lo
+        // lea durante send(), que ocurre después de que este método
+        // retorne — por eso el borrado va en un shutdown function, no aquí.
+        register_shutdown_function(static function () use ($rutaZip) {
+            @unlink($rutaZip);
+        });
+
+        return $this->response->download($rutaZip, null, true);
+    }
+
+    /**
+     * "Guardar para después", sin descargar nada — como una lista de la
+     * compra: no siempre se elige para bajar el zip en el momento, a veces
+     * es solo apuntar qué se quiere imprimir más adelante. Mismo registro
+     * que deja `carritoDescargar()`, solo que sin generar el zip.
+     */
+    public function carritoGuardarPlaca()
+    {
+        $carrito = $this->carritoActual();
+        if (empty($carrito)) {
+            $mensaje = 'La placa está vacía.';
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
+            }
+
+            return redirect()->to(site_url('piezas/galeria'))->with('error', $mensaje);
+        }
+
+        $placa = $this->registrarPlacaDesdeCarrito($carrito);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'nombre' => $placa['nombre']]);
+        }
+
+        return redirect()->to(site_url('piezas/galeria'))
+            ->with('success', 'Guardada como "' . $placa['nombre'] . '". La puedes ver en Placas.');
+    }
+
+    /**
+     * Queda registrada sola, con fecha y qué llevaba (fase 36): así hay
+     * histórico sin depender de acordarse de guardar nada, y desde
+     * /piezas/placas se puede volver a cargar la misma combinación, bajar el
+     * zip más tarde, o borrar la entrada si solo era una prueba. El nombre
+     * es un punto de partida editable, no definitivo.
+     */
+    private function registrarPlacaDesdeCarrito(array $carrito): array
+    {
+        $placaId = $this->placaModel->insert(['nombre' => 'Placa ' . date('d/m/Y H:i')], true);
+        if ($placaId) {
+            foreach ($carrito as $versionId) {
+                $this->placaVersionModel->insert(['placa_id' => $placaId, 'version_id' => $versionId]);
+            }
+        }
+
+        return $this->placaModel->find($placaId) ?? ['id' => $placaId, 'nombre' => '?'];
+    }
+
+    /**
+     * Junta en un zip los STL de una lista de versiones (una versión puede
+     * aportar varios si la pieza se imprime en trozos — fase 21). Null si
+     * ninguno sigue disponible en el almacén: compartido por la descarga de
+     * la placa actual y por "descargar de nuevo" una placa guardada, cuyos
+     * ficheros pueden llevar meses purgados si la versión cambió de estado.
+     */
+    private function construirZipDePlaca(array $versionIds): ?string
+    {
+        $versiones = $this->versionModel->whereIn('id', $versionIds)->findAll();
         $porVersion = $this->servicio->stlsDeVersiones(array_map(static fn($v) => (int) $v['id'], $versiones));
 
         $aEmpaquetar = [];
@@ -677,8 +965,7 @@ class Web extends BaseController
         }
 
         if ($aEmpaquetar === []) {
-            return redirect()->to(site_url('piezas/galeria'))
-                ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
+            return null;
         }
 
         $carpetaTmp = WRITEPATH . 'piezas/tmp';
@@ -700,14 +987,113 @@ class Web extends BaseController
         }
         $zip->close();
 
-        // El fichero tiene que seguir existiendo cuando DownloadResponse lo
-        // lea durante send(), que ocurre después de que este método
-        // retorne — por eso el borrado va en un shutdown function, no aquí.
+        return $rutaZip;
+    }
+
+    // ---- Historial de placas ---------------------------------------------
+
+    /**
+     * Cada fila con sus piezas resueltas (nombre, estado, si el STL sigue
+     * disponible) para poder decidir de un vistazo si merece la pena
+     * "descargar de nuevo" o "cargar en la placa actual".
+     */
+    public function placas()
+    {
+        $placas = $this->placaModel->orderBy('creado_en', 'DESC')->findAll();
+
+        $piezas = [];
+        foreach ($placas as $placa) {
+            $filas = $this->placaVersionModel->where('placa_id', $placa['id'])->findAll();
+            $lista = [];
+            foreach ($filas as $fila) {
+                $version = $this->versionModel->find($fila['version_id']);
+                if (!$version) {
+                    // La versión se purgó (variante borrada hace 30+ días,
+                    // invariante 6): el FK en cascada ya se llevó esta fila,
+                    // así que este caso no debería darse — pero por si acaso.
+                    continue;
+                }
+                $variante = $this->varianteModel->find($version['variante_id']);
+                $lista[] = [
+                    'version'   => $version,
+                    'variante'  => $variante,
+                    'familia'   => $variante ? $this->familiaModel->find($variante['familia_id']) : null,
+                    'disponible' => $this->servicio->stlsDe((int) $version['id']) !== [],
+                    'miniatura' => $variante ? $this->miniaturaDe($version, $variante) : null,
+                ];
+            }
+            $piezas[$placa['id']] = $lista;
+        }
+
+        return view('piezas/placas', [
+            'placas' => $placas,
+            'piezas' => $piezas,
+        ]);
+    }
+
+    public function placaDescargar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $versionIds = array_column($this->placaVersionModel->where('placa_id', $id)->findAll(), 'version_id');
+        $rutaZip = $versionIds ? $this->construirZipDePlaca($versionIds) : null;
+        if (!$rutaZip) {
+            return redirect()->to(site_url('piezas/placas'))
+                ->with('error', 'Ninguno de los STL de esta placa está ya disponible en el almacén.');
+        }
+
         register_shutdown_function(static function () use ($rutaZip) {
             @unlink($rutaZip);
         });
 
         return $this->response->download($rutaZip, null, true);
+    }
+
+    /**
+     * Sustituye la placa actual por esta — no la suma —, para no acabar con
+     * piezas mezcladas de dos combinaciones distintas sin darse cuenta.
+     */
+    public function placaCargar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $versionIds = array_column($this->placaVersionModel->where('placa_id', $id)->findAll(), 'version_id');
+        $this->carritoGuardar(array_map('intval', $versionIds));
+
+        return redirect()->to(site_url('piezas/galeria'))
+            ->with('success', 'Cargada en la placa actual: "' . $placa['nombre'] . '".');
+    }
+
+    public function placaRenombrar(int $id)
+    {
+        return $this->ejecutar(
+            fn() => $this->placaModel->update($id, ['nombre' => (string) $this->request->getPost('nombre')])
+                ? $this->placaModel->find($id)
+                : throw new RuntimeException('No se pudo renombrar la placa: ' . implode(' ', $this->placaModel->errors())),
+            fn() => site_url('piezas/placas'),
+            fn($placa) => 'Renombrada a "' . $placa['nombre'] . '".'
+        );
+    }
+
+    public function placaBorrar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        // Solo borra el registro del histórico — invariante 6 es para
+        // ficheros; esto no destruye ningún STL ni versión, solo la
+        // anotación de que un día se descargaron juntos.
+        $this->placaModel->delete($id);
+
+        return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
     }
 
     /**
@@ -1579,21 +1965,27 @@ class Web extends BaseController
     }
 
     /**
-     * @return array{aplica: bool, trozos: int, version_id: int|null}
+     * @return array{aplica: bool, trozos: int, version_id: int|null, stl_id: int|null}
      *         aplica=false si no hay ninguna versión todavía: no es que falte
-     *         el STL, es que aún no hay nada que exportar. El id es de esa
-     *         misma versión, para poder ofrecer su .blend desde el índice.
+     *         el STL, es que aún no hay nada que exportar. version_id es de
+     *         esa misma versión, para poder ofrecer su .blend desde el
+     *         índice. stl_id solo se rellena cuando hay exactamente un STL
+     *         (descarga directa desde el índice); con varios trozos hay que
+     *         elegir cuál, así que el índice manda a la ficha en su lugar.
      */
     private function estadoStl(?array $version): array
     {
         if (!$version) {
-            return ['aplica' => false, 'trozos' => 0, 'version_id' => null];
+            return ['aplica' => false, 'trozos' => 0, 'version_id' => null, 'stl_id' => null];
         }
+
+        $stls = $this->servicio->stlsDe((int) $version['id']);
 
         return [
             'aplica'     => true,
-            'trozos'     => count($this->servicio->stlsDe((int) $version['id'])),
+            'trozos'     => count($stls),
             'version_id' => (int) $version['id'],
+            'stl_id'     => count($stls) === 1 ? (int) $stls[0]['id'] : null,
         ];
     }
 

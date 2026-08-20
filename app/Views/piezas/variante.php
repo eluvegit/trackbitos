@@ -46,10 +46,17 @@ $tamanoLegible = function (?int $bytes): string {
  * se lee como disponible: Bootstrap solo le baja la opacidad, y sobre fondo
  * oscuro un cian al 65% sigue cantando más que un botón gris activo. Cuando
  * no aplica se pinta gris, para que la diferencia se vea de un vistazo.
+ *
+ * Paleta reducida a propósito (antes cada botón tenía su propio color —
+ * cian, verde, rojo, amarillo, blanco, azul — y quedaba ruidoso): gris
+ * neutro salvo en las dos acciones que de verdad son "bien"/"mal" — validar
+ * y descartar —, que se quedan con su color para no perder esa distinción.
+ * `rounded-pill` y más aire entre botones (gap-2 en el contenedor, en vez
+ * de gap-1) para que la fila se vea menos apretada.
  */
 $boton = function (bool $activo, string $color, string $modal, string $texto): string {
     return sprintf(
-        '<button class="btn btn-sm btn-outline-%s" data-bs-toggle="modal" data-bs-target="#%s"%s>%s</button>',
+        '<button class="btn btn-sm btn-outline-%s rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#%s"%s>%s</button>',
         $activo ? $color : 'secondary',
         $modal,
         $activo ? '' : ' disabled',
@@ -108,8 +115,12 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
     <i class="bi bi-box text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
+    <?php // Entre familia y variante NO va "/": no hay pantalla intermedia (no
+          // existe una ficha "solo familia"), así que una barra ahí sugiere una
+          // navegación que no existe. Es un guion porque es una sola pieza, con
+          // familia y variante como dos partes de su nombre. ?>
     <span class="text-muted fw-normal"><?= esc($familia['nombre']) ?></span>
-    <span class="text-muted">/</span>
+    <span class="text-muted">-</span>
     <strong class="fw-semibold"><?= esc($variante['nombre']) ?></strong>
     <?php if (!empty($variante['sku'])): ?>
         <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
@@ -385,7 +396,7 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                 <?php else: ?>
                     <div class="text-muted">
                         <i class="bi bi-hourglass"></i>
-                        Ninguna versión validada todavía: aún no hay una "buena" que imprimir a ciegas.
+                        Ninguna versión validada todavía: pendiente de imprimir y llegar a una versión válida.
                     </div>
                 <?php endif; ?>
 
@@ -478,119 +489,126 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         </div>
 
                         <!--
-                            STL para imprimir: aparte del .blend, inmutable una vez adjuntado.
-                            Las dos descargas (blend siempre, STL cuando ya existe) comparten el
-                            mismo azul sólido — es el color de "aquí hay un fichero listo para
-                            bajar". "Adjuntar STL" se queda en gris outline a propósito: es una
-                            acción pendiente, no una descarga, y el contraste de color es lo que
-                            dice de un vistazo si la versión ya tiene STL o todavía no.
+                            .blend (el máster) en naranja, STL (lo que va a imprimir) en azul: dos
+                            ficheros de naturaleza distinta, y colores distintos para no leerlos
+                            como la misma cosa. Cada uno en su propia columna, no seguidos, para
+                            que la separación se note también en el espacio y no solo en el color.
+                            Texto en negro (btn-texto-negro) en vez del blanco por defecto de
+                            Bootstrap: sobre naranja y azul claro se lee mejor en negro.
+                            "Adjuntar STL" se queda en gris outline a propósito: es una acción
+                            pendiente, no una descarga.
                         -->
-                        <div class="d-flex flex-wrap gap-1 mt-2">
-                            <?php
-                                /**
-                                 * Antes era un enlace directo con el aviso escrito debajo, a
-                                 * secas, en cada versión del historial — fácil de saltarse sin
-                                 * leerlo. Ahora hace falta pasar por el modal para llegar al
-                                 * enlace de verdad: no evita nada (spec 0, "se niega y explica",
-                                 * no "pregunta ¿estás seguro?"), pero sí obliga a ver la
-                                 * advertencia una vez antes de descargar, no solo a convivir con
-                                 * ella de fondo.
-                                 */
-                            ?>
-                            <button type="button" class="btn btn-sm btn-primary py-0 px-2"
-                                data-bs-toggle="modal" data-bs-target="#modalDescargarBlend<?= $v['id'] ?>">
-                                <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
-                                <?php if ($v['tamano_blend'] !== null): ?>
-                                    <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
-                                <?php endif; ?>
-                            </button>
-                            <?php
-                                /*
-                                 * Un STL por trozo a imprimir, no uno por versión: los dos brazos
-                                 * van por separado aunque compartan .blend, y una pieza más alta
-                                 * que la placa se corta y se monta. El .blend sigue siendo uno
-                                 * solo — ahí están todas las partes juntas.
-                                 */
-                            ?>
-                            <?php foreach ($v['stls'] as $stl): ?>
+                        <div class="row g-2 mt-2">
+                            <div class="col-6 d-flex flex-wrap align-content-start gap-1">
+                                <?php
+                                    /**
+                                     * Antes era un enlace directo con el aviso escrito debajo, a
+                                     * secas, en cada versión del historial — fácil de saltarse sin
+                                     * leerlo. Ahora hace falta pasar por el modal para llegar al
+                                     * enlace de verdad: no evita nada (spec 0, "se niega y explica",
+                                     * no "pregunta ¿estás seguro?"), pero sí obliga a ver la
+                                     * advertencia una vez antes de descargar, no solo a convivir con
+                                     * ella de fondo.
+                                     */
+                                ?>
+                                <button type="button" class="btn btn-sm btn-orange btn-texto-negro py-0 px-2"
+                                    data-bs-toggle="modal" data-bs-target="#modalDescargarBlend<?= $v['id'] ?>">
+                                    <i class="bi bi-file-earmark-arrow-down"></i> Descargar .blend
+                                    <?php if ($v['tamano_blend'] !== null): ?>
+                                        <span class="opacity-75">(<?= $tamanoLegible($v['tamano_blend']) ?>)</span>
+                                    <?php endif; ?>
+                                </button>
+                            </div>
+
+                            <div class="col-6 d-flex flex-wrap align-content-start gap-1">
                                 <?php
                                     /*
-                                     * El botón tiene que decir QUÉ se descarga, no solo de qué
-                                     * trozo es: junto a "Descargar .blend", un botón que ponga
-                                     * solo "completo" no se lee como una descarga de nada.
-                                     *
-                                     * El nombre solo se intercala cuando aporta: con un único
-                                     * STL llamado "completo" (el nombre que se pone solo) sería
-                                     * repetir que la pieza entera es la pieza entera.
+                                     * Un STL por trozo a imprimir, no uno por versión: los dos brazos
+                                     * van por separado aunque compartan .blend, y una pieza más alta
+                                     * que la placa se corta y se monta. El .blend sigue siendo uno
+                                     * solo — ahí están todas las partes juntas.
                                      */
-                                    $soloUno = count($v['stls']) === 1;
-                                    $queTrozo = ($soloUno && mb_strtolower($stl['nombre']) === 'completo')
-                                        ? ''
-                                        : ' ' . $stl['nombre'];
                                 ?>
-                                <div class="btn-group" role="group">
-                                    <a href="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/descargar') ?>"
-                                        class="btn btn-sm btn-primary py-0 px-2">
-                                        <i class="bi bi-file-earmark-arrow-down"></i>
-                                        Descargar<?= esc($queTrozo) ?> .STL
-                                        <?php if ($stl['tamano'] !== null): ?>
-                                            <span class="opacity-75">(<?= $tamanoLegible($stl['tamano']) ?>)</span>
-                                        <?php endif; ?>
-                                    </a>
-                                    <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/quitar') ?>">
-                                        <?= csrf_field() ?>
-                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1 h-100"
-                                            title="Quitar este STL (va a la papelera, 30 días)">
-                                            <i class="bi bi-x"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            <?php endforeach; ?>
-
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
-                                data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">
-                                <i class="bi bi-file-earmark-arrow-up"></i>
-                                <?= empty($v['stls']) ? 'Adjuntar STL' : 'Añadir otro STL' ?>
-                            </button>
-
-                            <?php // La placa se lleva TODOS los trozos de la versión: media pieza no se imprime. ?>
-                            <?php if (!empty($v['stls']) && $v['estado'] === 'validada'): ?>
-                                <?php if (in_array((int) $v['id'], $carrito, true)): ?>
-                                    <form method="post" action="<?= site_url('piezas/carrito/quitar/' . $v['id']) ?>">
-                                        <?= csrf_field() ?>
-                                        <button class="btn btn-sm btn-success py-0 px-2">
-                                            <i class="bi bi-check-lg"></i> En la placa
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <form method="post" action="<?= site_url('piezas/carrito/agregar/' . $v['id']) ?>">
-                                        <?= csrf_field() ?>
-                                        <button class="btn btn-sm btn-outline-primary py-0 px-2">
-                                            <i class="bi bi-plus-lg"></i> Añadir a la placa
-                                            <?php if (count($v['stls']) > 1): ?>
-                                                <span class="opacity-75">(<?= count($v['stls']) ?> trozos)</span>
+                                <?php foreach ($v['stls'] as $stl): ?>
+                                    <?php
+                                        /*
+                                         * El botón tiene que decir QUÉ se descarga, no solo de qué
+                                         * trozo es: junto a "Descargar .blend", un botón que ponga
+                                         * solo "completo" no se lee como una descarga de nada.
+                                         *
+                                         * El nombre solo se intercala cuando aporta: con un único
+                                         * STL llamado "completo" (el nombre que se pone solo) sería
+                                         * repetir que la pieza entera es la pieza entera.
+                                         */
+                                        $soloUno = count($v['stls']) === 1;
+                                        $queTrozo = ($soloUno && mb_strtolower($stl['nombre']) === 'completo')
+                                            ? ''
+                                            : ' ' . $stl['nombre'];
+                                    ?>
+                                    <div class="btn-group" role="group">
+                                        <a href="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/descargar') ?>"
+                                            class="btn btn-sm btn-primary btn-texto-negro py-0 px-2">
+                                            <i class="bi bi-file-earmark-arrow-down"></i>
+                                            Descargar<?= esc($queTrozo) ?> .STL
+                                            <?php if ($stl['tamano'] !== null): ?>
+                                                <span class="opacity-75">(<?= $tamanoLegible($stl['tamano']) ?>)</span>
                                             <?php endif; ?>
-                                        </button>
-                                    </form>
+                                        </a>
+                                        <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/quitar') ?>">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-outline-secondary py-0 px-1 h-100"
+                                                title="Quitar este STL (va a la papelera, 30 días)">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                <?php endforeach; ?>
+
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                    data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">
+                                    <i class="bi bi-file-earmark-arrow-up"></i>
+                                    <?= empty($v['stls']) ? 'Adjuntar STL' : 'Añadir otro STL' ?>
+                                </button>
+
+                                <?php // La placa se lleva TODOS los trozos de la versión: media pieza no se imprime. ?>
+                                <?php if (!empty($v['stls']) && $v['estado'] === 'validada'): ?>
+                                    <?php if (in_array((int) $v['id'], $carrito, true)): ?>
+                                        <form method="post" action="<?= site_url('piezas/carrito/quitar/' . $v['id']) ?>">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-success py-0 px-2">
+                                                <i class="bi bi-check-lg"></i> En la placa
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form method="post" action="<?= site_url('piezas/carrito/agregar/' . $v['id']) ?>">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-outline-primary py-0 px-2">
+                                                <i class="bi bi-plus-lg"></i> Añadir a la placa
+                                                <?php if (count($v['stls']) > 1): ?>
+                                                    <span class="opacity-75">(<?= count($v['stls']) ?> trozos)</span>
+                                                <?php endif; ?>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 <?php endif; ?>
-                            <?php endif; ?>
+                            </div>
                         </div>
 
-                        <div class="d-flex flex-wrap gap-1 mt-2">
+                        <div class="d-flex flex-wrap gap-2 mt-4 mb-3">
                             <!--
                                 Botones siempre visibles, deshabilitados con explicación cuando
                                 no aplican (spec 7.1): ocultarlos dejaría al usuario sin saber
                                 qué le falta para poder.
                             -->
-                            <?= $boton($v['estado'] === 'borrador', 'info', 'modalImpresa' . $v['id'], 'Marcar impresa') ?>
+                            <?= $boton($v['estado'] === 'borrador', 'primary', 'modalImpresa' . $v['id'], 'Marcar impresa') ?>
                             <?= $boton($v['estado'] === 'impresa', 'success', 'modalValidar' . $v['id'], 'Validar') ?>
                             <?= $boton(in_array($v['estado'], ['borrador', 'impresa'], true), 'danger', 'modalDescartar' . $v['id'], 'Descartar') ?>
                             <?php // Solo aparece donde sirve de algo: un botón "Deshacer" apagado en
                                   // todas las tarjetas invitaría a leerlo como que se puede deshacer todo. ?>
                             <?php if (in_array($v['estado'], ['impresa', 'descartada'], true)): ?>
-                                <?= $boton(true, 'warning', 'modalDeshacer' . $v['id'], 'Deshacer') ?>
+                                <?= $boton(true, 'primary', 'modalDeshacer' . $v['id'], 'Deshacer') ?>
                             <?php endif; ?>
-                            <?= $boton($puedeDevolver($v), 'light', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
+                            <?= $boton($puedeDevolver($v), 'primary', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
                             <?= $boton(true, 'primary', 'modalDerivar' . $v['id'], 'Derivar variante') ?>
                         </div>
 
@@ -842,6 +860,9 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                 <label class="form-label small">Notas</label>
                                 <textarea name="notas" class="form-control form-control-sm" rows="2"
                                     placeholder="Vista frontal, viewport de Blender"></textarea>
+                                <div class="progress d-none mt-2" style="height: 18px;" data-progreso>
+                                    <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                </div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -878,6 +899,11 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 
                                 <label class="form-label small">Fichero .stl</label>
                                 <input type="file" name="stl" accept=".stl" class="form-control form-control-sm" required>
+                                <?php // Los STL suelen pesar bastante más que las fotos — sin esto no había
+                                      // ninguna pista de que la subida estuviera avanzando. ?>
+                                <div class="progress d-none mt-2" style="height: 18px;" data-progreso>
+                                    <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                                </div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -887,128 +913,6 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     </div>
                 </div>
             <?php endforeach; ?>
-        <?php endif; ?>
-
-        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
-        <div class="card shadow-sm mb-3">
-            <div class="card-body p-3">
-                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
-                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
-                        <div class="text-muted small">en disco</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
-                        <div class="text-muted small">intento(s) de impresión</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
-                        <div class="text-muted small">sesión(es) de trabajo</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
-                        <div class="text-muted small">día(s) desde que se creó</div>
-                    </div>
-                </div>
-                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
-                    <div class="small text-muted mt-2">
-                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
-                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
-                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!--
-            "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
-            la escena de esta variante. Puramente informativo — no toca
-            origen_version_id ni la sincronización.
-        -->
-        <div class="d-flex align-items-center gap-2 mt-3 mb-2">
-            <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Compuesta de</h6>
-            <?php if (!empty($versionesParaComponer)): ?>
-                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
-                    data-bs-toggle="modal" data-bs-target="#modalComponente" title="Añadir">
-                    <i class="bi bi-plus-lg"></i>
-                </button>
-            <?php endif; ?>
-        </div>
-
-        <?php if (empty($componentes)): ?>
-            <p class="text-muted small">
-                Nada anotado. Si esta pieza incluye otras en la misma escena — un ensamblaje, o
-                una que dejaste al lado para partir de ella — añádelas aquí.
-            </p>
-        <?php else: ?>
-            <?php
-                $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
-            ?>
-            <ul class="list-group list-group-flush mb-2">
-                <?php foreach ($componentes as $c): ?>
-                    <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
-                    <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
-                        <div class="flex-grow-1">
-                            <?php if ($v && $va && $fa): ?>
-                                <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
-                                    <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
-                                </a>
-                                <?php if (isset($avisoEstado[$v['estado']])): ?>
-                                    <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <span class="text-muted">(esa pieza ya no existe)</span>
-                            <?php endif; ?>
-                            <?php if (!empty($c['notas'])): ?>
-                                <div class="small text-muted"><?= esc($c['notas']) ?></div>
-                            <?php endif; ?>
-                        </div>
-                        <form method="post" action="<?= site_url('piezas/componente/' . (int) $c['id'] . '/borrar') ?>">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
-                            <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Quitar"><i class="bi bi-x"></i></button>
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
-
-        <?php if (!empty($versionesParaComponer)): ?>
-            <div class="modal fade" id="modalComponente" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered">
-                    <form class="modal-content" method="post"
-                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/componente') ?>">
-                        <?= csrf_field() ?>
-                        <div class="modal-header">
-                            <h6 class="modal-title">Añadir a "Compuesta de"</h6>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="small text-muted mb-2">
-                                Qué otra pieza (en qué versión) estaba también en esta escena. Es solo
-                                para recordarlo — no afecta a nada del sistema.
-                            </p>
-                            <label class="form-label small">Pieza / versión</label>
-                            <select name="version_componente_id" class="form-select form-select-sm mb-2" required>
-                                <?php foreach ($versionesParaComponer as $v): ?>
-                                    <option value="<?= (int) $v['id'] ?>">
-                                        <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
-                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($nombreEstado($v['estado'])) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <label class="form-label small">Notas (opcional)</label>
-                            <input type="text" name="notas" class="form-control form-control-sm"
-                                placeholder="p. ej. para partir de ahí" maxlength="255">
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button class="btn btn-sm btn-primary">Añadir</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
         <?php endif; ?>
     </div>
 
@@ -1173,6 +1077,35 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             </div>
         </div>
 
+        <!-- Alta de referencia -->
+        <div class="modal fade" id="modalReferencia" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" enctype="multipart/form-data"
+                    action="<?= site_url('piezas/familia/' . (int) $variante['familia_id'] . '/referencia') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Referencia para <?= esc($familia['nombre'] ?? 'la pieza') ?></h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label small">Foto</label>
+                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
+                        <label class="form-label small">Notas (medidas de calibre, qué muestra)</label>
+                        <textarea name="notas" class="form-control form-control-sm" rows="2"
+                            placeholder="Alto total 78mm con calibre, vista frontal"></textarea>
+                        <div class="progress d-none mt-2" style="height: 18px;" data-progreso>
+                            <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button class="btn btn-sm btn-primary">Subir</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Renders sueltos: de esta variante pero sin versión concreta todavía
              (fase 31) -- útil sobre todo antes de la primera promoción, cuando
              no hay ninguna versión a la que colgar una foto de progreso. Los
@@ -1233,6 +1166,9 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         <label class="form-label small">Notas</label>
                         <textarea name="notas" class="form-control form-control-sm" rows="2"
                             placeholder="Vista frontal, viewport de Blender"></textarea>
+                        <div class="progress d-none mt-2" style="height: 18px;" data-progreso>
+                            <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -1242,30 +1178,133 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             </div>
         </div>
 
-        <!-- Alta de referencia -->
-        <div class="modal fade" id="modalReferencia" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content" method="post" enctype="multipart/form-data"
-                    action="<?= site_url('piezas/familia/' . (int) $variante['familia_id'] . '/referencia') ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
-                    <div class="modal-header">
-                        <h6 class="modal-title">Referencia para <?= esc($familia['nombre'] ?? 'la pieza') ?></h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <label class="form-label small">Foto</label>
-                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
-                        <label class="form-label small">Notas (medidas de calibre, qué muestra)</label>
-                        <textarea name="notas" class="form-control form-control-sm" rows="2"
-                            placeholder="Alto total 78mm con calibre, vista frontal"></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button class="btn btn-sm btn-primary">Subir</button>
-                    </div>
-                </form>
+        <!--
+            "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban en
+            la escena de esta variante. Puramente informativo — no toca
+            origen_version_id ni la sincronización. En su propia tarjeta,
+            igual que el resto de bloques de esta columna.
+        -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Compuesta de</h6>
+                    <?php if (!empty($versionesParaComponer)): ?>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
+                            data-bs-toggle="modal" data-bs-target="#modalComponente" title="Añadir">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (empty($componentes)): ?>
+                    <p class="text-muted small mb-0">
+                        Nada anotado. Si esta pieza incluye otras en la misma escena — un ensamblaje, o
+                        una que dejaste al lado para partir de ella — añádelas aquí.
+                    </p>
+                <?php else: ?>
+                    <?php
+                        $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
+                    ?>
+                    <ul class="list-group list-group-flush mb-0">
+                        <?php foreach ($componentes as $c): ?>
+                            <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
+                            <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
+                                <div class="flex-grow-1">
+                                    <?php if ($v && $va && $fa): ?>
+                                        <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
+                                            <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
+                                        </a>
+                                        <?php if (isset($avisoEstado[$v['estado']])): ?>
+                                            <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-muted">(esa pieza ya no existe)</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($c['notas'])): ?>
+                                        <div class="small text-muted"><?= esc($c['notas']) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <form method="post" action="<?= site_url('piezas/componente/' . (int) $c['id'] . '/borrar') ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Quitar"><i class="bi bi-x"></i></button>
+                                </form>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
             </div>
+        </div>
+
+        <?php if (!empty($versionesParaComponer)): ?>
+            <div class="modal fade" id="modalComponente" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <form class="modal-content" method="post"
+                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/componente') ?>">
+                        <?= csrf_field() ?>
+                        <div class="modal-header">
+                            <h6 class="modal-title">Añadir a "Compuesta de"</h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="small text-muted mb-2">
+                                Qué otra pieza (en qué versión) estaba también en esta escena. Es solo
+                                para recordarlo — no afecta a nada del sistema.
+                            </p>
+                            <label class="form-label small">Pieza / versión</label>
+                            <select name="version_componente_id" class="form-select form-select-sm mb-2" required>
+                                <?php foreach ($versionesParaComponer as $v): ?>
+                                    <option value="<?= (int) $v['id'] ?>">
+                                        <?= esc($v['familia_nombre']) ?> / <?= esc($v['variante_nombre']) ?>
+                                        · v<?= sprintf('%03d', (int) $v['numero']) ?> (<?= esc($nombreEstado($v['estado'])) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label class="form-label small">Notas (opcional)</label>
+                            <input type="text" name="notas" class="form-control form-control-sm"
+                                placeholder="p. ej. para partir de ahí" maxlength="255">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button class="btn btn-sm btn-primary">Añadir</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2"><i class="bi bi-hdd-stack"></i> Estadísticas</h6>
+                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $tamanoLegible($estadisticasPieza['peso']['total']) ?></div>
+                        <div class="text-muted small">en disco</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['intentos'] ?></div>
+                        <div class="text-muted small">intento(s) de impresión</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['sesiones'] ?></div>
+                        <div class="text-muted small">sesión(es) de trabajo</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= (int) $estadisticasPieza['dias_vida'] ?></div>
+                        <div class="text-muted small">día(s) desde que se creó</div>
+                    </div>
+                </div>
+                <?php if ($estadisticasPieza['peso']['sesiones'] > 0): ?>
+                    <div class="small text-muted mt-2">
+                        De eso, <?= $tamanoLegible($estadisticasPieza['peso']['sesiones']) ?> son sesiones de
+                        trabajo (no las versiones en sí) — mira más abajo si alguna sigue sin purgar y
+                        conviene <a href="#" onclick="event.preventDefault(); document.getElementById('sesiones-trabajo')?.scrollIntoView({behavior:'smooth'});">liberar sitio</a>.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         </div>
 
         <!-- Cómo se toca el fichero -->
@@ -1287,5 +1326,65 @@ trackbitos cerrar</code></pre>
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    // ---- Progreso al subir ficheros (renders, referencias, STL) ----------
+    // Un <form> normal no da ninguna pista de que la subida esté avanzando
+    // — con un STL de varios MB, la única señal era el icono de carga de la
+    // pestaña. Se manda por XMLHttpRequest (fetch no expone progreso de
+    // subida) y se pinta en la barra que cada modal ya lleva en su cuerpo.
+    // Al terminar se recarga la página entera: es la forma más simple de
+    // que salga el aviso de éxito/error y la lista actualizada, igual que
+    // haría el <form> normal tras el redirect del servidor.
+    document.querySelectorAll('form[enctype="multipart/form-data"]').forEach(function (form) {
+        var progreso = form.querySelector('[data-progreso]');
+        var barra = progreso ? progreso.querySelector('.progress-bar') : null;
+        var boton = form.querySelector('.modal-footer button:not([data-bs-dismiss])');
+        var textoOriginal = boton ? boton.textContent : '';
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            var datos = new FormData(form);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', form.action, true);
+
+            if (progreso) progreso.classList.remove('d-none');
+            if (boton) boton.disabled = true;
+            form.querySelectorAll('input, textarea').forEach(function (campo) { campo.disabled = true; });
+
+            xhr.upload.addEventListener('progress', function (ev) {
+                if (!ev.lengthComputable) return;
+                var pct = Math.round((ev.loaded / ev.total) * 100);
+                if (barra) {
+                    barra.style.width = pct + '%';
+                    barra.textContent = pct + '%';
+                }
+                if (boton) boton.textContent = 'Subiendo… ' + pct + '%';
+            });
+
+            xhr.addEventListener('load', function () {
+                // La barra llega al 100% en cuanto el navegador termina de
+                // mandar los bytes, pero el servidor todavía tiene que
+                // procesar (recomprimir la imagen, calcular hashes...) —
+                // "Terminando…" evita que parezca colgado en ese hueco.
+                if (barra) { barra.style.width = '100%'; barra.textContent = '100%'; }
+                if (boton) boton.textContent = 'Terminando…';
+                window.location.reload();
+            });
+
+            xhr.addEventListener('error', function () {
+                if (boton) { boton.disabled = false; boton.textContent = textoOriginal; }
+                form.querySelectorAll('input, textarea').forEach(function (campo) { campo.disabled = false; });
+                if (progreso) progreso.classList.add('d-none');
+                alert('Fallo de red al subir el fichero. Inténtalo otra vez.');
+            });
+
+            xhr.send(datos);
+        });
+    });
+})();
+</script>
 
 <?= $this->endSection() ?>

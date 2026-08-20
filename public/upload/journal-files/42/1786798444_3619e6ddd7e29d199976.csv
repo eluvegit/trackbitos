@@ -1,0 +1,101 @@
+# Plan de ejecución — Fase 0 (bot de Telegram)
+
+**Regla de oro: no leas nada más abajo de la tarea en la que estás.** Cada tarea es autosuficiente. Si te distraes leyendo la 12 estando en la 3, vuelve aquí.
+
+**Ritual de arranque (2 min, antes de cada sesión):**
+1. Abre este documento.
+2. Busca la primera casilla `[ ]` sin marcar.
+3. Lee SOLO esa tarea.
+4. Pon un temporizador de 30 minutos.
+5. Empieza. No prepares nada más.
+
+**Si te atascas en una tarea más de 10 minutos:** no la resuelvas ahí. Escribe una línea al final del documento en "Bloqueos" y pasa a marcarla como `[b]` (bloqueada) y sigue con la siguiente si es independiente, o para la sesión. Retomar un bloqueo con la cabeza fresca es más rápido que pelearlo cansado.
+
+---
+
+## Bloque A — Cuentas y accesos (ninguna requiere programar)
+
+- [ ] A1. Abre Telegram → busca `@BotFather` → pulsa "Start".
+- [ ] A2. Escríbele `/newbot`. Te pedirá un nombre visible: escribe `Buscapp` (o el que decidas luego, es cambiable).
+- [ ] A3. Te pedirá un username acabado en `bot`: prueba `buscapp_bot`. Si está cogido, prueba `buscapp_jz_bot`.
+- [ ] A4. Copia el token que te da BotFather (una cadena tipo `123456:ABC-DEF...`). Pégalo en un archivo de texto temporal en tu escritorio llamado `token-bot.txt`. **No lo subas a ningún sitio público.**
+- [ ] A5. Entra en tu panel de Hostinger y confirma que tienes acceso a un subdominio o carpeta libre, por ejemplo `busca.tudominio.com` o `tudominio.com/buscapp-bot/`. Anota cuál vas a usar en el mismo `token-bot.txt`.
+- [ ] A6. Comprueba que ese subdominio/carpeta tiene HTTPS activo (candado en el navegador). Telegram exige HTTPS para el webhook. Si no lo tiene, actívalo desde el panel de Hostinger (suele ser un botón de "SSL gratis").
+
+## Bloque B — Base de datos (una sola tabla)
+
+- [ ] B1. Entra en phpMyAdmin desde Hostinger.
+- [ ] B2. Crea una base de datos nueva llamada `buscapp` (o usa una existente si prefieres no crear otra).
+- [ ] B3. Pega y ejecuta este SQL tal cual, sin cambiar nada:
+
+```sql
+CREATE TABLE usuarios_bot (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  telegram_chat_id BIGINT UNIQUE,
+  alias VARCHAR(50),
+  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE telegramas_bot (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  emisor_chat_id BIGINT,
+  receptor_chat_id BIGINT,
+  mensaje VARCHAR(200),
+  estado VARCHAR(20) DEFAULT 'enviado',
+  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+- [ ] B4. Comprueba en phpMyAdmin que las dos tablas aparecen en la lista de la izquierda. Si aparecen: tarea hecha, no verifiques nada más.
+
+## Bloque C — El webhook mínimo (que el bot "conteste algo")
+
+- [ ] C1. En tu ordenador, crea una carpeta nueva vacía llamada `buscapp-bot`.
+- [ ] C2. Abre Claude Code dentro de esa carpeta (`cd buscapp-bot` y lanza Claude Code).
+- [ ] C3. Pégale a Claude Code este mensaje exacto:
+
+> "Voy a crear un webhook de Telegram en PHP puro (sin framework) para subir a Hostinger. Necesito un único archivo `webhook.php` que: reciba el POST de Telegram, conecte a MySQL con estas credenciales [pega tus credenciales de Hostinger], y de momento solo responda al chat que escribió con el texto 'Bot activo, recibido: ' seguido del texto que envió el usuario. Incluye también un archivo `config.php` separado con las credenciales, y explícame cómo lo subo a Hostinger por FTP o gestor de archivos."
+
+- [ ] C4. Deja que Claude Code genere los archivos. No leas el código en detalle todavía, solo comprueba que se han creado `webhook.php` y `config.php`.
+- [ ] C5. Sube esos dos archivos a la carpeta/subdominio de Hostinger que anotaste en A5 (por FTP con FileZilla, o por el gestor de archivos del panel).
+- [ ] C6. Abre el navegador y ve a `https://api.telegram.org/bot<TU_TOKEN>/setWebhook?url=https://tu-subdominio.com/webhook.php` (sustituye el token y la URL). Debe salir `{"ok":true,...}`.
+- [ ] C7. Abre Telegram, ve a tu bot, escríbele cualquier cosa como "hola". Debe responderte "Bot activo, recibido: hola". **Si esto funciona, para. Has cerrado la parte más importante del proyecto: el tubo de comunicación funciona de extremo a extremo.**
+
+## Bloque D — Registro de usuarios (que el bot sepa quién eres)
+
+- [ ] D1. Pídele a Claude Code: "Añade al webhook.php: cuando alguien escriba `/alta <alias>`, guarda su chat_id y alias en la tabla usuarios_bot (o actualízalo si ya existe) y responde 'Alta hecha: <alias>'."
+- [ ] D2. Sube el `webhook.php` actualizado a Hostinger (sobrescribe el anterior).
+- [ ] D3. En Telegram, escríbele a tu bot `/alta jesus`. Debe responder "Alta hecha: jesus".
+- [ ] D4. Comprueba en phpMyAdmin (tabla `usuarios_bot`) que aparece tu fila. Marca esta tarea solo si la ves ahí.
+- [ ] D5. Pide a Esther (o a quien sea tu primer probador) que abra tu bot en Telegram, pulse Start, y le escriba `/alta esther`. Confírmalo tú mismo mirando la tabla.
+
+## Bloque E — El comando principal: `/buscar`
+
+- [ ] E1. Pídele a Claude Code: "Añade el comando `/buscar <alias> <mensaje opcional>`. Debe: buscar el chat_id del alias en usuarios_bot, insertar una fila en telegramas_bot, y enviarle al receptor un mensaje con dos botones inline: 'Te llamo ahora' y 'Ahora no puedo'. El mensaje debe decir quién busca y el texto opcional."
+- [ ] E2. Sube el archivo actualizado.
+- [ ] E3. Escríbele a tu bot: `/buscar esther Llámame cuando puedas`. Comprueba que a Esther (o tu segundo Telegram/otro móvil) le llega el mensaje con los dos botones.
+- [ ] E4. Pulsa uno de los botones desde el móvil receptor. De momento no pasa nada más — es normal, eso es la siguiente tarea.
+
+## Bloque F — Respuesta de vuelta al emisor
+
+- [ ] F1. Pídele a Claude Code: "Añade el manejo de callback_query: cuando alguien pulse un botón, actualiza el estado en telegramas_bot y envía al emisor original un mensaje: '<alias> respondió: <texto del botón>'."
+- [ ] F2. Sube el archivo actualizado.
+- [ ] F3. Repite la prueba de E3, pulsa un botón, y comprueba que a TI te llega la respuesta. **Si esto funciona: el bot de validación está terminado y operativo. Fase 0 completa.**
+
+## Bloque G — Puesta en marcha real (dejar de probar, empezar a usar)
+
+- [ ] G1. Da de alta a los 2-4 primeros probadores reales (familia/Esther) con `/alta`.
+- [ ] G2. Úsalo tú mismo al menos una vez al día durante 3 días con una necesidad real, no una prueba.
+- [ ] G3. Al final de cada uno de esos 3 días, escribe una línea en "Notas de uso" (abajo) con lo que ha ido bien o mal.
+- [ ] G4. Pasados 3-5 días de uso real, decide con esas notas: ¿seguimos a la app Android (Fase 1) o hay que ajustar algo del bot primero?
+
+---
+
+## Bloqueos
+*(anota aquí cualquier tarea en la que te atascas más de 10 min, con la fecha)*
+
+-
+
+## Notas de uso
+*(una línea por día de la G2-G3)*
+
+-

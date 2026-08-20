@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title><?= esc($title ?? 'Trackbitos') ?></title>
+    <title><?= esc($title ?? 'LOCAL Trackbitos') ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Bootstrap 5 CDN -->

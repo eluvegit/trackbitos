@@ -56,3 +56,62 @@
 }
 
 /* ocupa el espacio pero no se ve */
+
+
+/* PIEZAS */
+
+/* Bootstrap no trae una variante "orange" de botón de serie — el naranja
+   ($orange: #fd7e14) existe como color base pero no como btn-orange. Se usa
+   para el .blend (el máster), distinto del azul de los STL (lo que se
+   imprime), para no confundir un fichero con el otro de un vistazo. */
+.btn-orange {
+    background-color: #fd7e14;
+    border-color: #fd7e14;
+    color: #fff;
+}
+
+.btn-orange:hover,
+.btn-orange:focus {
+    background-color: #dc6803;
+    border-color: #cf6002;
+    color: #fff;
+}
+
+/* Texto en negro en vez del blanco por defecto de Bootstrap: se lee mejor
+   sobre naranja y sobre el azul claro de btn-primary. Este bloque va
+   después de .btn-orange en el fichero a propósito, para ganarle el color
+   en botones que llevan las dos clases. */
+.btn-texto-negro,
+.btn-texto-negro:hover,
+.btn-texto-negro:focus {
+    color: #000;
+}
+
+/* Mismo naranja que .btn-orange, pero como color de texto/icono suelto (p.
+   ej. el enlace de descargar .blend en el índice, fuera de un botón). */
+.text-orange {
+    color: #fd7e14;
+}
+
+.text-orange:hover,
+.text-orange:focus {
+    color: #dc6803;
+}
+
+/* Placas (piezas/placas.php): una tarjeta plegada comparte el ancho de
+   row-cols-* con sus hermanas; al desplegarla necesita ocupar la fila
+   entera para que la lista de piezas no quede apretada. !important porque
+   la regla de row-cols-* también actúa sobre "> *" con la misma
+   especificidad — sin esto, cuál gana depende del orden en el CSS de
+   Bootstrap, no es fiable. */
+.placa-desplegada {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+}
+
+/* Botón "Ocultar fotos" en piezas/placas.php: la clase va en <body>
+   (JS, sin depender de un contenedor concreto) y esconde tanto el mosaico
+   de portada de cada tarjeta como las miniaturas de la lista desplegada. */
+.ocultar-fotos-placas [data-foto-placa] {
+    display: none !important;
+}

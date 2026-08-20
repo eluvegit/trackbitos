@@ -1,0 +1,275 @@
+# Trackbitos — Capa conversacional por Telegram
+## Resumen de decisiones, arquitectura y plan de implementación
+
+---
+
+## 1. Contexto de partida
+
+Trackbitos ya existe como web funcional en CodeIgniter 4 (Hostinger, hosting compartido, MySQL) con 13 módulos activos: Comida, Gimnasio, Compras, Lentillas, Coche, YouTube, Enlaces, Journal, Hogar, Recordatorios, Braintogram, Rodajes, Sesiones.
+
+Cada módulo ya funciona bien como formulario web + cron de avisos. **No se toca esa base.** Lo que se construye es una capa nueva encima: un punto de entrada conversacional por Telegram que lee y escribe en los módulos existentes, para lo que un formulario o un cron no pueden resolver por sí solos.
+
+---
+
+## 2. Decisión de stack (descartado n8n)
+
+Se evaluó n8n como orquestador intermedio, pero se descartó: añadía una pieza más sin necesidad, cuando CodeIgniter puede llamar directo a la API de Claude. **Stack final: Telegram + CodeIgniter + API de Claude**, sin capas intermedias.
+
+- **Hostinger compartido no soporta PostgreSQL** (solo MySQL), confirmado. Descarta pgvector como opción mientras se esté en hosting compartido.
+- Si en el futuro se necesita más potencia (Docker, procesos persistentes, VPS ya contemplado para yt-dlp/Instagram), ahí podría vivir cualquier pieza que lo requiera — pero no es necesario para lo diseñado aquí.
+
+---
+
+## 3. Por qué Telegram + IA aporta algo real (y no solo duplica avisos)
+
+Se descartó justificar esto con "avisos por Telegram en vez de web" — eso es un cron con webhook, sin valor añadido. El valor real está en cuatro cosas que un cron no puede hacer:
+
+1. **Consulta cruzada en lenguaje natural** ("¿qué tengo hoy?") sintetizando varios módulos según lo que se pregunta, no según reglas fijas.
+2. **Captura sin decidir de antemano a qué módulo pertenece** — mandas contenido, el sistema clasifica.
+3. **Diálogo bidireccional con estado** — el bot puede preguntar y ajustar sobre la marcha, no solo empujar avisos.
+4. **Acción real futura** (fase posterior) — agente que ejecuta, no solo informa.
+
+---
+
+## 4. Pipeline de entrada multimodal
+
+Todo formato se normaliza a texto antes de clasificar:
+
+| Entrada | Preprocesado |
+|---|---|
+| Texto | Directo al clasificador |
+| Audio | Transcripción (Whisper) → texto → clasificador |
+| Foto (objeto/situación) | Claude vision describe → texto → clasificador |
+| Foto (captura con texto) | OCR → clasificador |
+| Enlace | Detectado por regex, salta directo a rama de enlaces (sin pasar por clasificador general) |
+
+---
+
+## 5. El clasificador (prompt único, salida estructurada)
+
+Un prompt con la lista real de los 13 módulos, devuelve JSON:
+
+```json
+{
+  "modulo": "coche",
+  "confianza": "alta",
+  "campos_extraidos": { "km": 45000, "accion": "cambio aceite" },
+  "necesita_confirmacion": false
+}
+```
+
+- Si `confianza` es baja o el texto es ambiguo (ej. "cita" = frase textual vs. cita médica), **no adivina**: pregunta con botones inline de Telegram.
+- Casos especiales:
+  - **Enlace** → abre sesión conversacional ("¿de qué querés hablar de esto?"); si no hay respuesta en X minutos, se guarda igual con resumen automático (patrón "enlace → motivo").
+  - **Idea suelta** → va a Braintogram; en el guardado se compara contra ideas anteriores (RAG, ver sección 7) y avisa si hay algo parecido ya guardado.
+
+---
+
+## 6. Tool use de Claude (function calling) — explicado
+
+Claude **no ejecuta nada directamente**. El flujo:
+
+1. Se manda el mensaje del usuario + lista de "tools" disponibles (una por módulo consultable), con su `input_schema`.
+2. Claude responde con un bloque `tool_use` indicando qué función quiere y con qué parámetros — no ejecuta, solo decide.
+3. CodeIgniter recibe eso, ejecuta el `SELECT` real correspondiente en MySQL.
+4. Se devuelve el resultado a Claude (`tool_result`); Claude puede pedir otra tool más si hace falta, o responder ya en texto natural.
+
+**Ventaja clave:** la decisión de qué tablas consultar la toma Claude según la pregunta real del usuario, no una regla fija programada de antemano. Sirve tanto para "¿qué tengo hoy?" como para preguntas nuevas no anticipadas ("¿cómo voy con el gimnasio esta semana?").
+
+**Implementación en CodeIgniter:**
+- Controlador `ApiTools.php`: un método por módulo consultable (`consultarRecordatorios()`, `consultarCoche()`, etc.), cada uno devuelve JSON.
+- Controlador `TelegramWebhook.php`: hace el loop mensaje → tool_use → ejecutar método PHP → tool_result → repetir hasta texto final → responder a Telegram.
+
+---
+
+## 7. RAG (búsqueda semántica / relaciones por significado)
+
+Complementa (no reemplaza) la tabla `relaciones` explícita ya prevista en el diseño original. RAG da un grafo *implícito* por similitud de significado; la tabla SQL sigue siendo el grafo *explícito* confirmado por el usuario.
+
+**Decisión de implementación (sin sumar servicios de pago innecesarios):**
+- **Fase inicial:** vectores guardados como JSON en columna `TEXT` de la tabla `items` en MySQL; comparación de similitud calculada a mano en PHP (distancia coseno). Cero cuentas nuevas. Válido hasta unos pocos miles de items.
+- **Si se necesita más adelante:** migrar a Qdrant Cloud (tier gratuito) sin rediseñar el sistema — el `item_id` sigue siendo el puente entre MySQL y la base vectorial.
+- **API de embeddings necesaria aparte de Anthropic:** Claude no tiene endpoint de embeddings propio. Usar Voyage AI (tier gratis) o similar.
+
+**Dónde se aplica:**
+- Braintogram: detectar ideas parecidas ya guardadas.
+- Journal ↔ Braintogram: al escribir una idea nueva, retrieval sobre Journal para detectar si ya se pensó antes con otras palabras.
+- Búsqueda semántica general (sección G del informe original).
+
+---
+
+## 8. Sesiones — moodboard con imágenes
+
+### 8.1 Dos ejes de clasificación (independientes)
+
+- **Eje proyecto:** con sesión/proyecto concreto vs. sin proyecto (libre).
+- **Eje tipo de contenido:** referencia visual/estética, humor/memes, otros (categorías que pueden crecer con el uso).
+
+Un meme normalmente será "sin proyecto" + "humor", pero no se fuerza la regla — decide el clasificador de Claude vision en cada caso.
+
+### 8.2 Esquema de tabla
+
+```sql
+sesiones_imagenes
+- id
+- session_id (nullable — null = sin proyecto)
+- url_imagen
+- descripcion_ia
+- tipo (enum: referencia_visual, humor, otro)
+- tags (JSON)
+- fecha
+```
+
+### 8.3 Prompt de clasificación de imagen
+
+```json
+{
+  "descripcion": "modelo con luz lateral dura, fondo oscuro, pose de perfil",
+  "tipo": "referencia_visual",
+  "sugerencia_proyecto": "sesion_activa_id_o_null",
+  "es_humor": false
+}
+```
+
+Solo se pregunta con botones si la confianza es baja o si parece referencia visual con proyectos activos donde podría encajar. Los memes y contenido claramente no fotográfico se guardan directo sin fricción.
+
+---
+
+## 9. Ventana de captura por lote (envío de varias fotos seguidas)
+
+### 9.1 Decisión: apertura manual, no automática
+
+Se descartó abrir sesión de captura automáticamente con la primera foto suelta (generaría falsos positivos con memes random). En su lugar:
+
+- **`/sesion`** (o `/moodboard`) → abre la ventana de captura explícitamente.
+- Fotos enviadas dentro de la ventana se guardan sin preguntar nada, sin analizar todavía — solo se acumulan.
+- **`/fin`** → cierre explícito e inmediato.
+- **`/fin Proyecto X`** → cierre + respuesta en el mismo comando, salta el paso de botones.
+- Si no se cierra a mano, se autocierra por inactividad (ver 9.2) — evita sesiones zombie.
+
+### 9.2 Timeout por gap deslizante (no timeout fijo total)
+
+El cierre automático se calcula contra el **envío anterior**, no contra la apertura de la sesión:
+
+```
+foto_1: 14:32:00 → sesión abierta, se guarda
+foto_2: 14:32:15 → gap 15s → dentro de ventana
+foto_3: 14:33:40 → gap 85s → dentro de ventana (umbral 2-3 min)
+foto_4: 14:38:10 → gap 4:30 → supera umbral → autocierre ANTES de guardar esta foto
+```
+
+Esto evita cortar en medio de una subida lenta desde galería, y permite detectar sub-lotes dentro de la misma sesión manual si hay una pausa larga sin `/fin`.
+
+**Evaluación sin cron dedicado:** se comprueba el gap en el propio webhook cada vez que llega una foto nueva (comparando contra `ultimo_envio`), más un cron genérico de barrido (ya previsto en el diseño original para timeouts de sesión) que cierra sesiones vencidas aunque no llegue ninguna foto más.
+
+### 9.3 Esquema de tabla
+
+```sql
+sesiones_captura_temporal
+- chat_id
+- estado (abierta / cerrada)
+- ultimo_envio (timestamp, se actualiza en CADA foto)
+- imagenes_pendientes (JSON array de file_ids/paths)
+```
+
+### 9.4 Análisis al cierre (batch, no por foto)
+
+Al cerrarse la ventana (manual o por timeout), se lanza el análisis de Claude vision sobre el lote completo de una vez — agrupa por similitud y hace **una sola pregunta** con proyectos activos + inspiración general + detecta sub-grupos que no encajan con el resto ("18 fotos parecen ser Proyecto X, 2 no encajan").
+
+---
+
+## 10. Plan de fases de implementación
+
+**Fase A — Endpoints base**
+- `POST /api/item` en CodeIgniter: recibe `{modulo, campos, texto_original}`, inserta en la tabla correcta.
+- `GET /api/consulta/{modulo}` por cada módulo consultable, para uso como tool por Claude.
+
+**Fase B — Webhook Telegram + clasificador de texto**
+- `TelegramWebhook.php` recibe mensajes, distingue tipo (texto/audio/foto/enlace).
+- Prompt de clasificación con los 13 módulos → JSON estructurado.
+- Botones inline de confirmación cuando la confianza es baja.
+
+**Fase C — Multimodal**
+- Integración de transcripción de audio.
+- Integración de Claude vision para fotos sueltas.
+- Detección de enlaces + sesión de contexto "enlace → motivo".
+
+**Fase D — Tool use / consultas**
+- Definir tools por módulo en la llamada a la API de Claude.
+- Loop de tool_use ↔ tool_result hasta respuesta final.
+- Prueba con consultas reales tipo "¿qué tengo hoy?".
+
+**Fase E — Sesiones / moodboard**
+- Tabla `sesiones_imagenes` + comandos `/sesion` y `/fin`.
+- Lógica de gap deslizante + cron de barrido de sesiones vencidas.
+- Análisis batch de Claude vision al cierre + pregunta de agrupación.
+
+**Fase F — RAG básico**
+- Columna de embeddings en `items` (JSON).
+- Llamada a API de embeddings (Voyage u OpenAI) al guardar.
+- Comparación de similitud en PHP para Braintogram/Journal.
+
+**Fase G — Iteración**
+- Migrar RAG a Qdrant si el volumen lo justifica.
+- Ampliar tipos de imagen en Sesiones según uso real.
+- Explorar agente ejecutor (borradores, acciones reales) una vez el resto esté estable.
+
+---
+
+## 11. Prompt para Claude Code
+
+Copia y pega esto como mensaje inicial en la conversación con Claude Code:
+
+```
+Voy a desarrollar por fases una capa conversacional por Telegram sobre un
+sistema existente llamado Trackbitos, construido en CodeIgniter 4 con MySQL,
+alojado en Hostinger (hosting compartido, sin soporte PostgreSQL). El stack
+completo es: Telegram (webhook) + CodeIgniter 4 + API de Claude (Anthropic),
+sin orquestadores intermedios tipo n8n.
+
+CONTEXTO DEL SISTEMA:
+Ya existen 13 módulos funcionando como formularios web con sus propios crons
+de avisos: Comida, Gimnasio, Compras, Lentillas, Coche, YouTube, Enlaces,
+Journal, Hogar, Recordatorios, Braintogram, Rodajes, Sesiones. No se van a
+modificar esos módulos ni sus tablas existentes — se construye una capa
+nueva encima que lee y escribe en ellos.
+
+OBJETIVO DE ESTA CAPA:
+Un bot de Telegram como punto de entrada único que:
+1. Recibe texto, audio, fotos o enlaces, los normaliza a texto y clasifica
+   automáticamente a qué módulo pertenece (usando la API de Claude con
+   salida JSON estructurada), guardando vía un endpoint común.
+2. Si la confianza de clasificación es baja o el mensaje es ambiguo,
+   pregunta con botones inline de Telegram en vez de adivinar.
+3. Puede responder preguntas en lenguaje natural que cruzan varios módulos
+   (ej. "¿qué tengo hoy?") usando tool use / function calling de la API de
+   Claude: Claude decide qué endpoints de consulta llamar según la
+   pregunta, CodeIgniter ejecuta los SELECT reales y devuelve el resultado
+   a Claude para la síntesis final.
+4. Soporta un modo de captura de imágenes en lote para el módulo Sesiones
+   (moodboard): comando /sesion abre una ventana de captura, las fotos se
+   acumulan sin interrupciones, se cierra con /fin (opcionalmente con el
+   destino ya indicado, ej. "/fin Proyecto X") o automáticamente por
+   inactividad usando un timeout de gap deslizante entre envíos (no un
+   timeout fijo desde la apertura). Al cerrar, se analiza el lote completo
+   con Claude vision, clasificando cada imagen en dos ejes independientes:
+   con/sin proyecto asociado, y tipo de contenido (referencia visual,
+   humor/meme, otro).
+5. Para enlaces, abre una sesión conversacional breve preguntando el
+   motivo/contexto antes de guardar (o guarda con resumen automático si no
+   hay respuesta en unos minutos).
+
+Vamos a implementarlo por fases. Quiero empezar por la Fase A: crear los
+endpoints base en CodeIgniter — un POST /api/item que reciba
+{modulo, campos, texto_original} e inserte en la tabla correspondiente de
+los 13 módulos existentes, y endpoints GET /api/consulta/{modulo} de solo
+lectura para cada módulo, pensados para ser usados como "tools" por la API
+de Claude más adelante.
+
+Antes de escribir código, hazme las preguntas que necesites sobre el
+esquema real de mis tablas actuales para no asumir nada incorrecto.
+```
+
+---
+
+*Documento generado a partir de la conversación de brainstorm y diseño técnico de julio 2026. Complementa el informe original "Trackbitos — Segundo cerebro".*

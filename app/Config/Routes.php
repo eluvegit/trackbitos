@@ -654,6 +654,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('estadisticas', 'Web::estadisticas');
+    $routes->GET('estadisticas/backup', 'Web::backupDescargar');
     $routes->GET('sesiones-activas', 'Web::sesionesActivas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
@@ -711,6 +712,16 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
     $routes->GET('carrito/descargar', 'Web::carritoDescargar');
+    $routes->POST('carrito/guardar', 'Web::carritoGuardarPlaca');
+
+    // Histórico de placas (fase 36): cada descarga queda anotada sola, con
+    // qué llevaba, para poder reimprimir la misma combinación o solo mirar
+    // qué se ha ido mandando a la impresora.
+    $routes->GET('placas', 'Web::placas');
+    $routes->GET('placa/(:num)/descargar', 'Web::placaDescargar/$1');
+    $routes->POST('placa/(:num)/cargar', 'Web::placaCargar/$1');
+    $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
+    $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
