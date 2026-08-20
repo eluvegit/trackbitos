@@ -37,8 +37,8 @@ $filaSesionActiva = static function (array $s): string {
     <?php
         /**
          * Solo Galería y "+ Pieza" fuera, sueltos — son los dos que se usan
-         * a diario. El resto (Organizar, Categorías, Máquinas, Estadísticas,
-         * Papelera) es de uso ocasional y va agrupado en el desplegable, en
+         * a diario. El resto (Organizar, Categorías, Placas, Máquinas,
+         * Estadísticas, Papelera) es de uso ocasional y va agrupado en el desplegable, en
          * vez de sumar seis botones sueltos a la cabecera. "+ Variante" no
          * va ni ahí: se quita — crear una variante nace de una pieza
          * concreta, así que su sitio natural es la ficha, no un selector
@@ -63,6 +63,9 @@ $filaSesionActiva = static function (array $s): string {
                     <i class="bi bi-folder"></i> Categorías
                 </button>
             </li>
+            <?php // Placas cuelga de la galería (es donde se arman), pero mirar qué se ha
+                  // impreso no obliga a pasar por ahí: se llega también desde aquí. ?>
+            <li><a class="dropdown-item" href="<?= site_url('piezas/placas') ?>"><i class="bi bi-clock-history"></i> Placas</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/maquinas') ?>"><i class="bi bi-pc-display"></i> Máquinas</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/estadisticas') ?>"><i class="bi bi-hdd-stack"></i> Estadísticas</a></li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>

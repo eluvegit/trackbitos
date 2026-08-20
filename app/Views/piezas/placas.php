@@ -17,9 +17,30 @@
     entrada si solo era una prueba — no borra ningún STL ni versión, solo esta anotación.
 </p>
 
-<button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="btnFotosPlacas">
-    <i class="bi bi-image"></i> Ocultar fotos
-</button>
+<?php /**
+       * Las reglas van aquí y no en style.css a propósito: el Hostinger sirve los
+       * assets con una semana de caché, así que un cambio en la hoja tarda días en
+       * llegar al navegador y el botón parece roto sin estarlo (pasó, y costó
+       * encontrarlo). El HTML no se cachea, así que embebido siempre está al día.
+       */ ?>
+<style>
+    .ocultar-fotos-tarjetas [data-foto-placa="tarjeta"],
+    .ocultar-fotos-lista [data-foto-placa="lista"] {
+        display: none !important;
+    }
+</style>
+
+<?php // Dos interruptores, no uno: en las tarjetas la foto es para reconocer la placa
+      // de un vistazo y en el listado del modal es solo un apoyo al texto, así que cada
+      // sitio se apaga por su cuenta. Cada uno recuerda su estado. ?>
+<div class="btn-group btn-group-sm mb-2" role="group">
+    <button type="button" class="btn btn-outline-secondary" data-fotos="tarjetas">
+        <i class="bi bi-image"></i> Ocultar portadas
+    </button>
+    <button type="button" class="btn btn-outline-secondary" data-fotos="lista">
+        <i class="bi bi-list-ul"></i> Ocultar miniaturas
+    </button>
+</div>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
@@ -34,11 +55,12 @@
         galería, aparecerá aquí.
     </p>
 <?php else: ?>
-    <?php // Tarjetas pequeñas (6 de ancho en pantalla normal, como la galería) con un
-          // resumen de una línea; al pulsar se despliegan a todo el ancho con la lista
-          // completa y las acciones — así se puede escanear el histórico entero de un
-          // vistazo sin que cada placa ocupe una fila propia. ?>
-    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2">
+    <?php // Tarjetas de 4 de ancho en pantalla normal — menos que la galería (6) a
+          // propósito: aquí cada tarjeta lleva nombre, fecha y contadores, y a 6 el
+          // nombre se truncaba casi siempre. Al pulsar se despliegan a todo el ancho
+          // con la lista completa y las acciones — así se puede escanear el histórico
+          // entero de un vistazo sin que cada placa ocupe una fila propia. ?>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-2">
         <?php foreach ($placas as $placa): ?>
             <?php
                 $lista = $piezas[$placa['id']] ?? [];
@@ -46,98 +68,79 @@
                 $idPlaca = (int) $placa['id'];
                 $idDetalle = 'detalle-placa-' . $idPlaca;
                 $fecha = strtotime($placa['creado_en']);
-                // Mosaico de portada: con una sola foto, cuadrado entero;
-                // con varias, hasta 4 en rejilla — así la tarjeta se
-                // reconoce de un vistazo sin tener que desplegarla.
+                // Portada en tira baja (no cuadrada): la tarjeta es un lomo de
+                // archivador, no una foto de catálogo — con reconocerla basta.
+                // Hasta 4 miniaturas en fila; el detalle se ve en el modal.
                 $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
             ?>
             <div class="col" data-tarjeta-placa>
-                <div class="card shadow-sm h-100">
-                    <?php if (count($fotos) === 1): ?>
-                        <img src="<?= $fotos[0] ?>" loading="lazy" alt="" data-foto-placa
-                            style="width: 100%; aspect-ratio: 1; object-fit: cover; display: block;">
-                    <?php elseif (count($fotos) > 1): ?>
-                        <div class="d-grid" data-foto-placa
-                            style="grid-template-columns: 1fr 1fr; gap: 2px; aspect-ratio: 1; overflow: hidden; background: rgba(127,127,127,.15);">
+                <div class="card shadow-sm h-100 user-select-none" style="cursor: pointer"
+                    data-abrir-placa="<?= $idDetalle ?>" title="Ver el contenido de la placa">
+                    <?php if ($fotos): ?>
+                        <div class="d-flex" data-foto-placa="tarjeta"
+                            style="gap: 2px; height: 72px; overflow: hidden; background: rgba(127,127,127,.15);">
                             <?php foreach (array_slice($fotos, 0, 4) as $foto): ?>
                                 <img src="<?= $foto ?>" loading="lazy" alt=""
-                                    style="width: 100%; height: 100%; object-fit: cover; display: block;">
+                                    style="flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; display: block;">
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
-                    <div class="card-body p-2 user-select-none" style="cursor: pointer" data-plegar-placa="<?= $idDetalle ?>">
+                    <div class="card-body p-2">
                         <div class="small fw-semibold text-truncate" title="<?= esc($placa['nombre'], 'attr') ?>">
                             <?= esc($placa['nombre']) ?>
                         </div>
-                        <div class="text-muted small">
-                            <?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?>
-                        </div>
-                        <div class="mt-1 d-flex flex-wrap gap-1">
-                            <span class="badge text-bg-secondary">
-                                <?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?>
-                            </span>
+                        <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
+                            <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
+                            <span class="ms-auto"><?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?></span>
                             <?php if ($disponibles < count($lista)): ?>
-                                <span class="badge text-bg-warning" title="Algún STL de esta placa ya no está disponible">
-                                    <i class="bi bi-exclamation-triangle"></i>
-                                </span>
+                                <i class="bi bi-exclamation-triangle text-warning"
+                                    title="Algún STL de esta placa ya no está disponible"></i>
                             <?php endif; ?>
                         </div>
                     </div>
 
-                    <div id="<?= $idDetalle ?>" class="d-none border-top">
-                        <div class="card-body p-3">
-                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                                <div class="flex-grow-1 text-muted small"><?= esc($placa['creado_en']) ?></div>
+                    <?php // Se renderiza aquí dentro, oculto, y el JS lo mueve al modal al
+                          // abrirlo: así los formularios (con su CSRF) son los mismos de
+                          // siempre, sin duplicar un modal por placa en el HTML. ?>
+                    <div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>">
+                        <?php // Dos bloques con destino distinto dentro del modal: lo que se lee
+                              // (fecha, nombre, listado) va al cuerpo y los botones al pie, que es
+                              // donde se espera encontrarlos. El JS los reparte al abrir. ?>
+                        <div data-cuerpo-placa>
+                            <div class="text-muted small mb-2"><?= esc($placa['creado_en']) ?></div>
 
-                                <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>"
-                                    class="btn btn-sm btn-outline-primary" title="Volver a generar el zip con lo que haya ahora mismo">
-                                    <i class="bi bi-download"></i> Descargar de nuevo
-                                </a>
-                                <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/cargar') ?>">
-                                    <?= csrf_field() ?>
-                                    <button class="btn btn-sm btn-outline-secondary" title="Sustituye lo que haya ahora en la placa actual">
-                                        <i class="bi bi-arrow-return-left"></i> Cargar en la placa actual
-                                    </button>
-                                </form>
-                                <form method="post"
-                                    action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
-                                    onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
-                                    <?= csrf_field() ?>
-                                    <button class="btn btn-sm btn-outline-danger" title="Borrar del histórico">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </div>
-
-                            <form method="post" class="d-flex gap-1 mb-2" style="max-width: 420px;"
+                            <form method="post" class="d-flex gap-1 mb-2"
                                 action="<?= site_url('piezas/placa/' . $idPlaca . '/renombrar') ?>">
                                 <?= csrf_field() ?>
                                 <input type="text" name="nombre" class="form-control form-control-sm"
                                     value="<?= esc($placa['nombre'], 'attr') ?>" maxlength="150" required>
-                                <button class="btn btn-sm btn-outline-secondary">Renombrar</button>
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0">Renombrar</button>
                             </form>
 
                             <?php if (empty($lista)): ?>
                                 <p class="text-muted small mb-0">Ninguna de esas versiones existe ya.</p>
                             <?php else: ?>
-                                <ul class="list-group list-group-flush">
+                                <?php // Listado plano y en letra pequeña: aquí se viene a leer qué
+                                      // llevaba la placa, no a mirar fotos — la miniatura es solo
+                                      // para reconocer la pieza de reojo. ?>
+                                <ul class="list-unstyled mb-0" style="font-size: .8rem;">
                                     <?php foreach ($lista as $p): ?>
-                                        <li class="list-group-item px-0 py-1 d-flex align-items-center gap-2">
+                                        <li class="d-flex align-items-center gap-2 py-1 border-bottom border-secondary-subtle">
                                             <?php if ($p['miniatura']): ?>
-                                                <img src="<?= $p['miniatura'] ?>" loading="lazy" alt="" data-foto-placa
-                                                    class="rounded border flex-shrink-0" style="width: 32px; height: 32px; object-fit: cover;">
+                                                <img src="<?= $p['miniatura'] ?>" loading="lazy" alt="" data-foto-placa="lista"
+                                                    class="rounded border flex-shrink-0" style="width: 26px; height: 26px; object-fit: cover;">
                                             <?php endif; ?>
                                             <?php if ($p['variante'] && $p['familia']): ?>
                                                 <a href="<?= site_url('piezas/variante/' . (int) $p['variante']['id']) ?>"
-                                                    class="text-decoration-none text-body flex-grow-1">
+                                                    class="text-decoration-none text-body flex-grow-1 text-truncate">
                                                     <?= esc($p['familia']['nombre']) ?> / <?= esc($p['variante']['nombre']) ?>
-                                                    · v<?= sprintf('%03d', (int) $p['version']['numero']) ?>
+                                                    <span class="text-muted">· v<?= sprintf('%03d', (int) $p['version']['numero']) ?></span>
                                                 </a>
                                             <?php else: ?>
                                                 <span class="text-muted flex-grow-1">(esa pieza ya no existe)</span>
                                             <?php endif; ?>
                                             <?php if (!$p['disponible']): ?>
-                                                <span class="badge text-bg-warning" title="El STL ya no está en el almacén">
+                                                <span class="text-warning flex-shrink-0" title="El STL ya no está en el almacén">
                                                     <i class="bi bi-exclamation-triangle"></i> sin STL ya
                                                 </span>
                                             <?php endif; ?>
@@ -146,59 +149,158 @@
                                 </ul>
                             <?php endif; ?>
                         </div>
+
+                        <div class="d-flex flex-wrap justify-content-end gap-2" data-acciones-placa>
+                            <?php // A la izquierda del todo y separada del resto: la bitácora es
+                                  // otra pantalla, no una acción sobre el zip como las demás. ?>
+                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>"
+                                class="btn btn-sm btn-outline-info me-auto" title="Qué se probó en esta placa y cómo salió">
+                                <i class="bi bi-journal-text"></i> Ver bitácora
+                            </a>
+                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>"
+                                class="btn btn-sm btn-outline-primary" title="Volver a generar el zip con lo que haya ahora mismo">
+                                <i class="bi bi-download"></i> Descargar de nuevo
+                            </a>
+                            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/cargar') ?>">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm btn-outline-secondary" title="Sustituye lo que haya ahora en la placa actual">
+                                    <i class="bi bi-arrow-return-left"></i> Cargar en la placa actual
+                                </button>
+                            </form>
+                            <form method="post"
+                                action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
+                                onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm btn-outline-danger" title="Borrar del histórico">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
         <?php endforeach; ?>
     </div>
+
+    <?php // Un único modal para todas las placas: al abrirlo se le mete dentro el
+          // bloque de detalle que ya venía renderizado (oculto) en su tarjeta, y al
+          // cerrarlo se devuelve. Mover el nodo en vez de duplicarlo mantiene los
+          // formularios y sus tokens CSRF intactos, y el HTML no crece con un modal
+          // por placa. ?>
+    <div class="modal fade" id="modalPlaca" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title" id="modalPlacaTitulo"></h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="modalPlacaCuerpo"></div>
+                <div class="modal-footer py-2" id="modalPlacaPie"></div>
+            </div>
+        </div>
+    </div>
 <?php endif; ?>
 
 <script>
 (function () {
-    // Al desplegar, la tarjeta pasa de compartir el ancho de "6 de ancho"
-    // con sus hermanas a ocupar toda la fila — así cabe la lista completa
-    // sin quedar apretada en una columna estrecha. La clase la define
-    // style.css con !important, para ganarle a las de row-cols-* sin
-    // pelearse con el orden de las reglas de Bootstrap.
-    document.querySelectorAll('[data-plegar-placa]').forEach(function (cabecera) {
-        cabecera.addEventListener('click', function (e) {
+    // ---- Contenido de una placa, en modal -----------------------------------
+    var modalEl = document.getElementById('modalPlaca');
+    var cuerpo = document.getElementById('modalPlacaCuerpo');
+    var pie = document.getElementById('modalPlacaPie');
+    var titulo = document.getElementById('modalPlacaTitulo');
+    var detalleAbierto = null;   // el nodo prestado, para saber a quién devolverlo
+    var cunaDelDetalle = null;   // su tarjeta de origen
+    var accionesAbiertas = null; // los botones, que van al pie y no al cuerpo
+
+    // La instancia se crea al pulsar, no aquí: este <script> va en el cuerpo de
+    // la vista y el bundle de Bootstrap se carga al final del layout, así que
+    // ahora mismo `bootstrap` todavía no existe — hacerlo aquí tiraba el bloque
+    // entero con un ReferenceError y se llevaba por delante hasta el botón de
+    // las fotos.
+    function modalDePlacas() {
+        return (modalEl && window.bootstrap) ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+    }
+
+    document.querySelectorAll('[data-abrir-placa]').forEach(function (tarjeta) {
+        tarjeta.addEventListener('click', function (e) {
+            // La tarjeta entera es el disparador, así que hay que dejar pasar
+            // cualquier enlace o formulario que caiga dentro.
             if (e.target.closest('form, a')) return;
 
-            var id = cabecera.getAttribute('data-plegar-placa');
-            var detalle = document.getElementById(id);
+            var modal = modalDePlacas();
+            if (!modal) return;
+
+            var detalle = document.getElementById(tarjeta.getAttribute('data-abrir-placa'));
             if (!detalle) return;
 
-            var columna = cabecera.closest('[data-tarjeta-placa]');
-            var vaAAbrirse = detalle.classList.contains('d-none');
+            detalleAbierto = detalle;
+            cunaDelDetalle = detalle.parentNode;
+            titulo.textContent = detalle.getAttribute('data-nombre-placa') || 'Placa';
 
-            detalle.classList.toggle('d-none');
-            if (columna) columna.classList.toggle('placa-desplegada', vaAAbrirse);
+            detalle.classList.remove('d-none');
+            cuerpo.appendChild(detalle);
+
+            // Los botones salen del bloque prestado y se van al pie del modal.
+            accionesAbiertas = detalle.querySelector('[data-acciones-placa]');
+            if (accionesAbiertas) pie.appendChild(accionesAbiertas);
+
+            modal.show();
         });
     });
 
-    // ---- Mostrar/ocultar fotos --------------------------------------------
-    // Visibles por defecto (es lo que pediste: más visual) — el botón es
-    // para cuando prefieras una lista más densa y de texto. Se recuerda
-    // entre visitas.
-    var CLAVE_FOTOS_PLACAS = 'piezas_placas_fotos_ocultas';
-    var btnFotos = document.getElementById('btnFotosPlacas');
-
-    function pintarFotosPlacas(ocultas) {
-        document.body.classList.toggle('ocultar-fotos-placas', ocultas);
-        if (btnFotos) {
-            btnFotos.innerHTML = '<i class="bi bi-image"></i> ' + (ocultas ? 'Mostrar fotos' : 'Ocultar fotos');
-        }
-    }
-
-    pintarFotosPlacas(localStorage.getItem(CLAVE_FOTOS_PLACAS) === '1');
-
-    if (btnFotos) {
-        btnFotos.addEventListener('click', function () {
-            var ocultar = !document.body.classList.contains('ocultar-fotos-placas');
-            localStorage.setItem(CLAVE_FOTOS_PLACAS, ocultar ? '1' : '0');
-            pintarFotosPlacas(ocultar);
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            if (!detalleAbierto || !cunaDelDetalle) return;
+            // Primero los botones de vuelta a su bloque, y el bloque a su tarjeta:
+            // al revés dejaría los botones huérfanos en el pie del modal.
+            if (accionesAbiertas) {
+                detalleAbierto.appendChild(accionesAbiertas);
+                accionesAbiertas = null;
+            }
+            detalleAbierto.classList.add('d-none');
+            cunaDelDetalle.appendChild(detalleAbierto);
+            detalleAbierto = null;
+            cunaDelDetalle = null;
         });
     }
+
+    // ---- Mostrar/ocultar fotos ----------------------------------------------
+    // Todas visibles por defecto; cada interruptor va por su cuenta y recuerda
+    // su estado entre visitas.
+    var FOTOS = {
+        tarjetas: {
+            clase: 'ocultar-fotos-tarjetas',
+            clave: 'piezas_placas_fotos_tarjetas_ocultas',
+            icono: 'bi-image',
+            que: 'portadas'
+        },
+        lista: {
+            clase: 'ocultar-fotos-lista',
+            clave: 'piezas_placas_fotos_lista_ocultas',
+            icono: 'bi-list-ul',
+            que: 'miniaturas'
+        }
+    };
+
+    document.querySelectorAll('[data-fotos]').forEach(function (boton) {
+        var cfg = FOTOS[boton.getAttribute('data-fotos')];
+        if (!cfg) return;
+
+        function pintar(ocultas) {
+            document.body.classList.toggle(cfg.clase, ocultas);
+            boton.classList.toggle('active', ocultas);
+            boton.innerHTML = '<i class="bi ' + cfg.icono + '"></i> '
+                + (ocultas ? 'Mostrar ' : 'Ocultar ') + cfg.que;
+        }
+
+        pintar(localStorage.getItem(cfg.clave) === '1');
+
+        boton.addEventListener('click', function () {
+            var ocultar = !document.body.classList.contains(cfg.clase);
+            localStorage.setItem(cfg.clave, ocultar ? '1' : '0');
+            pintar(ocultar);
+        });
+    });
 })();
 </script>
 

@@ -116,15 +116,15 @@ Recarga la terminal (`source ~/.zshrc` o ábrela de nuevo) y ya está: `trackbit
 resuelve también lo de escribir `.././trackbitos.py` cada vez — la función deja llamar
 `trackbitos <lo que sea>` desde cualquier carpeta, para cualquier comando, no solo `trabajar`.
 
-#### Windows (PowerShell) — pendiente de aplicar esa máquina
+#### Windows (PowerShell) — ya configurado en esta máquina
 
 Mismo patrón, en el `$PROFILE` de PowerShell (`notepad $PROFILE`, se crea si no existe).
-**Sustituye la ruta por dónde esté `trackbitos.py` en esa máquina** — a diferencia del Mac, no
-se ha confirmado todavía cuál es:
+Apunta al `trackbitos.py` del checkout, igual que el Mac: aquí tampoco hay ya una copia
+aparte que sincronizar (la hubo en `R:\PIEZAS PLAYMOBIL\` y se retiró el 2026-08-20).
 
 ```powershell
 function trackbitos {
-    python "C:\ruta\a\trackbitos.py" @args
+    python "E:\Programacion\SERVIDORWEB\www\trackbitos\piezas-cli\trackbitos.py" @args
     if (($args[0] -eq "trabajar") -or ($args[0] -eq "t")) {
         $marker = "$HOME\.trackbitos\ultimo_directorio"
         if (Test-Path $marker) {
@@ -135,6 +135,12 @@ function trackbitos {
 ```
 
 Recarga la terminal (`. $PROFILE` o ábrela de nuevo).
+
+Ojo con una trampa de Windows: hay **dos** PowerShell y cada uno lee un perfil distinto —
+`Documents\PowerShell\` es el de la versión 7 (`pwsh`) y `Documents\WindowsPowerShell\` el del
+clásico 5.1. La función está puesta en los dos, porque si no aparece "solo a veces", según cuál
+abras. En `cmd.exe` no hay función: ahí sigue valiendo el `trackbitos.bat` de al lado del
+script, que no hace el `cd`.
 
 ---
 
@@ -159,7 +165,6 @@ En el Mac: `trackbitos subir` + `trackbitos cerrar` antes de irte. En Windows: `
 | `trackbitos estado` | El más usado: diagnóstico en lenguaje natural de la carpeta actual — qué hacer, sin comparar hashes tú. |
 | `trackbitos catalogo` | El catálogo completo desde la terminal, agrupado por categoría: qué hay y por dónde va cada cosa. |
 | `trackbitos variantes <pieza>` | Zoom sobre una pieza: cuántas variantes tiene y cómo se llama cada una. |
-| `trackbitos actualizar` | Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza a sí mismo. |
 | `trackbitos trabajar <pieza>` | **El atajo del día a día**: crea la carpeta, baja dentro y abre el `.blend` en Blender, todo de un golpe. |
 | `trackbitos bajar [<pieza>]` | Descarga la mesa de trabajo y abre sesión — o, si la pieza es nueva y no hay nada que descargar, solo abre sesión. Se niega si hay cambios sin subir. |
 | `trackbitos ver <pieza>` | Descarga solo para mirar (comparar una cota); no abre sesión ni consume número. |

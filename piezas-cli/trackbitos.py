@@ -48,11 +48,13 @@ DIAS_PAPELERA = 30
 # _recordar_directorio() más abajo y la sección 3 del TUTORIAL.
 ULTIMO_DIRECTORIO_PATH = CONFIG_DIR / "ultimo_directorio"
 
-# Se sube junto al resto de este fichero: cada mejora que se despliegue en el
-# servidor viene con la versión que le corresponde. "trackbitos actualizar"
-# la compara con la que sirve el servidor (GET /cliente/version, leída del
-# propio trackbitos.py desplegado allí) para saber si hay algo nuevo.
-VERSION = "1.10.0"
+# Solo informativa: sirve para saber de un vistazo con qué fichero estás
+# hablando cuando algo va raro. Nadie la compara ya con nada — hasta la fase
+# 37 el cliente se descargaba a sí mismo del servidor cuando la versión de
+# allí era mayor, y eso se retiró: las dos máquinas se ponen al día con git,
+# así que el script se actualiza como cualquier otro fichero del repo. Súbela
+# cuando el cambio merezca distinguirse.
+VERSION = "1.11.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -1347,102 +1349,6 @@ def cmd_promocionar(args) -> int:
 
 
 # --------------------------------------------------------------------------
-# Auto-actualización
-# --------------------------------------------------------------------------
-
-def _version_tupla(v: str) -> tuple:
-    """"1.2.10" -> (1, 2, 10), para comparar sin los líos de comparar texto ("1.9" > "1.10")."""
-    try:
-        return tuple(int(p) for p in v.strip().split("."))
-    except ValueError:
-        return (0,)
-
-
-def comprobar_version_remota(config: dict) -> Optional[str]:
-    """
-    Un vistazo silencioso a si hay versión nueva. Aviso automático,
-    actualización manual (nunca se autoactualiza sola): esto solo mira y
-    devuelve la versión si es más nueva, o None ante cualquier tropiezo — sin
-    red, sin config todavía, servidor caído. Timeout corto y propio (no el de
-    _abrir/api_get) a propósito: esto es un extra, y no puede ser lo que deje
-    esperando al comando que el usuario vino a ejecutar de verdad. Si de
-    verdad hace falta quejarse de que no se pudo comprobar, ya se queja
-    "trackbitos actualizar", que sí es una petición explícita.
-    """
-    try:
-        peticion = urllib.request.Request(
-            config["url_base"].rstrip("/") + "/cliente/version", headers=_cabeceras(config)
-        )
-        with urllib.request.urlopen(peticion, timeout=3) as resp:
-            remota = json.loads(resp.read().decode("utf-8")).get("version")
-    except Exception:
-        return None
-
-    if remota and _version_tupla(remota) > _version_tupla(VERSION):
-        return remota
-    return None
-
-
-def _aplicar_actualizacion(config: dict, remota: str) -> Path:
-    """
-    Descarga, verifica que compila y se reemplaza a sí mismo. Compartido por
-    "actualizar" (invocación explícita) y por la actualización automática de
-    cada ejecución (fase 23) — la lógica de CÓMO actualizar es una sola; lo
-    que cambia entre las dos es quién la dispara y qué dice al terminar.
-    """
-    peticion = urllib.request.Request(
-        config["url_base"].rstrip("/") + "/cliente/descargar", headers=_cabeceras(config)
-    )
-    with _abrir(peticion, config) as resp:
-        contenido_nuevo = resp.read()
-
-    # No se reemplaza nada sin comprobar antes que es Python válido: una
-    # descarga a medias o un fallo del servidor no debe dejar el script roto
-    # en disco, que es peor que quedarse en la versión vieja.
-    try:
-        compile(contenido_nuevo, "trackbitos.py", "exec")
-    except SyntaxError as e:
-        raise RuntimeError(f"lo descargado no es un trackbitos.py válido, no se toca nada: {e}")
-
-    ruta_actual = Path(__file__).resolve()
-
-    # Nada se pierde (invariante 6, igual que con los .blend): la versión que
-    # tenías se aparta a la papelera antes de escribir la nueva, por si hay
-    # que volver atrás a mano.
-    apartada = a_papelera(ruta_actual)
-    ruta_actual.write_bytes(contenido_nuevo)
-
-    return apartada
-
-
-def cmd_actualizar(args) -> int:
-    """
-    Comprobación y actualización explícitas, a petición. Con la
-    actualización automática (fase 23) esto ya no hace falta para el día a
-    día — cada ejecución se actualiza sola —, pero sigue sirviendo para
-    forzarlo ya mismo (sin esperar al próximo comando) o para ver el error
-    de verdad si la automática viene fallando en silencio.
-    """
-    config = cargar_config()
-
-    remota = api_get(config, "/cliente/version").get("version")
-    if not remota:
-        raise RuntimeError("el servidor no ha devuelto ninguna versión.")
-
-    if _version_tupla(remota) <= _version_tupla(VERSION):
-        print(f"\nYa tienes la última versión (v{VERSION}).\n")
-        return 0
-
-    print(f"\nHay una versión nueva: v{VERSION} → v{remota}. Descargando...")
-    apartada = _aplicar_actualizacion(config, remota)
-
-    print(f"\n  ✓ Actualizado a v{remota}.")
-    print(f"    La versión anterior quedó en {apartada}")
-    print("\n  → Vuelve a ejecutar el comando: los cambios se aplican desde la próxima ejecución.\n")
-    return 0
-
-
-# --------------------------------------------------------------------------
 
 def main(argv: Optional[list] = None) -> int:
     # En Windows, la consola por defecto no suele estar en UTF-8 y print()
@@ -1527,9 +1433,6 @@ def main(argv: Optional[list] = None) -> int:
     p.add_argument("pieza", help="Nombre o parte del nombre de la pieza.")
     p.set_defaults(func=cmd_variantes)
 
-    p = subs.add_parser("actualizar", aliases=["ac"], help="Comprueba si hay una versión nueva del cliente y, si la hay, se reemplaza. (alias: ac)")
-    p.set_defaults(func=cmd_actualizar)
-
     args = parser.parse_args(argv)
 
     # Lo apartado caduca a los 30 días. Se aprovecha cualquier ejecución en
@@ -1542,28 +1445,6 @@ def main(argv: Optional[list] = None) -> int:
     except RuntimeError as e:
         print(f"\n  ⚠ {e}\n", file=sys.stderr)
         resultado = 2
-
-    # Actualización automática (fase 23): antes solo avisaba y exigía
-    # "trackbitos actualizar" a mano; ahora se aplica ella sola. Se dispara
-    # después del comando (nunca antes, para no añadirle latencia a lo que
-    # el usuario vino a hacer de verdad) y en silencio ante cualquier fallo
-    # — un tropiezo actualizándose no debe ensombrecer el resultado del
-    # comando real, que es lo que importaba de esta ejecución. "actualizar"
-    # (o su alias "ac") se salta esto porque ya lo acaba de hacer por su
-    # cuenta, con sus propios mensajes. Se compara la función resuelta, no
-    # args.comando: con alias, args.comando guarda lo que se escribió de
-    # verdad ("ac"), no el nombre canónico, así que comparar contra la
-    # cadena "actualizar" se rompería.
-    if args.func is not cmd_actualizar:
-        try:
-            config_actual = cargar_config()
-            nueva = comprobar_version_remota(config_actual)
-            if nueva:
-                _aplicar_actualizacion(config_actual, nueva)
-                print(f"\n  ✓ trackbitos se actualizó solo: v{VERSION} → v{nueva}. "
-                      "Se aplica desde la próxima ejecución.\n")
-        except Exception:
-            pass
 
     return resultado
 

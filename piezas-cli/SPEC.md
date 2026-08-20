@@ -13,7 +13,7 @@
 | 7 | Papelera y purga de sesiones al validar | ✅ Hecho |
 | 8-13 | Imágenes, STL, SKU/galería/placa, descarga web del `.blend`, «Pieza» + variante `base`, categorías y listado | ✅ Hecho (detalle abajo) |
 | 14 | Papelera de piezas (borrar/restaurar/purgar una familia entera) | ✅ Hecho (detalle abajo) |
-| 15 | Auto-actualización del cliente (`trackbitos actualizar`) | ✅ Hecho (detalle abajo) |
+| 15 | Auto-actualización del cliente (`trackbitos actualizar`) | ⛔ Retirada en la fase 37 |
 | 16 | `catalogo` por categoría, `variantes <pieza>`, `abrir` ya no pisa ficheros | ✅ Hecho (detalle abajo) |
 | 17 | "Compuesta de": qué otras piezas estaban en la escena de una variante | ✅ Hecho (detalle abajo) |
 | 18 | Enlace al original, liberar sitio de una sesión suelta, y `resolver_variante` más preciso | ✅ Hecho (detalle abajo) |
@@ -21,7 +21,7 @@
 | 20 | Invariante 9 (impresión sin juzgar) y `cerrar` sin subir | ✅ Hecho (detalle abajo) |
 | 21 | Varios STL por versión (imprimir a trozos y montar) | ✅ Hecho (detalle abajo) |
 | 22 | `abrir` fusionado en `bajar`: un solo comando para pieza nueva o con historial | ✅ Hecho (detalle abajo) |
-| 23 | El cliente se actualiza solo de verdad, sin pedirlo | ✅ Hecho (detalle abajo) |
+| 23 | El cliente se actualiza solo de verdad, sin pedirlo | ⛔ Retirada en la fase 37 |
 | 24 | Papelera también por variante suelta (no solo la pieza entera) | ✅ Hecho (detalle abajo) |
 | 25 | Directorio vacío ya no confunde con "corrupto", y sesiones activas en el índice | ✅ Hecho (detalle abajo) |
 | 26 | `trackbitos trabajar`/`limpiar`, vocabulario del índice, deshacer un juicio | ✅ Hecho (detalle abajo) |
@@ -35,6 +35,9 @@
 | 34 | .blend en naranja y STL en azul, en dos columnas con texto negro en la ficha | ✅ Hecho (detalle abajo) |
 | 35 | Copia de seguridad descargable (Estadísticas): .blend de referencia + historial en texto | ✅ Hecho (detalle abajo) |
 | 36 | Histórico de placas (tablas nuevas) + filtro "en placa/sin placa" en galería | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
+| 38 | Bitácora de placa: cantidades, pruebas, tiempos, resina, veredicto y conclusiones | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
+| 39 | Miniaturas de 20 px en el listado del índice | ⛔ Retirada el mismo día (ver fase 40) |
+| 40 | Las imágenes se sirven con caché de un año y ETag (antes: ninguna) | ✅ Hecho (detalle abajo) |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -213,6 +216,11 @@ familia entera, no solo a ficheros sueltos).
 copiado a mano en cada máquina (sección 5), así que una mejora en el script no llegaba a las dos
 sin ir a buscarlo. Ahora se avisa solo y se actualiza cuando se le pide, nunca sin pedirlo — el
 principio del módulo es "el sistema se niega y explica", no "el sistema decide por ti".
+
+> **Retirado en la fase 37 (2026-08-20).** Lo que sigue describe cómo funcionaba, no cómo
+> funciona: el cliente ya no consulta ni descarga nada de sí mismo. Se conserva escrito
+> porque explica por qué existen `Api::clienteVersion` y `Api::clienteDescargar`, que siguen
+> en el servidor.
 
 - **Versión**: constante `VERSION` al principio de `trackbitos.py` (semver simple, `"1.0.0"`).
   La "oficial" es la que tiene el propio fichero desplegado en el servidor junto al resto de la
@@ -707,10 +715,12 @@ que lo lanzó, es una limitación del sistema operativo, no un descuido del scri
   script y, si el comando era `trabajar`/`t`, lee ese fichero y hace el `cd` de verdad. De paso
   resuelve la otra mitad del mismo problema: la función expone `trackbitos` como comando desde
   cualquier carpeta, sin tener que escribir la ruta relativa al script cada vez.
-- **Aplicado y probado en el Mac** (no hay copia personal de `trackbitos.py` en esa máquina — se
-  ejecuta directo desde el checkout, de ahí que hiciera falta la función). Snippet de PowerShell
-  para Windows dejado en el TUTORIAL, pendiente de aplicar ahí (falta confirmar la ruta real del
-  script en esa máquina).
+- **Aplicado y probado en las dos máquinas.** Ninguna de las dos tiene copia personal de
+  `trackbitos.py`: las dos lo ejecutan desde el checkout, de ahí que hiciera falta la función
+  (en Windows va en el `$PROFILE` de PowerShell, y hay que ponerla en los dos perfiles —
+  `Documents\PowerShell\` para pwsh 7 y `Documents\WindowsPowerShell\` para el 5.1 clásico —
+  porque cada uno lee el suyo). Hasta el 2026-08-20 Windows ejecutaba una copia suelta en
+  `R:\PIEZAS PLAYMOBIL\`, que obligaba a sincronizar a mano y se retiró.
 
 **Fase 28 (2026-08-19): la galería también admite "para imprimir" y "sin validar", no solo
 validadas.** Esta pantalla es para meter STL en placas, no para juzgar qué está terminado — y
@@ -1469,3 +1479,123 @@ Los `.stl` ya están exportados junto a los `.blend`, así que se pueden subir e
   si molesta; funciona igual como está.
 - **`piezas-cli/__pycache__/`** está versionado en git y aparece como modificado en cada
   ejecución del cliente. Debería ir al `.gitignore`.
+
+**Fase 37 (2026-08-20): fuera la auto-actualización del cliente — de eso ya se encarga git.**
+El CLI se descargaba a sí mismo del servidor cuando allí había una versión mayor (fases 15 y
+23). Tenía sentido mientras cada máquina ejecutaba una copia suelta del script, apartada del
+checkout: era el único canal por el que una mejora hecha en una máquina llegaba a la otra.
+
+- **Qué lo dejó sin sentido.** Las dos máquinas ejecutan ya el `piezas-cli/trackbitos.py` del
+  propio checkout (macOS desde siempre; Windows desde que se retiró la copia de
+  `R:\PIEZAS PLAYMOBIL\`), y los dos checkouts se ponen al día con git. El fichero, por tanto,
+  ya viaja solo: actualizarlo por HTTP era hacer dos veces el mismo trabajo.
+- **Y además mordía.** Al vivir el script dentro del repo, el destino de la descarga pasó a ser
+  la propia fuente: un checkout con una `VERSION` menor que la desplegada (por ejemplo, tocando
+  el CLI en Windows después de haber subido una versión desde el Mac) se veía sobrescrito por
+  la copia del servidor en la siguiente ejecución de cualquier comando. La versión pisada
+  quedaba en la papelera, pero el fichero del repo lo pisaba el servidor: la fuente dejaba de
+  mandar sobre sí misma.
+- **Qué se ha quitado**, todo en `trackbitos.py`: el comando `actualizar`/`ac`, el gancho del
+  final de `main()`, y las tres funciones que lo sostenían (`comprobar_version_remota`,
+  `_aplicar_actualizacion`, `_version_tupla`). 95 líneas menos.
+- **Qué se conserva.** `VERSION` sigue al principio del fichero, ahora solo como etiqueta para
+  saber con qué copia hablas cuando algo va raro; nadie la compara con nada. Y en el servidor
+  siguen en pie `GET /cliente/version` y `GET /cliente/descargar` (`Api::clienteVersion`,
+  `Api::clienteDescargar`): ya no los llama el cliente, pero son la forma de llevar el script a
+  una máquina nueva que todavía no tenga el repo.
+
+**Fase 38 (2026-08-20): la placa deja de ser una lista de STL y pasa a ser el cuaderno de esa
+impresión.** Hasta aquí una placa guardada solo decía qué versiones se bajaron juntas. Lo que
+de verdad hace falta al repetir una tanda no es eso, es lo de alrededor: cuántas copias iban,
+qué se estaba probando, qué exposición llevaba, cuánta resina se fue y qué habría que cambiar.
+Sin eso, cada placa se imprime como si fuera la primera.
+
+- **Guardar al descargar pasa a ser opcional.** El modal de la galería pregunta el nombre y
+  trae marcado "guardar en el histórico"; desmarcándolo se baja el zip sin anotar nada. La
+  galería también se usa para bajar STL sueltos de golpe, y eso no es una placa ni tiene
+  bitácora que llevar. Por GET (el enlace de siempre) se sigue guardando, como antes.
+- **Dos pantallas, no una.** `placa/(:num)/bitacora` se lee y `placa/(:num)/bitacora/editar`
+  se escribe. La bitácora se consulta muchas más veces de las que se toca, y un formulario
+  siempre abierto invita a cambiar sin querer lo que se apuntó en su momento. Se entra desde el
+  botón "Ver bitácora" del modal de la placa.
+- **Qué se guarda de la placa** (`piezas_placas`): `impresa_en` (distinto de cuándo se montó),
+  `exposicion` (texto libre: cada resina lo cuenta a su manera), `resina` (marca/color/lote),
+  `temperatura`, `peso_antes`/`peso_despues` del tanque, `resina_estimada` por el laminador,
+  los tres relojes (`minutos_estimados` del programa, `minutos_previstos` de la máquina,
+  `minutos_reales`), `veredicto` (buena/regular/repetir, null mientras no se juzgue), `notas` y
+  `conclusiones`.
+- **Los tiempos se guardan en minutos**, no como texto: lo interesante es restarlos. La pantalla
+  enseña "3 h — programa: +25 min · máquina: +10 min", y lo mismo con la resina ("54,5 g
+  gastados; el programa decía 48 g (+6,5 g)"). El formulario acepta "2h 35", "2:35" o los
+  minutos sueltos, que es como se leen de la pantalla, y los devuelve en esa misma forma al
+  reeditar.
+- **Qué se guarda de cada pieza** (`piezas_placas_versiones`): `cantidad` (las copias que iban;
+  es anotación, el zip sigue llevando el STL una sola vez) y `notas` (la orientación y los
+  soportes de ESA pieza — lo que es de la placa entera va en la placa).
+- **Las pruebas son tabla propia** (`piezas_placa_pruebas`: pregunta, respuesta, orden) y no un
+  campo de notas, porque tienen dos tiempos: la pregunta se escribe antes de imprimir y la
+  respuesta después, mirando la pieza. En un solo campo, al volver semanas más tarde no se
+  distingue qué se quería averiguar de qué se averiguó. Al guardar se reescriben enteras: la
+  lista es corta y se edita de una vez, así que una fila borrada en el navegador desaparece de
+  verdad. Las filas en blanco no se guardan.
+- **No se guarda la impresora.** Se llegó a implementar y se quitó antes de desplegar: hay una
+  sola, y una columna que siempre dice lo mismo no informa de nada. Si algún día hicieran falta
+  dos, ojo: `piezas_maquinas` NO vale para eso — son los ordenadores entre los que viajan las
+  sesiones del CLI.
+- Verificado contra la base real por HTTP: guardar y releer los tres tiempos, los decimales con
+  coma, el veredicto, los acentos, las filas de prueba vacías descartadas, la ida y vuelta de
+  155 minutos ↔ "2h 35", y que la descarga sin marcar "guardar" baja el zip sin crear placa.
+
+**Fase 39 (2026-08-20): el índice recupera las fotos, pero a tamaño de letra.** Cuando el
+índice pasó de tarjetas a listado (fase 11.1) las fotos se quedaron por el camino, y la
+decisión de entonces fue que se mirasen en la ficha. Con el catálogo ya en 29 piezas, encontrar
+una leyendo nombres cuesta más que reconocerla de un vistazo.
+
+- **20 px, no más**: lo justo para reconocer la pieza sin que la fila crezca ni el listado deje
+  de ser un listado — si la foto pide mirarse, esto vuelve a ser una galería, y ya hay una.
+- **Se reserva el hueco cuando no hay foto**, con un espacio del mismo tamaño: sin eso los
+  nombres de unas filas y otras no quedan alineados y el listado se lee peor que antes.
+- **De dónde sale la foto**: misma cascada que la galería (`miniaturaDe`) — render de la versión
+  que se enseña, render suelto de la variante, y foto del original como último recurso. El
+  método pasó a aceptar `?array $version` porque el índice pregunta también por piezas que aún
+  no tienen ninguna versión, donde antes habría reventado.
+- **La fila de una pieza con varias variantes** enseña la primera foto que encuentre entre sus
+  variantes: representa a la pieza, que es lo que esa fila es.
+- **Coste medido**, no supuesto: +0,1 s sobre 2,5 s con 35 variantes en local (una consulta más
+  por variante, dos si no hay render). Si algún día molesta, la solución es traer los renders
+  de todas las variantes en una sola consulta, no quitar las fotos.
+
+**Fase 40 (2026-08-20): las imágenes se cachean; y el susto que lo destapó.** En producción
+empezaron a fallar imágenes a ratos, con `Unable to connect to the database. Main connection
+[MySQLi]: Operation not permitted`. La primera hipótesis —las miniaturas del índice (fase 39)
+multiplicaban las peticiones— **era falsa**, y lo señaló el propio usuario: la galería lleva
+meses cargando muchas más imágenes sin fallar nunca.
+
+- **La causa real: el servidor estaba en `CI_ENVIRONMENT = development`.** Eso enciende la
+  Debug Toolbar, que **escribe un fichero por petición** en `writable/debugbar`. Medido en
+  local: 26 peticiones = 15 MB, o sea ~575 KB de disco por petición. Como cada imagen es una
+  petición PHP completa, abrir una galería de 30 imágenes escribía ~17 MB en 30 ficheros. En un
+  hosting compartido eso agota el I/O de la cuenta, y la siguiente conexión a MySQL se rechaza.
+  De ahí el fallo intermitente, que además NO era exclusivo del índice.
+- **El diseño tampoco ayudaba, y esa parte sí era culpa nuestra**: `imagenRender()` e
+  `imagenReferencia()` servían el fichero original (1-2 MB para pintar 100 px) y **sin una sola
+  cabecera de caché**, así que el navegador volvía a pedirlas enteras en cada visita — y cada
+  petición cruza el filtro de login, que consulta la tabla de usuarios. Treinta imágenes eran
+  treinta conexiones a la base para pintar una pantalla.
+- **Arreglo**: `servirImagen()` manda `Cache-Control: private, max-age=31536000, immutable` y un
+  `ETag` con el hash de la imagen, y responde `304` sin tocar el disco si el navegador dice que
+  ya la tiene. Una imagen subida no cambia nunca (cambiarla es subir otra, con otro id), así que
+  cachearla para siempre es correcto, no un atajo. `private` porque van detrás del login.
+- **No se usa `download()->inline()`**, aunque sería lo natural: `DownloadResponse::buildHeaders()`
+  llama a `noCache()` justo antes de enviar y machaca el `Cache-Control` — el `max-age` acababa
+  detrás de un `no-store` que lo anula. Verificado leyendo las cabeceras reales con curl: por eso
+  la respuesta se arma a mano.
+- **El Content-Type sale de la extensión**, no de `mime_content_type()`: esa función necesita la
+  extensión `fileinfo` de PHP, que no está en el equipo de desarrollo. La extensión del fichero
+  la puso el módulo al guardar, ya validada contra el mime real en `validarImagen()`.
+- **La fase 39 (miniaturas en el índice) se retiró** a petición del usuario mientras se
+  diagnosticaba. Con la caché ya puesta y el entorno en `production` se pueden recuperar: el
+  coste medido era de +0,1 s, y ahora además solo se pagan una vez por navegador.
+- **Pendiente en el servidor, y no es código**: poner `CI_ENVIRONMENT = production` en el `.env`
+  del Hostinger (en development las trazas de error se enseñan en público, con rutas y código) y
+  vaciar `writable/debugbar`, que puede llevar acumulados miles de ficheros.

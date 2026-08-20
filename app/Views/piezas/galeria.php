@@ -24,9 +24,11 @@
             title="Anota qué llevaba, sin descargar nada — como una lista de la compra, para retomarla más adelante">
             <i class="bi bi-bookmark-plus"></i> Guardar para después
         </button>
-        <a href="<?= site_url('piezas/carrito/descargar') ?>" class="btn btn-sm btn-success">
+        <?php // Descargar deja la placa anotada en el histórico, así que antes de
+              // bajar el zip se pregunta con qué nombre la quieres encontrar luego. ?>
+        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNombrePlaca">
             <i class="bi bi-file-earmark-zip"></i> Descargar placa (<span id="contadorPlaca"><?= count($carrito) ?></span>)
-        </a>
+        </button>
     </div>
 </h5>
 
@@ -215,13 +217,25 @@ foreach ($piezasTodas as $p) {
                                     <?php endif; ?>
                                 </div>
                                 <div class="card-body p-2">
+                                    <?php
+                                        /**
+                                         * La variante va pegada al nombre de la pieza ("Cabeza - calva"),
+                                         * no en un renglón aparte: es un apellido, no un dato suelto —
+                                         * en dos líneas parecía otra cosa distinta. Se calla cuando la
+                                         * variante es la de nacimiento y además es la única, que es
+                                         * cuando no distingue nada ("Lupa - base" no dice más que "Lupa").
+                                         */
+                                        $apellido = ($variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
+                                                || $p['variosVariantes'])
+                                            ? $variante['nombre']
+                                            : null;
+                                    ?>
                                     <div class="small fw-semibold text-truncate">
                                         <a href="<?= site_url('piezas/variante/' . (int) $variante['id']) ?>"
-                                            class="text-decoration-none text-body"><?= esc($p['familiaNombre']) ?></a>
+                                            class="text-decoration-none text-body"><?= esc($p['familiaNombre']) ?><?php
+                                            if ($apellido !== null): ?><span class="text-muted fw-normal"> - <?= esc($apellido) ?></span><?php
+                                            endif; ?></a>
                                     </div>
-                                    <?php if ($p['variosVariantes']): ?>
-                                        <div class="text-muted small text-truncate"><?= esc($variante['nombre']) ?></div>
-                                    <?php endif; ?>
                                     <div class="text-muted small d-flex align-items-center flex-wrap gap-1">
                                         <?php if ($esValidada): ?>
                                             <span class="badge text-bg-success">
@@ -266,8 +280,79 @@ foreach ($piezasTodas as $p) {
     <?php endforeach; ?>
 <?php endif; ?>
 
+<?php // El nombre es opcional a propósito: si lo dejas en blanco se apunta con la
+      // fecha, como hacía antes, y siempre se puede cambiar luego desde Placas. ?>
+<div class="modal fade" id="modalNombrePlaca" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" action="<?= site_url('piezas/carrito/descargar') ?>" class="modal-content" id="formNombrePlaca">
+            <?= csrf_field() ?>
+            <div class="modal-header py-2">
+                <h6 class="modal-title">Descargar los STL</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <?php // Guardar es lo normal (una placa que va a la impresora merece
+                      // su bitácora), pero se puede desmarcar: esta pantalla también
+                      // sirve para bajar STL sueltos de golpe, y eso no es una placa
+                      // ni tiene nada que documentar después. ?>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="guardar" value="1"
+                        id="guardarPlaca" checked>
+                    <label class="form-check-label small" for="guardarPlaca">
+                        Guardar esta placa en el histórico, con su bitácora
+                    </label>
+                </div>
+                <div id="bloqueNombrePlaca">
+                    <label class="form-label small mb-1" for="campoNombrePlaca">Nombre de la placa</label>
+                    <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
+                        id="campoNombrePlaca" autocomplete="off"
+                        placeholder="Placa <?= esc(date('d/m/Y H:i'), 'attr') ?>">
+                    <div class="form-text">
+                        Para reconocerla en el histórico. Si lo dejas vacío se guarda con la fecha.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-success">
+                    <i class="bi bi-file-earmark-zip"></i> Descargar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 (function () {
+    // El zip se baja en la misma pestaña y la página no navega a ningún sitio,
+    // así que el modal se queda abierto encima si no se cierra a mano. Se cierra
+    // al enviar, no antes: cancelar no debe disparar la descarga.
+    var formNombre = document.getElementById('formNombrePlaca');
+    if (formNombre) {
+        formNombre.addEventListener('submit', function () {
+            var modalEl = document.getElementById('modalNombrePlaca');
+            setTimeout(function () {
+                if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }, 400);
+        });
+
+        // El foco en el campo al abrir: si vienes a ponerle nombre, es lo primero
+        // que quieres hacer; y si no, das a Descargar y ya.
+        document.getElementById('modalNombrePlaca').addEventListener('shown.bs.modal', function () {
+            document.getElementById('campoNombrePlaca').focus();
+        });
+
+        // Sin guardar no hay nada que nombrar: el campo se esconde en vez de
+        // quedarse ahí pidiendo un dato que no se va a usar.
+        var guardar = document.getElementById('guardarPlaca');
+        var bloqueNombre = document.getElementById('bloqueNombrePlaca');
+        if (guardar && bloqueNombre) {
+            guardar.addEventListener('change', function () {
+                bloqueNombre.classList.toggle('d-none', !guardar.checked);
+            });
+        }
+    }
+
     // Plegar categorías, igual que en el índice pero con su propia clave de
     // localStorage: son dos pantallas distintas y no tiene por qué coincidir
     // qué categorías tienes plegadas en cada una.

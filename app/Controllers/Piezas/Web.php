@@ -3,11 +3,13 @@
 namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
+use CodeIgniter\HTTP\ResponseInterface;
 use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaComposicionModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaPlacaModel;
+use App\Models\PiezaPlacaPruebaModel;
 use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
@@ -54,6 +56,27 @@ class Web extends BaseController
      */
     private const SESION_CARRITO = 'piezas_carrito';
 
+    /**
+     * Un año y `immutable`: el navegador no vuelve a preguntar por una imagen
+     * que ya tiene. `private` porque estas imágenes van detrás del filtro de
+     * login — puede guardarlas quien las ve, nunca un proxy por el camino.
+     */
+    private const CACHE_IMAGENES = 'private, max-age=31536000, immutable';
+
+    /**
+     * El Content-Type sale de la extensión y no de `mime_content_type()`
+     * porque esa función vive en la extensión `fileinfo`, que no está en todos
+     * los PHP (falta en este equipo). La extensión la puso el propio módulo al
+     * guardar, ya validada contra el mime real en `validarImagen()`, así que
+     * es de fiar: no es lo que dijo el navegador que subía.
+     */
+    private const TIPOS_POR_EXTENSION = [
+        'png'  => 'image/png',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+    ];
+
     /** Mimes aceptados para referencias/renders → extensión con la que se guardan. */
     private const MIMES_IMAGEN = [
         'image/jpeg' => 'jpg',
@@ -80,6 +103,7 @@ class Web extends BaseController
     private PiezaComposicionModel $composicionModel;
     private PiezaPlacaModel $placaModel;
     private PiezaPlacaVersionModel $placaVersionModel;
+    private PiezaPlacaPruebaModel $placaPruebaModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
@@ -98,6 +122,7 @@ class Web extends BaseController
         $this->composicionModel = new PiezaComposicionModel();
         $this->placaModel       = new PiezaPlacaModel();
         $this->placaVersionModel = new PiezaPlacaVersionModel();
+        $this->placaPruebaModel = new PiezaPlacaPruebaModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
@@ -884,7 +909,18 @@ class Web extends BaseController
                 ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
         }
 
-        $this->registrarPlacaDesdeCarrito($carrito);
+        // Guardar en el histórico dejó de ser automático (fase 38): la galería
+        // también sirve para bajar STL sueltos de golpe, sin que eso sea una
+        // placa que vaya a la impresora ni tenga bitácora que llevar. El modal
+        // pregunta las dos cosas —nombre y si se guarda— y solo se anota si el
+        // usuario dijo que sí. Por GET (el enlace de siempre, sin modal) se
+        // guarda: es como se comportaba antes y nadie espera perder el registro.
+        $esPost  = strtoupper($this->request->getMethod()) === 'POST';
+        $guardar = !$esPost || $this->request->getPost('guardar') !== null;
+
+        if ($guardar) {
+            $this->registrarPlacaDesdeCarrito($carrito, $this->request->getPost('nombre'));
+        }
 
         // El fichero tiene que seguir existiendo cuando DownloadResponse lo
         // lea durante send(), que ocurre después de que este método
@@ -929,11 +965,20 @@ class Web extends BaseController
      * histórico sin depender de acordarse de guardar nada, y desde
      * /piezas/placas se puede volver a cargar la misma combinación, bajar el
      * zip más tarde, o borrar la entrada si solo era una prueba. El nombre
-     * es un punto de partida editable, no definitivo.
+     * es un punto de partida editable, no definitivo: si no llega ninguno
+     * (el usuario no lo escribió, o la acción no lo pregunta) se usa la
+     * fecha, que al menos sitúa la tanda en el tiempo.
      */
-    private function registrarPlacaDesdeCarrito(array $carrito): array
+    private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null): array
     {
-        $placaId = $this->placaModel->insert(['nombre' => 'Placa ' . date('d/m/Y H:i')], true);
+        $nombre = trim((string) $nombre);
+        if ($nombre === '') {
+            $nombre = 'Placa ' . date('d/m/Y H:i');
+        }
+        // Mismo tope que la columna y que el formulario de renombrar.
+        $nombre = mb_substr($nombre, 0, 150);
+
+        $placaId = $this->placaModel->insert(['nombre' => $nombre], true);
         if ($placaId) {
             foreach ($carrito as $versionId) {
                 $this->placaVersionModel->insert(['placa_id' => $placaId, 'version_id' => $versionId]);
@@ -1003,25 +1048,10 @@ class Web extends BaseController
 
         $piezas = [];
         foreach ($placas as $placa) {
-            $filas = $this->placaVersionModel->where('placa_id', $placa['id'])->findAll();
-            $lista = [];
-            foreach ($filas as $fila) {
-                $version = $this->versionModel->find($fila['version_id']);
-                if (!$version) {
-                    // La versión se purgó (variante borrada hace 30+ días,
-                    // invariante 6): el FK en cascada ya se llevó esta fila,
-                    // así que este caso no debería darse — pero por si acaso.
-                    continue;
-                }
-                $variante = $this->varianteModel->find($version['variante_id']);
-                $lista[] = [
-                    'version'   => $version,
-                    'variante'  => $variante,
-                    'familia'   => $variante ? $this->familiaModel->find($variante['familia_id']) : null,
-                    'disponible' => $this->servicio->stlsDe((int) $version['id']) !== [],
-                    'miniatura' => $variante ? $this->miniaturaDe($version, $variante) : null,
-                ];
-            }
+            // Una versión purgada (variante borrada hace 30+ días, invariante
+            // 6) se cae sola de la lista: el FK en cascada ya se habrá llevado
+            // su fila, pero piezasDeLaPlaca() lo comprueba igual.
+            $lista = $this->piezasDeLaPlaca((int) $placa['id']);
             $piezas[$placa['id']] = $lista;
         }
 
@@ -1094,6 +1124,192 @@ class Web extends BaseController
         $this->placaModel->delete($id);
 
         return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
+    }
+
+    // ---- Bitácora de una placa (fase 38) ---------------------------------
+
+    /**
+     * Todo lo que se sabe de una impresión, en una pantalla: qué llevaba y
+     * cuántas copias, qué se estaba probando y qué salió, cuánta resina se
+     * fue, y las conclusiones para la siguiente. Se lee aquí y se escribe en
+     * `bitacoraEditar`, en vez de una sola pantalla editable: la bitácora se
+     * consulta muchas más veces de las que se toca, y un formulario permanente
+     * invita a cambiar sin querer lo que se apuntó en su momento.
+     */
+    public function bitacora(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        return view('piezas/bitacora', [
+            'placa'   => $placa,
+            'piezas'  => $this->piezasDeLaPlaca($id),
+            'pruebas' => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+        ]);
+    }
+
+    public function bitacoraEditar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        return view('piezas/bitacora_editar', [
+            'placa'   => $placa,
+            'piezas'  => $this->piezasDeLaPlaca($id),
+            'pruebas' => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+        ]);
+    }
+
+    /**
+     * Guarda la bitácora entera de una vez: los campos de la placa, las
+     * cantidades y notas de cada pieza, y las pruebas. Las pruebas se
+     * reescriben (borrar y volver a insertar) en vez de ir casando ids: la
+     * lista es corta, se edita entera en un formulario, y así una fila
+     * quitada en el navegador desaparece de verdad sin arrastrar el id.
+     */
+    public function bitacoraGuardar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $veredicto = (string) $this->request->getPost('veredicto');
+
+        $datos = [
+            'nombre'       => trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'],
+            'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
+            'exposicion'   => trim((string) $this->request->getPost('exposicion')) ?: null,
+            'peso_antes'   => $this->aPeso($this->request->getPost('peso_antes')),
+            'peso_despues' => $this->aPeso($this->request->getPost('peso_despues')),
+            'notas'        => trim((string) $this->request->getPost('notas')) ?: null,
+            'conclusiones' => trim((string) $this->request->getPost('conclusiones')) ?: null,
+
+            'resina'      => trim((string) $this->request->getPost('resina')) ?: null,
+            'temperatura' => $this->aPeso($this->request->getPost('temperatura')),
+            'veredicto'   => isset(PiezaPlacaModel::VEREDICTOS[$veredicto]) ? $veredicto : null,
+
+            'resina_estimada'   => $this->aPeso($this->request->getPost('resina_estimada')),
+            'minutos_estimados' => $this->aMinutos($this->request->getPost('minutos_estimados')),
+            'minutos_previstos' => $this->aMinutos($this->request->getPost('minutos_previstos')),
+            'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
+        ];
+
+        if (!$this->placaModel->update($id, $datos)) {
+            return redirect()->back()->withInput()
+                ->with('error', implode(' ', $this->placaModel->errors()));
+        }
+
+        // Cantidades y notas por pieza. Se recorre lo que hay en la base, no lo
+        // que llega del formulario: así un id inventado en el POST no puede
+        // tocar la fila de otra placa.
+        $cantidades = (array) $this->request->getPost('cantidad');
+        $notasPieza = (array) $this->request->getPost('nota_pieza');
+        foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $fila) {
+            $filaId = (int) $fila['id'];
+            if (!array_key_exists($filaId, $cantidades) && !array_key_exists($filaId, $notasPieza)) {
+                continue;
+            }
+
+            $this->placaVersionModel->update($filaId, [
+                'cantidad' => max(1, (int) ($cantidades[$filaId] ?? 1)),
+                'notas'    => trim((string) ($notasPieza[$filaId] ?? '')) ?: null,
+            ]);
+        }
+
+        $this->placaPruebaModel->where('placa_id', $id)->delete();
+        $preguntas  = (array) $this->request->getPost('pregunta');
+        $respuestas = (array) $this->request->getPost('respuesta');
+        $orden = 0;
+        foreach ($preguntas as $i => $pregunta) {
+            $pregunta = trim((string) $pregunta);
+            if ($pregunta === '') {
+                continue;   // una fila en blanco es una fila que el usuario dejó sin usar
+            }
+
+            $this->placaPruebaModel->insert([
+                'placa_id'  => $id,
+                'pregunta'  => mb_substr($pregunta, 0, 255),
+                'respuesta' => trim((string) ($respuestas[$i] ?? '')) ?: null,
+                'orden'     => $orden++,
+            ]);
+        }
+
+        return redirect()->to(site_url('piezas/placa/' . $id . '/bitacora'))
+            ->with('success', 'Bitácora guardada.');
+    }
+
+    /**
+     * Un peso tal y como lo teclea una persona: vacío, "1234,56" o "1234.56".
+     * La coma es lo que sale del teclado numérico en español y lo que muestra
+     * la báscula, así que se acepta en vez de exigir punto.
+     */
+    private function aPeso($valor): ?string
+    {
+        $valor = trim((string) $valor);
+        if ($valor === '') {
+            return null;
+        }
+
+        return str_replace(',', '.', $valor);
+    }
+
+    /**
+     * Una duración tal y como se lee de la pantalla del laminador o de la
+     * impresora, a minutos: "2h 35", "2:35", "2h", "155" o "155 min" valen
+     * todos. Se guarda en minutos porque el interés de estos tres campos
+     * (estimado, previsto, real) está en restarlos entre sí, y para eso hay
+     * que poder hacer cuentas — no en volver a enseñar el texto tal cual.
+     */
+    private function aMinutos($valor): ?int
+    {
+        $valor = strtolower(trim((string) $valor));
+        if ($valor === '') {
+            return null;
+        }
+
+        // "2:35" y "2h35" son la misma cosa escrita de dos maneras.
+        if (preg_match('/^(\d+)\s*(?::|h)\s*(\d*)/', $valor, $m)) {
+            return (int) $m[1] * 60 + (int) ($m[2] === '' ? 0 : $m[2]);
+        }
+
+        if (preg_match('/(\d+)/', $valor, $m)) {
+            return (int) $m[1];   // un número suelto son minutos
+        }
+
+        return null;
+    }
+
+    /**
+     * Las piezas de una placa ya resueltas (familia, variante, versión, si el
+     * STL sigue estando, miniatura), compartido por el histórico y por las dos
+     * pantallas de la bitácora.
+     */
+    private function piezasDeLaPlaca(int $placaId): array
+    {
+        $lista = [];
+        foreach ($this->placaVersionModel->where('placa_id', $placaId)->orderBy('id')->findAll() as $fila) {
+            $version = $this->versionModel->find($fila['version_id']);
+            if (!$version) {
+                continue;
+            }
+
+            $variante = $this->varianteModel->find($version['variante_id']);
+            $lista[] = [
+                'fila'       => $fila,
+                'version'    => $version,
+                'variante'   => $variante,
+                'familia'    => $variante ? $this->familiaModel->find($variante['familia_id']) : null,
+                'disponible' => $this->servicio->stlsDe((int) $version['id']) !== [],
+                'miniatura'  => $variante ? $this->miniaturaDe($version, $variante) : null,
+            ];
+        }
+
+        return $lista;
     }
 
     /**
@@ -1801,10 +2017,10 @@ class Web extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
-        // setMime=true para que el Content-Type salga del tipo real de la
-        // imagen, e inline() para que el navegador la pinte en el <img> en
-        // vez de ofrecer descargarla.
-        return $this->response->download($this->almacen->absoluta($referencia['ruta_imagen']), null, true)->inline();
+        return $this->servirImagen(
+            $this->almacen->absoluta($referencia['ruta_imagen']),
+            $referencia['hash_imagen']
+        );
     }
 
     public function imagenRender(int $id)
@@ -1814,7 +2030,45 @@ class Web extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
-        return $this->response->download($this->almacen->absoluta($render['ruta_imagen']), null, true)->inline();
+        return $this->servirImagen(
+            $this->almacen->absoluta($render['ruta_imagen']),
+            $render['hash_imagen']
+        );
+    }
+
+    /**
+     * Sirve una imagen del almacén con caché de verdad.
+     *
+     * Una imagen ya subida no cambia nunca: el mismo id devuelve siempre el
+     * mismo fichero (cambiarla es subir otra, con otro id). Así que se puede
+     * cachear para siempre — y esto no es un detalle de rendimiento, es lo que
+     * evita que una galería de treinta piezas dispare treinta peticiones a
+     * PHP, con su sesión y su conexión a la base, cada vez que se abre.
+     *
+     * NO se usa `$response->download()->inline()` aunque sería lo natural:
+     * `DownloadResponse` llama a `noCache()` al construir sus cabeceras, justo
+     * antes de enviarlas, y machaca cualquier `Cache-Control` que se le ponga
+     * — el `max-age` acababa detrás de un `no-store` que lo anula. Por eso se
+     * arma la respuesta a mano.
+     */
+    private function servirImagen(string $rutaAbsoluta, ?string $hash): ResponseInterface
+    {
+        $etag = $hash ? '"' . $hash . '"' : null;
+
+        // Ya la tiene: 304 y ni se lee el fichero del disco ni viaja por la red.
+        if ($etag !== null && trim((string) $this->request->getHeaderLine('If-None-Match'), '"') === $hash) {
+            return $this->response->setStatusCode(304)
+                ->setHeader('Cache-Control', self::CACHE_IMAGENES)
+                ->setHeader('ETag', $etag);
+        }
+
+        $respuesta = $this->response
+            ->setHeader('Content-Type', self::TIPOS_POR_EXTENSION[strtolower(pathinfo($rutaAbsoluta, PATHINFO_EXTENSION))]
+                ?? 'application/octet-stream')
+            ->setHeader('Cache-Control', self::CACHE_IMAGENES)
+            ->setBody(file_get_contents($rutaAbsoluta));
+
+        return $etag !== null ? $respuesta->setHeader('ETag', $etag) : $respuesta;
     }
 
     /**

@@ -3,14 +3,29 @@
 
 <head>
     <meta charset="UTF-8">
-    <title><?= esc($title ?? 'LOCAL Trackbitos') ?></title>
+    <?php // "LOCAL" delante solo en desarrollo: es para distinguir de un vistazo la
+          // pestaña de la copia local de la de eluve.es, que se abren a la vez. En
+          // producción el título va limpio. ?>
+    <title><?= esc($title ?? (ENVIRONMENT === 'production' ? 'Trackbitos' : 'LOCAL Trackbitos')) ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Style css -->
-    <link href="<?= base_url('assets/css/style.css') ?>" rel="stylesheet">
+    <?php
+        /**
+         * El ?v= es la fecha del propio fichero, no un número a mano: el
+         * Hostinger sirve los assets con Cache-Control de una semana, así que
+         * sin esto el navegador se queda con la versión vieja durante días
+         * después de subir un cambio de estilos — y la pantalla parece rota
+         * sin que el código tenga nada malo (pasó con el botón de fotos de
+         * piezas/placas). Al cambiar el fichero cambia la URL y se baja solo.
+         */
+        $cssRuta = FCPATH . 'assets/css/style.css';
+        $cssVer  = is_file($cssRuta) ? filemtime($cssRuta) : null;
+    ?>
+    <link href="<?= base_url('assets/css/style.css') . ($cssVer ? '?v=' . $cssVer : '') ?>" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
 </head>
 

@@ -98,20 +98,6 @@
     color: #dc6803;
 }
 
-/* Placas (piezas/placas.php): una tarjeta plegada comparte el ancho de
-   row-cols-* con sus hermanas; al desplegarla necesita ocupar la fila
-   entera para que la lista de piezas no quede apretada. !important porque
-   la regla de row-cols-* también actúa sobre "> *" con la misma
-   especificidad — sin esto, cuál gana depende del orden en el CSS de
-   Bootstrap, no es fiable. */
-.placa-desplegada {
-    flex: 0 0 100% !important;
-    max-width: 100% !important;
-}
-
-/* Botón "Ocultar fotos" en piezas/placas.php: la clase va en <body>
-   (JS, sin depender de un contenedor concreto) y esconde tanto el mosaico
-   de portada de cada tarjeta como las miniaturas de la lista desplegada. */
-.ocultar-fotos-placas [data-foto-placa] {
-    display: none !important;
-}
+/* Las reglas de "ocultar fotos" de piezas/placas.php ya no viven aquí: van
+   embebidas en la propia vista, porque esta hoja se sirve con una semana de
+   caché y los cambios tardaban días en llegar al navegador. */

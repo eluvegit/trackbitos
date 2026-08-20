@@ -5,8 +5,12 @@ namespace App\Models;
 use CodeIgniter\Model;
 
 /**
- * Una placa descargada: fecha y nombre (autogenerado, editable). El
- * contenido real —qué versiones llevaba— vive en PiezaPlacaVersionModel.
+ * Una placa descargada: fecha, nombre (autogenerado, editable) y la
+ * bitácora de esa impresión (fase 38) — cuándo se imprimió de verdad, la
+ * exposición, el peso de resina antes y después, y las notas y conclusiones
+ * para la próxima. El contenido real —qué versiones llevaba y cuántas copias
+ * de cada una— vive en PiezaPlacaVersionModel; las pruebas, en
+ * PiezaPlacaPruebaModel.
  */
 class PiezaPlacaModel extends Model
 {
@@ -17,9 +21,35 @@ class PiezaPlacaModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['nombre'];
+    /**
+     * Cómo salió la placa, en una palabra. Mismo espíritu que el veredicto de
+     * una versión (impresa → validada/descartada): mientras no se juzga es
+     * null, no "regular" — no haber mirado todavía no es una nota media.
+     */
+    public const VEREDICTOS = [
+        'buena'   => 'Salió bien',
+        'regular' => 'Regular, aprovechable',
+        'repetir' => 'Hay que repetirla',
+    ];
+
+    protected $allowedFields = [
+        'nombre', 'impresa_en', 'exposicion', 'peso_antes', 'peso_despues',
+        'notas', 'conclusiones',
+        'resina', 'temperatura', 'veredicto',
+        'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'resina_estimada',
+    ];
 
     protected $validationRules = [
         'nombre' => 'required|max_length[150]',
+        // La bitácora se rellena a trozos y a destiempo, así que todo lo suyo
+        // es opcional; solo se comprueba que lo que llegue quepa y sea un peso
+        // creíble (permit_empty deja pasar el campo en blanco).
+        'exposicion'   => 'permit_empty|max_length[255]',
+        'peso_antes'   => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[1000000]',
+        'peso_despues' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[1000000]',
+        'resina_estimada' => 'permit_empty|decimal|greater_than_equal_to[0]|less_than[1000000]',
+        'resina'       => 'permit_empty|max_length[120]',
+        'temperatura'  => 'permit_empty|decimal|greater_than_equal_to[-50]|less_than[200]',
+        'veredicto'    => 'permit_empty|in_list[buena,regular,repetir]',
     ];
 }

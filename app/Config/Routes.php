@@ -711,7 +711,11 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
+    // Por POST desde el modal que pregunta el nombre de la placa; el GET se
+    // mantiene para el enlace directo de siempre (sin nombre: se apunta con
+    // la fecha).
     $routes->GET('carrito/descargar', 'Web::carritoDescargar');
+    $routes->POST('carrito/descargar', 'Web::carritoDescargar');
     $routes->POST('carrito/guardar', 'Web::carritoGuardarPlaca');
 
     // Histórico de placas (fase 36): cada descarga queda anotada sola, con
@@ -722,6 +726,15 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('placa/(:num)/cargar', 'Web::placaCargar/$1');
     $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
     $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
+
+    // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
+    // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
+    // Ver y editar en pantallas distintas: se consulta mucho más de lo que se
+    // toca. La ruta de edición va antes que la de lectura por el orden de
+    // declaración de siempre (la más específica primero).
+    $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
+    $routes->GET('placa/(:num)/bitacora', 'Web::bitacora/$1');
+    $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
