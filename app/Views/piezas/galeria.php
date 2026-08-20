@@ -83,6 +83,13 @@ foreach ($piezasTodas as $p) {
 <?php if ($total === 0): ?>
     <p class="text-muted">Todavía no hay ninguna versión validada, ni ninguna "para imprimir". En cuanto promociones o valides una aparecerá aquí.</p>
 <?php else: ?>
+    <?php // Fuera del panel plegable, igual que en el índice: buscar el nombre de
+          // una pieza es lo primero que se hace al entrar con treinta delante, y no
+          // puede costar antes un clic en "Filtros". Los tres facetados sí siguen
+          // dentro: esos son la consulta puntual. ?>
+    <input type="search" id="buscadorGaleria" class="form-control form-control-sm mb-2"
+        placeholder="Buscar por nombre o SKU..." autocomplete="off">
+
     <?php // Plegados por defecto, mismo criterio que el índice: consulta puntual,
           // no algo que se mira cada vez que se entra. Se recuerda si se han
           // dejado abiertos. ?>
@@ -189,9 +196,17 @@ foreach ($piezasTodas as $p) {
                             $enCarrito = in_array((int) $version['id'], $carrito, true);
                             $stls      = (int) ($p['stls'] ?? 0);
                             $tieneStl  = $stls > 0;
+                            // Lo mismo que busca el índice y en el mismo formato (en
+                            // minúsculas, ya montado desde PHP): quien escribe "copa" aquí
+                            // espera encontrar lo mismo que allí, y el SKU cuenta porque es
+                            // como se nombran las piezas al hablar de imprimirlas.
+                            $buscable = mb_strtolower(trim(
+                                $p['familiaNombre'] . ' ' . $variante['nombre'] . ' ' . ($variante['sku'] ?? '')
+                            ));
                         ?>
                         <div class="col" data-tarjeta data-estado="<?= esc($version['estado'], 'attr') ?>"
                             data-stl="<?= $tieneStl ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito ? 'en' : 'fuera' ?>"
+                            data-buscar="<?= esc($buscable, 'attr') ?>"
                             data-version-tarjeta="<?= (int) $version['id'] ?>">
                             <div class="card shadow-sm h-100">
                                 <div class="position-relative">
@@ -209,7 +224,7 @@ foreach ($piezasTodas as $p) {
                                     <?php if ($p['miniatura']): ?>
                                         <?php // Ojo aparte del enlace a la ficha (que va en la imagen entera): abre la
                                               // foto suelta en una pestaña nueva para verla en grande, sin navegar. ?>
-                                        <a href="<?= $p['miniatura'] ?>" target="_blank" rel="noopener"
+                                        <a href="<?= $p['foto'] ?>" target="_blank" rel="noopener"
                                             class="btn btn-sm btn-dark position-absolute top-0 end-0 m-1 py-0 px-1 opacity-75"
                                             style="font-size: .75rem; line-height: 1.4;" title="Ver foto en grande">
                                             <i class="bi bi-eye"></i>
@@ -428,16 +443,22 @@ foreach ($piezasTodas as $p) {
     var cajaStl = document.getElementById('filtrosStlGaleria');
     var cajaPlaca = document.getElementById('filtrosPlacaGaleria');
     var sinResultados = document.getElementById('sinResultadosGaleria');
+    var buscador = document.getElementById('buscadorGaleria');
     var filtroEstado = '';
     var filtroStl = '';
     var filtroPlaca = '';
 
     function aplicarFiltrosGaleria() {
-        var recortando = filtroEstado !== '' || filtroStl !== '' || filtroPlaca !== '';
+        // El texto entra en la misma pasada que los tres facetados, no en una
+        // suya aparte: dos recorridos independientes se pisarían el uno al
+        // otro (el segundo volvería a enseñar lo que el primero escondió).
+        var q = buscador ? buscador.value.trim().toLowerCase() : '';
+        var recortando = q !== '' || filtroEstado !== '' || filtroStl !== '' || filtroPlaca !== '';
         var encontradas = 0;
 
         document.querySelectorAll('[data-tarjeta]').forEach(function (tarjeta) {
-            var visible = (filtroEstado === '' || tarjeta.getAttribute('data-estado') === filtroEstado)
+            var visible = (q === '' || (tarjeta.getAttribute('data-buscar') || '').indexOf(q) !== -1)
+                && (filtroEstado === '' || tarjeta.getAttribute('data-estado') === filtroEstado)
                 && (filtroStl === '' || tarjeta.getAttribute('data-stl') === filtroStl)
                 && (filtroPlaca === '' || tarjeta.getAttribute('data-placa') === filtroPlaca);
             tarjeta.classList.toggle('d-none', !visible);
@@ -493,6 +514,8 @@ foreach ($piezasTodas as $p) {
         function () { return filtroStl; }, function (v) { filtroStl = v; });
     engancharFacet(cajaPlaca, 'data-filtro-placa',
         function () { return filtroPlaca; }, function (v) { filtroPlaca = v; });
+
+    if (buscador) buscador.addEventListener('input', aplicarFiltrosGaleria);
 
     // ---- Placa: añadir/quitar/vaciar sin recargar la página --------------
     // Con <form> normal, cada "Añadir a la placa" recargaba y se perdía el

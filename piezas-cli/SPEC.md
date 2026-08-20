@@ -1400,6 +1400,44 @@ papelera/20260816-154424-variante-3-rama-5-sesion-41.blend   ← apartado al val
 La versión se lleva **su propia copia** aunque el contenido sea idéntico al de la sesión que promocionó. Si apuntase al fichero de la sesión, la purga de la fase 7 se llevaría por delante justo el fichero que nunca debe perderse.
 
 - Incluir el directorio de subidas en el backup existente a Backblaze B2.
+
+### Las imágenes se miran desde `public/`, no desde el controlador
+
+Excepción deliberada a la regla de arriba, y la única. El original de un render
+o de una referencia sigue donde dice esta sección, bajo `writable/piezas/`; lo
+que se pinta en las galerías son **copias reducidas publicadas en
+`public/piezas-img/`** (`PiezaImagenesPublicas`), que sirve Apache como
+ficheros estáticos.
+
+El motivo está medido, no supuesto: una imagen dentro de `writable/` solo
+puede llegar al navegador atravesando un controlador, y eso convierte cada
+`<img>` de una cuadrícula en un arranque entero de CodeIgniter —framework,
+sesión, Myth\Auth y consulta a la base— para acabar volcando un fichero. 4 ms
+tarda Apache en servir un estático; 230 ms el mismo fichero por controlador.
+Multiplicado por las miniaturas que hay en pantalla, esa diferencia dejaba
+imágenes a medio cargar, y distintas en cada recarga.
+
+- Dos medidas por imagen: `<sha256>-t.webp` (400 px, la cuadrícula) y
+  `<sha256>-v.webp` (1600 px, abrir en grande). WebP para conservar el canal
+  alfa: un render de Blender viene con el fondo transparente.
+- El nombre es el `hash_imagen` que ya se guardaba. Da una URL que no se
+  adivina —toda la protección que tienen, y para lo que son basta—, cambia
+  solo si cambia la imagen, y por eso pueden servirse con `immutable`.
+- Son **desechables**: se pueden borrar todas y rehacerlas con
+  `php spark piezas:publicar-imagenes`. No entran en git ni hacen falta en el
+  backup.
+- Mientras no estén, `imagen_pieza()` cae al controlador de siempre: desplegar
+  antes de publicarlas no rompe nada, solo va lento.
+- `piezas:purgar` barre al final las copias que ya no respalda ningún
+  registro (apartar una pieza entera no pasa por `borrarRender`).
+- Por eso mismo el render **ya no se recomprime al subirlo**: se guarda tal
+  cual, como la referencia. Se aplastaba a un JPEG de 1024 px y 300 KB con la
+  transparencia rellenada de blanco porque era ese fichero el que se pintaba;
+  ahora quien se pinta es la miniatura.
+- `public/piezas-img` y no `public/piezas`: el `.htaccess` manda al front
+  controller solo lo que no existe en disco, así que una carpeta llamada
+  `piezas` secuestraría la sección entera.
+
 - **Fuera de este sistema todavía**: ficheros `.ctb` de placas laminadas. Las fotos de referencia y las imágenes de render sí se guardan aquí desde la fase 8 (decisión revisada: el coste de una foto de móvil es bajo y merece la pena tenerlas a mano en la ficha).
 
 ---

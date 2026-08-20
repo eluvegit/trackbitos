@@ -2,7 +2,10 @@
 
 namespace App\Commands;
 
+use App\Models\PiezaReferenciaModel;
+use App\Models\PiezaRenderModel;
 use App\Services\PiezaAlmacen;
+use App\Services\PiezaImagenesPublicas;
 use App\Services\PiezaService;
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
@@ -64,13 +67,34 @@ class PiezasPurgar extends BaseCommand
 
         if (!$borrados) {
             CLI::write("Ficheros: nada que purgar (la papelera no tiene ficheros de más de {$dias} días).", 'green');
-
-            return;
+        } else {
+            CLI::write(sprintf('Ficheros purgados (%d) con más de %d días en la papelera:', count($borrados), $dias), 'yellow');
+            foreach ($borrados as $fichero) {
+                CLI::write('  ' . $fichero);
+            }
         }
 
-        CLI::write(sprintf('Ficheros purgados (%d) con más de %d días en la papelera:', count($borrados), $dias), 'yellow');
-        foreach ($borrados as $fichero) {
-            CLI::write('  ' . $fichero);
-        }
+        $this->barrerImagenesPublicas();
+    }
+
+    /**
+     * Las copias públicas (`public/piezas-img`) que ya no respalda ningún
+     * registro. Va al final y no dentro de cada purga porque una imagen
+     * puede quedarse huérfana por varios caminos —purgar la pieza entera,
+     * la variante, o que alguien vacíe la papelera a mano— y comparar con
+     * lo que hay vivo en la base los cubre todos de una vez.
+     */
+    private function barrerImagenesPublicas(): void
+    {
+        $hashes = array_merge(
+            array_column((new PiezaRenderModel())->select('hash_imagen')->findAll(), 'hash_imagen'),
+            array_column((new PiezaReferenciaModel())->select('hash_imagen')->findAll(), 'hash_imagen')
+        );
+
+        $retiradas = (new PiezaImagenesPublicas())->retirarHuerfanas(array_filter($hashes));
+
+        CLI::write($retiradas
+            ? sprintf('Copias públicas retiradas (%d): ya no las respaldaba ningún render ni referencia.', $retiradas)
+            : 'Copias públicas: ninguna huérfana.', $retiradas ? 'yellow' : 'green');
     }
 }

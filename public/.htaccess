@@ -2,6 +2,33 @@
 Options -Indexes
 
 # ----------------------------------------------------------------------
+# Imágenes de Piezas: sin comprimir
+# ----------------------------------------------------------------------
+# Un PNG o un JPEG ya vienen comprimidos: pasarlos otra vez por gzip gasta
+# CPU para no ahorrar nada. Y al comprimir, mod_deflate le pega "-gzip" al
+# ETag y quita el Content-Length, que es justo lo que hace falta para que la
+# caché del navegador funcione y no se vuelva a pedir la galería entera.
+<IfModule mod_setenvif.c>
+	SetEnvIfNoCase Request_URI "/piezas/(render|referencia)/[0-9]+/imagen$" no-gzip dont-vary
+	# Sin anclar al principio: la app puede estar colgando de un
+	# subdirectorio (/trackbitos/public/...), y con "^" la regla no casaría.
+	SetEnvIfNoCase Request_URI "piezas-img/" no-gzip dont-vary
+</IfModule>
+
+# ----------------------------------------------------------------------
+# piezas-img: copias públicas, cacheadas para siempre
+# ----------------------------------------------------------------------
+# El nombre de cada fichero es el sha256 de la imagen, así que un fichero
+# concreto no puede cambiar nunca de contenido: si la imagen cambia, cambia
+# el nombre. Eso es exactamente lo que autoriza a decir "immutable" y que el
+# navegador no vuelva a preguntar por ella en un año.
+<IfModule mod_headers.c>
+	<FilesMatch "^[0-9a-f]{64}-[tv]\.webp$">
+		Header set Cache-Control "public, max-age=31536000, immutable"
+	</FilesMatch>
+</IfModule>
+
+# ----------------------------------------------------------------------
 # Rewrite engine
 # ----------------------------------------------------------------------
 

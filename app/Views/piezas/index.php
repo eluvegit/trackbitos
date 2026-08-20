@@ -272,6 +272,26 @@ $colSku = static function (array $v): string {
         : '<span class="badge border text-body-secondary font-monospace fw-normal">' . esc($v['sku']) . '</span>';
 };
 
+/**
+ * La foto de la fila, o un hueco de la misma medida cuando la pieza aún no
+ * tiene ninguna: así las filas no cambian de alto según haya foto o no, que
+ * en una tabla de treinta líneas se nota más que la propia foto.
+ *
+ * `contain` y no `cover` como en la galería: ahí el recorte cuadra una
+ * cuadrícula de tarjetas grandes, pero a 34 px recortar una pieza por los
+ * lados la deja irreconocible, que es justo lo contrario de para lo que
+ * está puesta.
+ */
+$colFoto = static function (array $v): string {
+    if (empty($v['miniatura'])) {
+        return '<span class="d-inline-flex align-items-center justify-content-center rounded border text-body-tertiary"'
+            . ' style="width: 34px; height: 34px;"><i class="bi bi-box" style="font-size: .8rem;"></i></span>';
+    }
+
+    return '<img src="' . esc($v['miniatura'], 'attr') . '" alt="" loading="lazy" class="rounded border"'
+        . ' style="width: 34px; height: 34px; object-fit: contain;">';
+};
+
 /** Todo lo que debe encontrar el buscador de una pieza: su nombre y el de sus variantes con sus SKU. */
 $textoBuscable = static function (array $familia): string {
     $partes = [$familia['nombre']];
@@ -458,7 +478,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="6" class="py-1 bg-body-secondary">
+                <td colspan="7" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -499,12 +519,16 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="6" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="7" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php foreach ($grupo['piezas'] as $familia): ?>
                 <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
                 <tr data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
+                    <?php // Misma regla que el resto de columnas: la fila de la pieza solo
+                          // habla de una variante cuando hay una sola. Con varias, cada una
+                          // trae su foto en su propia subfila. ?>
+                    <td style="width: 34px;"><?= count($variantes) === 1 ? $colFoto($variantes[0]) : '' ?></td>
                     <td>
                         <?php if (count($variantes) === 1): ?>
                             <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
@@ -554,6 +578,7 @@ foreach ($grupos as $grupo) {
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
                         <tr data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
+                            <td style="width: 34px;"><?= $colFoto($v) ?></td>
                             <td class="ps-4">
                                 <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
                                     class="text-decoration-none text-body">↳ <?= esc($v['nombre']) ?></a>

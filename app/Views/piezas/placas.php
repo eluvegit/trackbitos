@@ -12,9 +12,10 @@
 
 <p class="text-muted small">
     Cada vez que descargas o guardas una placa desde la galería queda anotada aquí sola, con fecha
-    y qué piezas llevaba. Desde aquí puedes volver a descargarla, cargarla de nuevo en la placa
-    actual para reimprimir la misma combinación, ponerle un nombre que la reconozcas, o borrar la
-    entrada si solo era una prueba — no borra ningún STL ni versión, solo esta anotación.
+    y qué piezas llevaba. Pulsa una para abrir su bitácora y anotar cómo salió sin salir de esta
+    pantalla: cuánto tardó, qué pesaba el tanque, qué querías probar y qué aprendiste. Desde el
+    mismo sitio puedes volver a descargarla, cargarla otra vez en la placa actual para reimprimir
+    la misma combinación, o borrar la entrada — no borra ningún STL ni versión, solo la anotación.
 </p>
 
 <?php /**
@@ -28,6 +29,15 @@
     .ocultar-fotos-lista [data-foto-placa="lista"] {
         display: none !important;
     }
+
+    /* El veredicto, como una pestaña de color en el lomo del archivador: lo
+       que permite repasar el histórico sin abrir placa por placa. */
+    .lomo-placa {
+        border-left: 4px solid transparent;
+    }
+    .lomo-buena   { border-left-color: var(--bs-success); }
+    .lomo-regular { border-left-color: var(--bs-warning); }
+    .lomo-repetir { border-left-color: var(--bs-danger); }
 </style>
 
 <?php // Dos interruptores, no uno: en las tarjetas la foto es para reconocer la placa
@@ -57,13 +67,14 @@
 <?php else: ?>
     <?php // Tarjetas de 4 de ancho en pantalla normal — menos que la galería (6) a
           // propósito: aquí cada tarjeta lleva nombre, fecha y contadores, y a 6 el
-          // nombre se truncaba casi siempre. Al pulsar se despliegan a todo el ancho
-          // con la lista completa y las acciones — así se puede escanear el histórico
-          // entero de un vistazo sin que cada placa ocupe una fila propia. ?>
+          // nombre se truncaba casi siempre. Al pulsar se abre el cuaderno de esa
+          // placa en un modal — así se puede escanear el histórico entero de un
+          // vistazo y anotar en cualquiera sin cambiar de pantalla. ?>
     <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-2">
         <?php foreach ($placas as $placa): ?>
             <?php
                 $lista = $piezas[$placa['id']] ?? [];
+                $resumen = $resumenes[$placa['id']] ?? ['anotada' => false, 'sinResponder' => 0, 'enlaces' => 0, 'veredicto' => null];
                 $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
                 $idPlaca = (int) $placa['id'];
                 $idDetalle = 'detalle-placa-' . $idPlaca;
@@ -73,9 +84,10 @@
                 // Hasta 4 miniaturas en fila; el detalle se ve en el modal.
                 $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
             ?>
-            <div class="col" data-tarjeta-placa>
-                <div class="card shadow-sm h-100 user-select-none" style="cursor: pointer"
-                    data-abrir-placa="<?= $idDetalle ?>" title="Ver el contenido de la placa">
+            <div class="col" data-tarjeta-placa="<?= $idPlaca ?>">
+                <div class="card shadow-sm h-100 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
+                    style="cursor: pointer" data-abrir-placa="<?= $idDetalle ?>" data-placa="<?= $idPlaca ?>"
+                    title="Abrir la bitácora de esta placa">
                     <?php if ($fotos): ?>
                         <div class="d-flex" data-foto-placa="tarjeta"
                             style="gap: 2px; height: 72px; overflow: hidden; background: rgba(127,127,127,.15);">
@@ -86,9 +98,8 @@
                         </div>
                     <?php endif; ?>
                     <div class="card-body p-2">
-                        <div class="small fw-semibold text-truncate" title="<?= esc($placa['nombre'], 'attr') ?>">
-                            <?= esc($placa['nombre']) ?>
-                        </div>
+                        <div class="small fw-semibold text-truncate" data-nombre-tarjeta
+                            title="<?= esc($placa['nombre'], 'attr') ?>"><?= esc($placa['nombre']) ?></div>
                         <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
                             <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
                             <span class="ms-auto"><?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?></span>
@@ -97,65 +108,54 @@
                                     title="Algún STL de esta placa ya no está disponible"></i>
                             <?php endif; ?>
                         </div>
-                    </div>
 
-                    <?php // Se renderiza aquí dentro, oculto, y el JS lo mueve al modal al
-                          // abrirlo: así los formularios (con su CSRF) son los mismos de
-                          // siempre, sin duplicar un modal por placa en el HTML. ?>
-                    <div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>">
-                        <?php // Dos bloques con destino distinto dentro del modal: lo que se lee
-                              // (fecha, nombre, listado) va al cuerpo y los botones al pie, que es
-                              // donde se espera encontrarlos. El JS los reparte al abrir. ?>
-                        <div data-cuerpo-placa>
-                            <div class="text-muted small mb-2"><?= esc($placa['creado_en']) ?></div>
-
-                            <form method="post" class="d-flex gap-1 mb-2"
-                                action="<?= site_url('piezas/placa/' . $idPlaca . '/renombrar') ?>">
-                                <?= csrf_field() ?>
-                                <input type="text" name="nombre" class="form-control form-control-sm"
-                                    value="<?= esc($placa['nombre'], 'attr') ?>" maxlength="150" required>
-                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0">Renombrar</button>
-                            </form>
-
-                            <?php if (empty($lista)): ?>
-                                <p class="text-muted small mb-0">Ninguna de esas versiones existe ya.</p>
+                        <?php // Segunda línea: en qué punto está el cuaderno. Lo que
+                              // se busca aquí es qué queda por cerrar —una placa sin
+                              // juzgar, o con preguntas escritas antes de imprimir a
+                              // las que nadie volvió— sin tener que abrirlas una a una. ?>
+                        <div class="d-flex align-items-center gap-1 flex-wrap mt-1" style="font-size: .7rem;"
+                            data-estado-tarjeta>
+                            <?php
+                                $veredictos = \App\Models\PiezaPlacaModel::VEREDICTOS;
+                                $colorVeredicto = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
+                            ?>
+                            <?php if ($resumen['veredicto'] && isset($veredictos[$resumen['veredicto']])): ?>
+                                <span class="badge text-bg-<?= $colorVeredicto[$resumen['veredicto']] ?? 'secondary' ?>">
+                                    <?= esc($veredictos[$resumen['veredicto']]) ?>
+                                </span>
+                            <?php elseif (!$resumen['anotada']): ?>
+                                <span class="badge bg-body-secondary text-body-secondary border">sin anotar</span>
                             <?php else: ?>
-                                <?php // Listado plano y en letra pequeña: aquí se viene a leer qué
-                                      // llevaba la placa, no a mirar fotos — la miniatura es solo
-                                      // para reconocer la pieza de reojo. ?>
-                                <ul class="list-unstyled mb-0" style="font-size: .8rem;">
-                                    <?php foreach ($lista as $p): ?>
-                                        <li class="d-flex align-items-center gap-2 py-1 border-bottom border-secondary-subtle">
-                                            <?php if ($p['miniatura']): ?>
-                                                <img src="<?= $p['miniatura'] ?>" loading="lazy" alt="" data-foto-placa="lista"
-                                                    class="rounded border flex-shrink-0" style="width: 26px; height: 26px; object-fit: cover;">
-                                            <?php endif; ?>
-                                            <?php if ($p['variante'] && $p['familia']): ?>
-                                                <a href="<?= site_url('piezas/variante/' . (int) $p['variante']['id']) ?>"
-                                                    class="text-decoration-none text-body flex-grow-1 text-truncate">
-                                                    <?= esc($p['familia']['nombre']) ?> / <?= esc($p['variante']['nombre']) ?>
-                                                    <span class="text-muted">· v<?= sprintf('%03d', (int) $p['version']['numero']) ?></span>
-                                                </a>
-                                            <?php else: ?>
-                                                <span class="text-muted flex-grow-1">(esa pieza ya no existe)</span>
-                                            <?php endif; ?>
-                                            <?php if (!$p['disponible']): ?>
-                                                <span class="text-warning flex-shrink-0" title="El STL ya no está en el almacén">
-                                                    <i class="bi bi-exclamation-triangle"></i> sin STL ya
-                                                </span>
-                                            <?php endif; ?>
-                                        </li>
-                                    <?php endforeach; ?>
-                                </ul>
+                                <span class="badge bg-body-secondary text-body-secondary border">sin juzgar</span>
+                            <?php endif; ?>
+
+                            <?php if ($resumen['sinResponder'] > 0): ?>
+                                <span class="badge bg-body-secondary text-warning-emphasis border"
+                                    title="Preguntas que escribiste antes de imprimir y siguen sin respuesta">
+                                    <i class="bi bi-question-circle"></i> <?= (int) $resumen['sinResponder'] ?> sin responder
+                                </span>
+                            <?php endif; ?>
+
+                            <?php if ($resumen['enlaces'] > 0): ?>
+                                <span class="badge bg-body-secondary text-body-secondary border" title="Tiene enlaces guardados">
+                                    <i class="bi bi-link-45deg"></i> <?= (int) $resumen['enlaces'] ?>
+                                </span>
                             <?php endif; ?>
                         </div>
+                    </div>
 
-                        <div class="d-flex flex-wrap justify-content-end gap-2" data-acciones-placa>
-                            <?php // A la izquierda del todo y separada del resto: la bitácora es
-                                  // otra pantalla, no una acción sobre el zip como las demás. ?>
-                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>"
-                                class="btn btn-sm btn-outline-info me-auto" title="Qué se probó en esta placa y cómo salió">
-                                <i class="bi bi-journal-text"></i> Ver bitácora
+                    <?php // Solo los botones viajan al modal, y siguen renderizados aquí
+                          // (ocultos) para que sus formularios lleven el CSRF de siempre
+                          // sin duplicar un modal por placa. El contenido —la bitácora—
+                          // se pide al abrir: son muchas placas y meter treinta
+                          // formularios completos en la página costaría más que todo lo
+                          // demás junto. ?>
+                    <div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>"
+                        data-montada="<?= esc(date('d/m/Y H:i', $fecha ?: time()), 'attr') ?>">
+                        <div class="d-flex flex-wrap gap-2" data-acciones-placa>
+                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>" target="_blank" rel="noopener"
+                                class="btn btn-sm btn-outline-info" title="La bitácora entera, para leerla de corrido">
+                                <i class="bi bi-journal-text"></i> Ver limpio
                             </a>
                             <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>"
                                 class="btn btn-sm btn-outline-primary" title="Volver a generar el zip con lo que haya ahora mismo">
@@ -182,35 +182,53 @@
         <?php endforeach; ?>
     </div>
 
-    <?php // Un único modal para todas las placas: al abrirlo se le mete dentro el
-          // bloque de detalle que ya venía renderizado (oculto) en su tarjeta, y al
-          // cerrarlo se devuelve. Mover el nodo en vez de duplicarlo mantiene los
-          // formularios y sus tokens CSRF intactos, y el HTML no crece con un modal
-          // por placa. ?>
+    <?php // Un único modal para todas las placas: al abrirlo se le presta el bloque
+          // de botones de su tarjeta (para no duplicar formularios ni tokens CSRF) y
+          // se le pide al servidor el formulario de la bitácora. A pantalla completa
+          // en el móvil, que es donde se rellena esto — de pie, al lado de la
+          // impresora, con la pieza todavía goteando. ?>
     <div class="modal fade" id="modalPlaca" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title" id="modalPlacaTitulo"></h6>
+                    <div class="me-auto">
+                        <h6 class="modal-title mb-0" id="modalPlacaTitulo"></h6>
+                        <div class="text-muted" style="font-size: .72rem;" id="modalPlacaMontada"></div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
-                <div class="modal-body" id="modalPlacaCuerpo"></div>
-                <div class="modal-footer py-2" id="modalPlacaPie"></div>
+                <div class="modal-body" id="modalPlacaCuerpo">
+                    <div class="text-muted small">Cargando la bitácora…</div>
+                </div>
+                <div class="modal-footer py-2 gap-2" id="modalPlacaPie">
+                    <div class="d-flex flex-wrap gap-2 me-auto" id="modalPlacaAcciones"></div>
+                    <span class="small" id="modalPlacaEstado"></span>
+                    <button type="button" class="btn btn-sm btn-success" id="modalPlacaGuardar">
+                        <i class="bi bi-check-lg"></i> Guardar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 <?php endif; ?>
 
+<?= $this->include('piezas/_bitacora_js') ?>
+
 <script>
 (function () {
-    // ---- Contenido de una placa, en modal -----------------------------------
+    // ---- La bitácora de una placa, en un modal -------------------------------
     var modalEl = document.getElementById('modalPlaca');
     var cuerpo = document.getElementById('modalPlacaCuerpo');
-    var pie = document.getElementById('modalPlacaPie');
+    var acciones = document.getElementById('modalPlacaAcciones');
     var titulo = document.getElementById('modalPlacaTitulo');
-    var detalleAbierto = null;   // el nodo prestado, para saber a quién devolverlo
-    var cunaDelDetalle = null;   // su tarjeta de origen
-    var accionesAbiertas = null; // los botones, que van al pie y no al cuerpo
+    var montada = document.getElementById('modalPlacaMontada');
+    var estado = document.getElementById('modalPlacaEstado');
+    var botonGuardar = document.getElementById('modalPlacaGuardar');
+
+    var accionesPrestadas = null;  // el bloque de botones, y de qué tarjeta salió
+    var cunaDeAcciones = null;
+    var tarjetaAbierta = null;     // la tarjeta que hay detrás, para repintarla al guardar
+    var peticion = 0;              // cuál es la última carga pedida, ver más abajo
 
     // La instancia se crea al pulsar, no aquí: este <script> va en el cuerpo de
     // la vista y el bundle de Bootstrap se carga al final del layout, así que
@@ -219,6 +237,15 @@
     // las fotos.
     function modalDePlacas() {
         return (modalEl && window.bootstrap) ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+    }
+
+    function formAbierto() {
+        return cuerpo.querySelector('[data-bitacora-form]');
+    }
+
+    function decir(texto, clase) {
+        estado.textContent = texto || '';
+        estado.className = 'small ' + (clase || 'text-muted');
     }
 
     document.querySelectorAll('[data-abrir-placa]').forEach(function (tarjeta) {
@@ -233,34 +260,178 @@
             var detalle = document.getElementById(tarjeta.getAttribute('data-abrir-placa'));
             if (!detalle) return;
 
-            detalleAbierto = detalle;
-            cunaDelDetalle = detalle.parentNode;
+            tarjetaAbierta = tarjeta.closest('[data-tarjeta-placa]');
             titulo.textContent = detalle.getAttribute('data-nombre-placa') || 'Placa';
+            montada.textContent = 'Montada el ' + (detalle.getAttribute('data-montada') || '');
+            decir('');
 
-            detalle.classList.remove('d-none');
-            cuerpo.appendChild(detalle);
+            // Los botones salen del bloque oculto de la tarjeta y se van al pie.
+            accionesPrestadas = detalle.querySelector('[data-acciones-placa]');
+            cunaDeAcciones = detalle;
+            if (accionesPrestadas) acciones.appendChild(accionesPrestadas);
 
-            // Los botones salen del bloque prestado y se van al pie del modal.
-            accionesAbiertas = detalle.querySelector('[data-acciones-placa]');
-            if (accionesAbiertas) pie.appendChild(accionesAbiertas);
-
+            cargarBitacora(tarjeta.getAttribute('data-placa'));
             modal.show();
         });
     });
 
+    /**
+     * El formulario se pide al abrir. `peticion` va contando: si se abre una
+     * placa, se cierra y se abre otra deprisa, la respuesta de la primera
+     * puede llegar después — y sin este número pintaría la bitácora
+     * equivocada encima de la que se está mirando.
+     */
+    function cargarBitacora(id) {
+        var mia = ++peticion;
+        cuerpo.innerHTML = '<div class="text-muted small">Cargando la bitácora…</div>';
+        botonGuardar.disabled = true;
+
+        fetch('<?= site_url('piezas/placa') ?>/' + id + '/bitacora/fragmento', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) {
+                if (!r.ok) throw new Error('respuesta ' + r.status);
+                return r.text();
+            })
+            .then(function (html) {
+                if (mia !== peticion) return;
+                cuerpo.innerHTML = html;
+                var form = formAbierto();
+                if (form) {
+                    window.bitacoraIniciar(form);
+                    form.addEventListener('input', function () { form.dataset.sucio = '1'; });
+                    form.addEventListener('change', function () { form.dataset.sucio = '1'; });
+                    form.addEventListener('submit', function (e) {
+                        e.preventDefault();
+                        guardar(form);
+                    });
+                }
+                botonGuardar.disabled = false;
+            })
+            .catch(function () {
+                if (mia !== peticion) return;
+                cuerpo.innerHTML = '<div class="alert alert-warning py-2 mb-0">'
+                    + 'No se pudo cargar la bitácora. Prueba a abrirla con «Ver limpio».</div>';
+            });
+    }
+
+    function guardar(form) {
+        if (!form) return;
+        botonGuardar.disabled = true;
+        decir('Guardando…');
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            body: new FormData(form)
+        })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, datos: d }; }); })
+            .then(function (r) {
+                botonGuardar.disabled = false;
+                if (!r.ok || !r.datos.ok) {
+                    decir(r.datos.mensaje || 'No se pudo guardar.', 'text-danger');
+                    return;
+                }
+
+                form.dataset.sucio = '';
+                decir('Guardado a las ' + new Date().toLocaleTimeString().slice(0, 5), 'text-success');
+                titulo.textContent = r.datos.nombre;
+                repintarTarjeta(r.datos);
+            })
+            .catch(function () {
+                botonGuardar.disabled = false;
+                decir('No se pudo guardar — mira la conexión.', 'text-danger');
+            });
+    }
+
+    /**
+     * La tarjeta de detrás se actualiza sola: si guardar obligara a recargar
+     * el histórico para ver el veredicto nuevo, volveríamos justo al ir y
+     * venir de pantallas que sobraba.
+     */
+    function repintarTarjeta(datos) {
+        if (!tarjetaAbierta) return;
+
+        var nombre = tarjetaAbierta.querySelector('[data-nombre-tarjeta]');
+        if (nombre) {
+            nombre.textContent = datos.nombre;
+            nombre.setAttribute('title', datos.nombre);
+        }
+
+        var tarjeta = tarjetaAbierta.querySelector('.lomo-placa');
+        if (tarjeta) {
+            tarjeta.classList.remove('lomo-buena', 'lomo-regular', 'lomo-repetir');
+            if (datos.veredicto) tarjeta.classList.add('lomo-' + datos.veredicto);
+        }
+
+        var zona = tarjetaAbierta.querySelector('[data-estado-tarjeta]');
+        var resumen = datos.resumen;
+        if (!zona || !resumen) return;
+
+        var VEREDICTOS = <?= json_encode(\App\Models\PiezaPlacaModel::VEREDICTOS, JSON_UNESCAPED_UNICODE) ?>;
+        var COLORES = { buena: 'success', regular: 'warning', repetir: 'danger' };
+        var trozos = [];
+
+        if (resumen.veredicto && VEREDICTOS[resumen.veredicto]) {
+            trozos.push('<span class="badge text-bg-' + (COLORES[resumen.veredicto] || 'secondary') + '">'
+                + VEREDICTOS[resumen.veredicto] + '</span>');
+        } else {
+            trozos.push('<span class="badge bg-body-secondary text-body-secondary border">'
+                + (resumen.anotada ? 'sin juzgar' : 'sin anotar') + '</span>');
+        }
+        if (resumen.sinResponder > 0) {
+            trozos.push('<span class="badge bg-body-secondary text-warning-emphasis border">'
+                + '<i class="bi bi-question-circle"></i> ' + resumen.sinResponder + ' sin responder</span>');
+        }
+        if (resumen.enlaces > 0) {
+            trozos.push('<span class="badge bg-body-secondary text-body-secondary border">'
+                + '<i class="bi bi-link-45deg"></i> ' + resumen.enlaces + '</span>');
+        }
+        zona.innerHTML = trozos.join(' ');
+    }
+
+    // Sin placas no hay modal en la página: todo lo de arriba queda inerte
+    // (los querySelectorAll no encuentran nada) pero estos dos sí hay que
+    // guardarlos, o el bloque se cae con un TypeError y se lleva por delante
+    // los interruptores de fotos de más abajo.
+    if (botonGuardar) {
+        botonGuardar.addEventListener('click', function () { guardar(formAbierto()); });
+    }
+
+    // Ctrl/Cmd+S guarda sin salir del campo: se escribe a ratos y con las
+    // manos sucias, y buscar el botón cada vez es parte de lo que cansa.
+    document.addEventListener('keydown', function (e) {
+        if (!modalEl || !modalEl.classList.contains('show')) return;
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            guardar(formAbierto());
+        }
+    });
+
     if (modalEl) {
-        modalEl.addEventListener('hidden.bs.modal', function () {
-            if (!detalleAbierto || !cunaDelDetalle) return;
-            // Primero los botones de vuelta a su bloque, y el bloque a su tarjeta:
-            // al revés dejaría los botones huérfanos en el pie del modal.
-            if (accionesAbiertas) {
-                detalleAbierto.appendChild(accionesAbiertas);
-                accionesAbiertas = null;
+        // Cerrar con cosas escritas y sin guardar sería perderlas en silencio:
+        // aquí no hay autoguardado a propósito (media bitácora se escribe a
+        // medias y no queremos guardar borradores), así que al menos se avisa.
+        modalEl.addEventListener('hide.bs.modal', function (e) {
+            var form = formAbierto();
+            if (form && form.dataset.sucio === '1'
+                && !confirm('Has escrito cosas en la bitácora y no las has guardado. ¿Cerrar de todas formas?')) {
+                e.preventDefault();
             }
-            detalleAbierto.classList.add('d-none');
-            cunaDelDetalle.appendChild(detalleAbierto);
-            detalleAbierto = null;
-            cunaDelDetalle = null;
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            // Los botones vuelven a su tarjeta antes de vaciar el modal, o se
+            // quedarían huérfanos en el pie y la placa se abriría sin ellos.
+            if (accionesPrestadas && cunaDeAcciones) cunaDeAcciones.appendChild(accionesPrestadas);
+            accionesPrestadas = null;
+            cunaDeAcciones = null;
+            tarjetaAbierta = null;
+            peticion++;   // lo que llegue tarde ya no es de nadie
+            cuerpo.innerHTML = '';
+            decir('');
         });
     }
 

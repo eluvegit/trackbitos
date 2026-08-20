@@ -10,7 +10,8 @@ use CodeIgniter\Model;
  * exposición, el peso de resina antes y después, y las notas y conclusiones
  * para la próxima. El contenido real —qué versiones llevaba y cuántas copias
  * de cada una— vive en PiezaPlacaVersionModel; las pruebas, en
- * PiezaPlacaPruebaModel.
+ * PiezaPlacaPruebaModel; los enlaces a lo que hay fuera (Drive, fotos), en
+ * PiezaPlacaEnlaceModel.
  */
 class PiezaPlacaModel extends Model
 {
@@ -37,6 +38,7 @@ class PiezaPlacaModel extends Model
         'notas', 'conclusiones',
         'resina', 'temperatura', 'veredicto',
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'resina_estimada',
+        'origen_placa_id',
     ];
 
     protected $validationRules = [

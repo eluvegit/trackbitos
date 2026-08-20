@@ -41,3 +41,8 @@ __pycache__/
 # Claude Code: worktrees son checkouts git aparte (repos anidados), nunca deben
 # trackearse desde el repo principal
 .claude/worktrees/
+
+# Copias públicas de las imágenes de Piezas (public/piezas-img): son
+# derivados regenerables del original que vive en writable/piezas, no
+# fuente. Se rehacen con `php spark piezas:publicar-imagenes`.
+/public/piezas-img/

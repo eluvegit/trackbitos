@@ -467,9 +467,9 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                             <?php foreach ($v['renders'] as $r): ?>
                                 <div class="position-relative" style="width: 56px;">
-                                    <a href="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                    <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank"
                                         title="<?= esc($r['notas'] ?? '') ?>">
-                                        <img src="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>"
+                                        <img src="<?= imagen_pieza($r, 'render') ?>"
                                             class="rounded border" style="width: 56px; height: 56px; object-fit: cover;"
                                             alt="Render" loading="lazy">
                                     </a>
@@ -1056,9 +1056,9 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <div class="d-flex flex-wrap gap-2">
                         <?php foreach ($referencias as $r): ?>
                             <div class="position-relative" style="width: 72px;">
-                                <a href="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                <a href="<?= imagen_pieza($r, 'referencia', 'v') ?>" target="_blank"
                                     title="<?= esc($r['notas'] ?? '') ?>">
-                                    <img src="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/imagen') ?>"
+                                    <img src="<?= imagen_pieza($r, 'referencia') ?>"
                                         class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
                                         alt="Referencia" loading="lazy">
                                 </a>
@@ -1130,9 +1130,9 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <div class="d-flex flex-wrap gap-2">
                         <?php foreach ($rendersSueltos as $r): ?>
                             <div class="position-relative" style="width: 72px;">
-                                <a href="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>" target="_blank"
+                                <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank"
                                     title="<?= esc($r['notas'] ?? '') ?>">
-                                    <img src="<?= site_url('piezas/render/' . (int) $r['id'] . '/imagen') ?>"
+                                    <img src="<?= imagen_pieza($r, 'render') ?>"
                                         class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
                                         alt="Render" loading="lazy">
                                 </a>
@@ -1269,6 +1269,54 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                             <button class="btn btn-sm btn-primary">Añadir</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!--
+            En qué placas ha ido esta pieza (fase 39). Es el otro extremo del
+            hilo de la bitácora: lo que se aprendió imprimiéndola se apunta en
+            la placa, pero se necesita aquí — cuando uno está mirando la pieza
+            y decide si vuelve a mandarla a la impresora.
+        -->
+        <?php if (!empty($placasDeLaPieza)): ?>
+            <?php
+                $veredictosPlaca = \App\Models\PiezaPlacaModel::VEREDICTOS;
+                $coloresPlaca = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
+            ?>
+            <div class="card shadow-sm mb-3">
+                <div class="card-body p-3">
+                    <h6 class="mb-2"><i class="bi bi-journal-text"></i> Se imprimió en</h6>
+                    <ul class="list-unstyled mb-0 small">
+                        <?php foreach ($placasDeLaPieza as $entrada): ?>
+                            <?php $p = $entrada['placa']; ?>
+                            <li class="d-flex align-items-center gap-2 py-1 border-bottom border-secondary-subtle">
+                                <a href="<?= site_url('piezas/placa/' . (int) $p['id'] . '/bitacora') ?>"
+                                    class="text-decoration-none text-body flex-grow-1 text-truncate"
+                                    title="<?= esc($p['nombre'], 'attr') ?>">
+                                    <?= esc($p['nombre']) ?>
+                                    <span class="text-muted">
+                                        ·
+                                        <?php foreach ($entrada['versiones'] as $i => $v): ?>
+                                            <?= $i ? ', ' : '' ?>v<?= sprintf('%03d', $v['numero']) ?><?= $v['cantidad'] > 1 ? ' ×' . $v['cantidad'] : '' ?>
+                                        <?php endforeach; ?>
+                                    </span>
+                                </a>
+                                <span class="text-muted flex-shrink-0" style="font-size: .75rem;">
+                                    <?= esc(date('d/m/y', strtotime($p['impresa_en'] ?: $p['creado_en']))) ?>
+                                </span>
+                                <?php if ($p['veredicto'] && isset($veredictosPlaca[$p['veredicto']])): ?>
+                                    <span class="badge text-bg-<?= $coloresPlaca[$p['veredicto']] ?? 'secondary' ?> flex-shrink-0"
+                                        title="<?= esc($veredictosPlaca[$p['veredicto']], 'attr') ?>">
+                                        <?= esc(mb_substr($veredictosPlaca[$p['veredicto']], 0, 1)) ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-body-secondary text-body-secondary border flex-shrink-0"
+                                        title="Sin juzgar todavía">·</span>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
                 </div>
             </div>
         <?php endif; ?>

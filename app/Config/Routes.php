@@ -729,9 +729,14 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
 
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
-    // Ver y editar en pantallas distintas: se consulta mucho más de lo que se
-    // toca. La ruta de edición va antes que la de lectura por el orden de
-    // declaración de siempre (la más específica primero).
+    //
+    // Se escribe en el modal del histórico (fase 39): `fragmento` devuelve el
+    // formulario suelto para meterlo ahí, y el POST de siempre lo guarda
+    // —contesta JSON si viene por fetch—. `bitacora` a secas es el "ver
+    // limpio", y `editar` la misma bitácora a pantalla completa, que es la
+    // que funciona sin JavaScript. Las rutas más específicas van primero,
+    // como en el resto del fichero.
+    $routes->GET('placa/(:num)/bitacora/fragmento', 'Web::bitacoraFragmento/$1');
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
     $routes->GET('placa/(:num)/bitacora', 'Web::bitacora/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');

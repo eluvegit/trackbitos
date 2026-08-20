@@ -2,6 +2,13 @@
 <?= $this->section('content') ?>
 
 <?php
+    /**
+     * La bitácora para leerla, no para escribirla (el "Ver limpio" del modal
+     * de Placas, fase 39): una impresión contada de corrido — de dónde venía,
+     * con qué se hizo, qué llevaba, qué se quería averiguar y qué se aprendió.
+     * Lo que se escribe a diario se escribe en el modal; aquí se viene a
+     * repasar, a enseñársela a alguien o a imprimirla.
+     */
     $idPlaca = (int) $placa['id'];
 
     // La resina que se fue en esta placa. Solo tiene sentido si están los dos
@@ -45,6 +52,21 @@
     $colorVeredicto = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
 ?>
 
+<?php // Igual que en Placas: embebido y no en style.css, que el Hostinger
+      // cachea los assets una semana. Aquí solo hace falta para que la
+      // versión impresa salga limpia — sin botones ni menú. ?>
+<style>
+    @media print {
+        .d-print-none, nav, header, footer, .navbar { display: none !important; }
+        a[href]::after { content: none !important; }
+        .card { border-color: #ccc !important; }
+    }
+    .dato-duro {
+        font-size: .7rem;
+        letter-spacing: .03em;
+    }
+</style>
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-journal-text text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
@@ -61,10 +83,18 @@
         <span class="badge text-bg-secondary" title="Todavía no la has juzgado">sin juzgar</span>
     <?php endif; ?>
 
-    <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/editar') ?>"
-        class="btn btn-sm btn-outline-primary ms-auto">
-        <i class="bi bi-pencil"></i> Editar bitácora
-    </a>
+    <?php // Anotar se anota en el modal de Placas; el botón de aquí es para
+          // sentarse a redactar con sitio, y es lo que funciona sin JS. ?>
+    <span class="ms-auto d-flex gap-2 d-print-none">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()"
+            title="Imprimir o guardar en PDF">
+            <i class="bi bi-printer"></i>
+        </button>
+        <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/editar') ?>"
+            class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-pencil"></i> Editar a pantalla completa
+        </a>
+    </span>
 </h5>
 
 <?php if (session('success')): ?>
@@ -74,18 +104,48 @@
     <div class="alert alert-warning py-2"><?= esc(session('error')) ?></div>
 <?php endif; ?>
 
+<?php // De dónde viene, cuando repite a otra placa: sus conclusiones son lo
+      // que uno quería tener delante justo al montar esta. ?>
+<?php if (!empty($origen)): ?>
+    <div class="card border-secondary-subtle mb-3">
+        <div class="card-body p-2 small">
+            <div class="text-muted dato-duro">REPITE A</div>
+            <a href="<?= site_url('piezas/placa/' . (int) $origen['id'] . '/bitacora') ?>"
+                class="text-decoration-none fw-semibold"><?= esc($origen['nombre']) ?></a>
+            <?php if (trim((string) $origen['conclusiones']) !== ''): ?>
+                <div class="text-muted mt-1"><?= nl2br(esc($origen['conclusiones'])) ?></div>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php // Los enlaces, arriba y como botones: si se abre una placa vieja suele
+      // ser justo para volver al proyecto del laminador o a las fotos. ?>
+<?php if (!empty($enlaces)): ?>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <?php foreach ($enlaces as $enlace): ?>
+            <?php $host = parse_url($enlace['url'], PHP_URL_HOST) ?: $enlace['url']; ?>
+            <a href="<?= esc($enlace['url'], 'attr') ?>" target="_blank" rel="noopener"
+                class="btn btn-sm btn-outline-secondary" title="<?= esc($enlace['url'], 'attr') ?>">
+                <i class="bi bi-box-arrow-up-right"></i>
+                <?= esc($enlace['titulo'] ?: preg_replace('/^www\./', '', $host)) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <?php // Cabecera de datos duros: fechas, exposición y resina. En fila de
       // tarjetitas para poder compararlas de un vistazo entre placas. ?>
 <div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">MONTADA</div>
+            <div class="text-muted dato-duro">MONTADA</div>
             <div class="small"><?= esc(date('d/m/Y H:i', strtotime($placa['creado_en']))) ?></div>
         </div></div>
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">IMPRESA</div>
+            <div class="text-muted dato-duro">IMPRESA</div>
             <div class="small">
                 <?= $placa['impresa_en'] ? esc(date('d/m/Y H:i', strtotime($placa['impresa_en']))) : '<span class="text-muted">sin anotar</span>' ?>
             </div>
@@ -93,13 +153,13 @@
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">EXPOSICIÓN</div>
+            <div class="text-muted dato-duro">EXPOSICIÓN</div>
             <div class="small"><?= $placa['exposicion'] ? esc($placa['exposicion']) : '<span class="text-muted">sin anotar</span>' ?></div>
         </div></div>
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">RESINA GASTADA</div>
+            <div class="text-muted dato-duro">RESINA GASTADA</div>
             <div class="small">
                 <?php if ($gastado !== null): ?>
                     <strong><?= esc($peso($gastado)) ?> g</strong>
@@ -130,19 +190,19 @@
 <div class="row row-cols-2 row-cols-md-4 g-2 mb-3">
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">ESTIMADO (PROGRAMA)</div>
+            <div class="text-muted dato-duro">ESTIMADO (PROGRAMA)</div>
             <div class="small"><?= $duracion($placa['minutos_estimados']) ? esc($duracion($placa['minutos_estimados'])) : '<span class="text-muted">—</span>' ?></div>
         </div></div>
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">PREVISTO (MÁQUINA)</div>
+            <div class="text-muted dato-duro">PREVISTO (MÁQUINA)</div>
             <div class="small"><?= $duracion($placa['minutos_previstos']) ? esc($duracion($placa['minutos_previstos'])) : '<span class="text-muted">—</span>' ?></div>
         </div></div>
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">TIEMPO REAL</div>
+            <div class="text-muted dato-duro">TIEMPO REAL</div>
             <div class="small">
                 <strong><?= $duracion($placa['minutos_reales']) ? esc($duracion($placa['minutos_reales'])) : '—' ?></strong>
                 <?php $dEstimado = $desvio($placa['minutos_reales'], $placa['minutos_estimados']); ?>
@@ -159,7 +219,7 @@
     </div>
     <div class="col">
         <div class="card h-100"><div class="card-body p-2">
-            <div class="text-muted" style="font-size: .7rem;">RESINA USADA</div>
+            <div class="text-muted dato-duro">RESINA USADA</div>
             <div class="small">
                 <?= $placa['resina'] ? esc($placa['resina']) : '<span class="text-muted">sin anotar</span>' ?>
                 <?php if ($placa['temperatura'] !== null): ?>
@@ -244,7 +304,7 @@
             <dd class="col-sm-7">
                 <?= $prueba['respuesta']
                     ? nl2br(esc($prueba['respuesta']))
-                    : '<span class="text-muted">pendiente de responder</span>' ?>
+                    : '<span class="text-warning-emphasis">pendiente de responder</span>' ?>
             </dd>
         <?php endforeach; ?>
     </dl>
