@@ -201,12 +201,68 @@ class Api extends BaseController
      */
     public function descargarSesion(int $sesionId)
     {
-        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarSesion($sesionId, $maquinaId, $motivo, $ignorar));
+        $varianteId = $this->varianteDeLaPeticionOFallar();
+        if ($varianteId instanceof \CodeIgniter\HTTP\Response) {
+            return $varianteId;
+        }
+
+        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarSesion($sesionId, $varianteId, $maquinaId, $motivo, $ignorar));
     }
 
     public function descargarVersion(int $versionId)
     {
-        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarVersion($versionId, $maquinaId, $motivo, $ignorar));
+        $varianteId = $this->varianteDeLaPeticionOFallar();
+        if ($varianteId instanceof \CodeIgniter\HTTP\Response) {
+            return $varianteId;
+        }
+
+        return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarVersion($versionId, $varianteId, $maquinaId, $motivo, $ignorar));
+    }
+
+    /**
+     * Re-descarga de solo lectura de una sesión ya subida, para comparar a
+     * ojo (fase 34). No crea ningún asiento ni sesión: `trackbitos subir` la
+     * llama automáticamente justo después de subir, como comprobación en
+     * paralelo, no como una mesa de trabajo nueva.
+     */
+    public function descargarVerificacion(int $sesionId)
+    {
+        $varianteId = $this->varianteDeLaPeticionOFallar();
+        if ($varianteId instanceof \CodeIgniter\HTTP\Response) {
+            return $varianteId;
+        }
+
+        try {
+            $entrega = $this->sync->entregarParaVerificacion($sesionId, $varianteId);
+        } catch (Throwable $e) {
+            return $this->comoError($e);
+        }
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/octet-stream')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $entrega['nombre_fichero'] . '"')
+            ->setHeader('X-Hash-Blend', $entrega['hash'])
+            ->setBody(file_get_contents($entrega['ruta_absoluta']));
+    }
+
+    /**
+     * Lee 'variante' de la query string: la descarga siempre declara para qué
+     * variante es (fase 34) — antes se deducía de la sesión/versión de
+     * origen, que puede pertenecer a otra variante cuando viene de
+     * `derivarVariante`. Devuelve el id, o una respuesta de error 422 ya
+     * lista para retornar.
+     */
+    private function varianteDeLaPeticionOFallar()
+    {
+        $varianteId = (int) ($this->request->getGet('variante') ?? 0);
+        if ($varianteId <= 0) {
+            return $this->comoError(new RuntimeException(
+                "Falta el parámetro 'variante': toda descarga debe declarar para qué variante es.",
+                422
+            ));
+        }
+
+        return $varianteId;
     }
 
     /**

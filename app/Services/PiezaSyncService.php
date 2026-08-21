@@ -97,8 +97,16 @@ class PiezaSyncService
 
     /**
      * Entrega el .blend de una sesión ya subida.
+     *
+     * $varianteId es la variante que ESTÁ PIDIENDO la descarga (la que el
+     * cliente resolvió y ya le confirmó a `/variante/{id}/estado`), no algo
+     * que se deduzca de la sesión. Se reverifica aquí contra
+     * estadoDeSincronizacion() en vez de fiarse del `variante_id` de la
+     * propia fila: son casi siempre el mismo valor, pero no cuando la sesión
+     * pertenece a la variante de ORIGEN de un `derivarVariante` (ver
+     * entregarVersion) — confundir ambos fue el bug de fase 34.
      */
-    public function entregarSesion(int $sesionOrigenId, int $maquinaId, string $motivo, bool $ignorarPendiente = false): array
+    public function entregarSesion(int $sesionOrigenId, int $varianteId, int $maquinaId, string $motivo, bool $ignorarPendiente = false): array
     {
         $sesion = $this->sesionModel->find($sesionOrigenId);
         if (!$sesion) {
@@ -121,13 +129,22 @@ class PiezaSyncService
             );
         }
 
+        $origenEsperado = $this->estadoDeSincronizacion($varianteId)['origen_descarga'];
+        if (!$origenEsperado || $origenEsperado['tipo'] !== 'sesion' || $origenEsperado['id'] !== $sesionOrigenId) {
+            throw new RuntimeException(
+                "La sesión {$sesionOrigenId} no es (ya) el origen de descarga de la variante {$varianteId}. "
+                . 'Vuelve a consultar el estado antes de bajar.',
+                409
+            );
+        }
+
         $rama = $this->ramaModel->find($sesion['rama_id']);
 
         return $this->entregar([
             'tipo'        => 'sesion',
             'id'          => (int) $sesion['id'],
             'numero'      => (int) $sesion['numero'],
-            'variante_id' => (int) $rama['variante_id'],
+            'variante_id' => $varianteId,
             'ruta_blend'  => $sesion['ruta_blend'],
             'rama'        => $rama,
         ], $maquinaId, $motivo, $ignorarPendiente);
@@ -138,22 +155,76 @@ class PiezaSyncService
      * de toda rama recién abierta: al promocionar, la rama nueva nace sin
      * ninguna sesión subida, y sin esto no habría de dónde bajar el fichero
      * para seguir trabajando — que es el ciclo normal, no un caso raro.
+     *
+     * $varianteId: igual que en entregarSesion, es la variante que pide la
+     * descarga — NUNCA `$version['variante_id']`. Con `derivarVariante`
+     * (spec: "nueva línea de diseño a partir de una versión ya existente"),
+     * la versión de origen pertenece a OTRA variante (p.ej. "pelo / anime"
+     * derivada de una versión de "pelo / base"): usar el `variante_id` de la
+     * fila de versión aquí hacía que la primera descarga de la variante
+     * derivada se entregara, se etiquetara y abriera sesión de trabajo en la
+     * variante de ORIGEN en vez de en la nueva — perdiendo el trabajo
+     * subsiguiente en la variante equivocada (fase 34).
      */
-    public function entregarVersion(int $versionId, int $maquinaId, string $motivo, bool $ignorarPendiente = false): array
+    public function entregarVersion(int $versionId, int $varianteId, int $maquinaId, string $motivo, bool $ignorarPendiente = false): array
     {
         $version = (new PiezaVersionModel())->find($versionId);
         if (!$version) {
             throw new RuntimeException("Versión {$versionId} no encontrada.", 404);
         }
 
+        $origenEsperado = $this->estadoDeSincronizacion($varianteId)['origen_descarga'];
+        if (!$origenEsperado || $origenEsperado['tipo'] !== 'version' || $origenEsperado['id'] !== $versionId) {
+            throw new RuntimeException(
+                "La versión {$versionId} no es (ya) el origen de descarga de la variante {$varianteId}. "
+                . 'Vuelve a consultar el estado antes de bajar.',
+                409
+            );
+        }
+
         return $this->entregar([
             'tipo'        => 'version',
             'id'          => (int) $version['id'],
             'numero'      => (int) $version['numero'],
-            'variante_id' => (int) $version['variante_id'],
+            'variante_id' => $varianteId,
             'ruta_blend'  => $version['ruta_blend'],
             'rama'        => null,
         ], $maquinaId, $motivo, $ignorarPendiente);
+    }
+
+    /**
+     * Descarga de solo lectura para comparar a ojo lo que se acaba de subir
+     * (fase 34: "confirmar nombre, variante y descargar la versión subida en
+     * paralelo para comprobación"). A propósito NO pasa por `entregar()`: no
+     * abre ningún asiento ni sesión — esto no es una mesa de trabajo nueva,
+     * es un vistazo en paralelo al fichero que ya tienes abierto, y no debe
+     * dejar nada pendiente de cerrar.
+     */
+    public function entregarParaVerificacion(int $sesionId, int $varianteId): array
+    {
+        $sesion = $this->sesionModel->find($sesionId);
+        if (!$sesion || empty($sesion['ruta_blend'])) {
+            throw new RuntimeException("La sesión {$sesionId} no tiene ningún fichero que verificar.", 404);
+        }
+
+        $rama = $this->ramaModel->find($sesion['rama_id']);
+        if (!$rama || (int) $rama['variante_id'] !== $varianteId) {
+            throw new RuntimeException("La sesión {$sesionId} no pertenece a la variante {$varianteId}.", 409);
+        }
+
+        if (!$this->almacen->existe($sesion['ruta_blend'])) {
+            throw new RuntimeException("El fichero de la sesión {$sesionId} no está en el almacén.", 409);
+        }
+
+        $variante = $this->varianteModel->find($varianteId);
+        $familia  = (new PiezaFamiliaModel())->find($variante['familia_id']);
+        $variante = $variante + ['familia_nombre' => $familia['nombre'] ?? null];
+
+        return [
+            'hash'           => $this->almacen->hash($sesion['ruta_blend']),
+            'ruta_absoluta'  => $this->almacen->absoluta($sesion['ruta_blend']),
+            'nombre_fichero' => $this->nombreFichero($variante, $rama, $sesion),
+        ];
     }
 
     /**

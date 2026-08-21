@@ -606,6 +606,7 @@ $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Contr
     $routes->POST('variante/(:num)/sesion/abrir', 'Api::abrirSesion/$1');
     $routes->GET('sesion/(:num)/descargar', 'Api::descargarSesion/$1');
     $routes->GET('version/(:num)/descargar', 'Api::descargarVersion/$1');
+    $routes->GET('sesion/(:num)/descargar-verificacion', 'Api::descargarVerificacion/$1');
     $routes->POST('sesion/(:num)/subir', 'Api::subirSesion/$1');
     $routes->POST('sesion/(:num)/cerrar', 'Api::cerrarSesion/$1');
 

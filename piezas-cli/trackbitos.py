@@ -54,7 +54,7 @@ ULTIMO_DIRECTORIO_PATH = CONFIG_DIR / "ultimo_directorio"
 # allí era mayor, y eso se retiró: las dos máquinas se ponen al día con git,
 # así que el script se actualiza como cualquier otro fichero del repo. Súbela
 # cuando el cambio merezca distinguirse.
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -883,7 +883,13 @@ def _bajar(args, motivo: str) -> int:
         print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
         return 0
 
-    ruta = f"/{origen['tipo']}/{origen['id']}/descargar?motivo={motivo}"
+    # 'variante' declara para quién es la descarga (fase 34): el servidor lo
+    # reverifica contra su propio estado en vez de fiarse solo del origen
+    # (sesión/versión), que puede pertenecer a OTRA variante cuando viene de
+    # "derivar variante" — confundir ambas cosas era el bug que hacía que una
+    # variante recién derivada se descargase y subiese como si fuera la de
+    # origen.
+    ruta = f"/{origen['tipo']}/{origen['id']}/descargar?motivo={motivo}&variante={variante_id}"
     if args.ignorar_pendiente:
         ruta += "&ignorar_pendiente=1"
 
@@ -1036,6 +1042,25 @@ def cmd_subir(args) -> int:
     if not blend:
         raise RuntimeError(f"no hay ningún .blend (o hay más de uno) en {directorio}. No se adivina cuál subir.")
 
+    # Confirmación tecleada (fase 34): antes de tocar la red, sin efectos
+    # secundarios todavía. El caso real que motivó esto fue una variante
+    # derivada ("pelo / anime") cuya primera descarga se etiquetaba mal como
+    # la variante de origen ("pelo / base") — eso ya está arreglado en el
+    # servidor, pero esto queda como red de seguridad para cualquier despiste
+    # de carpeta/fichero que el servidor no puede ver. Escribir el nombre a
+    # mano obliga a leerlo, no solo a pulsar Enter por costumbre.
+    identidad = sentinel.get("variante", "?")
+    print(f"\n{identidad} · rama {sentinel.get('rama', '?')}\n")
+    print(f"  Vas a subir {blend.name} a esta variante.")
+    print(f"  Para confirmarlo, escribe el nombre exacto: {identidad}")
+    try:
+        tecleado = input("\n  > ").strip()
+    except EOFError:
+        tecleado = ""
+    if tecleado.lower() != identidad.lower():
+        print("\n  ✗ No coincide. No se ha subido nada.\n")
+        return 1
+
     sesion_id = sentinel.get("sesion_id")
     if not sesion_id:
         # Aquí no hay sesión viva: o bajaste solo a mirar y has acabado
@@ -1063,9 +1088,42 @@ def cmd_subir(args) -> int:
 
     print(f"\n{sentinel.get('variante', '?')} · rama {sentinel.get('rama', '?')} · sesión {subida['numero']} subida\n")
     print(f"  ✓ {blend.name} — {subida['tamano_bytes']} bytes")
+
+    _verificar_subida(config, directorio, blend, sentinel, subida)
+
     print("\n  → Cuando cierres Blender: trackbitos cerrar")
     print("     Si esto ya es la versión buena: trackbitos promocionar --cambio \"...\"\n")
     return 0
+
+
+def _verificar_subida(config: dict, directorio: Path, blend: Path, sentinel: dict, subida: dict) -> None:
+    """
+    Comprobación en paralelo (fase 34): vuelve a descargar lo que se acaba de
+    subir a un fichero APARTE, en una subcarpeta, para poder abrirlo y
+    comparar a ojo que es de verdad lo que creías subir. En una subcarpeta y
+    no a lo suelto: encontrar_blend() exige exactamente un *.blend en el
+    directorio de trabajo, y dejar aquí una segunda copia dejaría "estado"/
+    "subir" ambiguos (no se adivina cuál es cuál) en cuanto se ejecutasen de
+    nuevo. Nombre fijo (se sobreescribe cada vez): es la última subida, no un
+    historial. No toca el .sesion.json ni abre ningún asiento — es solo un
+    vistazo; si falla, no invalida la subida, que ya se hizo.
+    """
+    carpeta_verificacion = directorio / "verificacion"
+    carpeta_verificacion.mkdir(exist_ok=True)
+    verificacion = carpeta_verificacion / f"{blend.stem}.subido-verificar.blend"
+    temporal = carpeta_verificacion / ".verificacion-parcial"
+    try:
+        ruta = f"/sesion/{subida['id']}/descargar-verificacion?variante={sentinel['variante_id']}"
+        asiento = api_descargar(config, ruta, temporal)
+        if asiento["hash"] != subida["hash_blend"]:
+            print("  ⚠ Verificación: el hash de lo re-descargado no coincide con lo subido. Revísalo a mano.")
+            return
+        temporal.replace(verificacion)
+        print(f"  ✓ Verificación: verificacion/{verificacion.name} — ábrelo y compáralo con lo que creías subir")
+    except Exception as e:
+        print(f"  ⚠ No se pudo descargar la verificación ({e}). La subida en sí ya se hizo.")
+    finally:
+        temporal.unlink(missing_ok=True)
 
 
 def cmd_cerrar(args) -> int:
