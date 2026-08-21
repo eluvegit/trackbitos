@@ -23,7 +23,7 @@ class PiezaCategoriaModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['nombre', 'orden'];
+    protected $allowedFields = ['nombre', 'orden', 'visible_sterclicks'];
 
     protected $validationRules = [
         'nombre' => 'required|max_length[100]',

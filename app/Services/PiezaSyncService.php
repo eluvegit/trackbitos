@@ -7,6 +7,7 @@ use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
+use App\Models\PiezaSubidaModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use RuntimeException;
@@ -370,15 +371,22 @@ class PiezaSyncService
         $descarga  = $this->descargaModel->abiertaDeMaquina($maquinaId, (int) $sesion['rama_id']);
         $this->exigirCuadre($sesion, $descarga, $hashPadre);
 
-        $rutaRelativa = $this->almacen->rutaSesion(
-            (int) $this->ramaModel->find($sesion['rama_id'])['variante_id'],
-            (int) $sesion['rama_id'],
-            $sesionId
-        );
+        $varianteId   = (int) $this->ramaModel->find($sesion['rama_id'])['variante_id'];
+        $rutaRelativa = $this->almacen->rutaSesion($varianteId, (int) $sesion['rama_id'], $sesionId);
         $this->almacen->guardar($rutaTemporal, $rutaRelativa);
 
+        // Histórico: además del fichero "vivo" de la sesión (el que pisa
+        // cada subida siguiente), una copia aparte numerada que no se pisa.
+        $subidaModel  = new PiezaSubidaModel();
+        $numeroSubida = $subidaModel->siguienteNumero($sesionId);
+        $rutaHistorial = $this->almacen->rutaSubida($varianteId, (int) $sesion['rama_id'], $sesionId, $numeroSubida);
+        $this->almacen->copiar($rutaRelativa, $rutaHistorial);
+
         try {
-            return $this->transaccion('registrar la subida', function () use ($sesionId, $rutaRelativa, $hashReal, $hashPadre, $log, $descarga) {
+            return $this->transaccion('registrar la subida', function () use (
+                $sesionId, $rutaRelativa, $hashReal, $hashPadre, $log, $descarga,
+                $subidaModel, $numeroSubida, $rutaHistorial
+            ) {
                 $sesion = (new PiezaService())->subirSesion(
                     $sesionId,
                     $rutaRelativa,
@@ -387,6 +395,17 @@ class PiezaSyncService
                     $log,
                     $hashPadre
                 );
+
+                $subidaModel->insert([
+                    'sesion_id'    => $sesionId,
+                    'numero'       => $numeroSubida,
+                    'ruta_blend'   => $rutaHistorial,
+                    'hash_blend'   => $hashReal,
+                    'tamano_bytes' => (int) filesize($this->almacen->absoluta($rutaHistorial)),
+                    'hash_padre'   => $hashPadre,
+                    'log'          => $log,
+                    'subida_en'    => date('Y-m-d H:i:s'),
+                ]);
 
                 return [
                     'sesion'   => $sesion,
@@ -399,6 +418,7 @@ class PiezaSyncService
             // El fichero ya está escrito pero la base de datos no se enteró:
             // dejarlo ahí sería un huérfano que nadie sabría interpretar.
             $this->almacen->descartarEscritura($rutaRelativa);
+            $this->almacen->descartarEscritura($rutaHistorial);
 
             throw $e;
         }

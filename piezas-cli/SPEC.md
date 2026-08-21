@@ -1637,3 +1637,15 @@ meses cargando muchas más imágenes sin fallar nunca.
 - **Pendiente en el servidor, y no es código**: poner `CI_ENVIRONMENT = production` en el `.env`
   del Hostinger (en development las trazas de error se enseñan en público, con rutas y código) y
   vaciar `writable/debugbar`, que puede llevar acumulados miles de ficheros.
+
+**Fase 41 (2026-08-21): histórico de subidas dentro de una sesión.** `sesion.ruta_blend` es un
+único fichero que cada `subir` pisaba — si se subía varias veces antes de cerrar, solo
+sobrevivía la última. Tabla nueva `piezas_subidas` (migración
+`2026-08-21-000001_CreatePiezasSubidas`, modelo `PiezaSubidaModel`): una fila y un fichero
+aparte (`variante-X/rama-Y/sesion-Z/subida-NNN.blend`) por cada subida, numerados por sesión.
+`PiezaSyncService::recibir()` guarda el fichero "vivo" de siempre (invariante 5 y las descargas
+siguen leyendo de ahí) y además copia esa misma subida al histórico. Sigue el invariante 6: al
+purgar una sesión (validar, `descartarFicheroSesion`, o borrar pieza/variante) sus subidas van
+también a la papelera, no se borran — `PiezaService::purgarSubidasDe()`. **Pendiente en el
+servidor**: correr `php spark migrate`. El plazo de la papelera (`piezas:purgar`) sube de 30 a
+90 días de gracia para que este histórico no desaparezca a las pocas semanas.

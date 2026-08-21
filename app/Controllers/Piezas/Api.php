@@ -667,6 +667,14 @@ class Api extends BaseController
                 'numero' => (int) $validada['numero'],
             ] : null,
             'versiones'             => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
+            // Solo las ramas abiertas a partir de la última versión consolidada:
+            // el trabajo de ramas anteriores ya quedó congelado en versiones
+            // previas y no cuenta como "lo que hay pendiente de esta".
+            'sesiones'              => $this->sesionModel
+                ->join('piezas_ramas', 'piezas_ramas.id = piezas_sesiones.rama_id')
+                ->where('piezas_ramas.variante_id', $variante['id'])
+                ->where('piezas_ramas.desde_version_id', $ultimaVersion['id'] ?? null)
+                ->countAllResults(),
             'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
             'rama_abierta'          => $rama !== null,
             'trabajo_en_curso'      => $sesionAbierta !== null || $ultimaSubida !== null,

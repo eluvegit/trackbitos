@@ -37,6 +37,17 @@ class PiezaAlmacen
     }
 
     /**
+     * Histórico de subidas dentro de una sesión (una por cada `subir`, no
+     * solo la última): rutaSesion() es el fichero "vivo" que sigue sirviendo
+     * las descargas de esa sesión; este es aparte, para que pisarlo con la
+     * siguiente subida no se lleve por delante la copia anterior.
+     */
+    public function rutaSubida(int $varianteId, int $ramaId, int $sesionId, int $numero): string
+    {
+        return sprintf('variante-%d/rama-%d/sesion-%d/subida-%03d.blend', $varianteId, $ramaId, $sesionId, $numero);
+    }
+
+    /**
      * Un STL para imprimir, junto al .blend de la misma versión. Se adjunta
      * aparte (PiezaService::adjuntarStl), no al promocionar: el usuario
      * decide cuándo exportarlo, normalmente justo antes de imprimir.
@@ -53,6 +64,12 @@ class PiezaAlmacen
     public function rutaReferencia(int $familiaId, int $referenciaId, string $extension): string
     {
         return sprintf('familia-%d/referencia-%d.%s', $familiaId, $referenciaId, $extension);
+    }
+
+    /** Captura de la plataforma del laminador para una placa (fase 43). */
+    public function rutaPlacaImagen(int $placaId, int $imagenId, string $extension): string
+    {
+        return sprintf('placa-%d/imagen-%d.%s', $placaId, $imagenId, $extension);
     }
 
     public function rutaRender(int $varianteId, int $versionId, int $renderId, string $extension): string
@@ -225,7 +242,7 @@ class PiezaAlmacen
      *
      * @return array<string> ficheros borrados, para poder decir qué se fue
      */
-    public function purgarPapelera(int $dias = 30): array
+    public function purgarPapelera(int $dias = 90): array
     {
         $directorio = $this->absoluta('papelera');
         if (!is_dir($directorio)) {

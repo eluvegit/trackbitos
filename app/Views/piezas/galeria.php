@@ -261,7 +261,15 @@ foreach ($piezasTodas as $p) {
                                             <?= $badgeEstadoVersion($version) ?>
                                         <?php endif; ?>
                                         <?php if (!empty($variante['sku'])): ?>
-                                            <span><?= esc($variante['sku']) ?></span>
+                                            <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($variante['sku']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($p['stock'] !== null): ?>
+                                            <?php
+                                                $stockClase = $p['stock']['stock_actual'] <= $p['stock']['stock_minimo'] ? 'text-bg-danger' : 'text-bg-success';
+                                            ?>
+                                            <span class="badge <?= $stockClase ?>" title="Stock en sterclicks">
+                                                <i class="bi bi-box-seam"></i> <?= $p['stock']['stock_actual'] ?>
+                                            </span>
                                         <?php endif; ?>
                                         <?php // Se imprime en trozos: saberlo aquí evita mandar a la placa media pieza creyendo que va entera. ?>
                                         <?php if ($stls > 1): ?>

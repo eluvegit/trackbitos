@@ -47,9 +47,6 @@
     <button type="button" class="btn btn-outline-secondary" data-fotos="tarjetas">
         <i class="bi bi-image"></i> Ocultar portadas
     </button>
-    <button type="button" class="btn btn-outline-secondary" data-fotos="lista">
-        <i class="bi bi-list-ul"></i> Ocultar miniaturas
-    </button>
 </div>
 
 <?php if (session('success')): ?>

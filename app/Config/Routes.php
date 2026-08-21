@@ -624,6 +624,17 @@ $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Contr
     $routes->POST('version/(:num)/devolver-a-trabajo', 'Api::devolverATrabajo/$1');
 });
 
+// API dedicada a la integración con sterclicks (token propio, filtro
+// 'sterclicksApi', sterclicks.apiToken en .env) — no comparte token con la
+// API del CLI de arriba. Catálogo de piezas validadas hacia sterclicks,
+// pedidos desde sterclicks hacia aquí.
+$routes->group('piezas/sterclicks-api', ['filter' => 'sterclicksApi', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
+    $routes->GET('catalogo', 'SterclicksApi::catalogo');
+    $routes->GET('render/(:num)/imagen', 'SterclicksApi::imagenRender/$1');
+    $routes->GET('referencia/(:num)/imagen', 'SterclicksApi::imagenReferencia/$1');
+    $routes->POST('pedidos', 'SterclicksApi::pedidos');
+});
+
 // Interfaz web (fase 6). Los ficheros NO se bajan desde aquí: quien toca el
 // disco es el script, que es el único que puede identificar la máquina
 // (spec 4.5) — esta web puede abrirse desde el móvil.
@@ -648,7 +659,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('categoria/(:num)/renombrar', 'Web::renombrarCategoria/$1');
     $routes->POST('categoria/(:num)/borrar', 'Web::borrarCategoria/$1');
     $routes->POST('categoria/(:num)/mover/(subir|bajar)', 'Web::moverCategoria/$1/$2');
+    $routes->POST('categoria/(:num)/visibilidad', 'Web::toggleVisibilidadCategoria/$1');
     $routes->POST('familia/(:num)/categoria', 'Web::clasificarFamilia/$1');
+    $routes->POST('familia/(:num)/visibilidad', 'Web::toggleVisibilidadFamilia/$1');
 
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.
@@ -658,9 +671,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('estadisticas/backup', 'Web::backupDescargar');
     $routes->GET('sesiones-activas', 'Web::sesionesActivas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
-    $routes->POST('variante/(:num)/sku', 'Web::editarSku/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
     $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
+    $routes->POST('variante/(:num)/visibilidad', 'Web::toggleVisibilidadVariante/$1');
     $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
     $routes->POST('variante/(:num)/restaurar', 'Web::restaurarVariante/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
@@ -681,12 +694,12 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('sesion/(:num)/forzar-cierre', 'Web::forzarCierreSesion/$1');
     $routes->POST('sesion/(:num)/descartar-fichero', 'Web::descartarFicheroSesion/$1');
 
-    // Imágenes: referencias (familia) y renders (variante, opcionalmente
+    // Imágenes: referencias (por variante) y renders (variante, opcionalmente
     // también de una versión concreta — fase 31, antes exigía versión
     // promocionada y no había dónde subir nada antes de la primera
     // promoción). A diferencia del .blend, se suben y se sirven desde
-    // aquí mismo (spec 1.1 + excepción documentada en la cabecera de Web.php).
-    $routes->POST('familia/(:num)/referencia', 'Web::subirReferencia/$1');
+    // aquí mismo (excepción documentada en la cabecera de Web.php).
+    $routes->POST('variante/(:num)/referencia', 'Web::subirReferencia/$1');
     $routes->POST('referencia/(:num)/borrar', 'Web::borrarReferencia/$1');
     $routes->GET('referencia/(:num)/imagen', 'Web::imagenReferencia/$1');
     $routes->POST('variante/(:num)/render', 'Web::subirRender/$1');
@@ -706,9 +719,21 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // cuadrar. Las sesiones (trabajo en curso) siguen siendo del CLI.
     $routes->GET('version/(:num)/blend/descargar', 'Web::descargarBlend/$1');
 
+    // Igual que la de arriba, pero de solo lectura para trabajo en curso:
+    // no abre asiento, solo sirve para comprobar a ojo que una subida llegó
+    // bien (fase 41). "sesion" es el .blend vivo de la última subida de esa
+    // sesión; "subida" es un punto concreto de su histórico.
+    $routes->GET('sesion/(:num)/blend/descargar', 'Web::descargarSesionBlend/$1');
+    $routes->GET('subida/(:num)/blend/descargar', 'Web::descargarSubidaBlend/$1');
+
     // Galería (solo piezas validadas) + placa de impresión: carrito de STL
     // en sesión, para bajarlos todos de golpe y meterlos en un laminador.
     $routes->GET('galeria', 'Web::galeria');
+
+    // Pedidos entrantes desde sterclicks (recibidos por SterclicksApi::pedidos).
+    $routes->GET('pedidos', 'PedidosController::index');
+    $routes->GET('pedido/(:num)', 'PedidosController::ver/$1');
+    $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
@@ -741,6 +766,13 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
     $routes->GET('placa/(:num)/bitacora', 'Web::bitacora/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
+
+    // Fotos de la plataforma del laminador (fase 43): de dónde partía la
+    // impresión. Alta y baja inmediatas, fuera del guardado general de la
+    // bitácora — mismo patrón que las referencias de una variante.
+    $routes->POST('placa/(:num)/imagen', 'Web::subirImagenPlaca/$1');
+    $routes->POST('placa-imagen/(:num)/borrar', 'Web::borrarImagenPlaca/$1');
+    $routes->GET('placa-imagen/(:num)/imagen', 'Web::imagenPlaca/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

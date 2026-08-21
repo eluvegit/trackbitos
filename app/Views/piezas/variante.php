@@ -125,6 +125,14 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
     <?php if (!empty($variante['sku'])): ?>
         <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
     <?php endif; ?>
+    <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/visibilidad') ?>" class="d-inline">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-sm py-0 px-1 <?= empty($variante['visible_sterclicks']) ? 'btn-outline-secondary' : 'btn-outline-primary' ?>"
+            title="<?= empty($variante['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+            <i class="bi <?= empty($variante['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+            <?= empty($variante['visible_sterclicks']) ? 'oculta en sterclicks' : 'visible en sterclicks' ?>
+        </button>
+    </form>
     <?php if (!empty($variante['enlace_original'])): ?>
         <?php // El máster de máxima calidad vive fuera del tracker (Drive u otro sitio): esto es solo el enlace. ?>
         <a href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener"
@@ -155,11 +163,11 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 
 <?php
 /**
- * Nombre de pieza, nombre de variante, SKU y enlace al original en el mismo
+ * Nombre de pieza, nombre de variante y enlace al original en el mismo
  * modal pero cada uno en su propio formulario: son verbos distintos y cada
- * uno puede negarse por su cuenta (un nombre repetido, un SKU que ya tiene
- * otra variante). Con un solo envío, el fallo de uno dejaría a los demás
- * aplicados a medias.
+ * uno puede negarse por su cuenta (p. ej. un nombre repetido). Con un solo
+ * envío, el fallo de uno dejaría a los demás aplicados a medias. El SKU se
+ * enseña aquí mismo pero ya no es un formulario: es autogenerado (fase 44).
  */
 ?>
 <div class="modal fade" id="modalSku" tabindex="-1">
@@ -203,14 +211,11 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                 <hr>
 
                 <label class="form-label small mb-1">SKU</label>
-                <p class="small text-muted mb-2">Referencia manual, para buscar la pieza cuando alguien te la pida por su código.</p>
-                <form method="post" class="d-flex gap-1 mb-3"
-                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/sku') ?>">
-                    <?= csrf_field() ?>
-                    <input type="text" name="sku" class="form-control form-control-sm"
-                        value="<?= esc($variante['sku'] ?? '', 'attr') ?>" placeholder="p. ej. FLOR-001" maxlength="50">
-                    <button class="btn btn-sm btn-primary">Guardar</button>
-                </form>
+                <p class="small text-muted mb-2">
+                    <code><?= esc($variante['sku'] ?? '—') ?></code> — asignado solo al crear la
+                    variante, no se edita: es lo que la identifica de forma única para pedirla
+                    desde fuera, y cambiarlo rompería esa referencia.
+                </p>
 
                 <hr>
 
@@ -965,12 +970,39 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                             <?php if (!empty($s['tamano_bytes'])): ?>
                                                 · <?= $tamanoLegible((int) $s['tamano_bytes']) ?>
                                             <?php endif; ?>
+                                            <?php if (empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
+                                                <a href="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/blend/descargar') ?>"
+                                                    class="text-orange text-decoration-none"
+                                                    title="Bajar el .blend de esta sesión (copia de solo lectura, para revisar que la subida llegó bien — no cuenta como descarga de trabajo)">
+                                                    <i class="bi bi-download"></i></a>
+                                            <?php endif; ?>
                                         </div>
                                     <?php else: ?>
                                         <div class="text-muted">sin subir</div>
                                     <?php endif; ?>
                                     <?php if (!empty($s['log'])): ?>
                                         <div class="text-muted fst-italic"><?= esc($s['log']) ?></div>
+                                    <?php endif; ?>
+
+                                    <?php // Histórico de subidas (fase 41): cada subida dentro de esta sesión, no solo la última que sobrevive en $s['ruta_blend']. ?>
+                                    <?php if (!empty($s['subidas']) && count($s['subidas']) > 1): ?>
+                                        <ul class="list-unstyled ms-3 mt-1 mb-0">
+                                            <?php foreach ($s['subidas'] as $sub): ?>
+                                                <li class="text-muted">
+                                                    subida #<?= (int) $sub['numero'] ?> ·
+                                                    <?= esc($sub['subida_en']) ?>
+                                                    <?php if (!empty($sub['tamano_bytes'])): ?>
+                                                        · <?= $tamanoLegible((int) $sub['tamano_bytes']) ?>
+                                                    <?php endif; ?>
+                                                    <?php if (empty($sub['purgada'])): ?>
+                                                        <a href="<?= site_url('piezas/subida/' . (int) $sub['id'] . '/blend/descargar') ?>"
+                                                            class="text-orange text-decoration-none"
+                                                            title="Bajar el .blend de esta subida concreta (copia de solo lectura, para revisar — no cuenta como descarga de trabajo)">
+                                                            <i class="bi bi-download"></i></a>
+                                                    <?php endif; ?>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
                                     <?php endif; ?>
 
                                     <?php // Cerrada, sin promocionar todavía y sin purgar ya: candidata a liberar sitio a mano (p.ej. una subida de prueba demasiado pesada). ?>
@@ -1035,12 +1067,12 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             </div>
         </div>
 
-        <!-- Referencias del original: de la PIEZA, no de esta variante (spec 1.1) -->
+        <!-- Referencias del original: de esta variante concreta -->
         <div class="card shadow-sm mb-3">
             <div class="card-body p-3">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <h6 class="mb-0"><i class="bi bi-camera"></i> Referencias</h6>
-                    <span class="text-muted small">de <?= esc($familia['nombre'] ?? 'la pieza') ?></span>
+                    <span class="text-muted small">de <?= esc($variante['nombre'] ?? 'esta variante') ?></span>
                     <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"
                         data-bs-toggle="modal" data-bs-target="#modalReferencia">
                         <i class="bi bi-plus-lg"></i>
@@ -1050,7 +1082,6 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                 <?php if (empty($referencias)): ?>
                     <p class="text-muted small mb-0">
                         Sin fotos de referencia todavía (medidas de calibre, ángulos del original).
-                        Son de la pieza entera: las verás igual desde cualquiera de sus variantes.
                     </p>
                 <?php else: ?>
                     <div class="d-flex flex-wrap gap-2">
@@ -1081,11 +1112,11 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
         <div class="modal fade" id="modalReferencia" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <form class="modal-content" method="post" enctype="multipart/form-data"
-                    action="<?= site_url('piezas/familia/' . (int) $variante['familia_id'] . '/referencia') ?>">
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/referencia') ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
                     <div class="modal-header">
-                        <h6 class="modal-title">Referencia para <?= esc($familia['nombre'] ?? 'la pieza') ?></h6>
+                        <h6 class="modal-title">Referencia para <?= esc($variante['nombre'] ?? 'esta variante') ?></h6>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">

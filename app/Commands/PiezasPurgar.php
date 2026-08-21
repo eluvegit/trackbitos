@@ -30,11 +30,11 @@ class PiezasPurgar extends BaseCommand
     protected $name        = 'piezas:purgar';
     protected $description = 'Vacía la papelera de Piezas (ficheros y piezas apartados hace más de N días).';
     protected $usage       = 'piezas:purgar [dias]';
-    protected $arguments   = ['dias' => 'Días de gracia antes de borrar. Por defecto, 30.'];
+    protected $arguments   = ['dias' => 'Días de gracia antes de borrar. Por defecto, 90.'];
 
     public function run(array $params)
     {
-        $dias = isset($params[0]) ? max(1, (int) $params[0]) : 30;
+        $dias = isset($params[0]) ? max(1, (int) $params[0]) : 90;
 
         // Primero piezas y variantes: purgarFamiliasBorradas/purgarVariantesBorradas
         // apartan a la papelera de ficheros lo que aún viviera en su sitio

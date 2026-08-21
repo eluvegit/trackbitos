@@ -10,7 +10,7 @@ El script razona, no el usuario (spec 5.2): cada comando termina con un
 veredicto en lenguaje natural y, si hay algo que hacer, el comando exacto.
 Nunca se imprime un hash crudo para que lo compares tú.
 
-Comportamiento defensivo (spec 5.3): "bajar" se niega si hay trabajo sin
+Comportamiento defensivo (spec 5.3): "descargar" se niega si hay trabajo sin
 subir, ningún borrado es directo (todo pasa por ~/.trackbitos/papelera/), y
 antes de escribir nada se comprueba que lo descargado es lo que el servidor
 dice que es.
@@ -88,7 +88,7 @@ ENCODING_LECTURA = "utf-8-sig"
 def encontrar_blend(directorio: Path) -> Optional[Path]:
     """
     El .sesion.json no dice el nombre del fichero: se asume que hay un
-    único .blend en el directorio de trabajo (así lo deja "bajar"). Si hay
+    único .blend en el directorio de trabajo (así lo deja "descargar"). Si hay
     más de uno o ninguno, es estado ambiguo/corrupto — no se adivina.
     """
     candidatos = sorted(p for p in directorio.glob("*.blend") if p.is_file())
@@ -427,7 +427,7 @@ def avisos_de(variante: dict) -> list:
 def _listado_agrupado(variantes: list, categorias_orden: list) -> str:
     """
     Una pieza por línea, agrupada por categoría — el mismo orden que ya usa
-    "catalogo" (spec 11.1) — en vez de la única línea larguísima separada
+    "lista" (spec 11.1) — en vez de la única línea larguísima separada
     por comas que había antes. "base" (la variante que se crea sola con
     cada pieza) no se muestra: repetida en casi todas las líneas no dice
     nada. Si una pieza tiene además otras variantes con nombre propio, esas
@@ -520,7 +520,7 @@ def resolver_variante(config: dict, texto: str) -> dict:
     raise RuntimeError(
         f"'{texto}' encaja con varias:\n\n"
         f"{_listado_agrupado(exactas, categorias_orden)}\n\n"
-        "    Concreta añadiendo la pieza, p.ej.: trackbitos bajar \"pincel base\""
+        "    Concreta añadiendo la pieza, p.ej.: trackbitos descargar \"pincel base\""
     )
 
 
@@ -665,7 +665,7 @@ def imprimir_veredicto(directorio: Path, sentinel: Optional[dict], resultado: di
     print(f"  origen {signo_nube} nube     {marca_nube} {etiqueta_nube}")
 
     acciones = {
-        "borrable": "Al día. Ya no hace falta esta copia: trackbitos limpiar la aparta a la papelera.",
+        "borrable": "Al día. Ya no hace falta esta copia: trackbitos borrar la aparta a la papelera.",
         "cerrar_sesion": "Todo subido, pero la sesión sigue abierta y bloquea el otro equipo. Ejecuta: trackbitos cerrar",
         "cerrar_sin_cambios": "No has tocado nada. Ejecuta: trackbitos cerrar --sin-cambios",
         "descargar": "Descarga la sesión nueva. Es seguro: no tienes cambios locales que perder.",
@@ -715,7 +715,7 @@ def _exigir_sentinel(directorio: Path) -> dict:
     if not sentinel:
         raise RuntimeError(
             f"no hay {SENTINEL_NAME} en {directorio}: este directorio no es una mesa de trabajo.\n"
-            "  → Empieza con: trackbitos bajar <variante>"
+            "  → Empieza con: trackbitos descargar <variante>"
         )
     return sentinel
 
@@ -783,7 +783,7 @@ def cmd_estado(args) -> int:
         # comando.
         print(f"\n{directorio}\n")
         print(f"  · No es un directorio de trabajo: no hay {SENTINEL_NAME} ni ningún .blend aquí.")
-        print("\n  → Empieza con: trackbitos bajar <variante>\n")
+        print("\n  → Empieza con: trackbitos descargar <variante>\n")
         return 1
 
     imprimir_veredicto(directorio, sentinel, resultado)
@@ -809,7 +809,7 @@ def _bajar(args, motivo: str) -> int:
     elif sentinel and sentinel.get("variante_id"):
         variante_id, variante_nombre = sentinel["variante_id"], sentinel.get("variante", "?")
     else:
-        raise RuntimeError("dime qué variante: trackbitos bajar <variante>")
+        raise RuntimeError("dime qué variante: trackbitos descargar <variante>")
 
     # Se niega antes de tocar la red si aquí hay trabajo sin subir (spec 5.3).
     if blend and sentinel:
@@ -848,7 +848,7 @@ def _bajar(args, motivo: str) -> int:
             # El id, no el nombre, para que se pueda pegar tal cual: con
             # varias piezas que comparten "base" el nombre por sí solo no
             # resolvería necesariamente la misma.
-            print(f"\n  → Para empezar a trabajar: trackbitos bajar {variante_id}\n")
+            print(f"\n  → Para empezar a trabajar: trackbitos descargar {variante_id}\n")
             return 1
 
         # Pieza recién estrenada: no existe ningún fichero todavía, así que
@@ -1239,7 +1239,7 @@ def cmd_limpiar(args) -> int:
         print(f"  ✓ {ruta.name}")
     print(f"\n  El trabajo está en el servidor; esto era la copia de trabajo.")
     print(f"  Sigue en {PAPELERA_DIR} durante {DIAS_PAPELERA} días (trackbitos papelera).")
-    print("\n  → Para volver a esta pieza: trackbitos bajar \"<pieza>\"\n")
+    print("\n  → Para volver a esta pieza: trackbitos descargar \"<pieza>\"\n")
     return 0
 
 
@@ -1313,7 +1313,7 @@ def cmd_catalogo(args) -> int:
             # 14: lo que mide la etiqueta más larga ("para imprimir") más
             # el espacio de separación. Con menos, la columna de la derecha se
             # descolocaba en cada pieza cuyo estado fuese más largo que eso.
-            linea = f"  {nombre_completo(v):<30} {buena:<14} {v['versiones']} versión(es)"
+            linea = f"  {nombre_completo(v):<30} {buena:<14} {v['sesiones']} sesión(es)"
             if avisos:
                 linea += "  ⚠ " + " · ".join(avisos)
             print(linea)
@@ -1325,7 +1325,7 @@ def cmd_catalogo(args) -> int:
 def cmd_variantes(args) -> int:
     """
     El zoom sobre una pieza concreta: cuántas variantes tiene y cómo se
-    llama cada una. "catalogo" es la foto completa; esto es para cuando ya
+    llama cada una. "lista" es la foto completa; esto es para cuando ya
     sabes qué pieza quieres mirar y no hace falta barrer las demás —
     "¿cuántas líneas de diseño tiene ya la Silla, y cómo se llaman?".
     """
@@ -1426,19 +1426,19 @@ def main(argv: Optional[list] = None) -> int:
 
     # Alias cortos (spec: una letra para los de uso diario, dos para el
     # resto, sin que ninguno choque con otro): "trackbitos b <pieza>" en vez
-    # de "trackbitos bajar <pieza>". El nombre completo se sigue aceptando
+    # de "trackbitos descargar <pieza>". El nombre completo se sigue aceptando
     # igual — esto es azúcar, no un reemplazo.
     p = con_dir(subs.add_parser("estado", aliases=["e"], help="Diagnóstico del directorio de trabajo actual. (alias: e)"))
     p.set_defaults(func=cmd_estado)
 
     # "abrir" existió como comando aparte hasta la fase 22; se fusionó en
-    # "bajar", que ya distinguía internamente si había algo que descargar o
+    # "descargar", que ya distinguía internamente si había algo que descargar o
     # no (origen_descarga) y antes se limitaba a negarse en el segundo caso.
     # Alias "a" conservado por compatibilidad con la costumbre del comando
-    # viejo, junto al "b" de siempre — los dos apuntan a lo mismo ahora.
+    # viejo. "b" ha pasado a "borrar" (antes "limpiar"), así que este usa "d".
     p = con_dir(subs.add_parser(
-        "bajar", aliases=["b", "a"],
-        help="Descarga la mesa de trabajo y abre sesión (o solo abre sesión, si la pieza está recién estrenada). (alias: b, a)"
+        "descargar", aliases=["d", "a"],
+        help="Descarga la mesa de trabajo y abre sesión (o solo abre sesión, si la pieza está recién estrenada). (alias: d, a)"
     ))
     p.add_argument("variante", nargs="?", help="Nombre o id; si ya hay .sesion.json, se deduce.")
     p.add_argument("--ignorar-pendiente", action="store_true", dest="ignorar_pendiente",
@@ -1476,15 +1476,15 @@ def main(argv: Optional[list] = None) -> int:
     p.set_defaults(func=cmd_promocionar)
 
     p = con_dir(subs.add_parser(
-        "limpiar", aliases=["l"],
-        help="Aparta a la papelera el .blend de este directorio, si ya está todo subido y cerrado. (alias: l)"
+        "borrar", aliases=["b"],
+        help="Aparta a la papelera el .blend de este directorio, si ya está todo subido y cerrado. (alias: b)"
     ))
     p.set_defaults(func=cmd_limpiar)
 
     p = subs.add_parser("papelera", aliases=["pa"], help="Qué hay apartado y cuándo caduca. (alias: pa)")
     p.set_defaults(func=cmd_papelera)
 
-    p = subs.add_parser("catalogo", aliases=["ca"], help="El catálogo completo: qué piezas hay y por dónde va cada una. (alias: ca)")
+    p = subs.add_parser("lista", aliases=["l"], help="El catálogo completo: qué piezas hay y por dónde va cada una. (alias: l)")
     p.set_defaults(func=cmd_catalogo)
 
     p = subs.add_parser("variantes", aliases=["va"], help="Cuántas variantes tiene una pieza y cómo se llama cada una. (alias: va)")

@@ -11,6 +11,7 @@ use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
+use App\Models\PiezaSubidaModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use App\Models\PiezaVersionStlModel;
@@ -46,6 +47,7 @@ class PiezaService
     private PiezaMaquinaModel $maquinaModel;
     private PiezaComposicionModel $composicionModel;
     private PiezaVersionStlModel $stlModel;
+    private PiezaSkuService $skuService;
 
     public function __construct()
     {
@@ -58,6 +60,7 @@ class PiezaService
         $this->categoriaModel   = new PiezaCategoriaModel();
         $this->maquinaModel     = new PiezaMaquinaModel();
         $this->composicionModel = new PiezaComposicionModel();
+        $this->skuService       = new PiezaSkuService();
     }
 
     // ---- Máquinas -------------------------------------------------------
@@ -248,9 +251,8 @@ class PiezaService
      *
      * @return array{familia: array, variante: array}
      */
-    public function crearFamilia(string $nombre, ?string $notas = null, ?string $sku = null, ?int $categoriaId = null): array
+    public function crearFamilia(string $nombre, ?string $notas = null, ?int $categoriaId = null): array
     {
-        $sku = $this->normalizarSkuOFallar($sku);
         if ($categoriaId !== null && !$this->categoriaModel->find($categoriaId)) {
             throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
         }
@@ -266,7 +268,7 @@ class PiezaService
         // Fuera de la transacción anterior a propósito: crearVariante abre su
         // propia transacción (rama incluida) y anidarlas en CodeIgniter no
         // daría un punto de retorno intermedio real.
-        $variante = $this->crearVariante($familiaId, self::VARIANTE_BASE, null, $sku);
+        $variante = $this->crearVariante($familiaId, self::VARIANTE_BASE, null);
 
         return [
             'familia'  => $this->familiaModel->find($familiaId),
@@ -424,13 +426,23 @@ class PiezaService
             return [];
         }
 
-        $almacen     = new PiezaAlmacen();
-        $renderModel = new PiezaRenderModel();
-        $nombres     = [];
+        $almacen         = new PiezaAlmacen();
+        $renderModel     = new PiezaRenderModel();
+        $referenciaModel = new PiezaReferenciaModel();
+        $nombres         = [];
 
         foreach ($variantes as $variante) {
             $varianteId = (int) $variante['id'];
             $familia    = $this->familiaModel->find((int) $variante['familia_id']);
+
+            // Referencias ligadas a esta variante (fase 42): las de antes
+            // del cambio, sin variante_id, siguen siendo de la familia y las
+            // purga purgarFamiliasBorradas, no esto.
+            foreach ($referenciaModel->where('variante_id', $varianteId)->findAll() as $referencia) {
+                if (!empty($referencia['ruta_imagen'])) {
+                    $almacen->aPapelera($referencia['ruta_imagen']);
+                }
+            }
 
             foreach ($this->versionModel->where('variante_id', $varianteId)->findAll() as $version) {
                 if (!empty($version['ruta_blend'])) {
@@ -457,6 +469,7 @@ class PiezaService
                     if (!empty($sesion['ruta_blend'])) {
                         $almacen->aPapelera($sesion['ruta_blend']);
                     }
+                    $this->purgarSubidasDe((int) $sesion['id'], $almacen);
                 }
             }
 
@@ -536,6 +549,7 @@ class PiezaService
                         if (!empty($sesion['ruta_blend'])) {
                             $almacen->aPapelera($sesion['ruta_blend']);
                         }
+                        $this->purgarSubidasDe((int) $sesion['id'], $almacen);
                     }
                 }
             }
@@ -555,15 +569,15 @@ class PiezaService
      * Crea la variante y le abre de una vez su rama inicial (desde_version_id
      * NULL): sin rama abierta no habría dónde abrir la primera sesión.
      */
-    public function crearVariante(int $familiaId, string $nombre, ?string $notas = null, ?string $sku = null): array
+    public function crearVariante(int $familiaId, string $nombre, ?string $notas = null): array
     {
         if (!$this->familiaModel->find($familiaId)) {
             throw new RuntimeException("Familia {$familiaId} no encontrada.");
         }
-        $sku = $this->normalizarSkuOFallar($sku);
         // Misma comprobación que al renombrar: si solo se exigiera allí, un
         // duplicado seguiría entrando por esta puerta.
         $nombre = $this->nombreDeVarianteOFallar($familiaId, $nombre);
+        $sku    = $this->skuService->generar();
 
         $varianteId = $this->transaccion('crear la variante', function () use ($familiaId, $nombre, $notas, $sku) {
             $varianteId = $this->insertarOFallar($this->varianteModel, [
@@ -632,42 +646,6 @@ class PiezaService
     }
 
     /**
-     * El SKU es la otra cosa editable de una variante. Es una referencia
-     * manual — Trackbitos no sincroniza con la tienda, solo guarda el mismo
-     * código.
-     */
-    public function actualizarSku(int $varianteId, ?string $sku): array
-    {
-        if (!$this->varianteModel->find($varianteId)) {
-            throw new RuntimeException("Variante {$varianteId} no encontrada.");
-        }
-
-        $sku = $this->normalizarSkuOFallar($sku, $varianteId);
-        $this->varianteModel->update($varianteId, ['sku' => $sku]);
-
-        return $this->varianteModel->find($varianteId);
-    }
-
-    private function normalizarSkuOFallar(?string $sku, ?int $excluirVarianteId = null): ?string
-    {
-        $sku = trim((string) $sku);
-        if ($sku === '') {
-            return null;
-        }
-
-        $query = $this->varianteModel->where('sku', $sku);
-        if ($excluirVarianteId !== null) {
-            $query->where('id !=', $excluirVarianteId);
-        }
-        $existente = $query->first();
-        if ($existente) {
-            throw new RuntimeException("El SKU '{$sku}' ya lo tiene \"{$existente['nombre']}\".");
-        }
-
-        return $sku;
-    }
-
-    /**
      * Dónde vive el máster de máxima calidad de esta variante (p. ej. la
      * malla en bruto de una generación por IA, sin decimar ni limpiar de
      * texturas): fuera del tracker, normalmente en Drive — no hace falta
@@ -699,13 +677,15 @@ class PiezaService
         }
         $varianteOrigen = $this->varianteModel->find($origen['variante_id']);
         $nombre         = $this->nombreDeVarianteOFallar((int) $varianteOrigen['familia_id'], $nombre);
+        $sku            = $this->skuService->generar();
 
-        $varianteId = $this->transaccion('derivar la variante', function () use ($origenVersionId, $nombre, $notas, $varianteOrigen) {
+        $varianteId = $this->transaccion('derivar la variante', function () use ($origenVersionId, $nombre, $notas, $varianteOrigen, $sku) {
             $varianteId = $this->insertarOFallar($this->varianteModel, [
                 'familia_id'        => $varianteOrigen['familia_id'],
                 'nombre'            => $nombre,
                 'origen_version_id' => $origenVersionId,
                 'notas'             => $notas,
+                'sku'               => $sku,
             ]);
 
             $this->ramaModel->abrir($varianteId, $origenVersionId);
@@ -1128,10 +1108,34 @@ class PiezaService
             }
 
             $this->sesionModel->update($sesion['id'], $datos);
+            $this->purgarSubidasDe((int) $sesion['id'], $almacen);
             $purgadas++;
         }
 
         return $purgadas;
+    }
+
+    /**
+     * El histórico de subidas (piezas_subidas) sigue el mismo destino que el
+     * fichero "vivo" de su sesión: a la papelera, no se borra. Sin esto, cada
+     * subida intermedia se quedaría ocupando sitio para siempre aunque la
+     * versión ya esté validada y su sesión purgada.
+     */
+    private function purgarSubidasDe(int $sesionId, ?PiezaAlmacen $almacen = null): void
+    {
+        $almacen     = $almacen ?? new PiezaAlmacen();
+        $subidaModel = new PiezaSubidaModel();
+
+        foreach ($subidaModel->where('sesion_id', $sesionId)->where('purgada', 0)->findAll() as $subida) {
+            $datos = ['purgada' => 1];
+
+            $enPapelera = $almacen->aPapelera($subida['ruta_blend']);
+            if ($enPapelera !== null) {
+                $datos['ruta_blend'] = $enPapelera;
+            }
+
+            $subidaModel->update($subida['id'], $datos);
+        }
     }
 
     /**
@@ -1179,6 +1183,7 @@ class PiezaService
             . 'Fichero apartado a mano' . (trim($motivo) !== '' ? ': ' . trim($motivo) : ' (sin motivo indicado).'));
 
         $this->sesionModel->update($sesionId, $datos);
+        $this->purgarSubidasDe($sesionId);
 
         return $this->sesionModel->find($sesionId);
     }

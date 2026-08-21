@@ -134,6 +134,21 @@
     </div>
 <?php endif; ?>
 
+<?php // Capturas del laminador: de dónde partía la impresión y cómo quedó
+      // orientada/soportada. Es justo lo primero que se quiere comprobar al
+      // repetir una placa o al revisar por qué falló algo. ?>
+<?php if (!empty($imagenes)): ?>
+    <h6 class="mt-2"><i class="bi bi-camera"></i> Plataforma del laminador</h6>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <?php foreach ($imagenes as $img): ?>
+            <a href="<?= imagen_pieza($img, 'placa-imagen', 'v') ?>" target="_blank" title="<?= esc($img['notas'] ?? '') ?>">
+                <img src="<?= imagen_pieza($img, 'placa-imagen') ?>" class="rounded border"
+                    style="width: 110px; height: 110px; object-fit: cover;" alt="Plataforma del laminador" loading="lazy">
+            </a>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <?php // Cabecera de datos duros: fechas, exposición y resina. En fila de
       // tarjetitas para poder compararlas de un vistazo entre placas. ?>
 <div class="row row-cols-2 row-cols-md-4 g-2 mb-3">

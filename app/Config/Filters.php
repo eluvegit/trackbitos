@@ -14,6 +14,7 @@ use CodeIgniter\Filters\PerformanceMetrics;
 use CodeIgniter\Filters\SecureHeaders;
 use App\Filters\BuscappApiAuth;
 use App\Filters\PiezasApiAuth;
+use App\Filters\SterclicksApiAuth;
 
 class Filters extends BaseFilters
 {
@@ -39,6 +40,7 @@ class Filters extends BaseFilters
         'auth'          => \Myth\Auth\Filters\LoginFilter::class, // ← AÑADE ESTA
         'buscappApi'    => BuscappApiAuth::class,
         'piezasApi'     => PiezasApiAuth::class,
+        'sterclicksApi' => SterclicksApiAuth::class,
     ];
 
     /**

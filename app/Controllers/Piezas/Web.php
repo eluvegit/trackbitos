@@ -9,6 +9,7 @@ use App\Models\PiezaComposicionModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaPlacaEnlaceModel;
+use App\Models\PiezaPlacaImagenModel;
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaPruebaModel;
 use App\Models\PiezaPlacaVersionModel;
@@ -16,6 +17,7 @@ use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
+use App\Models\PiezaSubidaModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use App\Services\PiezaAlmacen;
@@ -105,6 +107,7 @@ class Web extends BaseController
     private PiezaVersionModel $versionModel;
     private PiezaRamaModel $ramaModel;
     private PiezaSesionModel $sesionModel;
+    private PiezaSubidaModel $subidaModel;
     private PiezaReferenciaModel $referenciaModel;
     private PiezaRenderModel $renderModel;
     private PiezaComposicionModel $composicionModel;
@@ -112,6 +115,7 @@ class Web extends BaseController
     private PiezaPlacaVersionModel $placaVersionModel;
     private PiezaPlacaPruebaModel $placaPruebaModel;
     private PiezaPlacaEnlaceModel $placaEnlaceModel;
+    private PiezaPlacaImagenModel $placaImagenModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
@@ -134,6 +138,7 @@ class Web extends BaseController
         $this->versionModel     = new PiezaVersionModel();
         $this->ramaModel        = new PiezaRamaModel();
         $this->sesionModel      = new PiezaSesionModel();
+        $this->subidaModel      = new PiezaSubidaModel();
         $this->referenciaModel  = new PiezaReferenciaModel();
         $this->renderModel      = new PiezaRenderModel();
         $this->composicionModel = new PiezaComposicionModel();
@@ -141,6 +146,7 @@ class Web extends BaseController
         $this->placaVersionModel = new PiezaPlacaVersionModel();
         $this->placaPruebaModel = new PiezaPlacaPruebaModel();
         $this->placaEnlaceModel = new PiezaPlacaEnlaceModel();
+        $this->placaImagenModel = new PiezaPlacaImagenModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
@@ -423,29 +429,74 @@ class Web extends BaseController
     {
         $carpeta = $carpetaBase . '/' . ($this->paraNombreDeArchivo($variante['nombre']) ?: ('variante-' . $variante['id']));
 
+        // Todas las validadas (nunca se sabe cuál hará falta consultar más
+        // adelante) más, aparte, lo último conocido si hay trabajo posterior
+        // sin consolidar: o bien una versión más nueva sin validar todavía,
+        // o bien —cuando la validada SÍ es la última versión creada— una
+        // sesión ya subida en la rama abierta que parte de ella. En los dos
+        // casos se guarda aparte, con sufijo EN-DESARROLLO, sin sustituir a
+        // la validada.
         $versiones = $this->versionModel->where('variante_id', $variante['id'])->orderBy('numero', 'DESC')->findAll();
-        $validada  = null;
-        foreach ($versiones as $version) {
-            if ($version['estado'] === 'validada') {
-                $validada = $version;
-                break;
+        $incluidas = array_values(array_filter($versiones, static fn(array $v) => $v['estado'] === 'validada'));
+        $ultima    = $versiones[0] ?? null;
+
+        $sesionSinVersion = null;
+        if ($ultima !== null && $ultima['estado'] !== 'validada') {
+            // Ya hay una versión más nueva (sin validar) que la última
+            // validada: eso ya es "lo último conocido", no hace falta mirar
+            // la rama abierta.
+            $incluidas[] = $ultima;
+        } else {
+            // O no hay ninguna versión todavía, o la última que hay ya está
+            // validada: en los dos casos, lo que pueda haber en la rama
+            // abierta (invariante 2/3: como mucho una) es lo único más nuevo
+            // que puede existir.
+            $rama = $this->ramaModel->abiertaDe((int) $variante['id']);
+            $sesionSinVersion = $rama ? $this->sesionModel->ultimaSubida((int) $rama['id']) : null;
+        }
+
+        foreach ($incluidas as $version) {
+            if ($this->almacen->existe($version['ruta_blend'])) {
+                $esValidada = $version['estado'] === 'validada';
+                $zip->addFile(
+                    $this->almacen->absoluta($version['ruta_blend']),
+                    $carpeta . '/' . $this->nombreArchivo($variante, $version, 'blend', $esValidada ? null : 'EN-DESARROLLO')
+                );
             }
         }
-        // Sin validada, la más reciente en cualquier estado — es el último
-        // punto en el que se dejó el trabajo, mejor que nada.
-        $referencia = $validada ?: ($versiones[0] ?? null);
 
-        if ($referencia && $this->almacen->existe($referencia['ruta_blend'])) {
-            $zip->addFile(
-                $this->almacen->absoluta($referencia['ruta_blend']),
-                $carpeta . '/' . $this->nombreArchivo($variante, $referencia, 'blend')
-            );
+        if ($sesionSinVersion && $this->almacen->existe($sesionSinVersion['ruta_blend'])) {
+            // Con validada de por medio, el nombre lleva su "vNNN-" delante:
+            // sin eso, el fichero EN-DESARROLLO no dice a partir de qué
+            // versión se sigue trabajando, y esa referencia se pierde en
+            // cuanto sale de esta carpeta.
+            $prefijoVersion = ($ultima !== null && $ultima['estado'] === 'validada')
+                ? sprintf('v%03d-', (int) $ultima['numero'])
+                : '';
+            // Mismas partes que nombreArchivo() (sku, familia, variante): sin
+            // la familia, "base-v002-..." no distingue de qué pieza es en
+            // cuanto hay dos variantes con el mismo nombre suelto.
+            $partes = array_filter([
+                $this->paraNombreDeArchivo($variante['sku'] ?? null),
+                $this->paraNombreDeArchivo($familia['nombre'] ?? null),
+                $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . $variante['id'],
+            ]);
+            $nombre = implode('-', $partes)
+                . sprintf('-%ssesion-%03d-EN-DESARROLLO.blend', $prefijoVersion, (int) $sesionSinVersion['numero']);
+            $zip->addFile($this->almacen->absoluta($sesionSinVersion['ruta_blend']), $carpeta . '/' . $nombre);
         }
 
-        $zip->addFromString($carpeta . '/ficha.md', $this->fichaMarkdown($familia, $variante, $versiones, $referencia, $validada !== null));
+        $zip->addFromString(
+            $carpeta . '/ficha.md',
+            $this->fichaMarkdown($familia, $variante, $versiones, $incluidas, $sesionSinVersion)
+        );
     }
 
-    private function fichaMarkdown(array $familia, array $variante, array $versiones, ?array $referencia, bool $esValidada): string
+    /**
+     * @param array      $incluidas        versiones cuyo .blend viaja en esta copia (validadas + la última en curso, si aplica)
+     * @param array|null $sesionSinVersion última sesión subida, solo cuando la variante aún no tiene ninguna versión promocionada
+     */
+    private function fichaMarkdown(array $familia, array $variante, array $versiones, array $incluidas, ?array $sesionSinVersion = null): string
     {
         $l = [];
         $l[] = '# ' . $familia['nombre'] . ' — ' . $variante['nombre'];
@@ -464,30 +515,53 @@ class Web extends BaseController
         }
         $l[] = '';
 
-        $l[] = '## Versión de referencia de esta copia';
-        if (!$referencia) {
+        $l[] = '## Versiones incluidas en esta copia';
+        if (empty($incluidas) && !$sesionSinVersion) {
             $l[] = '';
-            $l[] = 'Sin ninguna versión promocionada todavía: no hay `.blend` que incluir.';
+            $l[] = 'Sin ninguna versión promocionada ni ninguna subida todavía: no hay `.blend` que incluir.';
         } else {
-            $l[] = '';
-            $l[] = sprintf(
-                '**v%03d** · %s%s · %s',
-                (int) $referencia['numero'],
-                $referencia['estado'],
-                $esValidada ? ' (la buena)' : ' (sin validar todavía — no había ninguna validada)',
-                $referencia['promocionada_en']
-            );
-            if (!empty($referencia['cambio'])) {
+            foreach ($incluidas as $version) {
+                $esValidada = $version['estado'] === 'validada';
                 $l[] = '';
-                $l[] = $referencia['cambio'];
+                $l[] = sprintf(
+                    '**v%03d** · %s%s · %s',
+                    (int) $version['numero'],
+                    $version['estado'],
+                    $esValidada ? ' (la buena)' : ' · **EN DESARROLLO — todavía sin validar**',
+                    $version['promocionada_en']
+                );
+                if (!empty($version['cambio'])) {
+                    $l[] = '';
+                    $l[] = $version['cambio'];
+                }
+                if (!empty($version['medidas'])) {
+                    $l[] = '';
+                    $l[] = 'Medidas: ' . $version['medidas'];
+                }
+                if (!empty($version['resultado'])) {
+                    $l[] = '';
+                    $l[] = 'Resultado: ' . $version['resultado'];
+                }
             }
-            if (!empty($referencia['medidas'])) {
+
+            // Trabajo posterior a la última versión (validada o no) que
+            // todavía no se ha promocionado: existe en paralelo, no sustituye
+            // a ninguna de las de arriba. Si parte de una validada, se dice
+            // de cuál — es la misma referencia que ya lleva el nombre del
+            // fichero.
+            if ($sesionSinVersion) {
+                $baseValidada = $incluidas[0] ?? null;
                 $l[] = '';
-                $l[] = 'Medidas: ' . $referencia['medidas'];
-            }
-            if (!empty($referencia['resultado'])) {
-                $l[] = '';
-                $l[] = 'Resultado: ' . $referencia['resultado'];
+                $l[] = sprintf(
+                    '**Sesión %d**%s · sin promocionar todavía · **EN DESARROLLO — todavía sin validar** · %s',
+                    (int) $sesionSinVersion['numero'],
+                    $baseValidada ? sprintf(' · a partir de v%03d', (int) $baseValidada['numero']) : '',
+                    $sesionSinVersion['subida_en']
+                );
+                if (!empty($sesionSinVersion['log'])) {
+                    $l[] = '';
+                    $l[] = $sesionSinVersion['log'];
+                }
             }
         }
         $l[] = '';
@@ -525,13 +599,13 @@ class Web extends BaseController
         // Cuenta, no ficheros: esta copia es solo texto + el .blend de
         // referencia (ver cabecera de backupDescargar). Sirve para saber
         // qué se dejó fuera sin tener que adivinarlo.
-        $nReferencias = $this->referenciaModel->where('familia_id', $familia['id'])->countAllResults();
+        $nReferencias = count($this->referenciaModel->deVariante((int) $familia['id'], (int) $variante['id']));
         $nRenders     = $this->renderModel->where('variante_id', $variante['id'])->countAllResults();
-        $nStl         = $referencia ? count($this->servicio->stlsDe((int) $referencia['id'])) : 0;
+        $nStl         = array_sum(array_map(fn(array $v) => count($this->servicio->stlsDe((int) $v['id'])), $incluidas));
         $l[] = '## No incluido en esta copia';
         $l[] = '';
         $l[] = sprintf(
-            '%d referencia(s) de la pieza, %d render(es) de esta variante, %d STL de la versión de referencia.',
+            '%d referencia(s) de esta variante, %d render(es) de esta variante, %d STL de las versiones incluidas.',
             $nReferencias,
             $nRenders,
             $nStl
@@ -582,6 +656,68 @@ class Web extends BaseController
             fn() => $this->servicio->crearCategoria((string) $this->request->getPost('nombre')),
             fn() => site_url('piezas'),
             fn($categoria) => 'Categoría "' . $categoria['nombre'] . '" creada.'
+        );
+    }
+
+    /**
+     * Ocultar/mostrar en el catálogo de sterclicks (SterclicksApi::catalogo()).
+     * Ocultar una categoría o familia oculta también todo lo que cuelga de
+     * ella, aunque la variante en sí siga marcada como visible.
+     */
+    public function toggleVisibilidadCategoria(int $id)
+    {
+        return $this->ejecutar(
+            function () use ($id) {
+                $categoria = $this->categoriaModel->find($id);
+                if (!$categoria) {
+                    throw new RuntimeException('Esa categoría no existe.');
+                }
+                $visible = empty($categoria['visible_sterclicks']) ? 1 : 0;
+                $this->categoriaModel->update($id, ['visible_sterclicks' => $visible]);
+                return ['nombre' => $categoria['nombre'], 'visible' => $visible];
+            },
+            fn() => site_url('piezas'),
+            fn($r) => $r['visible']
+                ? '"' . $r['nombre'] . '" vuelve a verse en sterclicks.'
+                : '"' . $r['nombre'] . '" oculta de sterclicks (y todo lo de dentro).'
+        );
+    }
+
+    public function toggleVisibilidadFamilia(int $id)
+    {
+        return $this->ejecutar(
+            function () use ($id) {
+                $familia = $this->familiaModel->find($id);
+                if (!$familia) {
+                    throw new RuntimeException('Esa pieza no existe.');
+                }
+                $visible = empty($familia['visible_sterclicks']) ? 1 : 0;
+                $this->familiaModel->update($id, ['visible_sterclicks' => $visible]);
+                return ['nombre' => $familia['nombre'], 'visible' => $visible];
+            },
+            fn() => site_url('piezas'),
+            fn($r) => $r['visible']
+                ? '"' . $r['nombre'] . '" vuelve a verse en sterclicks.'
+                : '"' . $r['nombre'] . '" oculta de sterclicks (y todas sus variantes).'
+        );
+    }
+
+    public function toggleVisibilidadVariante(int $id)
+    {
+        return $this->ejecutar(
+            function () use ($id) {
+                $variante = $this->varianteModel->find($id);
+                if (!$variante) {
+                    throw new RuntimeException('Esa variante no existe.');
+                }
+                $visible = empty($variante['visible_sterclicks']) ? 1 : 0;
+                $this->varianteModel->update($id, ['visible_sterclicks' => $visible]);
+                return ['id' => $id, 'nombre' => $variante['nombre'], 'visible' => $visible];
+            },
+            fn($r) => site_url('piezas/variante/' . $r['id']),
+            fn($r) => $r['visible']
+                ? '"' . $r['nombre'] . '" vuelve a verse en sterclicks.'
+                : '"' . $r['nombre'] . '" oculta de sterclicks.'
         );
     }
 
@@ -713,11 +849,9 @@ class Web extends BaseController
         return view('piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
-            // Comunes a toda la pieza, no por variante (spec 1.1): las
-            // referencias del original ayudan a modelar cualquiera de sus
-            // variantes, y es aquí — no en el índice — donde se miran.
-            'referencias' => $this->referenciaModel
-                ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->findAll(),
+            // Solo las de esta variante (más las de antes del cambio que
+            // aún no distinguía variante, ver PiezaReferenciaModel).
+            'referencias' => $this->referenciaModel->deVariante((int) $variante['familia_id'], $id),
             // Renders sueltos (fase 31): de esta variante pero sin versión
             // concreta todavía — antes de la primera promoción es la única
             // clase de render que puede existir. Los que sí tienen versión
@@ -804,6 +938,7 @@ class Web extends BaseController
     public function galeria()
     {
         $piezas = [];
+        $stockPorSku = (new \App\Services\SterclicksClient())->stockPorSku();
 
         // Las piezas en la papelera no cuentan como "listas para imprimir",
         // aunque conserven una versión validada: siguen existiendo hasta que
@@ -866,6 +1001,7 @@ class Web extends BaseController
                 // filas del índice: se reutiliza tal cual, sin duplicar la
                 // lógica de reparto por categoría (spec 11.1).
                 'categoria_id'    => $categoriaDeFamilia[$familiaId] ?? null,
+                'stock'           => $variante['sku'] ? ($stockPorSku[$variante['sku']] ?? null) : null,
             ];
         }
 
@@ -911,8 +1047,7 @@ class Web extends BaseController
                 ->orderBy('subida_en', 'DESC')->first();
         }
 
-        $registro = $render ?: $this->referenciaModel
-            ->where('familia_id', $variante['familia_id'])->orderBy('subida_en', 'DESC')->first();
+        $registro = $render ?: ($this->referenciaModel->deVariante((int) $variante['familia_id'], (int) $variante['id'])[0] ?? null);
 
         if (!$registro) {
             return ['miniatura' => null, 'vista' => null];
@@ -1309,6 +1444,17 @@ class Web extends BaseController
         // no sabe añadirlas a una tabla ya creada), así que el SET NULL lo
         // hacemos aquí a mano.
         $this->placaModel->where('origen_placa_id', $id)->set(['origen_placa_id' => null])->update();
+
+        // Las fotos de la plataforma sí son ficheros propios (a diferencia
+        // del STL, que es de la versión): la fila se va con la placa por
+        // cascada de FK, pero el fichero no se aparta solo.
+        foreach ($this->placaImagenModel->where('placa_id', $id)->findAll() as $imagen) {
+            if (!empty($imagen['ruta_imagen'])) {
+                $this->almacen->aPapelera($imagen['ruta_imagen']);
+            }
+            $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+        }
+
         $this->placaModel->delete($id);
 
         return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
@@ -1422,10 +1568,11 @@ class Web extends BaseController
         $id = (int) $placa['id'];
 
         return [
-            'placa'   => $placa,
-            'piezas'  => $this->piezasDeLaPlaca($id),
-            'pruebas' => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
-            'enlaces' => $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            'placa'    => $placa,
+            'piezas'   => $this->piezasDeLaPlaca($id),
+            'pruebas'  => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            'enlaces'  => $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            'imagenes' => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
         ];
     }
 
@@ -1700,7 +1847,6 @@ class Web extends BaseController
             fn() => $this->servicio->crearFamilia(
                 trim((string) $this->request->getPost('nombre')),
                 $this->request->getPost('notas') ?: null,
-                $this->request->getPost('sku') ?: null,
                 $this->request->getPost('categoria_id') ? (int) $this->request->getPost('categoria_id') : null
             ),
             fn($creado) => site_url('piezas'),
@@ -1814,8 +1960,7 @@ class Web extends BaseController
             fn() => $this->servicio->crearVariante(
                 (int) $this->request->getPost('familia_id'),
                 trim((string) $this->request->getPost('nombre')),
-                $this->request->getPost('notas') ?: null,
-                $this->request->getPost('sku') ?: null
+                $this->request->getPost('notas') ?: null
             ),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Variante "' . $variante['nombre'] . '" creada, con su rama inicial abierta.'
@@ -1833,17 +1978,6 @@ class Web extends BaseController
             fn() => $this->servicio->renombrarVariante($varianteId, (string) $this->request->getPost('nombre')),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Ahora se llama "' . $variante['nombre'] . '". Desde el script, llámala por ese nombre.'
-        );
-    }
-
-    public function editarSku(int $varianteId)
-    {
-        return $this->ejecutar(
-            fn() => $this->servicio->actualizarSku($varianteId, $this->request->getPost('sku')),
-            fn($variante) => site_url('piezas/variante/' . $variante['id']),
-            fn($variante) => $variante['sku']
-                ? 'SKU actualizado: ' . $variante['sku'] . '.'
-                : 'SKU quitado.'
         );
     }
 
@@ -2037,19 +2171,22 @@ class Web extends BaseController
 
     // ---- Imágenes: referencias (familia) y renders (versión) ------------
 
-    public function subirReferencia(int $familiaId)
+    public function subirReferencia(int $varianteId)
     {
-        $familia = $this->familiaModel->find($familiaId);
-        if (!$familia) {
-            return redirect()->to(site_url('piezas'))->with('error', 'Esa pieza no existe.');
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa variante no existe.');
         }
 
+        $familiaId = (int) $variante['familia_id'];
+
         return $this->ejecutar(
-            function () use ($familiaId) {
+            function () use ($familiaId, $varianteId) {
                 $extension = $this->validarImagen($this->request->getFile('imagen'));
 
                 $id = $this->referenciaModel->insert([
-                    'familia_id' => $familiaId,
+                    'familia_id'  => $familiaId,
+                    'variante_id' => $varianteId,
                     'ruta_imagen' => '',
                     'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
                     'subida_en'   => date('Y-m-d H:i:s'),
@@ -2073,19 +2210,19 @@ class Web extends BaseController
 
                 $this->publicarCopias($ruta, $hash);
 
-                return $familiaId;
+                return $varianteId;
             },
-            fn() => $this->vueltaALaFicha($familiaId),
+            fn() => site_url('piezas/variante/' . $varianteId),
             fn() => 'Referencia añadida.'
         );
     }
 
     /**
-     * A dónde volver tras tocar una referencia. Se sube desde la ficha de
-     * una variante concreta, pero la referencia es de la pieza entera, así
-     * que el destino viene en el formulario en vez de deducirse. Se
-     * comprueba que esa variante sea de esta pieza: es lo que impide
-     * convertir el campo en un redirector a cualquier sitio.
+     * A dónde volver tras borrar una referencia. Si tiene `variante_id`
+     * (subida tras este cambio) se sabe sin más; las de antes (compartidas,
+     * sin variante) siguen dependiendo del campo oculto del formulario —
+     * comprobando que la variante indicada sea de la misma familia, para que
+     * no se convierta en un redirector a cualquier sitio.
      */
     private function vueltaALaFicha(int $familiaId): string
     {
@@ -2107,13 +2244,93 @@ class Web extends BaseController
         // Invariante 6 en espíritu: el fichero se aparta, no se destruye —
         // el registro de la referencia sí se quita, porque a diferencia de
         // una sesión o una versión no es parte del histórico de trabajo.
-        $destino = $this->vueltaALaFicha((int) $referencia['familia_id']);
+        $destino = !empty($referencia['variante_id'])
+            ? site_url('piezas/variante/' . $referencia['variante_id'])
+            : $this->vueltaALaFicha((int) $referencia['familia_id']);
 
         $this->almacen->aPapelera($referencia['ruta_imagen']);
         $this->publicas->retirar($referencia['hash_imagen'] ?? null);
         $this->referenciaModel->delete($id);
 
         return redirect()->to($destino)->with('success', 'Referencia apartada a la papelera.');
+    }
+
+    /**
+     * Captura de la plataforma del laminador (fase 43): de dónde partía la
+     * impresión y cómo quedó orientada/soportada, no solo el resultado ya
+     * curado. Una placa compleja puede necesitar varias, así que se suben
+     * de una en una y se acumulan, igual que las referencias de una
+     * variante — no forman parte del guardado general de la bitácora.
+     */
+    public function subirImagenPlaca(int $placaId)
+    {
+        $placa = $this->placaModel->find($placaId);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        return $this->ejecutar(
+            function () use ($placaId) {
+                $extension = $this->validarImagen($this->request->getFile('imagen'));
+
+                $id = $this->placaImagenModel->insert([
+                    'placa_id'    => $placaId,
+                    'ruta_imagen' => '',
+                    'notas'       => trim((string) $this->request->getPost('notas')) ?: null,
+                    'orden'       => $this->placaImagenModel->siguienteOrden($placaId),
+                    'subida_en'   => date('Y-m-d H:i:s'),
+                ], true);
+                if (!$id) {
+                    throw new RuntimeException('No se pudo registrar la imagen: ' . implode(' ', $this->placaImagenModel->errors()));
+                }
+
+                $ruta = $this->almacen->rutaPlacaImagen($placaId, $id, $extension);
+                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+                $hash = $this->almacen->hash($ruta);
+
+                $this->placaImagenModel->update($id, [
+                    'ruta_imagen'  => $ruta,
+                    'hash_imagen'  => $hash,
+                    'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                ]);
+
+                $this->publicarCopias($ruta, $hash);
+
+                return $placaId;
+            },
+            fn() => site_url('piezas/placa/' . $placaId . '/bitacora/editar'),
+            fn() => 'Foto añadida.'
+        );
+    }
+
+    public function borrarImagenPlaca(int $id)
+    {
+        $imagen = $this->placaImagenModel->find($id);
+        if (!$imagen) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa foto ya no existe.');
+        }
+
+        // Invariante 6 en espíritu, igual que las referencias: el fichero se
+        // aparta, no se destruye; el registro sí se quita.
+        $this->almacen->aPapelera($imagen['ruta_imagen']);
+        $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+        $this->placaImagenModel->delete($id);
+
+        return redirect()->to(site_url('piezas/placa/' . (int) $imagen['placa_id'] . '/bitacora/editar'))
+            ->with('success', 'Foto apartada a la papelera.');
+    }
+
+    public function imagenPlaca(int $id)
+    {
+        $imagen = $this->placaImagenModel->find($id);
+        if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return $this->servirImagen(
+            $this->almacen->absoluta($imagen['ruta_imagen']),
+            $imagen['hash_imagen']
+        );
     }
 
     /**
@@ -2335,6 +2552,74 @@ class Web extends BaseController
         // existe, y lo que se suba desde aquí no cuadraría con nada).
         return $this->response->download($this->almacen->absoluta($version['ruta_blend']), null, true)
             ->setFileName($this->nombreArchivo($variante, $version, 'blend', 'solo-lectura'));
+    }
+
+    /**
+     * El .blend "vivo" de una sesión (el de la última subida), de solo
+     * lectura desde la web — mismo espíritu que `descargarBlend`, pero para
+     * trabajo en curso: sirve para comprobar a ojo que una subida llegó bien
+     * sin tener que fiarse solo del CLI, sobre todo si hay fallos recientes
+     * de subida y hace falta verificar que no se ha perdido nada. No abre
+     * ningún asiento ni afecta a la sincronización — igual que
+     * `PiezaSyncService::entregarParaVerificacion`, que ya hace lo mismo
+     * para el cliente (fase 34).
+     */
+    public function descargarSesionBlend(int $sesionId)
+    {
+        $sesion = $this->sesionModel->find($sesionId);
+        if (!$sesion || !$this->almacen->existe($sesion['ruta_blend'] ?? null)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $variante = $this->varianteModel->find($this->ramaModel->find($sesion['rama_id'])['variante_id']);
+
+        return $this->response->download($this->almacen->absoluta($sesion['ruta_blend']), null, true)
+            ->setFileName($this->nombreDescargaSesion($variante, (int) $sesion['numero'], 'solo-lectura'));
+    }
+
+    /**
+     * Igual que `descargarSesionBlend`, pero de una subida concreta del
+     * histórico (fase 41) en vez del último estado de la sesión: la subida
+     * 2 de una sesión que ya lleva 3 sigue siendo descargable, aunque ya no
+     * sea la que se vería al abrir la sesión hoy.
+     */
+    public function descargarSubidaBlend(int $subidaId)
+    {
+        $subida = $this->subidaModel->find($subidaId);
+        if (!$subida || !$this->almacen->existe($subida['ruta_blend'] ?? null)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $sesion   = $this->sesionModel->find($subida['sesion_id']);
+        $variante = $this->varianteModel->find($this->ramaModel->find($sesion['rama_id'])['variante_id']);
+
+        return $this->response->download($this->almacen->absoluta($subida['ruta_blend']), null, true)
+            ->setFileName($this->nombreDescargaSesion(
+                $variante,
+                (int) $sesion['numero'],
+                'solo-lectura',
+                (int) $subida['numero']
+            ));
+    }
+
+    /** Nombre de fichero para descargas de sesión/subida: no hay "versión" que numerar con v%03d, así que no reutiliza nombreArchivo(). */
+    private function nombreDescargaSesion(?array $variante, int $numeroSesion, string $sufijo, ?int $numeroSubida = null): string
+    {
+        $familia = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
+
+        $partes = array_filter([
+            $this->paraNombreDeArchivo($variante['sku'] ?? null),
+            $this->paraNombreDeArchivo($familia['nombre'] ?? null),
+            $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . ($variante['id'] ?? '0'),
+        ]);
+
+        return sprintf(
+            '%s-sesion-%03d%s-%s.blend',
+            implode('-', $partes),
+            $numeroSesion,
+            $numeroSubida !== null ? sprintf('-subida-%03d', $numeroSubida) : '',
+            $this->paraNombreDeArchivo($sufijo)
+        );
     }
 
     /**
@@ -2613,7 +2898,14 @@ class Web extends BaseController
 
         $sesiones = $this->sesionModel->where('rama_id', $rama['id'])->orderBy('numero', 'DESC')->findAll();
 
-        return array_map(fn($s) => $s + ['maquina' => $this->sync->nombreDeMaquina((int) $s['maquina_id'])], $sesiones);
+        return array_map(fn($s) => $s + [
+            'maquina' => $this->sync->nombreDeMaquina((int) $s['maquina_id']),
+            // Histórico de subidas de esta sesión (fase 41): antes cada
+            // `subir` pisaba el .blend anterior, así que solo quedaba el
+            // último. Se enseñan aparte para poder revisar/descargar
+            // cualquier punto intermedio, no solo el que sobrevivió.
+            'subidas' => $this->subidaModel->deSesion((int) $s['id']),
+        ], $sesiones);
     }
 
     /**

@@ -18,14 +18,13 @@ class PiezaVarianteModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['familia_id', 'nombre', 'sku', 'origen_version_id', 'notas', 'enlace_original', 'borrado_en'];
+    protected $allowedFields = ['familia_id', 'nombre', 'sku', 'origen_version_id', 'notas', 'enlace_original', 'borrado_en', 'visible_sterclicks'];
 
     protected $validationRules = [
         'familia_id'      => 'required|integer',
         'nombre'          => 'required|max_length[150]',
-        // Unicidad comprobada aparte en PiezaService::actualizarSku(), con
-        // mensaje que dice a qué variante pertenece ya el SKU — más útil
-        // que el genérico de is_unique.
+        // Autogenerado por PiezaSkuService al crear la variante (fase 44):
+        // ya no es un campo editable a mano.
         'sku'             => 'permit_empty|max_length[50]',
         'enlace_original' => 'permit_empty|max_length[500]',
     ];

@@ -67,6 +67,7 @@ $filaSesionActiva = static function (array $s): string {
                   // impreso no obliga a pasar por ahí: se llega también desde aquí. ?>
             <li><a class="dropdown-item" href="<?= site_url('piezas/placas') ?>"><i class="bi bi-clock-history"></i> Placas</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/maquinas') ?>"><i class="bi bi-pc-display"></i> Máquinas</a></li>
+            <li><a class="dropdown-item" href="<?= site_url('piezas/pedidos') ?>"><i class="bi bi-cart-check"></i> Pedidos (sterclicks)</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/estadisticas') ?>"><i class="bi bi-hdd-stack"></i> Estadísticas</a></li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
             <?php if (!empty($papeleraCount)): ?>
@@ -499,8 +500,21 @@ foreach ($grupos as $grupo) {
                         </span>
                         <span class="badge border text-body-secondary" data-contador><?= count($grupo['piezas']) ?></span>
 
+                        <?php if ($categoria && empty($categoria['visible_sterclicks'])): ?>
+                            <span class="badge text-bg-secondary" title="Oculta del catálogo de sterclicks (y todo lo de dentro)">
+                                <i class="bi bi-eye-slash"></i> oculta en sterclicks
+                            </span>
+                        <?php endif; ?>
+
                         <?php if ($categoria): ?>
                             <span class="zona-organizar d-none ms-auto d-flex gap-1">
+                                <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/visibilidad') ?>">
+                                    <?= csrf_field() ?>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                        title="<?= empty($categoria['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+                                        <i class="bi <?= empty($categoria['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+                                    </button>
+                                </form>
                                 <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/subir') ?>">
                                     <?= csrf_field() ?>
                                     <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Subir"
@@ -540,6 +554,9 @@ foreach ($grupos as $grupo) {
                                 (<?= count($variantes) > 0 ? count($variantes) . ' variantes' : 'sin variantes' ?>)
                             </span>
                         <?php endif; ?>
+                        <?php if (empty($familia['visible_sterclicks'])): ?>
+                            <i class="bi bi-eye-slash text-muted ms-1" title="Oculta del catálogo de sterclicks"></i>
+                        <?php endif; ?>
                     </td>
                     <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
@@ -560,6 +577,15 @@ foreach ($grupos as $grupo) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </form>
+
+                            <?php // Ocultar/mostrar en sterclicks: mismo modo Organizar que el resto de acciones de la fila. ?>
+                            <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad') ?>">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                    title="<?= empty($familia['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+                                    <i class="bi <?= empty($familia['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+                                </button>
                             </form>
 
                             <?php // Borrar (a papelera): mismo modo Organizar, para no ensuciar la fila el resto del tiempo. ?>
@@ -677,13 +703,12 @@ foreach ($grupos as $grupo) {
                         <option value="<?= (int) $c['id'] ?>"><?= esc($c['nombre']) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <label class="form-label small">SKU (opcional)</label>
-                <input type="text" name="sku" class="form-control form-control-sm mb-2" placeholder="el código de tu tienda, si ya lo tienes" maxlength="50">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
                 <p class="text-muted small mt-2 mb-0">
-                    Nace lista para trabajar, con numeración propia desde v001. Solo hace falta
-                    añadir variantes si esta pieza acaba teniendo varias líneas de diseño.
+                    Nace lista para trabajar, con numeración propia desde v001 y su SKU asignado
+                    solo. Solo hace falta añadir variantes si esta pieza acaba teniendo varias
+                    líneas de diseño.
                 </p>
             </div>
             <div class="modal-footer">

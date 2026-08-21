@@ -20,6 +20,7 @@
 $idPlaca = (int) $placa['id'];
 $enModal = isset($enModal) && $enModal;
 $enlaces = $enlaces ?? [];
+$imagenes = $imagenes ?? [];
 
 $paraInput = static fn(?string $fecha) => $fecha ? date('Y-m-d\TH:i', strtotime($fecha)) : '';
 $peso = static fn($v) => $v === null || $v === '' ? '' : rtrim(rtrim(number_format((float) $v, 2, ',', ''), '0'), ',');
@@ -122,7 +123,7 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
                     value="<?= esc(old('resina', (string) $placa['resina']), 'attr') ?>">
             </div>
             <div class="col-md-3">
-                <label class="form-label small mb-1">Temperatura (°C)</label>
+                <label class="form-label small mb-1">Temperatura ambiente (°C)</label>
                 <input type="text" inputmode="decimal" name="temperatura" class="form-control form-control-sm"
                     placeholder="24,5" value="<?= esc(old('temperatura', $peso($placa['temperatura'])), 'attr') ?>">
             </div>
@@ -300,3 +301,50 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
         </div>
     <?php endif; ?>
 </form>
+
+<?php // Fotos de la plataforma del laminador: de dónde partía la impresión y
+      // cómo quedó orientada/soportada, no solo el resultado ya curado.
+      // Fuera del <form> de arriba (no se puede anidar un <form> dentro de
+      // otro): alta y baja son inmediatas, igual que las referencias de una
+      // variante — no forman parte del guardado general de la bitácora. ?>
+<div class="mt-3">
+    <div class="small fw-semibold text-body-secondary mb-1">
+        <i class="bi bi-camera"></i> Fotos de la plataforma (laminador)
+    </div>
+
+    <?php if (empty($imagenes)): ?>
+        <p class="text-muted small mb-2">
+            Sin fotos todavía (captura del laminador: orientación, soportes, desde dónde partía).
+        </p>
+    <?php else: ?>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+            <?php foreach ($imagenes as $img): ?>
+                <div class="position-relative" style="width: 88px;">
+                    <a href="<?= imagen_pieza($img, 'placa-imagen', 'v') ?>" target="_blank"
+                        title="<?= esc($img['notas'] ?? '') ?>">
+                        <img src="<?= imagen_pieza($img, 'placa-imagen') ?>"
+                            class="rounded border" style="width: 88px; height: 88px; object-fit: cover;"
+                            alt="Plataforma del laminador" loading="lazy">
+                    </a>
+                    <form method="post" action="<?= site_url('piezas/placa-imagen/' . (int) $img['id'] . '/borrar') ?>"
+                        onsubmit="return confirm('¿Apartar esta foto a la papelera?');" class="position-absolute top-0 end-0">
+                        <?= csrf_field() ?>
+                        <button class="btn btn-sm btn-dark py-0 px-1 opacity-75" style="font-size: .65rem;" title="Borrar">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center"
+        action="<?= site_url('piezas/placa/' . $idPlaca . '/imagen') ?>">
+        <?= csrf_field() ?>
+        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp"
+            class="form-control form-control-sm" style="max-width: 220px;" required>
+        <input type="text" name="notas" class="form-control form-control-sm" maxlength="150"
+            placeholder="Nota (opcional)" style="max-width: 180px;">
+        <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> Subir foto</button>
+    </form>
+</div>
