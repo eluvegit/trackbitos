@@ -60,4 +60,26 @@ class SterclicksClient
 
         return $porSku;
     }
+
+    /** Avisa a sterclicks de que resincronice su catálogo ya, sin esperar al cron. */
+    public function sincronizarCatalogo(): bool
+    {
+        if ($this->apiToken === '') {
+            return false;
+        }
+
+        $ch = curl_init($this->baseUrl . '/sincronizar');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $this->apiToken],
+            CURLOPT_TIMEOUT        => 5,
+        ]);
+
+        $raw = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $raw !== false && $status >= 200 && $status < 300;
+    }
 }

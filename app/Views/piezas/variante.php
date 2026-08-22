@@ -122,8 +122,10 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
     <span class="text-muted fw-normal"><?= esc($familia['nombre']) ?></span>
     <span class="text-muted">-</span>
     <strong class="fw-semibold"><?= esc($variante['nombre']) ?></strong>
+    <?php // Sin color de fondo: text-bg-light sobre el tema oscuro deja el código
+          // casi ilegible (mismo arreglo que colSku() en piezas/index.php). ?>
     <?php if (!empty($variante['sku'])): ?>
-        <span class="badge text-bg-light text-muted border font-monospace"><?= esc($variante['sku']) ?></span>
+        <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($variante['sku']) ?></span>
     <?php endif; ?>
     <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/visibilidad') ?>" class="d-inline">
         <?= csrf_field() ?>
@@ -136,7 +138,7 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
     <?php if (!empty($variante['enlace_original'])): ?>
         <?php // El máster de máxima calidad vive fuera del tracker (Drive u otro sitio): esto es solo el enlace. ?>
         <a href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener"
-            class="badge text-bg-light text-muted border text-decoration-none" title="Abrir el original de máxima calidad">
+            class="badge border text-body-secondary text-decoration-none" title="Abrir el original de máxima calidad">
             <i class="bi bi-box-arrow-up-right"></i> original
         </a>
     <?php endif; ?>
@@ -567,6 +569,26 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                             </button>
                                         </form>
                                     </div>
+                                    <?php // Cuánto ocupa en la placa (spec: reparto de piezas en placas),
+                                          // en cuadrículas de 6×10 — a ojo, no hay lectura del STL de por
+                                          // medio. Vacío = "sin medir": esa pieza se queda fuera del
+                                          // cálculo hasta que alguien lo rellene. ?>
+                                    <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/cuadros') ?>"
+                                        class="d-inline-flex align-items-center gap-1">
+                                        <?= csrf_field() ?>
+                                        <input type="number" name="ancho" min="1" max="<?= \App\Services\PiezaEmpaquetadoService::COLUMNAS ?>"
+                                            value="<?= esc((string) ($stl['cuadros_ancho'] ?? ''), 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 2.6em;"
+                                            title="Cuadrículas de ancho en la placa" placeholder="anc">
+                                        <span class="text-muted small">×</span>
+                                        <input type="number" name="fondo" min="1" max="<?= \App\Services\PiezaEmpaquetadoService::FILAS ?>"
+                                            value="<?= esc((string) ($stl['cuadros_fondo'] ?? ''), 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 2.6em;"
+                                            title="Cuadrículas de fondo en la placa" placeholder="fon">
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Guardar cuadrícula">
+                                            <i class="bi bi-check-lg"></i>
+                                        </button>
+                                    </form>
                                 <?php endforeach; ?>
 
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"

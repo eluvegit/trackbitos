@@ -185,6 +185,47 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
 
     <?php // Las piezas no se añaden ni se quitan aquí: eso lo decide la placa
           // al montarla en la galería. Aquí solo se anota sobre lo que llevó. ?>
+    <?php
+        /**
+         * Cuántas placas hace falta según las cuadrículas medidas de cada
+         * STL (spec: reparto de piezas en placas). Con las cantidades de
+         * AHORA, así que se recalcula cada vez que se guarda — cambiar
+         * "Copias" no lo actualiza solo hasta que se pulse Guardar.
+         */
+        $reparto = $reparto ?? [];
+        $sinMedir = $sinMedir ?? 0;
+    ?>
+    <?php $capacidad = \App\Services\PiezaEmpaquetadoService::COLUMNAS * \App\Services\PiezaEmpaquetadoService::FILAS; ?>
+    <?php if ($reparto !== [] || $sinMedir > 0): ?>
+        <div class="alert <?= count($reparto) > 1 ? 'alert-info' : 'alert-secondary' ?> mt-3 py-2 mb-2 small" data-reparto>
+            <?php if (count($reparto) <= 1): ?>
+                <i class="bi bi-grid-3x3"></i> Cabe en <strong>una placa</strong>
+                (<?= (int) ($reparto[0]['cuadrosUsados'] ?? 0) ?>/<?= $capacidad ?> cuadrículas).
+            <?php else: ?>
+                <?php // "No cabe" a secas suena a que algo ha ido mal — y no es
+                      // así, es que hacen falta dos o más, que es tan normal
+                      // como una: por eso el color es informativo, no de aviso. ?>
+                <i class="bi bi-grid-3x3"></i> No cabe en una placa, pero sí en
+                <strong><?= count($reparto) ?></strong> (cálculo aproximado):
+                <ul class="mb-0 mt-1 ps-3">
+                    <?php foreach ($reparto as $i => $bin): ?>
+                        <li>
+                            Placa <?= $i + 1 ?> (<?= $bin['cuadrosUsados'] ?>/<?= $capacidad ?>):
+                            <?= implode(', ', array_map(
+                                static fn(array $p) => esc($p['etiqueta']) . ($p['cantidad'] > 1 ? ' ×' . $p['cantidad'] : ''),
+                                $bin['piezas']
+                            )) ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <span class="text-muted">Usa "Repartir en otra placa" desde el histórico para materializarlo.</span>
+            <?php endif; ?>
+            <?php if ($sinMedir > 0): ?>
+                <div class="text-warning-emphasis mt-1"><?= $sinMedir ?> STL sin cuadrícula medida, no entran en la cuenta.</div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <details class="mt-3" open>
         <summary class="small fw-semibold text-body-secondary" style="cursor: pointer;">
             <i class="bi bi-box"></i> Qué llevaba (<?= count($piezas) ?>)

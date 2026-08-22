@@ -6,6 +6,13 @@
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Pedidos</strong>
+
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Piezas listas para imprimir">
+        <i class="bi bi-grid-3x3-gap"></i> Galería
+    </a>
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
+        <i class="bi bi-clock-history"></i> Placas
+    </a>
 </h5>
 
 <?php if (session('success')): ?>

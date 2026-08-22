@@ -21,6 +21,7 @@ use App\Models\PiezaSubidaModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use App\Services\PiezaAlmacen;
+use App\Services\PiezaEmpaquetadoService;
 use App\Services\PiezaImagenesPublicas;
 use App\Services\PiezaService;
 use App\Services\PiezaSyncService;
@@ -68,6 +69,16 @@ class Web extends BaseController
      * pueda heredar sus preguntas sin responder.
      */
     private const SESION_CARRITO_ORIGEN = 'piezas_carrito_origen';
+
+    /**
+     * De qué pedido de sterclicks salió lo que hay ahora en la placa actual,
+     * cuando se cargó desde "Cargar piezas a la placa" en la ficha de un
+     * pedido. Mismo espíritu que SESION_CARRITO_ORIGEN: no es contenido, es
+     * procedencia, y solo sirve para que la placa que se registre a
+     * continuación quede enlazada a ese pedido — sin ningún cálculo de
+     * cuánto del pedido cubre, eso se sigue juzgando a mano.
+     */
+    private const SESION_CARRITO_PEDIDO_ORIGEN = 'piezas_carrito_pedido_origen';
 
     /**
      * Un año y `immutable`: el navegador no vuelve a preguntar por una imagen
@@ -120,6 +131,7 @@ class Web extends BaseController
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
     private PiezaImagenesPublicas $publicas;
+    private PiezaEmpaquetadoService $empaquetado;
 
     /**
      * Las vistas del módulo pintan las imágenes con `imagen_pieza()`, que
@@ -151,6 +163,7 @@ class Web extends BaseController
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
         $this->publicas         = new PiezaImagenesPublicas();
+        $this->empaquetado      = new PiezaEmpaquetadoService();
     }
 
     /**
@@ -674,6 +687,7 @@ class Web extends BaseController
                 }
                 $visible = empty($categoria['visible_sterclicks']) ? 1 : 0;
                 $this->categoriaModel->update($id, ['visible_sterclicks' => $visible]);
+                (new \App\Services\SterclicksClient())->sincronizarCatalogo();
                 return ['nombre' => $categoria['nombre'], 'visible' => $visible];
             },
             fn() => site_url('piezas'),
@@ -693,6 +707,7 @@ class Web extends BaseController
                 }
                 $visible = empty($familia['visible_sterclicks']) ? 1 : 0;
                 $this->familiaModel->update($id, ['visible_sterclicks' => $visible]);
+                (new \App\Services\SterclicksClient())->sincronizarCatalogo();
                 return ['nombre' => $familia['nombre'], 'visible' => $visible];
             },
             fn() => site_url('piezas'),
@@ -712,6 +727,7 @@ class Web extends BaseController
                 }
                 $visible = empty($variante['visible_sterclicks']) ? 1 : 0;
                 $this->varianteModel->update($id, ['visible_sterclicks' => $visible]);
+                (new \App\Services\SterclicksClient())->sincronizarCatalogo();
                 return ['id' => $id, 'nombre' => $variante['nombre'], 'visible' => $visible];
             },
             fn($r) => site_url('piezas/variante/' . $r['id']),
@@ -960,21 +976,13 @@ class Web extends BaseController
         }
 
         foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->findAll() as $variante) {
-            $version = $this->versionModel
-                ->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
-
-            if (!$version) {
-                // Sin validada todavía: la candidata es la más reciente que
-                // siga siendo "para imprimir" (borrador) o "impresa,
-                // pendiente de juzgar" — este apartado es para meter STL en
-                // placas, y esas dos ya pueden tener uno adjunto aunque el
-                // resultado físico no esté juzgado. Ni "descartada" ni
-                // "superada" cuentan: de esas ya se sabe que no sirven.
-                $version = $this->versionModel
-                    ->where('variante_id', $variante['id'])
-                    ->whereIn('estado', ['borrador', 'impresa'])
-                    ->orderBy('numero', 'DESC')->first();
-            }
+            // Validada si la hay; si no, la más reciente que siga siendo
+            // "para imprimir" (borrador) o "impresa, pendiente de juzgar" —
+            // este apartado es para meter STL en placas, y esas dos ya
+            // pueden tener uno adjunto aunque el resultado físico no esté
+            // juzgado. Ni "descartada" ni "superada" cuentan: de esas ya se
+            // sabe que no sirven.
+            $version = $this->versionParaImprimir((int) $variante['id']);
 
             if (!$version) {
                 continue;
@@ -1107,8 +1115,9 @@ class Web extends BaseController
     {
         $this->carritoGuardar([]);
         // Vaciar es empezar de cero: lo que se monte a partir de ahora ya no
-        // repite ninguna placa vieja.
+        // repite ninguna placa vieja ni sigue enlazado a un pedido anterior.
         session()->remove(self::SESION_CARRITO_ORIGEN);
+        session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
 
         if ($this->request->isAJAX()) {
             return $this->response->setJSON(['ok' => true, 'total' => 0]);
@@ -1146,7 +1155,7 @@ class Web extends BaseController
         $guardar = !$esPost || $this->request->getPost('guardar') !== null;
 
         if ($guardar) {
-            $this->registrarPlacaDesdeCarrito($carrito, $this->request->getPost('nombre'));
+            $this->registrarPlacaDesdeCarrito($carrito, $this->request->getPost('nombre'), true);
         }
 
         // El fichero tiene que seguir existiendo cuando DownloadResponse lo
@@ -1195,8 +1204,15 @@ class Web extends BaseController
      * es un punto de partida editable, no definitivo: si no llega ninguno
      * (el usuario no lo escribió, o la acción no lo pregunta) se usa la
      * fecha, que al menos sitúa la tanda en el tiempo.
+     *
+     * `$descargada` distingue las dos acciones que llegan aquí: descargar el
+     * zip de verdad (carritoDescargar) frente a "Guardar para después"
+     * (carritoGuardarPlaca) — es lo que decide si la placa nace "lista para
+     * imprimir" o solo "guardada". Se fija una vez, al crear la fila, y no
+     * se vuelve a tocar: volver a descargar una placa ya guardada desde el
+     * histórico (placaDescargar) no pasa por aquí, así que no la asciende.
      */
-    private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null): array
+    private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null, bool $descargada = false): array
     {
         $nombre = trim((string) $nombre);
         if ($nombre === '') {
@@ -1205,7 +1221,16 @@ class Web extends BaseController
         // Mismo tope que la columna y que el formulario de renombrar.
         $nombre = mb_substr($nombre, 0, 150);
 
-        $placaId = $this->placaModel->insert(['nombre' => $nombre] + $this->herenciaDeLaPlacaAnterior(), true);
+        $datos = ['nombre' => $nombre, 'descargada_en' => $descargada ? date('Y-m-d H:i:s') : null]
+            + $this->herenciaDeLaPlacaAnterior();
+
+        $pedidoId = (int) session(self::SESION_CARRITO_PEDIDO_ORIGEN);
+        if ($pedidoId) {
+            $datos['pedido_id'] = $pedidoId;
+            session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
+        }
+
+        $placaId = $this->placaModel->insert($datos, true);
         if ($placaId) {
             foreach ($carrito as $versionId) {
                 $this->placaVersionModel->insert(['placa_id' => $placaId, 'version_id' => $versionId]);
@@ -1348,8 +1373,30 @@ class Web extends BaseController
             $enlacesPorPlaca[(int) $enlace['placa_id']] = ($enlacesPorPlaca[(int) $enlace['placa_id']] ?? 0) + 1;
         }
 
+        // Nombre de la placa de origen, para las que vienen de "Repartir en
+        // otra placa" o de "Cargar en la placa actual" — una consulta para
+        // el histórico entero, no una por tarjeta.
+        $origenIds = array_values(array_unique(array_filter(array_column($placas, 'origen_placa_id'))));
+        $origenNombres = [];
+        if ($origenIds !== []) {
+            foreach ($this->placaModel->select('id, nombre')->whereIn('id', $origenIds)->findAll() as $o) {
+                $origenNombres[(int) $o['id']] = $o['nombre'];
+            }
+        }
+
         $piezas = [];
         $resumenes = [];
+        // Tres cajones, en el mismo orden en que avanza una placa por la
+        // vida real: guardada (idea suelta) -> lista (ya tienes el zip) ->
+        // impresa (ya se montó). Que veredicto/impresa_en se vean fuera
+        // significa que ya pasó por la bitácora; que descargada_en esté
+        // puesto significa que el zip salió de verdad (spec: "volver a
+        // descargar" desde el histórico no cuenta, solo la descarga que
+        // registra la placa).
+        $guardadas = [];
+        $listas    = [];
+        $impresas  = [];
+        $sugerenciasReparto = [];
         foreach ($placas as $placa) {
             $idPlaca = (int) $placa['id'];
             // Una versión purgada (variante borrada hace 30+ días, invariante
@@ -1361,13 +1408,104 @@ class Web extends BaseController
                 $pruebasPorPlaca[$idPlaca] ?? [],
                 $enlacesPorPlaca[$idPlaca] ?? 0
             );
+            // Qué piezas sobran de la primera placa según el reparto
+            // calculado (spec: empaquetado) — para preseleccionarlas en el
+            // desplegable "Repartir en otra placa" y ahorrar el marcado a
+            // mano. Sigue siendo editable: es una sugerencia, no una orden.
+            $sugerenciasReparto[$idPlaca] = $this->filasFueraDeLaPrimeraPlaca($piezas[$idPlaca]);
+
+            if ($placa['impresa_en']) {
+                $impresas[] = $placa;
+            } elseif ($placa['descargada_en']) {
+                $listas[] = $placa;
+            } else {
+                $guardadas[] = $placa;
+            }
         }
 
+        // Las impresas se ordenan y agrupan por cuándo se montaron de
+        // verdad, no por cuándo se bajó el zip: es la fecha que responde
+        // "qué hice y cuándo", el resto de la fila ya viene en orden de
+        // creado_en por el orderBy de arriba.
+        usort($impresas, static fn($a, $b) => strcmp((string) $b['impresa_en'], (string) $a['impresa_en']));
+
         return view('piezas/placas', [
-            'placas'    => $placas,
-            'piezas'    => $piezas,
-            'resumenes' => $resumenes,
+            'piezas'             => $piezas,
+            'resumenes'          => $resumenes,
+            'origenNombres'      => $origenNombres,
+            'sugerenciasReparto' => $sugerenciasReparto,
+            'bloques'       => [
+                'guardada' => ['titulo' => 'Guardadas para después', 'grupos' => $this->agruparPorPeriodo($guardadas, 'creado_en')],
+                'lista'    => ['titulo' => 'Listas para imprimir', 'grupos' => $this->agruparPorPeriodo($listas, 'creado_en')],
+                'impresa'  => ['titulo' => 'Impresas', 'grupos' => $this->agruparPorPeriodo($impresas, 'impresa_en')],
+            ],
+            'hayPlacas' => $placas !== [],
         ]);
+    }
+
+    /**
+     * Reparte una lista de placas (ya ordenadas por la fecha que toque) en
+     * grupos "Hoy / Ayer / Esta semana / Semana pasada / Este mes / <Mes
+     * Año>" — el vistazo de actividad que se ve en cualquier app de tareas.
+     * No hace falta ordenar los grupos aparte: como la lista de entrada ya
+     * viene de más reciente a más antigua, cada etiqueta aparece por primera
+     * vez en el orden correcto y los arrays asociativos de PHP conservan el
+     * orden de inserción.
+     *
+     * @return array<string, list<array>> etiqueta => placas de ese grupo
+     */
+    private function agruparPorPeriodo(array $placas, string $campoFecha): array
+    {
+        $hoy = new \DateTimeImmutable('today');
+
+        $grupos = [];
+        foreach ($placas as $placa) {
+            $fechaTexto = $placa[$campoFecha] ?? $placa['creado_en'];
+            if (!$fechaTexto) {
+                continue;
+            }
+
+            $grupos[$this->etiquetaPeriodo(new \DateTimeImmutable($fechaTexto), $hoy)][] = $placa;
+        }
+
+        return $grupos;
+    }
+
+    /** A qué "cajón" temporal pertenece una fecha, visto desde hoy. */
+    private function etiquetaPeriodo(\DateTimeImmutable $fecha, \DateTimeImmutable $hoy): string
+    {
+        $fecha = $fecha->setTime(0, 0);
+
+        if ($fecha == $hoy) {
+            return 'Hoy';
+        }
+        if ($fecha == $hoy->modify('-1 day')) {
+            return 'Ayer';
+        }
+
+        $lunesEstaSemana = $hoy->modify('monday this week');
+        if ($fecha >= $lunesEstaSemana) {
+            return 'Esta semana';
+        }
+
+        $lunesSemanaPasada = $lunesEstaSemana->modify('-7 days');
+        if ($fecha >= $lunesSemanaPasada) {
+            return 'Semana pasada';
+        }
+
+        $inicioMes = $hoy->modify('first day of this month');
+        if ($fecha >= $inicioMes) {
+            return 'Este mes';
+        }
+
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+            'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        $etiqueta = ucfirst($meses[(int) $fecha->format('n') - 1]);
+        if ($fecha->format('Y') !== $hoy->format('Y')) {
+            $etiqueta .= ' ' . $fecha->format('Y');
+        }
+
+        return $etiqueta;
     }
 
     public function placaDescargar(int $id)
@@ -1408,6 +1546,9 @@ class Web extends BaseController
         // placa nueva heredará de aquí los ajustes y las preguntas que se
         // quedaron sin responder, que es la razón habitual de repetirla.
         session()->set(self::SESION_CARRITO_ORIGEN, $id);
+        // Repetir una placa entera es un ciclo aparte del de un pedido: si
+        // había uno pendiente de antes, ya no aplica a esta tanda.
+        session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
 
         $aviso = 'Cargada en la placa actual: "' . $placa['nombre'] . '".';
         if (trim((string) $placa['conclusiones']) !== '') {
@@ -1415,6 +1556,81 @@ class Web extends BaseController
         }
 
         return redirect()->to(site_url('piezas/galeria'))->with('success', $aviso);
+    }
+
+    /**
+     * Vuelca en la placa actual las piezas de un pedido de sterclicks: por
+     * cada línea con variante viva busca la versión que se ofrece para
+     * imprimir (validada; si no, la más reciente en borrador/impresa —
+     * misma cascada que galeria()) y, si tiene STL adjunto, la añade.
+     * Sustituye la placa actual en vez de sumarse a ella, igual que
+     * placaCargar(), para no mezclar sin darse cuenta con lo que hubiera
+     * antes.
+     */
+    public function pedidoCargarACarrito(int $pedidoId)
+    {
+        $pedido = (new \App\Models\PiezaPedidoModel())->find($pedidoId);
+        if (!$pedido) {
+            return redirect()->to(site_url('piezas/pedidos'))->with('error', 'Ese pedido ya no existe.');
+        }
+
+        $lineas = (new \App\Models\PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)->findAll();
+
+        $versionIds = [];
+        $sinVersion = 0;
+        $sinStl     = 0;
+        foreach ($lineas as $linea) {
+            $version = $linea['variante_id'] ? $this->versionParaImprimir((int) $linea['variante_id']) : null;
+            if (!$version) {
+                $sinVersion++;
+                continue;
+            }
+            if ($this->servicio->stlsDe((int) $version['id']) === []) {
+                $sinStl++;
+                continue;
+            }
+            $versionIds[] = (int) $version['id'];
+        }
+
+        $this->carritoGuardar(array_values(array_unique($versionIds)));
+        session()->remove(self::SESION_CARRITO_ORIGEN);
+        // Igual que placaCargar() con SESION_CARRITO_ORIGEN: se recuerda de
+        // qué pedido sale esto para que la placa que se registre a
+        // continuación quede enlazada, sin ningún cálculo de cobertura.
+        session()->set(self::SESION_CARRITO_PEDIDO_ORIGEN, $pedidoId);
+
+        if ($versionIds === []) {
+            return redirect()->to(site_url('piezas/pedido/' . $pedidoId))
+                ->with('error', 'Ninguna línea de este pedido tiene una versión con STL para cargar.');
+        }
+
+        $aviso = count($versionIds) . ' pieza(s) cargada(s) en la placa actual.';
+        if ($sinStl > 0) {
+            $aviso .= ' ' . $sinStl . ' sin STL todavía.';
+        }
+        if ($sinVersion > 0) {
+            $aviso .= ' ' . $sinVersion . ' sin versión para imprimir.';
+        }
+
+        return redirect()->to(site_url('piezas/galeria'))->with('success', $aviso);
+    }
+
+    /**
+     * La versión que se ofrece para imprimir de una variante: la validada
+     * si la hay, y si no la más reciente en borrador/impresa. Misma
+     * cascada que usa galeria() para elegir la miniatura/STL de cada
+     * tarjeta — aquí se reutiliza para que "cargar pedido en la placa" saque
+     * exactamente la misma versión que el usuario ya ve ofrecida allí.
+     */
+    private function versionParaImprimir(int $varianteId): ?array
+    {
+        $version = $this->versionModel->where('variante_id', $varianteId)->where('estado', 'validada')->first();
+        if ($version) {
+            return $version;
+        }
+
+        return $this->versionModel->where('variante_id', $varianteId)
+            ->whereIn('estado', ['borrador', 'impresa'])->orderBy('numero', 'DESC')->first();
     }
 
     public function placaRenombrar(int $id)
@@ -1458,6 +1674,86 @@ class Web extends BaseController
         $this->placaModel->delete($id);
 
         return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
+    }
+
+    /**
+     * No cupo entera en la plataforma: mueve un subconjunto de sus piezas a
+     * una placa nueva, enlazada a esta como origen (mismo `origen_placa_id`
+     * que ya usa "Cargar en la placa actual", generalizado a un trozo en vez
+     * de al total). Se mueven, no se copian, así entre las dos placas siguen
+     * sumando exactamente lo que había antes. La nueva hereda el estado de
+     * la original (descargada/guardada, pedido) y los ajustes de impresión:
+     * es la misma tanda física partida en dos, no una tanda distinta.
+     */
+    /**
+     * Reparte por CANTIDAD, no por fila entera: si de las 3 copias de una
+     * pieza solo sobraban 2 según el cálculo, mover las 3 dejaría la placa
+     * nueva con más cuadrículas de las que el reparto decía — justo el
+     * error de cálculo que se cuela si "repartir" es un todo-o-nada. Cuando
+     * se pide menos que el total de la fila, esta se parte en dos: la
+     * original se queda con el resto y una fila nueva (mismo version_id,
+     * mismas notas) nace ya en la placa nueva con la cantidad movida.
+     */
+    public function placaRepartir(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $cantidades = (array) $this->request->getPost('cantidades');
+        $movidas = 0;
+        $piezasMovidas = 0;
+        $nuevaId = null;
+
+        foreach ($cantidades as $filaId => $cantidad) {
+            $cantidad = (int) $cantidad;
+            if ($cantidad <= 0) {
+                continue;
+            }
+
+            $fila = $this->placaVersionModel->where('placa_id', $id)->find((int) $filaId);
+            if (!$fila) {
+                continue; // ya no está en esta placa: no bloquea el resto del reparto
+            }
+            $cantidad = min($cantidad, (int) $fila['cantidad']);
+
+            if ($nuevaId === null) {
+                $nuevaId = $this->placaModel->insert([
+                    'nombre'          => mb_substr($placa['nombre'] . ' (parte)', 0, 150),
+                    'origen_placa_id' => $id,
+                    'descargada_en'   => $placa['descargada_en'],
+                    'pedido_id'       => $placa['pedido_id'],
+                    'exposicion'      => $placa['exposicion'],
+                    'resina'          => $placa['resina'],
+                    'temperatura'     => $placa['temperatura'],
+                ], true);
+            }
+
+            if ($cantidad >= (int) $fila['cantidad']) {
+                $this->placaVersionModel->update((int) $fila['id'], ['placa_id' => $nuevaId]);
+            } else {
+                $this->placaVersionModel->update((int) $fila['id'], ['cantidad' => (int) $fila['cantidad'] - $cantidad]);
+                $this->placaVersionModel->insert([
+                    'placa_id'   => $nuevaId,
+                    'version_id' => $fila['version_id'],
+                    'cantidad'   => $cantidad,
+                    'notas'      => $fila['notas'],
+                ]);
+            }
+
+            $movidas++;
+            $piezasMovidas += $cantidad;
+        }
+
+        if ($nuevaId === null) {
+            return redirect()->back()->with('error', 'Elige al menos una pieza para repartir.');
+        }
+
+        $nueva = $this->placaModel->find($nuevaId);
+
+        return redirect()->to(site_url('piezas/placas'))
+            ->with('success', $piezasMovidas . ' pieza(s) (' . $movidas . ' referencia(s)) repartidas en "' . $nueva['nombre'] . '".');
     }
 
     // ---- Bitácora de una placa (fase 38) ---------------------------------
@@ -1566,13 +1862,20 @@ class Web extends BaseController
     private function datosDeLaBitacora(array $placa): array
     {
         $id = (int) $placa['id'];
+        $piezas = $this->piezasDeLaPlaca($id);
 
         return [
             'placa'    => $placa,
-            'piezas'   => $this->piezasDeLaPlaca($id),
+            'piezas'   => $piezas,
             'pruebas'  => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'enlaces'  => $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'imagenes' => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            // Con las cantidades de AHORA MISMO (spec: en Galería aún no se
+            // sabe cuántas copias de cada una entran, así que el cálculo
+            // solo tiene sentido aquí, una vez la placa ya existe y tiene
+            // "Copias" que editar).
+            'reparto'  => $this->repartoLegible($piezas),
+            'sinMedir' => $this->itemsParaEmpaquetar($piezas)['sinMedir'],
         ];
     }
 
@@ -1680,12 +1983,17 @@ class Web extends BaseController
             // para repintar la tarjeta de detrás (nombre y veredicto) sin
             // recargar el histórico entero.
             $placa = $this->placaModel->find($id);
+            $piezasActuales = $this->piezasDeLaPlaca($id);
 
             return $this->response->setJSON([
                 'ok'        => true,
                 'nombre'    => $placa['nombre'],
                 'veredicto' => $placa['veredicto'],
                 'resumen'   => $this->resumenDeBitacora($id, $placa),
+                // Las cantidades acaban de cambiar (el "Copias" de cada
+                // fila), así que el reparto de antes de guardar ya no vale.
+                'reparto'   => $this->repartoLegible($piezasActuales),
+                'sinMedir'  => $this->itemsParaEmpaquetar($piezasActuales)['sinMedir'],
             ]);
         }
 
@@ -1780,6 +2088,123 @@ class Web extends BaseController
         }
 
         return $lista;
+    }
+
+    /**
+     * De la lista de piezasDeLaPlaca() a items sueltos para
+     * PiezaEmpaquetadoService::repartir(): una unidad física por copia (la
+     * "cantidad" de la fila multiplica) y por cada trozo de STL que tenga la
+     * versión — un STL sin cuadrícula medida no entra, y se cuenta aparte
+     * para poder avisar de que el cálculo no es completo.
+     *
+     * @return array{items: list<array>, sinMedir: int}
+     */
+    private function itemsParaEmpaquetar(array $piezas): array
+    {
+        $items = [];
+        $sinMedir = 0;
+
+        foreach ($piezas as $p) {
+            if (!$p['version']) {
+                continue;
+            }
+            $cantidad = max(1, (int) $p['fila']['cantidad']);
+            $etiquetaBase = $p['familia'] && $p['variante']
+                ? $p['familia']['nombre'] . ' - ' . $p['variante']['nombre']
+                : '(pieza borrada)';
+
+            foreach ($this->servicio->stlsDe((int) $p['version']['id']) as $stl) {
+                if (!$stl['cuadros_ancho'] || !$stl['cuadros_fondo']) {
+                    $sinMedir++;
+                    continue;
+                }
+
+                $etiqueta = $etiquetaBase . (mb_strtolower($stl['nombre']) === 'completo' ? '' : ' · ' . $stl['nombre']);
+                for ($i = 0; $i < $cantidad; $i++) {
+                    $items[] = [
+                        'etiqueta'     => $etiqueta,
+                        // Sin el trozo: es como se agrupa el desglose por
+                        // placa (una copia entera, no un trozo suelto).
+                        'etiquetaBase' => $etiquetaBase,
+                        'ancho'    => (int) $stl['cuadros_ancho'],
+                        'fondo'    => (int) $stl['cuadros_fondo'],
+                        'filaId'   => (int) $p['fila']['id'],
+                        // Qué copia de esa fila es (0, 1, 2... hasta cantidad-1):
+                        // los trozos de una misma copia comparten índice, así se
+                        // puede saber luego cuántas copias COMPLETAS caen fuera
+                        // de la primera placa, no solo cuántos trozos sueltos —
+                        // spec: mover una fila entera cuando solo sobraba una
+                        // copia de tres movía de más.
+                        'copia'    => $i,
+                    ];
+                }
+            }
+        }
+
+        return ['items' => $items, 'sinMedir' => $sinMedir];
+    }
+
+    /**
+     * Cuántas COPIAS de cada fila sobrarían de la primera placa, según
+     * PiezaEmpaquetadoService — para preseleccionar "Repartir en otra placa"
+     * con la cantidad justa, no la fila entera. Si una fila tiene 3 copias y
+     * solo 1 no cabe en la primera placa, aquí sale 1 — mover las 3 movería
+     * cuadrículas de más y el reparto real ya no cuadraría con el calculado.
+     *
+     * Una copia cuenta como "fuera" si CUALQUIERA de sus trozos de STL cayó
+     * en la segunda placa o posterior: los trozos de una misma copia se
+     * mueven siempre juntos (son la misma pieza física, aunque se imprima
+     * en partes), nunca repartidos entre dos placas.
+     *
+     * @return array<int, int> filaId => cantidad de copias fuera
+     */
+    private function filasFueraDeLaPrimeraPlaca(array $piezas): array
+    {
+        $bins = $this->empaquetado->repartir($this->itemsParaEmpaquetar($piezas)['items']);
+        if (count($bins) <= 1) {
+            return [];
+        }
+
+        $copiasFuera = []; // filaId => set de índices de copia
+        foreach (array_slice($bins, 1) as $bin) {
+            foreach ($bin['piezas'] as $item) {
+                $copiasFuera[$item['filaId']][$item['copia']] = true;
+            }
+        }
+
+        return array_map('count', $copiasFuera);
+    }
+
+    /**
+     * El reparto, listo para enseñar: por cada placa que hace falta, cuántas
+     * cuadrículas usa y qué piezas lleva (agrupadas por copia entera, no por
+     * trozo de STL suelto — spec: "el reparto no dice cuántas piezas
+     * sobran"). Aparte de PiezaEmpaquetadoService::repartir() porque ese
+     * devuelve los items en bruto (uno por copia×trozo), que sirven para
+     * calcular pero no para leer de un vistazo.
+     *
+     * @return list<array{cuadrosUsados: int, piezas: list<array{etiqueta: string, cantidad: int}>}>
+     */
+    private function repartoLegible(array $piezas): array
+    {
+        $bins = $this->empaquetado->repartir($this->itemsParaEmpaquetar($piezas)['items']);
+
+        return array_map(function (array $bin): array {
+            $porFila = [];
+            foreach ($bin['piezas'] as $item) {
+                $id = $item['filaId'];
+                $porFila[$id]['etiqueta'] = $item['etiquetaBase'];
+                $porFila[$id]['copias'][$item['copia']] = true;
+            }
+
+            return [
+                'cuadrosUsados' => $bin['cuadrosUsados'],
+                'piezas' => array_values(array_map(
+                    static fn(array $f) => ['etiqueta' => $f['etiqueta'], 'cantidad' => count($f['copias'])],
+                    $porFila
+                )),
+            ];
+        }, $bins);
     }
 
     /**
@@ -2501,6 +2926,40 @@ class Web extends BaseController
     }
 
     /**
+     * Cuánto ocupa este STL en la placa, en cuadrículas (spec: reparto de
+     * piezas en placas) — a ojo, sin leer el fichero. Vacío en cualquiera de
+     * los dos campos borra la medida: "sin medir" es un estado válido, ese
+     * STL solo se queda fuera del cálculo de cuántas placas hacen falta
+     * hasta que alguien lo mida.
+     */
+    public function actualizarCuadrosStl(int $stlId)
+    {
+        $stl = $this->servicio->stl($stlId);
+        if (!$stl) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Ese STL no existe.');
+        }
+        $version = $this->versionModel->find($stl['version_id']);
+
+        return $this->ejecutar(
+            function () use ($stlId) {
+                $aCuadro = static fn($valor, int $max) => ($valor === null || trim((string) $valor) === '')
+                    ? null
+                    : max(1, min($max, (int) $valor));
+
+                $datos = [
+                    'cuadros_ancho' => $aCuadro($this->request->getPost('ancho'), PiezaEmpaquetadoService::COLUMNAS),
+                    'cuadros_fondo' => $aCuadro($this->request->getPost('fondo'), PiezaEmpaquetadoService::FILAS),
+                ];
+                (new \App\Models\PiezaVersionStlModel())->update($stlId, $datos);
+
+                return $datos;
+            },
+            fn() => site_url('piezas/variante/' . (int) $version['variante_id']),
+            fn() => 'Cuadrícula guardada.'
+        );
+    }
+
+    /**
      * A diferencia de las imágenes, el STL se sirve para descargar (no
      * inline): se abre en el laminador, no en el navegador.
      */
@@ -2792,7 +3251,15 @@ class Web extends BaseController
         } catch (Throwable $e) {
             log_message('debug', '[Piezas web] ' . $e->getMessage());
 
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $e->getMessage()]);
+            }
+
             return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'mensaje' => $mensaje($resultado)] + (is_array($resultado) ? $resultado : []));
         }
 
         return redirect()->to($destino($resultado))->with('success', $mensaje($resultado));

@@ -24,7 +24,8 @@ class PiezaVersionStlModel extends Model
     protected $useTimestamps = false;
 
     protected $allowedFields = [
-        'version_id', 'nombre', 'ruta_stl', 'hash_stl', 'tamano_bytes', 'subido_en',
+        'version_id', 'nombre', 'ruta_stl', 'hash_stl', 'tamano_bytes',
+        'cuadros_ancho', 'cuadros_fondo', 'subido_en',
     ];
 
     protected $validationRules = [

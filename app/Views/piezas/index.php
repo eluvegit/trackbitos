@@ -36,13 +36,13 @@ $filaSesionActiva = static function (array $s): string {
 
     <?php
         /**
-         * Solo Galería y "+ Pieza" fuera, sueltos — son los dos que se usan
-         * a diario. El resto (Organizar, Categorías, Placas, Máquinas,
-         * Estadísticas, Papelera) es de uso ocasional y va agrupado en el desplegable, en
-         * vez de sumar seis botones sueltos a la cabecera. "+ Variante" no
-         * va ni ahí: se quita — crear una variante nace de una pieza
-         * concreta, así que su sitio natural es la ficha, no un selector
-         * suelto de "elige la pieza" aquí en el índice.
+         * Galería, Placas, Pedidos y "+ Pieza" fuera, sueltos — son los que
+         * se usan a diario. El resto (Organizar, Categorías, Máquinas,
+         * Estadísticas, Papelera) es de uso ocasional y va agrupado en el
+         * desplegable, en vez de sumar más botones sueltos a la cabecera.
+         * "+ Variante" no va ni ahí: se quita — crear una variante nace de
+         * una pieza concreta, así que su sitio natural es la ficha, no un
+         * selector suelto de "elige la pieza" aquí en el índice.
          */
     ?>
     <div class="dropdown ms-auto">
@@ -63,11 +63,7 @@ $filaSesionActiva = static function (array $s): string {
                     <i class="bi bi-folder"></i> Categorías
                 </button>
             </li>
-            <?php // Placas cuelga de la galería (es donde se arman), pero mirar qué se ha
-                  // impreso no obliga a pasar por ahí: se llega también desde aquí. ?>
-            <li><a class="dropdown-item" href="<?= site_url('piezas/placas') ?>"><i class="bi bi-clock-history"></i> Placas</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/maquinas') ?>"><i class="bi bi-pc-display"></i> Máquinas</a></li>
-            <li><a class="dropdown-item" href="<?= site_url('piezas/pedidos') ?>"><i class="bi bi-cart-check"></i> Pedidos (sterclicks)</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/estadisticas') ?>"><i class="bi bi-hdd-stack"></i> Estadísticas</a></li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
             <?php if (!empty($papeleraCount)): ?>
@@ -81,6 +77,15 @@ $filaSesionActiva = static function (array $s): string {
         </ul>
     </div>
 
+    <a href="<?= site_url('piezas/pendientes') ?>" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-list-check"></i> Pendientes
+    </a>
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-clock-history"></i> Placas
+    </a>
+    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-cart-check"></i> Pedidos
+    </a>
     <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-grid-3x3-gap"></i> Galería
         <?php if (!empty($carritoCount)): ?>
@@ -500,21 +505,23 @@ foreach ($grupos as $grupo) {
                         </span>
                         <span class="badge border text-body-secondary" data-contador><?= count($grupo['piezas']) ?></span>
 
-                        <?php if ($categoria && empty($categoria['visible_sterclicks'])): ?>
-                            <span class="badge text-bg-secondary" title="Oculta del catálogo de sterclicks (y todo lo de dentro)">
-                                <i class="bi bi-eye-slash"></i> oculta en sterclicks
-                            </span>
+                        <?php if ($categoria): ?>
+                            <?php // Siempre visible y siempre clicable: no depende del modo Organizar,
+                                  // porque ocultar/mostrar una categoría es una acción suelta, no un
+                                  // reordenamiento que se haga en tanda. ?>
+                            <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/visibilidad') ?>"
+                                data-toggle-visibilidad data-clase-oculta="btn-outline-secondary" data-clase-visible="btn-outline-primary" data-con-texto="1">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm py-0 px-1 <?= empty($categoria['visible_sterclicks']) ? 'btn-outline-secondary' : 'btn-outline-primary' ?>"
+                                    title="<?= empty($categoria['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+                                    <i class="bi <?= empty($categoria['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+                                    <span data-texto><?= empty($categoria['visible_sterclicks']) ? 'oculta' : 'visible' ?></span>
+                                </button>
+                            </form>
                         <?php endif; ?>
 
                         <?php if ($categoria): ?>
                             <span class="zona-organizar d-none ms-auto d-flex gap-1">
-                                <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/visibilidad') ?>">
-                                    <?= csrf_field() ?>
-                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                        title="<?= empty($categoria['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
-                                        <i class="bi <?= empty($categoria['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
-                                    </button>
-                                </form>
                                 <form method="post" action="<?= site_url('piezas/categoria/' . (int) $categoria['id'] . '/mover/subir') ?>">
                                     <?= csrf_field() ?>
                                     <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Subir"
@@ -554,9 +561,14 @@ foreach ($grupos as $grupo) {
                                 (<?= count($variantes) > 0 ? count($variantes) . ' variantes' : 'sin variantes' ?>)
                             </span>
                         <?php endif; ?>
-                        <?php if (empty($familia['visible_sterclicks'])): ?>
-                            <i class="bi bi-eye-slash text-muted ms-1" title="Oculta del catálogo de sterclicks"></i>
-                        <?php endif; ?>
+                        <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad') ?>" class="d-inline"
+                            data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm py-0 px-1 border-0 <?= empty($familia['visible_sterclicks']) ? 'text-muted' : 'text-primary' ?>"
+                                title="<?= empty($familia['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+                                <i class="bi <?= empty($familia['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+                            </button>
+                        </form>
                     </td>
                     <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
@@ -579,15 +591,6 @@ foreach ($grupos as $grupo) {
                                 </select>
                             </form>
 
-                            <?php // Ocultar/mostrar en sterclicks: mismo modo Organizar que el resto de acciones de la fila. ?>
-                            <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad') ?>">
-                                <?= csrf_field() ?>
-                                <button class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                    title="<?= empty($familia['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
-                                    <i class="bi <?= empty($familia['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
-                                </button>
-                            </form>
-
                             <?php // Borrar (a papelera): mismo modo Organizar, para no ensuciar la fila el resto del tiempo. ?>
                             <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/borrar') ?>"
                                 onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
@@ -608,6 +611,14 @@ foreach ($grupos as $grupo) {
                             <td class="ps-4">
                                 <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
                                     class="text-decoration-none text-body">↳ <?= esc($v['nombre']) ?></a>
+                                <form method="post" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/visibilidad') ?>" class="d-inline"
+                                    data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm py-0 px-1 border-0 <?= empty($v['visible_sterclicks']) ? 'text-muted' : 'text-primary' ?>"
+                                        title="<?= empty($v['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
+                                        <i class="bi <?= empty($v['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
+                                    </button>
+                                </form>
                             </td>
                             <td><?= $colSku($v) ?></td>
                             <td><?= $colEstado($v) ?></td>
@@ -780,6 +791,45 @@ foreach ($grupos as $grupo) {
     if (cajaSesiones) {
         setInterval(refrescarSesionesActivas, 20000);
     }
+
+    // ---- Toggle visibilidad sterclicks (categoría/familia/variante) --
+    document.querySelectorAll('form[data-toggle-visibilidad]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var boton = form.querySelector('button[type=submit]');
+            boton.disabled = true;
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form)
+            })
+                .then(function (resp) { return resp.json(); })
+                .then(function (datos) {
+                    boton.disabled = false;
+                    if (!datos.ok) { alert(datos.mensaje || 'No se pudo cambiar.'); return; }
+
+                    var visible = !!datos.visible;
+                    var claseOculta = form.getAttribute('data-clase-oculta');
+                    var claseVisible = form.getAttribute('data-clase-visible');
+                    boton.classList.toggle(claseOculta, !visible);
+                    boton.classList.toggle(claseVisible, visible);
+                    boton.title = visible ? 'Ocultar de sterclicks' : 'Mostrar en sterclicks';
+
+                    var icono = boton.querySelector('i');
+                    icono.classList.toggle('bi-eye', visible);
+                    icono.classList.toggle('bi-eye-slash', !visible);
+
+                    if (form.hasAttribute('data-con-texto')) {
+                        boton.querySelector('[data-texto]').textContent = visible ? 'visible' : 'oculta';
+                    }
+                })
+                .catch(function () {
+                    boton.disabled = false;
+                    alert('No se pudo conectar con el servidor.');
+                });
+        });
+    });
 
     // ---- Plegar categorías -------------------------------------------
     // A mano en vez de con Collapse de Bootstrap: el buscador necesita

@@ -8,14 +8,18 @@
     <a href="<?= site_url('piezas/galeria') ?>" class="text-decoration-none text-muted fw-normal">Galería</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Placas</strong>
+
+    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
+        <i class="bi bi-cart-check"></i> Pedidos
+    </a>
 </h5>
 
 <p class="text-muted small">
-    Cada vez que descargas o guardas una placa desde la galería queda anotada aquí sola, con fecha
-    y qué piezas llevaba. Pulsa una para abrir su bitácora y anotar cómo salió sin salir de esta
-    pantalla: cuánto tardó, qué pesaba el tanque, qué querías probar y qué aprendiste. Desde el
-    mismo sitio puedes volver a descargarla, cargarla otra vez en la placa actual para reimprimir
-    la misma combinación, o borrar la entrada — no borra ningún STL ni versión, solo la anotación.
+    Tres cajones, el mismo camino que sigue una placa de verdad: <strong>Guardada</strong> es solo una
+    idea apuntada sin bajar nada todavía; <strong>Lista para imprimir</strong> es que ya tienes el zip
+    de los STL; <strong>Impresa</strong> es que ya se montó, con o sin veredicto todavía. Dentro de cada
+    cajón, agrupadas por cuándo — así se ve de un vistazo por dónde vas. Pulsa una tarjeta para abrir su
+    bitácora y anotar cómo salió sin salir de esta pantalla.
 </p>
 
 <?php /**
@@ -56,128 +60,58 @@
     <div class="alert alert-warning py-2"><?= esc(session('error')) ?></div>
 <?php endif; ?>
 
-<?php if (empty($placas)): ?>
+<?php if (!$hayPlacas): ?>
     <p class="text-muted">
-        Todavía no hay ninguna placa descargada. En cuanto bajes el zip de alguna desde la
-        galería, aparecerá aquí.
+        Todavía no hay ninguna placa. En cuanto guardes o descargues alguna desde la galería,
+        aparecerá aquí.
     </p>
 <?php else: ?>
-    <?php // Tarjetas de 4 de ancho en pantalla normal — menos que la galería (6) a
-          // propósito: aquí cada tarjeta lleva nombre, fecha y contadores, y a 6 el
-          // nombre se truncaba casi siempre. Al pulsar se abre el cuaderno de esa
-          // placa en un modal — así se puede escanear el histórico entero de un
-          // vistazo y anotar en cualquiera sin cambiar de pantalla. ?>
-    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-2">
-        <?php foreach ($placas as $placa): ?>
-            <?php
-                $lista = $piezas[$placa['id']] ?? [];
-                $resumen = $resumenes[$placa['id']] ?? ['anotada' => false, 'sinResponder' => 0, 'enlaces' => 0, 'veredicto' => null];
-                $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
-                $idPlaca = (int) $placa['id'];
-                $idDetalle = 'detalle-placa-' . $idPlaca;
-                $fecha = strtotime($placa['creado_en']);
-                // Portada en tira baja (no cuadrada): la tarjeta es un lomo de
-                // archivador, no una foto de catálogo — con reconocerla basta.
-                // Hasta 4 miniaturas en fila; el detalle se ve en el modal.
-                $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
-            ?>
-            <div class="col" data-tarjeta-placa="<?= $idPlaca ?>">
-                <div class="card shadow-sm h-100 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
-                    style="cursor: pointer" data-abrir-placa="<?= $idDetalle ?>" data-placa="<?= $idPlaca ?>"
-                    title="Abrir la bitácora de esta placa">
-                    <?php if ($fotos): ?>
-                        <div class="d-flex" data-foto-placa="tarjeta"
-                            style="gap: 2px; height: 72px; overflow: hidden; background: rgba(127,127,127,.15);">
-                            <?php foreach (array_slice($fotos, 0, 4) as $foto): ?>
-                                <img src="<?= $foto ?>" loading="lazy" alt=""
-                                    style="flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; display: block;">
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    <div class="card-body p-2">
-                        <div class="small fw-semibold text-truncate" data-nombre-tarjeta
-                            title="<?= esc($placa['nombre'], 'attr') ?>"><?= esc($placa['nombre']) ?></div>
-                        <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
-                            <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
-                            <span class="ms-auto"><?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?></span>
-                            <?php if ($disponibles < count($lista)): ?>
-                                <i class="bi bi-exclamation-triangle text-warning"
-                                    title="Algún STL de esta placa ya no está disponible"></i>
-                            <?php endif; ?>
-                        </div>
+    <?php
+        // Recientes abiertos, el resto plegado por defecto: mismo espíritu que
+        // "Organizar" en el índice de Piezas — lo que se mira a diario no debe
+        // obligar a desplegar nada, lo antiguo sí puede empezar escondido.
+        $abiertosPorDefecto = ['Hoy', 'Ayer', 'Esta semana'];
+        $iconoBloque = ['guardada' => 'bi-bookmark', 'lista' => 'bi-file-earmark-zip', 'impresa' => 'bi-check-circle'];
+    ?>
+    <?php foreach ($bloques as $claveBloque => $bloque): ?>
+        <?php $totalBloque = array_sum(array_map('count', $bloque['grupos'])); ?>
+        <h6 class="d-flex align-items-center gap-2 mt-4 mb-2">
+            <i class="bi <?= $iconoBloque[$claveBloque] ?? 'bi-inbox' ?>"></i>
+            <?= esc($bloque['titulo']) ?>
+            <span class="badge text-bg-secondary"><?= $totalBloque ?></span>
+        </h6>
 
-                        <?php // Segunda línea: en qué punto está el cuaderno. Lo que
-                              // se busca aquí es qué queda por cerrar —una placa sin
-                              // juzgar, o con preguntas escritas antes de imprimir a
-                              // las que nadie volvió— sin tener que abrirlas una a una. ?>
-                        <div class="d-flex align-items-center gap-1 flex-wrap mt-1" style="font-size: .7rem;"
-                            data-estado-tarjeta>
-                            <?php
-                                $veredictos = \App\Models\PiezaPlacaModel::VEREDICTOS;
-                                $colorVeredicto = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
-                            ?>
-                            <?php if ($resumen['veredicto'] && isset($veredictos[$resumen['veredicto']])): ?>
-                                <span class="badge text-bg-<?= $colorVeredicto[$resumen['veredicto']] ?? 'secondary' ?>">
-                                    <?= esc($veredictos[$resumen['veredicto']]) ?>
-                                </span>
-                            <?php elseif (!$resumen['anotada']): ?>
-                                <span class="badge bg-body-secondary text-body-secondary border">sin anotar</span>
-                            <?php else: ?>
-                                <span class="badge bg-body-secondary text-body-secondary border">sin juzgar</span>
-                            <?php endif; ?>
-
-                            <?php if ($resumen['sinResponder'] > 0): ?>
-                                <span class="badge bg-body-secondary text-warning-emphasis border"
-                                    title="Preguntas que escribiste antes de imprimir y siguen sin respuesta">
-                                    <i class="bi bi-question-circle"></i> <?= (int) $resumen['sinResponder'] ?> sin responder
-                                </span>
-                            <?php endif; ?>
-
-                            <?php if ($resumen['enlaces'] > 0): ?>
-                                <span class="badge bg-body-secondary text-body-secondary border" title="Tiene enlaces guardados">
-                                    <i class="bi bi-link-45deg"></i> <?= (int) $resumen['enlaces'] ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <?php // Solo los botones viajan al modal, y siguen renderizados aquí
-                          // (ocultos) para que sus formularios lleven el CSRF de siempre
-                          // sin duplicar un modal por placa. El contenido —la bitácora—
-                          // se pide al abrir: son muchas placas y meter treinta
-                          // formularios completos en la página costaría más que todo lo
-                          // demás junto. ?>
-                    <div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>"
-                        data-montada="<?= esc(date('d/m/Y H:i', $fecha ?: time()), 'attr') ?>">
-                        <div class="d-flex flex-wrap gap-2" data-acciones-placa>
-                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>" target="_blank" rel="noopener"
-                                class="btn btn-sm btn-outline-info" title="La bitácora entera, para leerla de corrido">
-                                <i class="bi bi-journal-text"></i> Ver limpio
-                            </a>
-                            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>"
-                                class="btn btn-sm btn-outline-primary" title="Volver a generar el zip con lo que haya ahora mismo">
-                                <i class="bi bi-download"></i> Descargar de nuevo
-                            </a>
-                            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/cargar') ?>">
-                                <?= csrf_field() ?>
-                                <button class="btn btn-sm btn-outline-secondary" title="Sustituye lo que haya ahora en la placa actual">
-                                    <i class="bi bi-arrow-return-left"></i> Cargar en la placa actual
-                                </button>
-                            </form>
-                            <form method="post"
-                                action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
-                                onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
-                                <?= csrf_field() ?>
-                                <button class="btn btn-sm btn-outline-danger" title="Borrar del histórico">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+        <?php if ($totalBloque === 0): ?>
+            <p class="text-muted small fst-italic">Nada por aquí.</p>
+        <?php else: ?>
+            <?php foreach ($bloque['grupos'] as $etiqueta => $placasDelGrupo): ?>
+                <?php $idGrupo = 'grupo-' . $claveBloque . '-' . preg_replace('/[^a-z0-9]+/i', '-', $etiqueta); ?>
+                <div class="d-flex align-items-center gap-2 user-select-none mb-1" style="cursor: pointer"
+                    data-plegar="<?= $idGrupo ?>">
+                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body">
+                        <i class="bi bi-chevron-down" data-chevron></i>
+                    </button>
+                    <span class="small fw-semibold text-uppercase text-muted"><?= esc($etiqueta) ?></span>
+                    <span class="badge border text-body-secondary"><?= count($placasDelGrupo) ?></span>
                 </div>
-            </div>
-        <?php endforeach; ?>
-    </div>
+                <div id="<?= $idGrupo ?>" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-2 mb-3">
+                    <?php foreach ($placasDelGrupo as $placa): ?>
+                        <?php
+                            // `include` nativo de PHP, no `$this->include()`: este último solo
+                            // repite los datos que ya trajo el controlador (su tercer parámetro
+                            // es de caché, no de datos), así que no sirve para pasar variables
+                            // de cada vuelta del bucle como $placa o $lista. El include nativo
+                            // comparte el scope de aquí, así que $origenNombres también le llega
+                            // sin tener que pasarlo aparte.
+                            $lista   = $piezas[(int) $placa['id']] ?? [];
+                            $resumen = $resumenes[(int) $placa['id']] ?? ['anotada' => false, 'sinResponder' => 0, 'enlaces' => 0, 'veredicto' => null];
+                            include APPPATH . 'Views/piezas/_placa_tarjeta.php';
+                        ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    <?php endforeach; ?>
 
     <?php // Un único modal para todas las placas: al abrirlo se le presta el bloque
           // de botones de su tarjeta (para no duplicar formularios ni tokens CSRF) y
@@ -336,6 +270,7 @@
                 decir('Guardado a las ' + new Date().toLocaleTimeString().slice(0, 5), 'text-success');
                 titulo.textContent = r.datos.nombre;
                 repintarTarjeta(r.datos);
+                repintarReparto(form, r.datos);
             })
             .catch(function () {
                 botonGuardar.disabled = false;
@@ -389,6 +324,58 @@
         zona.innerHTML = trozos.join(' ');
     }
 
+    /**
+     * El aviso de "cuántas placas hacen falta" que vive dentro del propio
+     * formulario (ver _bitacora_form.php): tras guardar, las cantidades
+     * pueden haber cambiado, así que se repinta con lo que devuelve el
+     * guardado — sin esto se quedaría enseñando el cálculo de antes de tocar
+     * "Copias".
+     */
+    function escHtml(texto) {
+        var div = document.createElement('div');
+        div.textContent = texto == null ? '' : String(texto);
+        return div.innerHTML;
+    }
+
+    function repintarReparto(form, datos) {
+        var caja = form.querySelector('[data-reparto]');
+        if (!caja || !datos.reparto) return;
+
+        var CAPACIDAD = <?= \App\Services\PiezaEmpaquetadoService::COLUMNAS * \App\Services\PiezaEmpaquetadoService::FILAS ?>;
+        var reparto = datos.reparto;
+        var html;
+
+        function piezasDeBin(bin) {
+            return bin.piezas.map(function (p) {
+                return escHtml(p.etiqueta) + (p.cantidad > 1 ? ' ×' + p.cantidad : '');
+            }).join(', ');
+        }
+
+        if (reparto.length <= 1) {
+            caja.className = 'alert alert-secondary mt-3 py-2 mb-2 small';
+            html = '<i class="bi bi-grid-3x3"></i> Cabe en <strong>una placa</strong> ('
+                + (reparto[0] ? reparto[0].cuadrosUsados : 0) + '/' + CAPACIDAD + ' cuadrículas).';
+        } else {
+            // "No cabe" a secas suena a que algo ha ido mal — y no es así, es
+            // que hacen falta dos o más, tan normal como una: de ahí el color
+            // informativo, no de aviso (mismo criterio que _bitacora_form.php).
+            caja.className = 'alert alert-info mt-3 py-2 mb-2 small';
+            html = '<i class="bi bi-grid-3x3"></i> No cabe en una placa, pero sí en <strong>'
+                + reparto.length + '</strong> (cálculo aproximado):'
+                + '<ul class="mb-0 mt-1 ps-3">'
+                + reparto.map(function (bin, i) {
+                    return '<li>Placa ' + (i + 1) + ' (' + bin.cuadrosUsados + '/' + CAPACIDAD + '): ' + piezasDeBin(bin) + '</li>';
+                }).join('')
+                + '</ul>'
+                + '<span class="text-muted">Usa "Repartir en otra placa" desde el histórico para materializarlo.</span>';
+        }
+        if (datos.sinMedir > 0) {
+            html += '<div class="text-warning-emphasis mt-1">' + datos.sinMedir + ' STL sin cuadrícula medida, no entran en la cuenta.</div>';
+        }
+
+        caja.innerHTML = html;
+    }
+
     // Sin placas no hay modal en la página: todo lo de arriba queda inerte
     // (los querySelectorAll no encuentran nada) pero estos dos sí hay que
     // guardarlos, o el bloque se cae con un TypeError y se lleva por delante
@@ -431,6 +418,55 @@
             decir('');
         });
     }
+
+    // ---- Plegar grupos de fecha ----------------------------------------------
+    // A mano, mismo patrón que el índice de Piezas con sus categorías. Por
+    // defecto abiertos "Hoy/Ayer/Esta semana" y cerrado el resto; solo se
+    // guarda en localStorage cuando el usuario toca algo a mano, como una
+    // excepción a ese valor de partida — así cambiar de semana no deja
+    // grupos "Esta semana" viejos marcados como abiertos para siempre.
+    var EXCEPCIONES = 'piezas_placas_grupos_excepciones';
+
+    function excepciones() {
+        try { return JSON.parse(localStorage.getItem(EXCEPCIONES)) || {}; } catch (e) { return {}; }
+    }
+
+    function pintarGrupo(id, abierto) {
+        var cuerpoGrupo = document.getElementById(id);
+        if (!cuerpoGrupo) return;
+        cuerpoGrupo.classList.toggle('d-none', !abierto);
+
+        var cabecera = document.querySelector('[data-plegar="' + id + '"]');
+        var chevron = cabecera ? cabecera.querySelector('[data-chevron]') : null;
+        if (chevron) {
+            chevron.classList.toggle('bi-chevron-down', abierto);
+            chevron.classList.toggle('bi-chevron-right', !abierto);
+        }
+    }
+
+    var abiertosPorDefecto = <?= json_encode($abiertosPorDefecto, JSON_UNESCAPED_UNICODE) ?>;
+    document.querySelectorAll('[data-plegar]').forEach(function (cabecera) {
+        var id = cabecera.getAttribute('data-plegar');
+        var etiqueta = cabecera.querySelector('span').textContent.trim();
+        var abiertoPorDefecto = abiertosPorDefecto.some(function (e) { return e.toLowerCase() === etiqueta.toLowerCase(); });
+        var excepcion = excepciones()[id];
+
+        pintarGrupo(id, excepcion !== undefined ? excepcion : abiertoPorDefecto);
+
+        cabecera.addEventListener('click', function (e) {
+            if (e.target.closest('form, a')) return;
+
+            var vaAAbrir = document.getElementById(id).classList.contains('d-none');
+            var mapa = excepciones();
+            if (vaAAbrir === abiertoPorDefecto) {
+                delete mapa[id];
+            } else {
+                mapa[id] = vaAAbrir;
+            }
+            localStorage.setItem(EXCEPCIONES, JSON.stringify(mapa));
+            pintarGrupo(id, vaAAbrir);
+        });
+    });
 
     // ---- Mostrar/ocultar fotos ----------------------------------------------
     // Todas visibles por defecto; cada interruptor va por su cuenta y recuerda

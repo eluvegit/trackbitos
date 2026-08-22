@@ -3,6 +3,7 @@
 namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
+use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaPedidoLineaModel;
 use App\Models\PiezaPedidoModel;
 use App\Models\PiezaReferenciaModel;
@@ -82,7 +83,28 @@ class PedidosController extends BaseController
             return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
         }
 
-        return view('piezas/pedidos/ver', ['pedido' => $pedido, 'estados' => PiezaPedidoModel::ESTADOS]);
+        // Foto y nombre de cada línea: el SKU solo no dice nada de un
+        // vistazo, y esta ficha es justo donde se decide qué imprimir.
+        $varianteModel = new PiezaVarianteModel();
+        $familiaModel  = new PiezaFamiliaModel();
+        foreach ($pedido['lineas'] as &$linea) {
+            $variante = $linea['variante_id'] ? $varianteModel->find($linea['variante_id']) : null;
+            $linea['nombreFamilia']  = $variante ? ($familiaModel->find($variante['familia_id'])['nombre'] ?? null) : null;
+            $linea['nombreVariante'] = $variante['nombre'] ?? null;
+            $linea['foto']           = $variante ? $this->miniaturaDeVariante($variante) : null;
+        }
+        unset($linea);
+
+        // Qué placas se han marcado como "de este pedido" (a mano, al cargar
+        // piezas a la placa desde aquí) — solo dato, sin cuadrar cantidades:
+        // eso lo sigue juzgando quien mira la placa, no el sistema.
+        $placas = (new \App\Models\PiezaPlacaModel())->where('pedido_id', $id)->orderBy('creado_en', 'DESC')->findAll();
+
+        return view('piezas/pedidos/ver', [
+            'pedido'  => $pedido,
+            'estados' => PiezaPedidoModel::ESTADOS,
+            'placas'  => $placas,
+        ]);
     }
 
     public function cambiarEstado(int $id)
@@ -101,5 +123,32 @@ class PedidosController extends BaseController
         $model->update($id, ['estado' => $estado, 'actualizado_en' => date('Y-m-d H:i:s')]);
 
         return redirect()->to('/piezas/pedido/' . $id)->with('success', 'Estado actualizado.');
+    }
+
+    /**
+     * Cuántas unidades de una línea se dan ya por buenas — a mano, sin
+     * cuadrarlo contra ninguna placa: si una pieza sale mal no vale para el
+     * pedido aunque esté impresa, y eso es una valoración que no le
+     * corresponde adivinar al sistema. El botón +/- de la ficha del pedido
+     * llama aquí con `delta`; se recorta entre 0 y la cantidad pedida.
+     */
+    public function ajustarCompletada(int $lineaId)
+    {
+        $lineaModel = new PiezaPedidoLineaModel();
+        $linea = $lineaModel->find($lineaId);
+        if (!$linea) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Línea no encontrada.']);
+        }
+
+        $delta = (int) $this->request->getPost('delta');
+        $nueva = max(0, min((int) $linea['cantidad'], (int) $linea['cantidad_completada'] + $delta));
+
+        $lineaModel->update($lineaId, ['cantidad_completada' => $nueva]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'cantidad_completada' => $nueva]);
+        }
+
+        return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);
     }
 }

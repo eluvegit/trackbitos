@@ -713,6 +713,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
     $routes->GET('stl/(:num)/descargar', 'Web::descargarStl/$1');
     $routes->POST('stl/(:num)/quitar', 'Web::quitarStl/$1');
+    $routes->POST('stl/(:num)/cuadros', 'Web::actualizarCuadrosStl/$1');
 
     // El .blend de una versión ya promocionada, sin declarar máquina: es
     // inmutable y nadie espera que vuelva, así que no hay asiento que
@@ -734,6 +735,16 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('pedidos', 'PedidosController::index');
     $routes->GET('pedido/(:num)', 'PedidosController::ver/$1');
     $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');
+    $routes->POST('pedido/(:num)/cargar-placa', 'Web::pedidoCargarACarrito/$1');
+    $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
+
+    // Pendientes de crear: subtareas sin marcar de una tarea de Journal
+    // (spec: journal es el punto de entrada, esto es una vista filtrada
+    // encima, ver PendientesController).
+    $routes->GET('pendientes', 'PendientesController::index');
+    $routes->POST('pendientes/enlazar', 'PendientesController::enlazar');
+    $routes->POST('pendientes/desenlazar', 'PendientesController::desenlazar');
+    $routes->POST('pendientes/subtarea/(:num)/copiar-referencias', 'PendientesController::copiarReferencias/$1');
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
@@ -752,6 +763,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('placa/(:num)/cargar', 'Web::placaCargar/$1');
     $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
     $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
+    // No cupo entera en la plataforma: mueve un subconjunto de piezas a una
+    // placa nueva, enlazada a esta como origen (spec: "repartir en otra
+    // placa").
+    $routes->POST('placa/(:num)/repartir', 'Web::placaRepartir/$1');
 
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.

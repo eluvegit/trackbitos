@@ -248,6 +248,30 @@
 </div>
 
 <h6 class="mt-4"><i class="bi bi-box"></i> Qué llevaba</h6>
+<?php if (!empty($reparto) || !empty($sinMedir)): ?>
+    <?php $capacidad = \App\Services\PiezaEmpaquetadoService::COLUMNAS * \App\Services\PiezaEmpaquetadoService::FILAS; ?>
+    <div class="text-muted small mb-2">
+        <?php if (count($reparto) <= 1): ?>
+            Cabe en una placa (<?= (int) ($reparto[0]['cuadrosUsados'] ?? 0) ?>/<?= $capacidad ?> cuadrículas).
+        <?php else: ?>
+            No cabe en una placa, pero sí en <?= count($reparto) ?> (cálculo aproximado):
+            <ul class="mb-0 mt-1 ps-3">
+                <?php foreach ($reparto as $i => $bin): ?>
+                    <li>
+                        Placa <?= $i + 1 ?> (<?= $bin['cuadrosUsados'] ?>/<?= $capacidad ?>):
+                        <?= implode(', ', array_map(
+                            static fn(array $p) => esc($p['etiqueta']) . ($p['cantidad'] > 1 ? ' ×' . $p['cantidad'] : ''),
+                            $bin['piezas']
+                        )) ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <?php if (!empty($sinMedir)): ?>
+            <div class="mt-1"><?= $sinMedir ?> STL sin cuadrícula medida, no entran en la cuenta.</div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
 <?php if (empty($piezas)): ?>
     <p class="text-muted small">Ninguna de esas versiones existe ya.</p>
 <?php else: ?>

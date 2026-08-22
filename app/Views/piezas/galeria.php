@@ -14,7 +14,10 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Galería</strong>
 
-    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Histórico de placas (guardadas y descargadas)">
+    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
+        <i class="bi bi-cart-check"></i> Pedidos
+    </a>
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
         <i class="bi bi-clock-history"></i> Placas
     </a>
 

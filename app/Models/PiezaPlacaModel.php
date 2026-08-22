@@ -38,7 +38,7 @@ class PiezaPlacaModel extends Model
         'notas', 'conclusiones',
         'resina', 'temperatura', 'veredicto',
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'resina_estimada',
-        'origen_placa_id',
+        'origen_placa_id', 'descargada_en', 'pedido_id',
     ];
 
     protected $validationRules = [
