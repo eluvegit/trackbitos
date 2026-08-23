@@ -175,6 +175,122 @@
             });
         }
 
+        // ---- Añadir/quitar piezas sueltas, sin borrar la placa (fase 44) --
+        // El resto del formulario se guarda todo junto al pulsar "Guardar",
+        // pero esto va contra el servidor al momento: son filas de verdad de
+        // piezas_placas_versiones, no texto suelto que se pueda reescribir
+        // entero como pruebas o enlaces.
+        var placaId = form.dataset.placa;
+
+        function cuerpoConToken(extra) {
+            var body = new FormData();
+            body.append(form.dataset.csrfName, form.dataset.csrfHash);
+            Object.keys(extra || {}).forEach(function (clave) { body.append(clave, extra[clave]); });
+            return body;
+        }
+
+        function llamada(url, extra) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: cuerpoConToken(extra)
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok && d.ok, datos: d }; }); });
+        }
+
+        // Recargar el formulario entero es lo más simple para que la tabla,
+        // el reparto y el propio token CSRF (de un solo uso) queden al día
+        // tras un cambio, sin duplicar aquí el marcado de una fila nueva.
+        function recargarFormulario() {
+            fetch('<?= site_url('piezas/placa') ?>/' + placaId + '/bitacora/fragmento', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.text(); })
+                .then(function (html) {
+                    var envoltorio = document.createElement('div');
+                    envoltorio.innerHTML = html;
+                    var nuevo = envoltorio.querySelector('[data-bitacora-form]');
+                    if (!nuevo || !form.parentNode) return;
+                    form.parentNode.replaceChild(nuevo, form);
+                    window.bitacoraIniciar(nuevo);
+                    // El modal de Placas engancha algunas cosas propias (aviso
+                    // de cambios sin guardar, Enter-para-guardar) sobre el
+                    // formulario que cargó él mismo; como este formulario es
+                    // uno nuevo, avisamos para que las vuelva a enganchar.
+                    nuevo.dispatchEvent(new CustomEvent('bitacora:recargada', { bubbles: true }));
+                });
+        }
+
+        var cajaBuscarPieza = form.querySelector('[data-buscar-pieza]');
+        var resultadosPieza = form.querySelector('[data-resultados-pieza]');
+        if (cajaBuscarPieza && resultadosPieza) {
+            var esperaBusqueda = null;
+
+            cajaBuscarPieza.addEventListener('input', function () {
+                clearTimeout(esperaBusqueda);
+                var q = cajaBuscarPieza.value.trim();
+                if (q.length < 2) {
+                    resultadosPieza.style.display = 'none';
+                    resultadosPieza.innerHTML = '';
+                    return;
+                }
+
+                esperaBusqueda = setTimeout(function () {
+                    fetch('<?= site_url('piezas/pieza-buscar') ?>?q=' + encodeURIComponent(q), {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        credentials: 'same-origin'
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            var lista = d.resultados || [];
+                            resultadosPieza.innerHTML = lista.length
+                                ? lista.map(function (p) {
+                                    var texto = p.texto.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                                    return '<button type="button" class="list-group-item list-group-item-action py-1 small" '
+                                        + 'data-elegir-pieza data-version-id="' + p.version_id + '">' + texto + '</button>';
+                                }).join('')
+                                : '<div class="list-group-item py-1 small text-muted">Sin resultados</div>';
+                            resultadosPieza.style.display = 'block';
+                        });
+                }, 250);
+            });
+
+            // Se cierra al perder el foco, con un respiro para que el click
+            // sobre un resultado (que quita el foco del campo) llegue a
+            // disparar su propio evento antes de que la lista desaparezca.
+            cajaBuscarPieza.addEventListener('blur', function () {
+                setTimeout(function () { resultadosPieza.style.display = 'none'; }, 200);
+            });
+
+            resultadosPieza.addEventListener('click', function (e) {
+                var boton = e.target.closest('[data-elegir-pieza]');
+                if (!boton) return;
+
+                cajaBuscarPieza.disabled = true;
+                llamada(
+                    '<?= site_url('piezas/placa') ?>/' + placaId + '/pieza/agregar',
+                    { version_id: boton.getAttribute('data-version-id'), cantidad: 1 }
+                ).then(function (r) {
+                    if (!r.ok) { cajaBuscarPieza.disabled = false; return; }
+                    recargarFormulario();
+                });
+            });
+        }
+
+        form.addEventListener('click', function (e) {
+            var boton = e.target.closest('[data-quitar-pieza]');
+            if (!boton) return;
+            if (!confirm('¿Quitar esta pieza de la placa?')) return;
+
+            boton.disabled = true;
+            llamada('<?= site_url('piezas/placa') ?>/' + placaId + '/pieza/' + boton.getAttribute('data-fila') + '/quitar', {})
+                .then(function (r) {
+                    if (!r.ok) { boton.disabled = false; return; }
+                    recargarFormulario();
+                });
+        });
+
         form.addEventListener('input', function () { recalcular(form); });
         recalcular(form);
     };

@@ -2110,6 +2110,118 @@ class Web extends BaseController
     }
 
     /**
+     * Piezas candidatas a añadir a una bitácora ya guardada: busca por
+     * nombre de familia, nombre de variante o SKU, y para cada variante que
+     * encaje ofrece la misma versión que ofrecería la Galería (validada, o
+     * si no la más reciente para imprimir) — así lo que se añade aquí es
+     * justo lo que se habría podido llevar desde allí.
+     */
+    public function piezaBuscar()
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($q) < 2) {
+            return $this->response->setJSON(['resultados' => []]);
+        }
+
+        $familiasQueEncajan = $this->familiaModel->where('borrado_en', null)->like('nombre', $q)->findAll();
+        $idsFamilia = array_column($familiasQueEncajan, 'id') ?: [0];
+
+        $variantes = $this->varianteModel->where('borrado_en', null)
+            ->groupStart()
+                ->like('nombre', $q)
+                ->orLike('sku', $q)
+                ->orWhereIn('familia_id', $idsFamilia)
+            ->groupEnd()
+            ->orderBy('nombre')
+            ->findAll(30);
+
+        $resultados = [];
+        foreach ($variantes as $variante) {
+            $version = $this->versionParaImprimir((int) $variante['id']);
+            if (!$version) {
+                continue;   // sin versión validada ni para imprimir, no hay STL que meter en la placa
+            }
+
+            $familia = $this->familiaModel->find($variante['familia_id']);
+            $resultados[] = [
+                'version_id' => (int) $version['id'],
+                'texto'      => ($familia['nombre'] ?? '?') . ' - ' . $variante['nombre']
+                    . ' · v' . sprintf('%03d', (int) $version['numero']),
+                'miniatura'  => $this->fotosDe($version, $variante)['miniatura'],
+            ];
+
+            if (count($resultados) >= 15) {
+                break;
+            }
+        }
+
+        return $this->response->setJSON(['resultados' => $resultados]);
+    }
+
+    /**
+     * Añade una pieza suelta a una placa ya guardada, sin pasar por el
+     * carrito de la Galería: para corregir un olvido (spec: pedido del
+     * usuario) sin tener que borrar la placa y volver a montarla entera. Si
+     * esa versión ya estaba en la placa, suma cantidad en vez de duplicar la
+     * fila — mismo criterio que ya usa deshacerReparto al juntar filas
+     * gemelas.
+     */
+    public function bitacoraPiezaAgregar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.']);
+        }
+
+        $versionId = (int) $this->request->getPost('version_id');
+        $version = $versionId ? $this->versionModel->find($versionId) : null;
+        if (!$version) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => 'Esa pieza ya no existe.']);
+        }
+
+        $cantidad = max(1, (int) $this->request->getPost('cantidad') ?: 1);
+
+        $existente = $this->placaVersionModel->where('placa_id', $id)->where('version_id', $versionId)->first();
+        if ($existente) {
+            $this->placaVersionModel->update((int) $existente['id'], [
+                'cantidad' => (int) $existente['cantidad'] + $cantidad,
+            ]);
+        } else {
+            $this->placaVersionModel->insert([
+                'placa_id'   => $id,
+                'version_id' => $versionId,
+                'cantidad'   => $cantidad,
+            ]);
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Quita una pieza de la bitácora: para cuando se metió por error y no
+     * hace falta rehacer la placa entera para sacarla. Se comprueba que la
+     * fila sea de esta placa antes de tocarla —igual que en
+     * bitacoraGuardar— para que un id ajeno en la URL no pueda borrar la
+     * fila de otra placa.
+     */
+    public function bitacoraPiezaQuitar(int $id, int $filaId)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.']);
+        }
+
+        $fila = $this->placaVersionModel->where('placa_id', $id)->find($filaId);
+        if (!$fila) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa pieza ya no está en esta placa.']);
+        }
+
+        $this->placaVersionModel->delete($filaId);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
      * Una URL tal y como se pega desde el navegador: a veces con esquema y a
      * veces sin él ("drive.google.com/..."). Se le pone https:// delante en
      * vez de rechazarla — lo contrario sería perder el enlace por una

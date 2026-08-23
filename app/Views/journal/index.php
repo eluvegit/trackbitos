@@ -468,28 +468,46 @@ foreach ($categories as $category) {
                                 ?>
                                 <li class="list-group-item p-1 <?= $isDone ? 'opacity-50' : '' ?>">
 
-                                    <!-- Fila principal -->
+                                    <?php
+                                    $subs = $subtasksByTask[$task['id']] ?? [];
+                                    $subsTotal = count($subs);
+                                    $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
+                                    ?>
+
+                                    <!-- Fila principal. El orden visual de los cinco hijos se controla con
+                                         clases order-*: en móvil se queda como estaba (estrella, título,
+                                         subtareas, terminar, tiempo); en escritorio (>=lg) las subtareas se
+                                         adelantan a justo después de la estrella, para no tener que saltar de
+                                         un extremo a otro de la fila al abrirlas. -->
                                     <div class="d-flex align-items-center gap-2">
 
-                                        <!-- Bloque izquierdo -->
-                                        <div class="d-flex align-items-center gap-1 flex-grow-1">
+                                        <!-- Estrella -->
+                                        <span class="current-star btn-toggle-current order-1"
+                                            data-task-id="<?= $task['id'] ?>">
+                                            <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg"
+                                                    width="16"
+                                                    height="16"
+                                                    fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>"
+                                                    class="bi bi-star-fill"
+                                                    viewBox="0 0 16 16">
+                                                    <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
+                                                </svg>
+                                            </button>
+                                        </span>
 
-                                            <!-- Estrella -->
-                                            <span class="current-star btn-toggle-current"
-                                                data-task-id="<?= $task['id'] ?>">
-                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
-                                                    <svg xmlns="http://www.w3.org/2000/svg"
-                                                        width="16"
-                                                        height="16"
-                                                        fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>"
-                                                        class="bi bi-star-fill"
-                                                        viewBox="0 0 16 16">
-                                                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                                                    </svg>
-                                                </button>
-                                            </span>
+                                        <!-- Subtareas -->
+                                        <button type="button" class="jt-subtask-toggle order-3 order-lg-2 <?= $subsTotal > 0 ? 'has-subtasks' : '' ?>"
+                                            data-bs-toggle="collapse" data-bs-target="#subtasks-<?= $task['id'] ?>"
+                                            title="Subtareas">
+                                            <i class="bi bi-list-check"></i>
+                                            <?php if ($subsTotal > 0): ?>
+                                                <span class="jt-subtask-count"><?= $subsDone ?>/<?= $subsTotal ?></span>
+                                            <?php endif; ?>
+                                        </button>
 
-                                            <!-- Título -->
+                                        <!-- Título + fecha -->
+                                        <div class="d-flex align-items-center gap-1 flex-grow-1 order-2 order-lg-3">
                                             <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
                                                 class="text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
                                                 <?= esc($task['title']) ?>
@@ -501,24 +519,8 @@ foreach ($categories as $category) {
                                             </span>
                                         </div>
 
-                                        <?php
-                                        $subs = $subtasksByTask[$task['id']] ?? [];
-                                        $subsTotal = count($subs);
-                                        $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
-                                        ?>
-
-                                        <!-- Subtareas -->
-                                        <button type="button" class="jt-subtask-toggle <?= $subsTotal > 0 ? 'has-subtasks' : '' ?>"
-                                            data-bs-toggle="collapse" data-bs-target="#subtasks-<?= $task['id'] ?>"
-                                            title="Subtareas">
-                                            <i class="bi bi-list-check"></i>
-                                            <?php if ($subsTotal > 0): ?>
-                                                <span class="jt-subtask-count"><?= $subsDone ?>/<?= $subsTotal ?></span>
-                                            <?php endif; ?>
-                                        </button>
-
                                         <!-- Terminar / resumen -->
-                                        <button type="button" class="jt-task-complete-btn js-task-complete <?= $isDone ? 'is-done' : '' ?>"
+                                        <button type="button" class="jt-task-complete-btn js-task-complete order-4 <?= $isDone ? 'is-done' : '' ?>"
                                             data-task-id="<?= $task['id'] ?>"
                                             data-title="<?= esc($task['title'], 'attr') ?>"
                                             data-start="<?= !empty($task['start_time']) && $task['start_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['start_time'])) : '' ?>"
@@ -531,7 +533,7 @@ foreach ($categories as $category) {
                                         </button>
 
                                         <!-- Tiempo -->
-                                        <span class="text-muted small ms-auto task-time-trigger"
+                                        <span class="text-muted small ms-auto order-5 task-time-trigger"
                                             data-task-id="<?= $task['id'] ?>">
                                             <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
                                         </span>

@@ -40,7 +40,8 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
 ?>
 
 <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>"
-    data-bitacora-form data-placa="<?= $idPlaca ?>">
+    data-bitacora-form data-placa="<?= $idPlaca ?>"
+    data-csrf-name="<?= csrf_token() ?>" data-csrf-hash="<?= csrf_hash() ?>">
     <?= csrf_field() ?>
 
     <?php // Lo de después de imprimir, todo junto y sin plegar. ?>
@@ -183,8 +184,6 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
         </button>
     </div>
 
-    <?php // Las piezas no se añaden ni se quitan aquí: eso lo decide la placa
-          // al montarla en la galería. Aquí solo se anota sobre lo que llevó. ?>
     <?php
         /**
          * Cuántas placas hace falta según las cuadrículas medidas de cada
@@ -241,6 +240,7 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
                             <th>Pieza</th>
                             <th style="width: 5.5rem;">Copias</th>
                             <th>Soportes y pruebas de esta pieza</th>
+                            <th style="width: 2rem;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -278,12 +278,28 @@ $veredictoActual = (string) old('veredicto', (string) $placa['veredicto']);
                                         placeholder="tumbada 30°, soportes medios en la base"
                                         value="<?= esc((string) $p['fila']['notas'], 'attr') ?>">
                                 </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-quitar-pieza
+                                        data-fila="<?= $filaId ?>" title="Quitar esta pieza de la placa">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         <?php endif; ?>
+
+        <div class="mt-2" data-anadir-pieza>
+            <label class="form-label small mb-1">Añadir pieza a esta placa</label>
+            <div class="position-relative">
+                <input type="text" class="form-control form-control-sm" placeholder="Nombre o SKU de la pieza…"
+                    data-buscar-pieza autocomplete="off">
+                <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1060; display: none;"
+                    data-resultados-pieza></div>
+            </div>
+        </div>
     </details>
 
     <div class="mt-3">

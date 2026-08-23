@@ -784,6 +784,13 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('placa/(:num)/bitacora', 'Web::bitacora/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
 
+    // Añadir/quitar piezas sueltas de una bitácora ya guardada, sin rehacer
+    // la placa entera: hasta ahora la única forma de corregir un olvido era
+    // borrar la placa y volver a montarla desde cero.
+    $routes->GET('pieza-buscar', 'Web::piezaBuscar');
+    $routes->POST('placa/(:num)/pieza/agregar', 'Web::bitacoraPiezaAgregar/$1');
+    $routes->POST('placa/(:num)/pieza/(:num)/quitar', 'Web::bitacoraPiezaQuitar/$1/$2');
+
     // Fotos de la plataforma del laminador (fase 43): de dónde partía la
     // impresión. Alta y baja inmediatas, fuera del guardado general de la
     // bitácora — mismo patrón que las referencias de una variante.

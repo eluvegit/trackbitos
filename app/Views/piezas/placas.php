@@ -9,8 +9,12 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Placas</strong>
 
+    
     <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos
+    </a>
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary " title="Galería de piezas">
+        <i class="bi bi-cart-check"></i> Galería
     </a>
 </h5>
 
@@ -173,6 +177,21 @@
     function formAbierto() {
         return cuerpo.querySelector('[data-bitacora-form]');
     }
+
+    // Añadir/quitar una pieza (ver _bitacora_js.php) cambia el formulario por
+    // uno nuevo, así que hay que volver a engancharle lo que solo pone este
+    // modal encima del formulario base: aviso de cambios sin guardar y
+    // Enter-para-guardar.
+    cuerpo.addEventListener('bitacora:recargada', function () {
+        var form = formAbierto();
+        if (!form) return;
+        form.addEventListener('input', function () { form.dataset.sucio = '1'; });
+        form.addEventListener('change', function () { form.dataset.sucio = '1'; });
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            guardar(form);
+        });
+    });
 
     function decir(texto, clase) {
         estado.textContent = texto || '';
