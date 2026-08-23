@@ -72,6 +72,12 @@ class PiezaAlmacen
         return sprintf('placa-%d/imagen-%d.%s', $placaId, $imagenId, $extension);
     }
 
+    /** Captura de cómo quedó una pieza concreta dentro de una placa. */
+    public function rutaPlacaVersionImagen(int $placaVersionId, int $imagenId, string $extension): string
+    {
+        return sprintf('placa-version-%d/imagen-%d.%s', $placaVersionId, $imagenId, $extension);
+    }
+
     public function rutaRender(int $varianteId, int $versionId, int $renderId, string $extension): string
     {
         return sprintf('variante-%d/version-%d/render-%d.%s', $varianteId, $versionId, $renderId, $extension);

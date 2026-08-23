@@ -37,7 +37,7 @@ class PiezaPlacaModel extends Model
         'nombre', 'impresa_en', 'exposicion', 'peso_antes', 'peso_despues',
         'notas', 'conclusiones',
         'resina', 'temperatura', 'veredicto',
-        'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'resina_estimada',
+        'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
         'origen_placa_id', 'es_reparto', 'descargada_en', 'pedido_id',
     ];
 
@@ -53,5 +53,8 @@ class PiezaPlacaModel extends Model
         'resina'       => 'permit_empty|max_length[120]',
         'temperatura'  => 'permit_empty|decimal|greater_than_equal_to[-50]|less_than[200]',
         'veredicto'    => 'permit_empty|in_list[buena,regular,repetir]',
+        // Sin tope realista fijado: la mayoría de piezas rondan las
+        // centenas, pero una pieza alta a capa fina puede pasar de mil.
+        'numero_capas' => 'permit_empty|is_natural_no_zero',
     ];
 }

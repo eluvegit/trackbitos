@@ -1,8 +1,9 @@
 <?php
 /**
- * El comportamiento del formulario de bitácora, en un solo sitio: lo cargan
- * la pantalla /bitacora/editar y la de Placas (para el modal). Va embebido
- * en el HTML y no en public/assets a propósito — el Hostinger sirve los
+ * El comportamiento del formulario de bitácora, en un solo sitio: lo carga
+ * la pantalla /bitacora/editar (el modal de Placas es de solo lectura desde
+ * la fase 48, sin formulario que iniciar). Va embebido en el HTML y no en
+ * public/assets a propósito — el Hostinger sirve los
  * assets con una semana de caché y un arreglo aquí tardaría días en llegar
  * al navegador; el HTML no se cachea.
  *
@@ -28,21 +29,9 @@
         return suelto ? parseInt(suelto[1], 10) : null;
     }
 
-    // Un peso tal y como se teclea aquí: con coma o con punto.
-    function aPeso(texto) {
-        texto = (texto || '').toString().replace(',', '.').trim();
-        if (texto === '') return null;
-        var n = parseFloat(texto);
-        return isNaN(n) ? null : n;
-    }
-
     function duracion(minutos) {
         var h = Math.floor(minutos / 60), m = minutos % 60;
         return h ? (m ? h + ' h ' + m + ' min' : h + ' h') : m + ' min';
-    }
-
-    function gramos(n) {
-        return (Math.round(n * 100) / 100).toString().replace('.', ',') + ' g';
     }
 
     function valor(form, nombre) {
@@ -51,36 +40,14 @@
     }
 
     /**
-     * Lo que se deduce de lo tecleado, sin esperar al guardado: cuánta resina
-     * se fue (los dos pesos), cuánto se pasó de lo prometido (los tres
-     * relojes) y si el laminador acertó con la resina.
+     * Lo que se deduce de lo tecleado, sin esperar al guardado: cuánto se
+     * pasó de lo prometido, en los tres relojes.
      */
     function recalcular(form) {
         var salida = form.querySelector('[data-calculado]');
         if (!salida) return;
 
         var partes = [];
-
-        var antes = aPeso(valor(form, 'peso_antes'));
-        var despues = aPeso(valor(form, 'peso_despues'));
-        var estimadaResina = aPeso(valor(form, 'resina_estimada'));
-        if (antes !== null && despues !== null) {
-            var gastado = antes - despues;
-            if (gastado > 0) {
-                var texto = '<i class="bi bi-droplet"></i> Se fueron <strong>' + gramos(gastado) + '</strong>';
-                if (estimadaResina !== null) {
-                    var difR = gastado - estimadaResina;
-                    texto += ' (el programa decía ' + gramos(estimadaResina) + ': '
-                        + (difR >= 0 ? '+' : '−') + gramos(Math.abs(difR)) + ')';
-                }
-                partes.push(texto);
-            } else {
-                // Al revés no es un dato raro, es una errata al teclear — y
-                // más vale decirlo ahora que guardar un número imposible.
-                partes.push('<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> '
-                    + 'El peso de después no puede ser mayor que el de antes</span>');
-            }
-        }
 
         var reales = aMinutos(valor(form, 'minutos_reales'));
         if (reales !== null) {
@@ -119,6 +86,38 @@
         if (!form || form.dataset.iniciado === '1') return;
         form.dataset.iniciado = '1';
 
+        // A pantalla completa, piezas/pruebas/enlaces viven fuera de la
+        // etiqueta <form> (asociados por el atributo `form="..."` de cada
+        // campo, para poder meter la foto de la placa entre medias sin
+        // anidar formularios) — pero sus botones siguen necesitando algo
+        // que buscarlos. `raiz` es ese algo: el envoltorio que los junta a
+        // todos, o el propio form si no existe (el modal, que no lo tiene).
+        var raiz = form.closest('[data-bitacora-raiz]') || form;
+
+        // El estado (Cómo salió) se ve como un único botón de color; al
+        // pincharlo se abre el desplegable con las demás opciones.
+        var veredictoBoton = form.querySelector('[data-veredicto-boton]');
+        var veredictoInput = form.querySelector('[data-veredicto-input]');
+        if (veredictoBoton && veredictoInput) {
+            form.querySelectorAll('[data-veredicto-opcion]').forEach(function (opcion) {
+                opcion.addEventListener('click', function () {
+                    veredictoInput.value = opcion.dataset.valor;
+                    veredictoBoton.textContent = opcion.textContent.trim();
+                    veredictoBoton.className = 'btn btn-sm btn-' + opcion.dataset.color + ' dropdown-toggle';
+                    veredictoInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+        }
+
+        // Las notas de "soportes y pruebas" de cada pieza ocupan una sola
+        // línea en reposo (no abultan la tabla) y se abren a varias líneas
+        // en cuanto se pincha, para escribir sin apretarse — se vuelven a
+        // encoger al salir del campo.
+        raiz.querySelectorAll('[data-nota-expandible]').forEach(function (campo) {
+            campo.addEventListener('focus', function () { campo.rows = 3; });
+            campo.addEventListener('blur', function () { campo.rows = 1; });
+        });
+
         // "Ahora" en la fecha de impresión: casi siempre se apunta al rato de
         // que la máquina pare, y escribir un datetime a mano es lo más
         // pesado de todo el formulario.
@@ -133,8 +132,8 @@
             });
         });
 
-        var listaPruebas = form.querySelector('[data-lista-pruebas]');
-        var botonPrueba = form.querySelector('[data-anadir-prueba]');
+        var listaPruebas = raiz.querySelector('[data-lista-pruebas]');
+        var botonPrueba = raiz.querySelector('[data-anadir-prueba]');
         if (listaPruebas && botonPrueba) {
             botonPrueba.addEventListener('click', function () { anadirFila(listaPruebas, '[data-prueba]'); });
 
@@ -152,8 +151,8 @@
             });
         }
 
-        var listaEnlaces = form.querySelector('[data-lista-enlaces]');
-        var botonEnlace = form.querySelector('[data-anadir-enlace]');
+        var listaEnlaces = raiz.querySelector('[data-lista-enlaces]');
+        var botonEnlace = raiz.querySelector('[data-anadir-enlace]');
         if (listaEnlaces && botonEnlace) {
             botonEnlace.addEventListener('click', function () { anadirFila(listaEnlaces, '[data-enlace]'); });
 
@@ -198,32 +197,17 @@
             }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok && d.ok, datos: d }; }); });
         }
 
-        // Recargar el formulario entero es lo más simple para que la tabla,
-        // el reparto y el propio token CSRF (de un solo uso) queden al día
-        // tras un cambio, sin duplicar aquí el marcado de una fila nueva.
+        // Este formulario solo vive a pantalla completa (fase 48: el modal
+        // de Placas es de solo lectura, sin edición), así que recargar tras
+        // añadir/quitar una pieza es simplemente recargar la página — más
+        // simple que reconstruir la tabla a mano, y sigue funcionando sin
+        // JavaScript.
         function recargarFormulario() {
-            fetch('<?= site_url('piezas/placa') ?>/' + placaId + '/bitacora/fragmento', {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin'
-            })
-                .then(function (r) { return r.text(); })
-                .then(function (html) {
-                    var envoltorio = document.createElement('div');
-                    envoltorio.innerHTML = html;
-                    var nuevo = envoltorio.querySelector('[data-bitacora-form]');
-                    if (!nuevo || !form.parentNode) return;
-                    form.parentNode.replaceChild(nuevo, form);
-                    window.bitacoraIniciar(nuevo);
-                    // El modal de Placas engancha algunas cosas propias (aviso
-                    // de cambios sin guardar, Enter-para-guardar) sobre el
-                    // formulario que cargó él mismo; como este formulario es
-                    // uno nuevo, avisamos para que las vuelva a enganchar.
-                    nuevo.dispatchEvent(new CustomEvent('bitacora:recargada', { bubbles: true }));
-                });
+            window.location.reload();
         }
 
-        var cajaBuscarPieza = form.querySelector('[data-buscar-pieza]');
-        var resultadosPieza = form.querySelector('[data-resultados-pieza]');
+        var cajaBuscarPieza = raiz.querySelector('[data-buscar-pieza]');
+        var resultadosPieza = raiz.querySelector('[data-resultados-pieza]');
         if (cajaBuscarPieza && resultadosPieza) {
             var esperaBusqueda = null;
 
@@ -278,7 +262,7 @@
             });
         }
 
-        form.addEventListener('click', function (e) {
+        raiz.addEventListener('click', function (e) {
             var boton = e.target.closest('[data-quitar-pieza]');
             if (!boton) return;
             if (!confirm('¿Quitar esta pieza de la placa?')) return;

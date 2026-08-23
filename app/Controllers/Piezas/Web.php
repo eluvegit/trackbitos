@@ -12,6 +12,7 @@ use App\Models\PiezaPlacaEnlaceModel;
 use App\Models\PiezaPlacaImagenModel;
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaPruebaModel;
+use App\Models\PiezaPlacaVersionImagenModel;
 use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
@@ -127,6 +128,7 @@ class Web extends BaseController
     private PiezaPlacaPruebaModel $placaPruebaModel;
     private PiezaPlacaEnlaceModel $placaEnlaceModel;
     private PiezaPlacaImagenModel $placaImagenModel;
+    private PiezaPlacaVersionImagenModel $placaVersionImagenModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
     private PiezaAlmacen $almacen;
@@ -159,6 +161,7 @@ class Web extends BaseController
         $this->placaPruebaModel = new PiezaPlacaPruebaModel();
         $this->placaEnlaceModel = new PiezaPlacaEnlaceModel();
         $this->placaImagenModel = new PiezaPlacaImagenModel();
+        $this->placaVersionImagenModel = new PiezaPlacaVersionImagenModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
         $this->almacen          = new PiezaAlmacen();
@@ -862,6 +865,8 @@ class Web extends BaseController
             'dias_vida' => $this->diasDesde($variante['creado_en']),
         ];
 
+        $historialPlacas = $this->placasDeLaVariante($id);
+
         return view('piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
@@ -895,15 +900,20 @@ class Web extends BaseController
             // En qué placas ha ido esta pieza y cómo salió cada una (fase
             // 39): cierra el círculo del cuaderno — lo que se aprendió
             // imprimiéndola se consulta desde la pieza, que es donde uno
-            // está cuando decide volver a mandarla a la impresora.
-            'placasDeLaPieza'       => $this->placasDeLaVariante($id),
+            // está cuando decide volver a mandarla a la impresora. Trae
+            // también las capturas de cada fila y el conjunto entero, para
+            // comparar posiciones (fase 44).
+            'placasDeLaPieza'    => $historialPlacas['placas'],
+            'capturasDeLaPieza'  => $historialPlacas['capturas'],
         ]);
     }
 
     /**
      * Las placas en las que se imprimió alguna versión de esta variante, de
-     * la más reciente a la más vieja, con el veredicto de cada una y qué
-     * versión llevaba.
+     * la más reciente a la más vieja, con el veredicto de cada una, qué
+     * versión llevaba y las capturas de cada fila (fase 44).
+     *
+     * @return array{placas: list<array>, capturas: list<array>}
      */
     private function placasDeLaVariante(int $varianteId): array
     {
@@ -912,12 +922,12 @@ class Web extends BaseController
             'id'
         );
         if ($versionIds === []) {
-            return [];
+            return ['placas' => [], 'capturas' => []];
         }
 
         $filas = $this->placaVersionModel->whereIn('version_id', $versionIds)->findAll();
         if ($filas === []) {
-            return [];
+            return ['placas' => [], 'capturas' => []];
         }
 
         $placas = $this->placaModel
@@ -927,22 +937,41 @@ class Web extends BaseController
 
         // Una placa puede llevar dos versiones distintas de la misma pieza
         // (una prueba con dos alturas de capa, por ejemplo): se indexa por
-        // placa y se guardan todas las versiones que puso.
+        // placa y se guardan todas las versiones que puso. `fila_id` viaja
+        // con cada una para poder colgarle capturas (fase 44): la gestión
+        // de esas fotos vive aquí, en la ficha de la pieza, no en la placa.
         $porPlaca = [];
+        $todasLasImagenes = [];
         foreach ($filas as $fila) {
             $version = $this->versionModel->find($fila['version_id']);
             if ($version) {
+                $imagenes = $this->placaVersionImagenModel->where('placa_version_id', $fila['id'])
+                    ->orderBy('orden')->orderBy('id')->findAll();
+
                 $porPlaca[(int) $fila['placa_id']][] = [
+                    'fila_id'  => (int) $fila['id'],
                     'numero'   => (int) $version['numero'],
                     'cantidad' => (int) $fila['cantidad'],
+                    'notas'    => $fila['notas'],
+                    'imagenes' => $imagenes,
                 ];
+
+                foreach ($imagenes as $imagen) {
+                    $todasLasImagenes[] = $imagen + ['placa_id' => (int) $fila['placa_id']];
+                }
             }
         }
 
-        return array_map(static fn(array $placa) => [
-            'placa'     => $placa,
-            'versiones' => $porPlaca[(int) $placa['id']] ?? [],
-        ], $placas);
+        return [
+            'placas'   => array_map(static fn(array $placa) => [
+                'placa'     => $placa,
+                'versiones' => $porPlaca[(int) $placa['id']] ?? [],
+            ], $placas),
+            // Todas las capturas juntas, para poder comparar de un vistazo
+            // qué posición salió bien y cuál no repetir, sin tener que abrir
+            // placa por placa.
+            'capturas' => $todasLasImagenes,
+        ];
     }
 
     /**
@@ -1243,15 +1272,10 @@ class Web extends BaseController
 
     /**
      * Lo que una placa nueva puede dar por sabido antes de que nadie escriba
-     * nada (fase 39). Dos herencias distintas, y por razones distintas:
-     *
-     * - El peso del tanque de antes sale del peso de después de la última
-     *   placa: el tanque sigue como se dejó, y volver a pesarlo para escribir
-     *   el mismo número es trabajo tonto.
-     * - La exposición, la resina y la temperatura salen de la placa que se
-     *   está repitiendo si la hay, y si no de la última: casi nunca cambian
-     *   de una tanda a la siguiente, y cuando cambian es justo el dato que
-     *   uno va a corregir a mano de todas formas.
+     * nada (fase 39): la exposición, la resina y la temperatura salen de la
+     * placa que se está repitiendo si la hay, y si no de la última — casi
+     * nunca cambian de una tanda a la siguiente, y cuando cambian es justo
+     * el dato que uno va a corregir a mano de todas formas.
      *
      * Son valores de partida, no un registro de lo que pasó: se sobreescriben
      * en cuanto se toca la bitácora.
@@ -1268,7 +1292,6 @@ class Web extends BaseController
 
         return array_filter([
             'origen_placa_id' => $origenId ?: null,
-            'peso_antes'      => $ultima['peso_despues'],
             'exposicion'      => $modelo['exposicion'],
             'resina'          => $modelo['resina'],
             'temperatura'     => $modelo['temperatura'],
@@ -1419,11 +1442,15 @@ class Web extends BaseController
             // reparto hipotético): para no perder de vista, sobre todo en
             // una placa nacida de un reparto, cuánto le queda por llenar.
             $itemsInfo = $this->itemsParaEmpaquetar($piezas[$idPlaca]);
-            $usados = 0;
+            $areaUsada = 0.0;
             foreach ($itemsInfo['items'] as $item) {
-                $usados += $item['ancho'] * $item['fondo'];
+                $areaUsada += $item['ancho'] * $item['fondo'];
             }
-            $cuadrosPorPlaca[$idPlaca] = ['usados' => $usados, 'sinMedir' => $itemsInfo['sinMedir']];
+            $areaPlaca = PiezaEmpaquetadoService::PLACA_ANCHO_MM * PiezaEmpaquetadoService::PLACA_FONDO_MM;
+            $cuadrosPorPlaca[$idPlaca] = [
+                'porcentajeUsado' => $areaPlaca > 0 ? min(100, $areaUsada / $areaPlaca * 100) : 0,
+                'sinMedir'        => $itemsInfo['sinMedir'],
+            ];
 
             if ($placa['impresa_en']) {
                 $impresas[] = $placa;
@@ -1724,6 +1751,17 @@ class Web extends BaseController
             $this->publicas->retirar($imagen['hash_imagen'] ?? null);
         }
 
+        // Igual, pero con las capturas de cada pieza (piezas_placas_versiones
+        // se va sola por cascada de FK; el fichero, no).
+        foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $filaVersion) {
+            foreach ($this->placaVersionImagenModel->where('placa_version_id', $filaVersion['id'])->findAll() as $imagen) {
+                if (!empty($imagen['ruta_imagen'])) {
+                    $this->almacen->aPapelera($imagen['ruta_imagen']);
+                }
+                $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+            }
+        }
+
         $this->placaModel->delete($id);
 
         return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
@@ -1842,6 +1880,11 @@ class Web extends BaseController
 
             if ($gemela) {
                 $this->placaVersionModel->update((int) $gemela['id'], ['cantidad' => (int) $gemela['cantidad'] + (int) $fila['cantidad']]);
+                // Las capturas de la fila que desaparece se quedan con la
+                // gemela en la que se fusiona, igual que las fotos/preguntas
+                // de la placa entera unas líneas más abajo.
+                $this->placaVersionImagenModel->where('placa_version_id', $fila['id'])
+                    ->set(['placa_version_id' => $gemela['id']])->update();
                 $this->placaVersionModel->delete((int) $fila['id']);
             } else {
                 $this->placaVersionModel->update((int) $fila['id'], ['placa_id' => $origen['id']]);
@@ -1866,33 +1909,6 @@ class Web extends BaseController
 
     // ---- Bitácora de una placa (fase 38) ---------------------------------
 
-    /**
-     * Todo lo que se sabe de una impresión, en una pantalla de leer: qué
-     * llevaba y cuántas copias, qué se estaba probando y qué salió, cuánta
-     * resina se fue, y las conclusiones para la siguiente.
-     *
-     * Desde la fase 39 esto es el "ver limpio" y no el sitio por donde se
-     * pasa para escribir: la bitácora se rellena en el modal del histórico,
-     * sin salir de Placas. El razonamiento viejo —que se consulta más de lo
-     * que se toca— vale para una placa cerrada de hace meses, pero no para la
-     * de esta semana, que es la que se está anotando a ratos; y llegar al
-     * formulario costaba tres pantallas. Esta se queda para leerla de
-     * corrido, y para poder trabajar sin JavaScript.
-     */
-    public function bitacora(int $id)
-    {
-        $placa = $this->placaModel->find($id);
-        if (!$placa) {
-            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
-        }
-
-        return view('piezas/bitacora', $this->datosDeLaBitacora($placa) + [
-            // De qué placa es repetición, si lo es: sus conclusiones son
-            // justo lo que se quería tener delante al montar esta.
-            'origen' => $placa['origen_placa_id'] ? $this->placaModel->find($placa['origen_placa_id']) : null,
-        ]);
-    }
-
     public function bitacoraEditar(int $id)
     {
         $placa = $this->placaModel->find($id);
@@ -1904,20 +1920,20 @@ class Web extends BaseController
     }
 
     /**
-     * El formulario suelto, sin layout, para meterlo en el modal de Placas
-     * (fase 39). Se pide al abrir la placa y no viene ya en la página porque
-     * son treinta y pico placas: incrustar treinta formularios completos —con
-     * su tabla de piezas y sus pruebas— para que se use uno hace pesar el
-     * histórico entero por nada.
+     * El vistazo rápido para el modal de Placas (fase 48): piezas impresas,
+     * foto, fecha, tiempo, estado, notas y conclusiones — solo lectura, para
+     * enterarse sin salir del histórico. Editar de verdad es "Ver completa",
+     * a pantalla completa (antes esto cargaba el formulario editable entero;
+     * con piezas/pruebas/fotos/ajustes ya no cabía en un vistazo rápido).
      */
-    public function bitacoraFragmento(int $id)
+    public function bitacoraResumen(int $id)
     {
         $placa = $this->placaModel->find($id);
         if (!$placa) {
             return $this->response->setStatusCode(404)->setBody('Esa placa ya no existe.');
         }
 
-        return view('piezas/_bitacora_form', $this->datosDeLaBitacora($placa) + ['enModal' => true]);
+        return view('piezas/_bitacora_resumen', $this->datosDeLaBitacora($placa));
     }
 
     /**
@@ -1941,7 +1957,7 @@ class Web extends BaseController
         // registrar la placa, así que contarlos daría por escrita una
         // bitácora en blanco.
         $anotada = $placa['impresa_en'] !== null
-            || $placa['peso_despues'] !== null
+            || $placa['numero_capas'] !== null
             || $placa['minutos_reales'] !== null
             || $placa['veredicto'] !== null
             || trim((string) $placa['notas']) !== ''
@@ -1984,6 +2000,11 @@ class Web extends BaseController
             // "Copias" que editar).
             'reparto'  => $this->repartoLegible($piezas),
             'sinMedir' => $this->itemsParaEmpaquetar($piezas)['sinMedir'],
+            // Cuántas copias de cada fila sobran de la primera placa, para
+            // preseleccionarlas en el formulario de "Repartir" (fase 47:
+            // ahora también en el sidebar de la bitácora, no solo en el
+            // desplegable del histórico).
+            'sugerenciaReparto' => $this->filasFueraDeLaPrimeraPlaca($piezas),
         ];
     }
 
@@ -2003,23 +2024,34 @@ class Web extends BaseController
 
         $veredicto = (string) $this->request->getPost('veredicto');
 
+        // Algunos campos venían pensados para poderse guardar sueltos desde
+        // el modal (fase 44); ya no existe ese guardado parcial (fase 48: el
+        // modal es de solo lectura), pero el guardián se queda porque sigue
+        // siendo verdad que solo se toca lo que llega en el POST — así un
+        // formulario a medio montar no borra ajustes, notas, etc.
+        $tieneCampo = fn(string $clave) => $this->request->getPost($clave) !== null;
+
+        // El peso antes/después se quitó de la bitácora (fase 51):
+        // logísticamente casi nunca se llega a pesar el tanque, y cuando
+        // hace falta contarlo ahora va como texto suelto en notas.
+        $numeroCapas = trim((string) $this->request->getPost('numero_capas'));
+
         $datos = [
             'nombre'       => trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'],
             'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
-            'exposicion'   => trim((string) $this->request->getPost('exposicion')) ?: null,
-            'peso_antes'   => $this->aPeso($this->request->getPost('peso_antes')),
-            'peso_despues' => $this->aPeso($this->request->getPost('peso_despues')),
-            'notas'        => trim((string) $this->request->getPost('notas')) ?: null,
-            'conclusiones' => trim((string) $this->request->getPost('conclusiones')) ?: null,
-
-            'resina'      => trim((string) $this->request->getPost('resina')) ?: null,
-            'temperatura' => $this->aPeso($this->request->getPost('temperatura')),
+            'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
+            'numero_capas' => $numeroCapas !== '' ? (int) $numeroCapas : null,
             'veredicto'   => isset(PiezaPlacaModel::VEREDICTOS[$veredicto]) ? $veredicto : null,
 
-            'resina_estimada'   => $this->aPeso($this->request->getPost('resina_estimada')),
-            'minutos_estimados' => $this->aMinutos($this->request->getPost('minutos_estimados')),
-            'minutos_previstos' => $this->aMinutos($this->request->getPost('minutos_previstos')),
-            'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
+            'exposicion'   => $tieneCampo('exposicion') ? (trim((string) $this->request->getPost('exposicion')) ?: null) : $placa['exposicion'],
+            'notas'        => $tieneCampo('notas') ? (trim((string) $this->request->getPost('notas')) ?: null) : $placa['notas'],
+            'conclusiones' => $tieneCampo('conclusiones') ? (trim((string) $this->request->getPost('conclusiones')) ?: null) : $placa['conclusiones'],
+            'resina'      => $tieneCampo('resina') ? (trim((string) $this->request->getPost('resina')) ?: null) : $placa['resina'],
+            'temperatura' => $tieneCampo('temperatura') ? $this->aPeso($this->request->getPost('temperatura')) : $placa['temperatura'],
+
+            'resina_estimada'   => $tieneCampo('resina_estimada') ? $this->aPeso($this->request->getPost('resina_estimada')) : $placa['resina_estimada'],
+            'minutos_estimados' => $tieneCampo('minutos_estimados') ? $this->aMinutos($this->request->getPost('minutos_estimados')) : $placa['minutos_estimados'],
+            'minutos_previstos' => $tieneCampo('minutos_previstos') ? $this->aMinutos($this->request->getPost('minutos_previstos')) : $placa['minutos_previstos'],
         ];
 
         if (!$this->placaModel->update($id, $datos)) {
@@ -2048,42 +2080,51 @@ class Web extends BaseController
             ]);
         }
 
-        $this->placaPruebaModel->where('placa_id', $id)->delete();
-        $preguntas  = (array) $this->request->getPost('pregunta');
-        $respuestas = (array) $this->request->getPost('respuesta');
-        $orden = 0;
-        foreach ($preguntas as $i => $pregunta) {
-            $pregunta = trim((string) $pregunta);
-            if ($pregunta === '') {
-                continue;   // una fila en blanco es una fila que el usuario dejó sin usar
-            }
+        // Se reescriben enteros, pero solo si la sección venía en el POST:
+        // el modal no la manda, y sin este guardián un guardado desde ahí
+        // vaciaría las pruebas de la placa por no tener dónde volver a
+        // escribirlas.
+        if ($tieneCampo('pregunta') || $tieneCampo('respuesta')) {
+            $this->placaPruebaModel->where('placa_id', $id)->delete();
+            $preguntas  = (array) $this->request->getPost('pregunta');
+            $respuestas = (array) $this->request->getPost('respuesta');
+            $orden = 0;
+            foreach ($preguntas as $i => $pregunta) {
+                $pregunta = trim((string) $pregunta);
+                if ($pregunta === '') {
+                    continue;   // una fila en blanco es una fila que el usuario dejó sin usar
+                }
 
-            $this->placaPruebaModel->insert([
-                'placa_id'  => $id,
-                'pregunta'  => mb_substr($pregunta, 0, 255),
-                'respuesta' => trim((string) ($respuestas[$i] ?? '')) ?: null,
-                'orden'     => $orden++,
-            ]);
+                $this->placaPruebaModel->insert([
+                    'placa_id'  => $id,
+                    'pregunta'  => mb_substr($pregunta, 0, 255),
+                    'respuesta' => trim((string) ($respuestas[$i] ?? '')) ?: null,
+                    'orden'     => $orden++,
+                ]);
+            }
         }
 
-        // Los enlaces, igual que las pruebas: se reescriben enteros. Una fila
-        // sin URL es una fila que el usuario dejó a medias, no un enlace.
-        $this->placaEnlaceModel->where('placa_id', $id)->delete();
-        $urls    = (array) $this->request->getPost('enlace_url');
-        $titulos = (array) $this->request->getPost('enlace_titulo');
-        $orden = 0;
-        foreach ($urls as $i => $url) {
-            $url = $this->aUrl($url);
-            if ($url === null) {
-                continue;
-            }
+        // Los enlaces, igual que las pruebas: se reescriben enteros, y solo
+        // si venían en el POST. Una fila sin URL es una fila que el usuario
+        // dejó a medias, no un enlace.
+        if ($tieneCampo('enlace_url') || $tieneCampo('enlace_titulo')) {
+            $this->placaEnlaceModel->where('placa_id', $id)->delete();
+            $urls    = (array) $this->request->getPost('enlace_url');
+            $titulos = (array) $this->request->getPost('enlace_titulo');
+            $orden = 0;
+            foreach ($urls as $i => $url) {
+                $url = $this->aUrl($url);
+                if ($url === null) {
+                    continue;
+                }
 
-            $this->placaEnlaceModel->insert([
-                'placa_id' => $id,
-                'url'      => $url,
-                'titulo'   => mb_substr(trim((string) ($titulos[$i] ?? '')), 0, 150) ?: null,
-                'orden'    => $orden++,
-            ]);
+                $this->placaEnlaceModel->insert([
+                    'placa_id' => $id,
+                    'url'      => $url,
+                    'titulo'   => mb_substr(trim((string) ($titulos[$i] ?? '')), 0, 150) ?: null,
+                    'orden'    => $orden++,
+                ]);
+            }
         }
 
         if ($this->request->isAJAX()) {
@@ -2105,7 +2146,11 @@ class Web extends BaseController
             ]);
         }
 
-        return redirect()->to(site_url('piezas/placa/' . $id . '/bitacora'))
+        // Se queda en la misma pantalla (fase 49): guardar no es "terminar y
+        // salir a ver el resultado", es una acción suelta más mientras se
+        // sigue editando — igual que ya pasaba en el modal antes de que
+        // pasara a ser de solo lectura.
+        return redirect()->to(site_url('piezas/placa/' . $id . '/bitacora/editar'))
             ->with('success', 'Bitácora guardada.');
     }
 
@@ -2216,6 +2261,15 @@ class Web extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa pieza ya no está en esta placa.']);
         }
 
+        // La fila se va con sus capturas: cascada de FK para el registro,
+        // pero el fichero de cada foto hay que apartarlo a mano.
+        foreach ($this->placaVersionImagenModel->where('placa_version_id', $filaId)->findAll() as $imagen) {
+            if (!empty($imagen['ruta_imagen'])) {
+                $this->almacen->aPapelera($imagen['ruta_imagen']);
+            }
+            $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+        }
+
         $this->placaVersionModel->delete($filaId);
 
         return $this->response->setJSON(['ok' => true]);
@@ -2304,6 +2358,8 @@ class Web extends BaseController
                 'familia'    => $variante ? $this->familiaModel->find($variante['familia_id']) : null,
                 'disponible' => $this->servicio->stlsDe((int) $version['id']) !== [],
                 'miniatura'  => $variante ? $this->fotosDe($version, $variante)['miniatura'] : null,
+                'imagenes'   => $this->placaVersionImagenModel->where('placa_version_id', $fila['id'])
+                    ->orderBy('orden')->orderBy('id')->findAll(),
             ];
         }
 
@@ -2314,8 +2370,8 @@ class Web extends BaseController
      * De la lista de piezasDeLaPlaca() a items sueltos para
      * PiezaEmpaquetadoService::repartir(): una unidad física por copia (la
      * "cantidad" de la fila multiplica) y por cada trozo de STL que tenga la
-     * versión — un STL sin cuadrícula medida no entra, y se cuenta aparte
-     * para poder avisar de que el cálculo no es completo.
+     * versión — un STL sin medir no entra, y se cuenta aparte para poder
+     * avisar de que el cálculo no es completo.
      *
      * @return array{items: list<array>, sinMedir: int}
      */
@@ -2334,7 +2390,7 @@ class Web extends BaseController
                 : '(pieza borrada)';
 
             foreach ($this->servicio->stlsDe((int) $p['version']['id']) as $stl) {
-                if (!$stl['cuadros_ancho'] || !$stl['cuadros_fondo']) {
+                if (!$stl['ancho_mm'] || !$stl['fondo_mm']) {
                     $sinMedir++;
                     continue;
                 }
@@ -2346,8 +2402,8 @@ class Web extends BaseController
                         // Sin el trozo: es como se agrupa el desglose por
                         // placa (una copia entera, no un trozo suelto).
                         'etiquetaBase' => $etiquetaBase,
-                        'ancho'    => (int) $stl['cuadros_ancho'],
-                        'fondo'    => (int) $stl['cuadros_fondo'],
+                        'ancho'    => (float) $stl['ancho_mm'],
+                        'fondo'    => (float) $stl['fondo_mm'],
                         'filaId'   => (int) $p['fila']['id'],
                         // Qué copia de esa fila es (0, 1, 2... hasta cantidad-1):
                         // los trozos de una misma copia comparten índice, así se
@@ -2403,13 +2459,14 @@ class Web extends BaseController
      * devuelve los items en bruto (uno por copia×trozo), que sirven para
      * calcular pero no para leer de un vistazo.
      *
-     * @return list<array{cuadrosUsados: int, piezas: list<array{etiqueta: string, cantidad: int}>}>
+     * @return list<array{porcentajeUsado: float, piezas: list<array{etiqueta: string, cantidad: int}>}>
      */
     private function repartoLegible(array $piezas): array
     {
         $bins = $this->empaquetado->repartir($this->itemsParaEmpaquetar($piezas)['items']);
+        $areaPlaca = PiezaEmpaquetadoService::PLACA_ANCHO_MM * PiezaEmpaquetadoService::PLACA_FONDO_MM;
 
-        return array_map(function (array $bin): array {
+        return array_map(function (array $bin) use ($areaPlaca): array {
             $porFila = [];
             foreach ($bin['piezas'] as $item) {
                 $id = $item['filaId'];
@@ -2418,7 +2475,7 @@ class Web extends BaseController
             }
 
             return [
-                'cuadrosUsados' => $bin['cuadrosUsados'],
+                'porcentajeUsado' => $areaPlaca > 0 ? min(100, $bin['areaUsadaMm2'] / $areaPlaca * 100) : 0,
                 'piezas' => array_values(array_map(
                     static fn(array $f) => ['etiqueta' => $f['etiqueta'], 'cantidad' => count($f['copias'])],
                     $porFila
@@ -2979,6 +3036,91 @@ class Web extends BaseController
     }
 
     /**
+     * Captura de cómo quedó UNA pieza dentro de la placa: la mejor posición
+     * impresa, con notas de cómo estaba puesta y un veredicto rápido. Varias
+     * por fila y en momentos distintos (antes de imprimir, ya curada), igual
+     * que subirImagenPlaca() pero a nivel de pieza.
+     */
+    public function subirImagenPlacaVersion(int $placaVersionId)
+    {
+        $fila = $this->placaVersionModel->find($placaVersionId);
+        if (!$fila) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa pieza ya no está en ninguna placa.');
+        }
+        $placaId = (int) $fila['placa_id'];
+
+        return $this->ejecutar(
+            function () use ($placaVersionId) {
+                $extension = $this->validarImagen($this->request->getFile('imagen'));
+
+                $resultado = (string) $this->request->getPost('resultado');
+                $resultado = isset(PiezaPlacaVersionImagenModel::RESULTADOS[$resultado]) ? $resultado : null;
+
+                $id = $this->placaVersionImagenModel->insert([
+                    'placa_version_id' => $placaVersionId,
+                    'ruta_imagen'      => '',
+                    'notas'            => trim((string) $this->request->getPost('notas')) ?: null,
+                    'resultado'        => $resultado,
+                    'orden'            => $this->placaVersionImagenModel->siguienteOrden($placaVersionId),
+                    'subida_en'        => date('Y-m-d H:i:s'),
+                ], true);
+                if (!$id) {
+                    throw new RuntimeException('No se pudo registrar la imagen: ' . implode(' ', $this->placaVersionImagenModel->errors()));
+                }
+
+                $ruta = $this->almacen->rutaPlacaVersionImagen($placaVersionId, $id, $extension);
+                $this->almacen->guardar($this->request->getFile('imagen')->getTempName(), $ruta);
+                $hash = $this->almacen->hash($ruta);
+
+                $this->placaVersionImagenModel->update($id, [
+                    'ruta_imagen'  => $ruta,
+                    'hash_imagen'  => $hash,
+                    'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                ]);
+
+                $this->publicarCopias($ruta, $hash);
+
+                return $placaVersionId;
+            },
+            fn() => site_url('piezas/placa/' . $placaId . '/bitacora/editar'),
+            fn() => 'Foto añadida.'
+        );
+    }
+
+    public function borrarImagenPlacaVersion(int $id)
+    {
+        $imagen = $this->placaVersionImagenModel->find($id);
+        if (!$imagen) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa foto ya no existe.');
+        }
+
+        $fila = $this->placaVersionModel->find((int) $imagen['placa_version_id']);
+
+        // Invariante 6 en espíritu, igual que las fotos de placa: el fichero
+        // se aparta, no se destruye; el registro sí se quita.
+        $this->almacen->aPapelera($imagen['ruta_imagen']);
+        $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+        $this->placaVersionImagenModel->delete($id);
+
+        $destino = $fila ? site_url('piezas/placa/' . (int) $fila['placa_id'] . '/bitacora/editar') : site_url('piezas/placas');
+
+        return redirect()->to($destino)->with('success', 'Foto apartada a la papelera.');
+    }
+
+    public function imagenPlacaVersion(int $id)
+    {
+        $imagen = $this->placaVersionImagenModel->find($id);
+        if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return $this->servirImagen(
+            $this->almacen->absoluta($imagen['ruta_imagen']),
+            $imagen['hash_imagen']
+        );
+    }
+
+    /**
      * `version_id` es opcional (fase 31): un render cuelga siempre de la
      * variante (el ancla que existe desde la creación de la pieza), y
      * además de una versión concreta cuando se sube desde el historial de
@@ -3146,13 +3288,14 @@ class Web extends BaseController
     }
 
     /**
-     * Cuánto ocupa este STL en la placa, en cuadrículas (spec: reparto de
-     * piezas en placas) — a ojo, sin leer el fichero. Vacío en cualquiera de
-     * los dos campos borra la medida: "sin medir" es un estado válido, ese
-     * STL solo se queda fuera del cálculo de cuántas placas hacen falta
-     * hasta que alguien lo mida.
+     * Cuánto ocupa este STL en la placa, en mm (fase 53) — la caja de
+     * ocupación que da Chitubox con la pieza ya orientada como se va a
+     * imprimir, no una lectura del fichero. Vacío en cualquiera de los dos
+     * campos borra la medida: "sin medir" es un estado válido, ese STL solo
+     * se queda fuera del cálculo de cuántas placas hacen falta hasta que
+     * alguien lo mida.
      */
-    public function actualizarCuadrosStl(int $stlId)
+    public function actualizarMedidasStl(int $stlId)
     {
         $stl = $this->servicio->stl($stlId);
         if (!$stl) {
@@ -3162,20 +3305,25 @@ class Web extends BaseController
 
         return $this->ejecutar(
             function () use ($stlId) {
-                $aCuadro = static fn($valor, int $max) => ($valor === null || trim((string) $valor) === '')
-                    ? null
-                    : max(1, min($max, (int) $valor));
+                $aMm = function ($valor, float $max): ?string {
+                    $valor = $this->aPeso($valor);
+                    if ($valor === null) {
+                        return null;
+                    }
+
+                    return (string) max(0.1, min($max, (float) $valor));
+                };
 
                 $datos = [
-                    'cuadros_ancho' => $aCuadro($this->request->getPost('ancho'), PiezaEmpaquetadoService::COLUMNAS),
-                    'cuadros_fondo' => $aCuadro($this->request->getPost('fondo'), PiezaEmpaquetadoService::FILAS),
+                    'ancho_mm' => $aMm($this->request->getPost('ancho'), PiezaEmpaquetadoService::PLACA_ANCHO_MM),
+                    'fondo_mm' => $aMm($this->request->getPost('fondo'), PiezaEmpaquetadoService::PLACA_FONDO_MM),
                 ];
                 (new \App\Models\PiezaVersionStlModel())->update($stlId, $datos);
 
                 return $datos;
             },
             fn() => site_url('piezas/variante/' . (int) $version['variante_id']),
-            fn() => 'Cuadrícula guardada.'
+            fn() => 'Medida guardada.'
         );
     }
 

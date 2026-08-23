@@ -144,7 +144,7 @@
     <ul class="list-group">
         <?php foreach ($placas as $placa): ?>
             <li class="list-group-item d-flex align-items-center gap-2">
-                <a href="<?= site_url('piezas/placa/' . (int) $placa['id'] . '/bitacora') ?>" target="_blank" rel="noopener"
+                <a href="<?= site_url('piezas/placa/' . (int) $placa['id'] . '/bitacora/editar') ?>" target="_blank" rel="noopener"
                     class="text-decoration-none flex-grow-1"><?= esc($placa['nombre']) ?></a>
                 <span class="text-muted small"><?= esc(date('d/m/Y H:i', strtotime($placa['creado_en']))) ?></span>
                 <?php if ($placa['impresa_en']): ?>

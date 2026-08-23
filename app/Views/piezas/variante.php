@@ -570,22 +570,25 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                         </form>
                                     </div>
                                     <?php // Cuánto ocupa en la placa (spec: reparto de piezas en placas),
-                                          // en cuadrículas de 6×10 — a ojo, no hay lectura del STL de por
-                                          // medio. Vacío = "sin medir": esa pieza se queda fuera del
-                                          // cálculo hasta que alguien lo rellene. ?>
-                                    <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/cuadros') ?>"
+                                          // en mm — la caja de ocupación que da Chitubox con la pieza ya
+                                          // orientada como se va a imprimir. Vacío = "sin medir": esa
+                                          // pieza se queda fuera del cálculo hasta que alguien la mida. ?>
+                                    <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/medidas') ?>"
                                         class="d-inline-flex align-items-center gap-1">
                                         <?= csrf_field() ?>
-                                        <input type="number" name="ancho" min="1" max="<?= \App\Services\PiezaEmpaquetadoService::COLUMNAS ?>"
-                                            value="<?= esc((string) ($stl['cuadros_ancho'] ?? ''), 'attr') ?>"
-                                            class="form-control form-control-sm py-0 px-1" style="width: 2.6em;"
-                                            title="Cuadrículas de ancho en la placa" placeholder="anc">
+                                        <input type="text" inputmode="decimal" name="ancho"
+                                            max="<?= \App\Services\PiezaEmpaquetadoService::PLACA_ANCHO_MM ?>"
+                                            value="<?= esc($stl['ancho_mm'] !== null ? rtrim(rtrim($stl['ancho_mm'], '0'), '.') : '', 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 3.6em;"
+                                            title="Ancho en mm (caja de ocupación de Chitubox)" placeholder="anc">
                                         <span class="text-muted small">×</span>
-                                        <input type="number" name="fondo" min="1" max="<?= \App\Services\PiezaEmpaquetadoService::FILAS ?>"
-                                            value="<?= esc((string) ($stl['cuadros_fondo'] ?? ''), 'attr') ?>"
-                                            class="form-control form-control-sm py-0 px-1" style="width: 2.6em;"
-                                            title="Cuadrículas de fondo en la placa" placeholder="fon">
-                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Guardar cuadrícula">
+                                        <input type="text" inputmode="decimal" name="fondo"
+                                            max="<?= \App\Services\PiezaEmpaquetadoService::PLACA_FONDO_MM ?>"
+                                            value="<?= esc($stl['fondo_mm'] !== null ? rtrim(rtrim($stl['fondo_mm'], '0'), '.') : '', 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 3.6em;"
+                                            title="Fondo en mm (caja de ocupación de Chitubox)" placeholder="fon">
+                                        <span class="text-muted small">mm</span>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Guardar medida">
                                             <i class="bi bi-check-lg"></i>
                                         </button>
                                     </form>
@@ -1336,42 +1339,174 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             <?php
                 $veredictosPlaca = \App\Models\PiezaPlacaModel::VEREDICTOS;
                 $coloresPlaca = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
+                $coloresResultado = ['bien' => 'success', 'regular' => 'warning', 'mal' => 'danger'];
+                $resultados = \App\Models\PiezaPlacaVersionImagenModel::RESULTADOS;
             ?>
-            <div class="card shadow-sm mb-3">
+            <?php
+                /**
+                 * Punto de anclaje para el enlace "Ver histórico de capturas"
+                 * de la tabla de piezas de una placa (fase 44): la gestión de
+                 * las fotos vive aquí, no allí, así que allí solo hay un
+                 * enlace a este sitio.
+                 */
+            ?>
+            <div class="card shadow-sm mb-3" id="capturas">
                 <div class="card-body p-3">
                     <h6 class="mb-2"><i class="bi bi-journal-text"></i> Se imprimió en</h6>
                     <ul class="list-unstyled mb-0 small">
                         <?php foreach ($placasDeLaPieza as $entrada): ?>
                             <?php $p = $entrada['placa']; ?>
-                            <li class="d-flex align-items-center gap-2 py-1 border-bottom border-secondary-subtle">
-                                <a href="<?= site_url('piezas/placa/' . (int) $p['id'] . '/bitacora') ?>"
-                                    class="text-decoration-none text-body flex-grow-1 text-truncate"
-                                    title="<?= esc($p['nombre'], 'attr') ?>">
-                                    <?= esc($p['nombre']) ?>
-                                    <span class="text-muted">
-                                        ·
-                                        <?php foreach ($entrada['versiones'] as $i => $v): ?>
-                                            <?= $i ? ', ' : '' ?>v<?= sprintf('%03d', $v['numero']) ?><?= $v['cantidad'] > 1 ? ' ×' . $v['cantidad'] : '' ?>
-                                        <?php endforeach; ?>
+                            <li class="py-1 border-bottom border-secondary-subtle">
+                                <div class="d-flex align-items-center gap-2">
+                                    <a href="<?= site_url('piezas/placa/' . (int) $p['id'] . '/bitacora/editar') ?>"
+                                        class="text-decoration-none text-body flex-grow-1 text-truncate"
+                                        title="<?= esc($p['nombre'], 'attr') ?>">
+                                        <?= esc($p['nombre']) ?>
+                                        <span class="text-muted">
+                                            ·
+                                            <?php foreach ($entrada['versiones'] as $i => $v): ?>
+                                                <?= $i ? ', ' : '' ?>v<?= sprintf('%03d', $v['numero']) ?><?= $v['cantidad'] > 1 ? ' ×' . $v['cantidad'] : '' ?>
+                                            <?php endforeach; ?>
+                                        </span>
+                                    </a>
+                                    <span class="text-muted flex-shrink-0" style="font-size: .75rem;">
+                                        <?= esc(date('d/m/y', strtotime($p['impresa_en'] ?: $p['creado_en']))) ?>
                                     </span>
-                                </a>
-                                <span class="text-muted flex-shrink-0" style="font-size: .75rem;">
-                                    <?= esc(date('d/m/y', strtotime($p['impresa_en'] ?: $p['creado_en']))) ?>
-                                </span>
-                                <?php if ($p['veredicto'] && isset($veredictosPlaca[$p['veredicto']])): ?>
-                                    <span class="badge text-bg-<?= $coloresPlaca[$p['veredicto']] ?? 'secondary' ?> flex-shrink-0"
-                                        title="<?= esc($veredictosPlaca[$p['veredicto']], 'attr') ?>">
-                                        <?= esc(mb_substr($veredictosPlaca[$p['veredicto']], 0, 1)) ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="badge bg-body-secondary text-body-secondary border flex-shrink-0"
-                                        title="Sin juzgar todavía">·</span>
-                                <?php endif; ?>
+                                    <?php if ($p['veredicto'] && isset($veredictosPlaca[$p['veredicto']])): ?>
+                                        <span class="badge text-bg-<?= $coloresPlaca[$p['veredicto']] ?? 'secondary' ?> flex-shrink-0"
+                                            title="<?= esc($veredictosPlaca[$p['veredicto']], 'attr') ?>">
+                                            <?= esc(mb_substr($veredictosPlaca[$p['veredicto']], 0, 1)) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-body-secondary text-body-secondary border flex-shrink-0"
+                                            title="Sin juzgar todavía">·</span>
+                                    <?php endif; ?>
+                                    <?php // Capturas de esta impresión concreta: la mejor
+                                          // posición, cómo estaba puesta, si salió bien. Se
+                                          // gestionan aquí, en la ficha de la pieza (fase 44). ?>
+                                    <?php // Un id por placa (no por fila): una plaqueta puede
+                                          // llevar dos versiones de la misma pieza, y el botón
+                                          // despliega las capturas de ambas a la vez, con un
+                                          // selector de clase en vez de un único id de destino. ?>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary position-relative flex-shrink-0"
+                                        data-bs-toggle="collapse" data-bs-target=".capturas-placa-<?= (int) $p['id'] ?>"
+                                        title="Capturas de esta impresión">
+                                        <i class="bi bi-camera"></i>
+                                        <?php $totalImagenes = array_sum(array_map(static fn($v) => count($v['imagenes']), $entrada['versiones'])); ?>
+                                        <?php if ($totalImagenes > 0): ?>
+                                            <span class="badge rounded-pill bg-secondary position-absolute top-0 start-100 translate-middle"
+                                                style="font-size: .55rem;"><?= $totalImagenes ?></span>
+                                        <?php endif; ?>
+                                    </button>
+                                </div>
+
+                                <?php foreach ($entrada['versiones'] as $v): ?>
+                                    <div class="collapse mt-2 capturas-placa-<?= (int) $p['id'] ?>" id="capturas-<?= (int) $v['fila_id'] ?>">
+                                        <div class="border rounded p-2">
+                                            <?php if (count($entrada['versiones']) > 1): ?>
+                                                <div class="text-muted mb-1" style="font-size: .72rem;">
+                                                    v<?= sprintf('%03d', $v['numero']) ?>
+                                                    <?php if ($v['notas']): ?> · <?= esc($v['notas']) ?><?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <?php if ($v['imagenes'] !== []): ?>
+                                                <div class="d-flex flex-wrap gap-2 mb-2">
+                                                    <?php foreach ($v['imagenes'] as $img): ?>
+                                                        <div class="position-relative" style="width: 88px;">
+                                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank"
+                                                                title="<?= esc($img['notas'] ?? '') ?>">
+                                                                <img src="<?= imagen_pieza($img, 'placa-version-imagen') ?>"
+                                                                    class="rounded border" style="width: 88px; height: 88px; object-fit: cover;"
+                                                                    alt="Captura de la pieza en placa" loading="lazy">
+                                                            </a>
+                                                            <?php if (!empty($img['resultado'])): ?>
+                                                                <span class="badge bg-<?= $coloresResultado[$img['resultado']] ?? 'secondary' ?> position-absolute bottom-0 start-0 m-1"
+                                                                    style="font-size: .6rem;">
+                                                                    <?= esc($resultados[$img['resultado']] ?? $img['resultado']) ?>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                            <form method="post" action="<?= site_url('piezas/placa-version-imagen/' . (int) $img['id'] . '/borrar') ?>"
+                                                                onsubmit="return confirm('¿Apartar esta foto a la papelera?');" class="position-absolute top-0 end-0">
+                                                                <?= csrf_field() ?>
+                                                                <button class="btn btn-sm btn-dark py-0 px-1 opacity-75" style="font-size: .65rem;" title="Borrar">
+                                                                    <i class="bi bi-x"></i>
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <p class="text-muted small mb-2">
+                                                    Sin capturas todavía (la mejor posición impresa, cómo estaba puesta, si salió bien).
+                                                </p>
+                                            <?php endif; ?>
+
+                                            <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center"
+                                                action="<?= site_url('piezas/placa-version/' . (int) $v['fila_id'] . '/imagen') ?>">
+                                                <?= csrf_field() ?>
+                                                <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp"
+                                                    class="form-control form-control-sm" style="max-width: 190px;" required>
+                                                <input type="text" name="notas" class="form-control form-control-sm" maxlength="150"
+                                                    placeholder="Cómo estaba puesta" style="max-width: 190px;">
+                                                <select name="resultado" class="form-select form-select-sm" style="max-width: 120px;">
+                                                    <option value="">Sin juzgar</option>
+                                                    <?php foreach ($resultados as $clave => $texto): ?>
+                                                        <option value="<?= esc($clave, 'attr') ?>"><?= esc($texto) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> Subir</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>
                 </div>
             </div>
+
+            <?php if (!empty($capturasDeLaPieza)): ?>
+                <?php
+                    // Agrupadas por resultado, no por placa: lo que se viene a
+                    // buscar aquí es "¿cuál es la posición que funciona?", y
+                    // eso se ve poniendo lo bueno y lo malo uno al lado del
+                    // otro, no repasando placa por placa.
+                    $porResultado = ['bien' => [], 'regular' => [], 'mal' => [], '' => []];
+                    foreach ($capturasDeLaPieza as $img) {
+                        $porResultado[$img['resultado'] ?? ''][] = $img;
+                    }
+                ?>
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="mb-1"><i class="bi bi-images"></i> Capturas: qué posición funciona</h6>
+                        <p class="text-muted small mb-2">
+                            Todas las capturas de todas las placas juntas, para comparar de un vistazo
+                            cuál es la óptima y cómo no volver a ponerla.
+                        </p>
+                        <div class="row g-2">
+                            <?php foreach (['bien' => 'Bien', 'regular' => 'Regular', 'mal' => 'Mal', '' => 'Sin juzgar'] as $clave => $titulo): ?>
+                                <?php if ($porResultado[$clave] === []) continue; ?>
+                                <div class="col-md-3 col-6">
+                                    <div class="small fw-semibold text-<?= $coloresResultado[$clave] ?? 'muted' ?> mb-1">
+                                        <?= esc($titulo) ?> (<?= count($porResultado[$clave]) ?>)
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <?php foreach ($porResultado[$clave] as $img): ?>
+                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank"
+                                                title="<?= esc($img['notas'] ?? '') ?>">
+                                                <img src="<?= imagen_pieza($img, 'placa-version-imagen') ?>"
+                                                    class="rounded border" style="width: 64px; height: 64px; object-fit: cover;"
+                                                    alt="Captura" loading="lazy">
+                                            </a>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->

@@ -27,6 +27,17 @@
     ?>
     <link href="<?= base_url('assets/css/style.css') . ($cssVer ? '?v=' . $cssVer : '') ?>" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
+    <?php // Embebido y no en style.css a propósito, mismo motivo que el resto
+          // de ajustes puntuales del proyecto: esta hoja se sirve con una
+          // semana de caché. El gris que trae Bootstrap por defecto para los
+          // placeholders en tema oscuro es casi tan visible como el texto ya
+          // escrito, y se confunde con él de un vistazo. ?>
+    <style>
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, .35);
+            opacity: 1;
+        }
+    </style>
 </head>
 
 <body data-bs-theme="dark">

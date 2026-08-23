@@ -713,7 +713,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
     $routes->GET('stl/(:num)/descargar', 'Web::descargarStl/$1');
     $routes->POST('stl/(:num)/quitar', 'Web::quitarStl/$1');
-    $routes->POST('stl/(:num)/cuadros', 'Web::actualizarCuadrosStl/$1');
+    $routes->POST('stl/(:num)/medidas', 'Web::actualizarMedidasStl/$1');
 
     // El .blend de una versión ya promocionada, sin declarar máquina: es
     // inmutable y nadie espera que vuelva, así que no hay asiento que
@@ -773,15 +773,14 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
     //
-    // Se escribe en el modal del histórico (fase 39): `fragmento` devuelve el
-    // formulario suelto para meterlo ahí, y el POST de siempre lo guarda
-    // —contesta JSON si viene por fetch—. `bitacora` a secas es el "ver
-    // limpio", y `editar` la misma bitácora a pantalla completa, que es la
-    // que funciona sin JavaScript. Las rutas más específicas van primero,
-    // como en el resto del fichero.
-    $routes->GET('placa/(:num)/bitacora/fragmento', 'Web::bitacoraFragmento/$1');
+    // El modal del histórico (fase 48) solo enseña: `resumen` devuelve el
+    // vistazo rápido de solo lectura que se mete ahí. Editar de verdad es
+    // "Ver completa", que lleva a `editar` — la única pantalla de la
+    // bitácora desde la fase 50 (se quitó la versión imprimible: solo la
+    // editable). Las rutas más específicas van primero, como en el resto
+    // del fichero.
+    $routes->GET('placa/(:num)/bitacora/resumen', 'Web::bitacoraResumen/$1');
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
-    $routes->GET('placa/(:num)/bitacora', 'Web::bitacora/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
 
     // Añadir/quitar piezas sueltas de una bitácora ya guardada, sin rehacer
@@ -797,6 +796,12 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('placa/(:num)/imagen', 'Web::subirImagenPlaca/$1');
     $routes->POST('placa-imagen/(:num)/borrar', 'Web::borrarImagenPlaca/$1');
     $routes->GET('placa-imagen/(:num)/imagen', 'Web::imagenPlaca/$1');
+
+    // Igual, pero de cómo quedó UNA pieza dentro de la placa (fase 44): la
+    // mejor posición impresa, con su nota y su veredicto.
+    $routes->POST('placa-version/(:num)/imagen', 'Web::subirImagenPlacaVersion/$1');
+    $routes->POST('placa-version-imagen/(:num)/borrar', 'Web::borrarImagenPlacaVersion/$1');
+    $routes->GET('placa-version-imagen/(:num)/imagen', 'Web::imagenPlacaVersion/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

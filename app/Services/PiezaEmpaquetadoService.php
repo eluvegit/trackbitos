@@ -5,11 +5,13 @@ namespace App\Services;
 /**
  * Cuántas placas hacen falta para una tanda de piezas, y qué va en cada una
  * — una aproximación, no una vista real del laminador. La plataforma se
- * trata como una rejilla de 6×10 cuadrículas (el margen lateral de la
- * impresora real ya se descuenta de ese 6: no cuenta como hueco
- * aprovechable) y cada pieza ocupa un rectángulo entero de cuadrículas,
- * medido a ojo por quien la sube — no hay ninguna lectura del STL de por
- * medio.
+ * trata como un rectángulo de PLACA_ANCHO_MM × PLACA_FONDO_MM (el tamaño
+ * real de la plataforma, medido con la rejilla configurable de Chitubox) y
+ * cada pieza ocupa su caja de ocupación exacta en mm, más un margen fijo
+ * (MARGEN_MM) por los cuatro lados para no pegar piezas entre sí y fallar
+ * por un descuadre de plataforma o un soporte que se salga un poco de su
+ * sitio. La medida sale de Chitubox (caja de ocupación de la pieza), no de
+ * leer el STL — a ojo, con la orientación con la que se vaya a imprimir.
  *
  * El algoritmo es un "shelf packing" (estanterías): se ordenan las piezas de
  * más a menos fondo y se van colocando, placa a placa EN ORDEN, en el
@@ -23,17 +25,26 @@ namespace App\Services;
  */
 class PiezaEmpaquetadoService
 {
-    /** Cuadrículas de ancho de la plataforma (el margen lateral de la impresora ya queda fuera). */
-    public const COLUMNAS = 6;
+    /** Ancho real de la plataforma, en mm. */
+    public const PLACA_ANCHO_MM = 211.68;
 
-    /** Cuadrículas de fondo de la plataforma. */
-    public const FILAS = 10;
+    /** Fondo real de la plataforma, en mm. */
+    public const PLACA_FONDO_MM = 118.37;
 
     /**
-     * @param list<array{etiqueta: string, ancho: int, fondo: int, filaId?: int}> $items
+     * Separación mínima entre piezas, en mm, para no fallar por descuadres
+     * de plataforma o soportes que se salgan un poco de su sitio. Se reserva
+     * por los cuatro lados de cada pieza (aproximación conservadora: en la
+     * práctica solo hace falta entre piezas vecinas, no contra el borde de
+     * la plataforma, pero es más simple y nunca se pasa de optimista).
+     */
+    public const MARGEN_MM = 5.0;
+
+    /**
+     * @param list<array{etiqueta: string, ancho: float, fondo: float, filaId?: int}> $items
      *        Una fila por unidad física a colocar (ya expandidas por cantidad):
      *        no se agrupan aquí copias de la misma pieza.
-     * @return list<array{piezas: list<array>, cuadrosUsados: int}> una entrada por placa que hace falta
+     * @return list<array{piezas: list<array>, areaUsadaMm2: float}> una entrada por placa que hace falta
      */
     public function repartir(array $items): array
     {
@@ -42,11 +53,12 @@ class PiezaEmpaquetadoService
         }
 
         // Descarta lo que nunca podría entrar (más grande que la propia
-        // plataforma en cualquiera de los dos lados) — no bloquea el resto,
-        // simplemente no se puede colocar y se queda fuera del reparto.
+        // plataforma en cualquiera de los dos lados, sin contar el margen)
+        // — no bloquea el resto, simplemente no se puede colocar y se queda
+        // fuera del reparto.
         $items = array_values(array_filter(
             $items,
-            static fn(array $i) => $i['ancho'] <= self::COLUMNAS && $i['fondo'] <= self::FILAS
+            static fn(array $i) => $i['ancho'] <= self::PLACA_ANCHO_MM && $i['fondo'] <= self::PLACA_FONDO_MM
         ));
 
         // De más a menos fondo (y de más a menos ancho como desempate): es
@@ -63,21 +75,21 @@ class PiezaEmpaquetadoService
 
             $bins[] = [
                 'estantes' => [$this->estanteNuevo($item)],
-                'filaUsada' => $item['fondo'],
+                'filaUsada' => $item['fondo'] + self::MARGEN_MM,
             ];
         }
 
         return array_map(function (array $bin): array {
             $piezas = [];
-            $cuadrosUsados = 0;
+            $areaUsadaMm2 = 0.0;
             foreach ($bin['estantes'] as $estante) {
                 foreach ($estante['piezas'] as $pieza) {
                     $piezas[] = $pieza;
-                    $cuadrosUsados += $pieza['ancho'] * $pieza['fondo'];
+                    $areaUsadaMm2 += $pieza['ancho'] * $pieza['fondo'];
                 }
             }
 
-            return ['piezas' => $piezas, 'cuadrosUsados' => $cuadrosUsados];
+            return ['piezas' => $piezas, 'areaUsadaMm2' => $areaUsadaMm2];
         }, $bins);
     }
 
@@ -94,14 +106,17 @@ class PiezaEmpaquetadoService
      */
     private function colocarEnBinsExistentes(array &$bins, array $item): bool
     {
+        $anchoConMargen = $item['ancho'] + self::MARGEN_MM;
+        $fondoConMargen = $item['fondo'] + self::MARGEN_MM;
+
         foreach ($bins as &$bin) {
             $mejorIndice = null;
             $mejorHueco = null;
             foreach ($bin['estantes'] as $i => $estante) {
-                if ($estante['alto'] < $item['fondo'] || $estante['ocupado'] + $item['ancho'] > self::COLUMNAS) {
+                if ($estante['alto'] < $fondoConMargen || $estante['ocupado'] + $anchoConMargen > self::PLACA_ANCHO_MM) {
                     continue;
                 }
-                $hueco = self::COLUMNAS - ($estante['ocupado'] + $item['ancho']);
+                $hueco = self::PLACA_ANCHO_MM - ($estante['ocupado'] + $anchoConMargen);
                 if ($mejorHueco === null || $hueco < $mejorHueco) {
                     $mejorHueco = $hueco;
                     $mejorIndice = $i;
@@ -109,15 +124,15 @@ class PiezaEmpaquetadoService
             }
 
             if ($mejorIndice !== null) {
-                $bin['estantes'][$mejorIndice]['ocupado'] += $item['ancho'];
+                $bin['estantes'][$mejorIndice]['ocupado'] += $anchoConMargen;
                 $bin['estantes'][$mejorIndice]['piezas'][] = $item;
 
                 return true;
             }
 
-            if ($bin['filaUsada'] + $item['fondo'] <= self::FILAS) {
+            if ($bin['filaUsada'] + $fondoConMargen <= self::PLACA_FONDO_MM) {
                 $bin['estantes'][] = $this->estanteNuevo($item);
-                $bin['filaUsada'] += $item['fondo'];
+                $bin['filaUsada'] += $fondoConMargen;
 
                 return true;
             }
@@ -128,6 +143,10 @@ class PiezaEmpaquetadoService
 
     private function estanteNuevo(array $item): array
     {
-        return ['alto' => $item['fondo'], 'ocupado' => $item['ancho'], 'piezas' => [$item]];
+        return [
+            'alto'     => $item['fondo'] + self::MARGEN_MM,
+            'ocupado'  => $item['ancho'] + self::MARGEN_MM,
+            'piezas'   => [$item],
+        ];
     }
 }

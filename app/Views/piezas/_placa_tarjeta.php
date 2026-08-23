@@ -118,109 +118,25 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
                     </span>
                 <?php endif; ?>
 
-                <?php // Cuánto lleva ESTA placa de las 60 cuadrículas de la
-                      // plataforma — no un reparto hipotético, lo que ya
-                      // tiene puesto. Con esto no hace falta abrir cada
-                      // hermana para saber qué le queda de sitio. ?>
-                <?php if ($cuadros['usados'] > 0 || $cuadros['sinMedir'] > 0): ?>
+                <?php // Cuánto lleva ESTA placa de la plataforma — no un
+                      // reparto hipotético, lo que ya tiene puesto. Con esto
+                      // no hace falta abrir cada hermana para saber qué le
+                      // queda de sitio. ?>
+                <?php if ($cuadros['porcentajeUsado'] > 0 || $cuadros['sinMedir'] > 0): ?>
                     <span class="badge bg-body-secondary text-body-secondary border"
-                        title="Cuadrículas ocupadas de las 60 de la plataforma<?= $cuadros['sinMedir'] > 0 ? ' (' . $cuadros['sinMedir'] . ' pieza(s) sin medir, no entran en la cuenta)' : '' ?>">
-                        <i class="bi bi-grid-3x3-gap"></i> <?= $cuadros['usados'] ?>/<?= \App\Services\PiezaEmpaquetadoService::COLUMNAS * \App\Services\PiezaEmpaquetadoService::FILAS ?><?= $cuadros['sinMedir'] > 0 ? '+' : '' ?>
+                        title="Porcentaje ocupado de la plataforma<?= $cuadros['sinMedir'] > 0 ? ' (' . $cuadros['sinMedir'] . ' pieza(s) sin medir, no entran en la cuenta)' : '' ?>">
+                        <i class="bi bi-grid-3x3-gap"></i> <?= round($cuadros['porcentajeUsado']) ?>%<?= $cuadros['sinMedir'] > 0 ? '+' : '' ?>
                     </span>
                 <?php endif; ?>
             </div>
         </div>
 
         <?php // Solo los botones viajan al modal, y siguen renderizados aquí
-              // (ocultos) para que sus formularios lleven el CSRF de siempre
-              // sin duplicar un modal por placa. El contenido —la bitácora—
-              // se pide al abrir: son muchas placas y meter treinta
-              // formularios completos en la página costaría más que todo lo
-              // demás junto. ?>
-        <div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>"
-            data-montada="<?= esc(date('d/m/Y H:i', $fecha ?: time()), 'attr') ?>">
-            <div class="d-flex flex-wrap gap-2" data-acciones-placa>
-                <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>" target="_blank" rel="noopener"
-                    class="btn btn-sm btn-outline-info" title="La bitácora entera, para leerla de corrido">
-                    <i class="bi bi-journal-text"></i> Ver limpio
-                </a>
-                <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>"
-                    class="btn btn-sm btn-outline-primary" title="Volver a generar el zip con lo que haya ahora mismo">
-                    <i class="bi bi-download"></i> Descargar de nuevo
-                </a>
-                <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/cargar') ?>">
-                    <?= csrf_field() ?>
-                    <button class="btn btn-sm btn-outline-secondary" title="Sustituye lo que haya ahora en la placa actual">
-                        <i class="bi bi-arrow-return-left"></i> Cargar en la placa actual
-                    </button>
-                </form>
-
-                <?php // No cupo entera: mueve las piezas marcadas a una placa nueva,
-                      // enlazada a esta como origen. Solo tiene sentido antes de
-                      // imprimir — una vez montada, ya no hay nada que repartir. ?>
-                <?php if (!$placa['impresa_en'] && count($lista) > 1): ?>
-                    <div class="dropdown">
-                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle"
-                            data-bs-toggle="dropdown" data-bs-auto-close="outside" title="No cupo entera en la plataforma">
-                            <i class="bi bi-signpost-split"></i> Repartir
-                        </button>
-                        <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/repartir') ?>"
-                            class="dropdown-menu p-2" style="min-width: 240px; max-height: 260px; overflow-y: auto;">
-                            <?= csrf_field() ?>
-                            <?php
-                                $copiasFuera = $sugerenciasReparto[$idPlaca] ?? [];
-                            ?>
-                            <div class="small text-muted mb-1">
-                                Cuántas copias de cada una se van a una placa nueva:
-                                <?php if ($copiasFuera !== []): ?>
-                                    <span title="Ya viene puesta la cantidad que sobra de la primera placa según el reparto por cuadrículas — sigue siendo editable">
-                                        (cantidad sugerida según el cálculo de reparto)
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <?php foreach ($lista as $p): ?>
-                                <?php
-                                    $filaId = (int) $p['fila']['id'];
-                                    $cantidadFila = (int) $p['fila']['cantidad'];
-                                    $sugerida = $copiasFuera[$filaId] ?? 0;
-                                ?>
-                                <div class="d-flex align-items-center gap-1 mb-1">
-                                    <input type="number" name="cantidades[<?= $filaId ?>]" min="0" max="<?= $cantidadFila ?>"
-                                        value="<?= $sugerida ?>" class="form-control form-control-sm py-0 px-1" style="width: 3.2em;"
-                                        title="Cuántas de las <?= $cantidadFila ?> copias se mueven">
-                                    <label class="form-check-label small">
-                                        <?= esc($p['familia']['nombre'] ?? '?') ?> · <?= esc($p['variante']['nombre'] ?? '?') ?><?= $cantidadFila > 1 ? ' (de ' . $cantidadFila . ')' : '' ?>
-                                    </label>
-                                </div>
-                            <?php endforeach; ?>
-                            <button type="submit" class="btn btn-sm btn-primary mt-1 w-100">Repartir seleccionadas</button>
-                        </form>
-                    </div>
-                <?php endif; ?>
-
-                <?php // Deshacer un reparto: junta esta placa de vuelta con
-                      // la que la originó y la borra. Solo tiene sentido si
-                      // nació de un "Repartir en otra placa" (no de "Cargar
-                      // en la placa actual") y esa origen sigue existiendo. ?>
-                <?php if (!empty($placa['es_reparto']) && $placa['origen_placa_id'] && isset($origenNombres[(int) $placa['origen_placa_id']])): ?>
-                    <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/deshacer-reparto') ?>"
-                        onsubmit="return confirm('¿Deshacer el reparto? Esta placa se borra y sus piezas vuelven a «<?= esc($origenNombres[(int) $placa['origen_placa_id']], 'attr') ?>».');">
-                        <?= csrf_field() ?>
-                        <button class="btn btn-sm btn-outline-warning" title="Volver a juntar con la placa de origen">
-                            <i class="bi bi-arrow-counterclockwise"></i> Deshacer reparto
-                        </button>
-                    </form>
-                <?php endif; ?>
-
-                <form method="post"
-                    action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
-                    onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
-                    <?= csrf_field() ?>
-                    <button class="btn btn-sm btn-outline-danger" title="Borrar del histórico">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </form>
-            </div>
-        </div>
+              // (ocultos, en su propio parcial compartido) para que sus
+              // formularios lleven el CSRF de siempre sin duplicar un modal
+              // por placa. El contenido —la bitácora— se pide al abrir: son
+              // muchas placas y meter treinta formularios completos en la
+              // página costaría más que todo lo demás junto. ?>
+        <?php include APPPATH . 'Views/piezas/_placa_acciones.php'; ?>
     </div>
 </div>
