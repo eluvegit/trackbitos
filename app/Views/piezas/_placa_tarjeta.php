@@ -6,12 +6,17 @@
  * fecha — sin esto sería la misma pantalla de HTML copiada tres veces.
  *
  * Espera: $placa, $lista (piezasDeLaPlaca), $resumen (resumenConDatos),
- * $origenNombres (id => nombre de la placa origen).
+ * $origenNombres (id => nombre de la placa origen), $cuadrosPorPlaca
+ * (id => ['usados' => int, 'sinMedir' => int]), $gruposReparto
+ * (id => ['raiz' => int, 'hermanas' => list<int>], solo si tiene),
+ * $nombresPlacas (id => nombre, para las hermanas).
  */
 $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
 $idDetalle = 'detalle-placa-' . $idPlaca;
 $fecha = strtotime($placa['creado_en']);
+$cuadros = $cuadrosPorPlaca[$idPlaca] ?? ['usados' => 0, 'sinMedir' => 0];
+$grupo = $gruposReparto[$idPlaca] ?? null;
 // Portada en tira baja (no cuadrada): la tarjeta es un lomo de archivador, no
 // una foto de catálogo — con reconocerla basta. Hasta 4 miniaturas en fila;
 // el detalle se ve en el modal.
@@ -59,6 +64,27 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
                 </div>
             <?php endif; ?>
 
+            <?php // Vínculo entre placas nacidas de la misma división: un
+                  // cuadradito de color (mismo tono para toda la familia,
+                  // sacado del id de la raíz) más la lista de hermanas en el
+                  // título, para reconocerlas de un vistazo aunque hayan
+                  // caído en grupos de fecha distintos. ?>
+            <?php if ($grupo): ?>
+                <?php
+                    $tono = ($grupo['raiz'] * 47) % 360;
+                    $nombresHermanas = array_map(
+                        static fn($hid) => $nombresPlacas[$hid] ?? 'placa borrada',
+                        $grupo['hermanas']
+                    );
+                    $totalGrupo = count($grupo['hermanas']) + 1;
+                ?>
+                <div class="text-muted text-truncate" style="font-size: .7rem;"
+                    title="Placa dividida — <?= esc(implode(', ', $nombresHermanas), 'attr') ?>">
+                    <span class="d-inline-block" style="width:.6em;height:.6em;background:hsl(<?= $tono ?>,65%,45%);border-radius:2px;"></span>
+                    Dividida (<?= $totalGrupo ?> placas)
+                </div>
+            <?php endif; ?>
+
             <?php // Segunda línea: en qué punto está el cuaderno. Lo que
                   // se busca aquí es qué queda por cerrar —una placa sin
                   // juzgar, o con preguntas escritas antes de imprimir a
@@ -89,6 +115,17 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
                 <?php if ($resumen['enlaces'] > 0): ?>
                     <span class="badge bg-body-secondary text-body-secondary border" title="Tiene enlaces guardados">
                         <i class="bi bi-link-45deg"></i> <?= (int) $resumen['enlaces'] ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php // Cuánto lleva ESTA placa de las 60 cuadrículas de la
+                      // plataforma — no un reparto hipotético, lo que ya
+                      // tiene puesto. Con esto no hace falta abrir cada
+                      // hermana para saber qué le queda de sitio. ?>
+                <?php if ($cuadros['usados'] > 0 || $cuadros['sinMedir'] > 0): ?>
+                    <span class="badge bg-body-secondary text-body-secondary border"
+                        title="Cuadrículas ocupadas de las 60 de la plataforma<?= $cuadros['sinMedir'] > 0 ? ' (' . $cuadros['sinMedir'] . ' pieza(s) sin medir, no entran en la cuenta)' : '' ?>">
+                        <i class="bi bi-grid-3x3-gap"></i> <?= $cuadros['usados'] ?>/<?= \App\Services\PiezaEmpaquetadoService::COLUMNAS * \App\Services\PiezaEmpaquetadoService::FILAS ?><?= $cuadros['sinMedir'] > 0 ? '+' : '' ?>
                     </span>
                 <?php endif; ?>
             </div>
@@ -159,6 +196,20 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
                             <button type="submit" class="btn btn-sm btn-primary mt-1 w-100">Repartir seleccionadas</button>
                         </form>
                     </div>
+                <?php endif; ?>
+
+                <?php // Deshacer un reparto: junta esta placa de vuelta con
+                      // la que la originó y la borra. Solo tiene sentido si
+                      // nació de un "Repartir en otra placa" (no de "Cargar
+                      // en la placa actual") y esa origen sigue existiendo. ?>
+                <?php if (!empty($placa['es_reparto']) && $placa['origen_placa_id'] && isset($origenNombres[(int) $placa['origen_placa_id']])): ?>
+                    <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/deshacer-reparto') ?>"
+                        onsubmit="return confirm('¿Deshacer el reparto? Esta placa se borra y sus piezas vuelven a «<?= esc($origenNombres[(int) $placa['origen_placa_id']], 'attr') ?>».');">
+                        <?= csrf_field() ?>
+                        <button class="btn btn-sm btn-outline-warning" title="Volver a juntar con la placa de origen">
+                            <i class="bi bi-arrow-counterclockwise"></i> Deshacer reparto
+                        </button>
+                    </form>
                 <?php endif; ?>
 
                 <form method="post"

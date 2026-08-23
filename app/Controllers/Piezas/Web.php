@@ -1397,6 +1397,7 @@ class Web extends BaseController
         $listas    = [];
         $impresas  = [];
         $sugerenciasReparto = [];
+        $cuadrosPorPlaca    = [];
         foreach ($placas as $placa) {
             $idPlaca = (int) $placa['id'];
             // Una versión purgada (variante borrada hace 30+ días, invariante
@@ -1414,12 +1415,61 @@ class Web extends BaseController
             // mano. Sigue siendo editable: es una sugerencia, no una orden.
             $sugerenciasReparto[$idPlaca] = $this->filasFueraDeLaPrimeraPlaca($piezas[$idPlaca]);
 
+            // Cuánto ocupa lo que YA lleva esta placa concreta (no un
+            // reparto hipotético): para no perder de vista, sobre todo en
+            // una placa nacida de un reparto, cuánto le queda por llenar.
+            $itemsInfo = $this->itemsParaEmpaquetar($piezas[$idPlaca]);
+            $usados = 0;
+            foreach ($itemsInfo['items'] as $item) {
+                $usados += $item['ancho'] * $item['fondo'];
+            }
+            $cuadrosPorPlaca[$idPlaca] = ['usados' => $usados, 'sinMedir' => $itemsInfo['sinMedir']];
+
             if ($placa['impresa_en']) {
                 $impresas[] = $placa;
             } elseif ($placa['descargada_en']) {
                 $listas[] = $placa;
             } else {
                 $guardadas[] = $placa;
+            }
+        }
+
+        // Familias de reparto: qué placas nacieron de dividir cuál, para
+        // poder mostrar en cada una un vínculo con sus hermanas ("de la
+        // misma placa dividida") en vez de solo la flecha unidireccional
+        // hacia el origen que ya se veía antes. La raíz de una placa es ella
+        // misma si no viene de un reparto, o si no, la raíz de su origen.
+        $porId = [];
+        foreach ($placas as $p) {
+            $porId[(int) $p['id']] = $p;
+        }
+        $raizCache = [];
+        $raizDe = function (int $id) use (&$raizDe, &$raizCache, $porId): int {
+            if (isset($raizCache[$id])) {
+                return $raizCache[$id];
+            }
+            $p = $porId[$id] ?? null;
+            if (!$p || !$p['es_reparto'] || !$p['origen_placa_id'] || !isset($porId[(int) $p['origen_placa_id']])) {
+                return $raizCache[$id] = $id;
+            }
+
+            return $raizCache[$id] = $raizDe((int) $p['origen_placa_id']);
+        };
+
+        $miembrosPorRaiz = [];
+        foreach ($placas as $p) {
+            $idPlaca = (int) $p['id'];
+            $miembrosPorRaiz[$raizDe($idPlaca)][] = $idPlaca;
+        }
+
+        $gruposReparto = [];
+        $nombresPlacas = [];
+        foreach ($placas as $p) {
+            $idPlaca = (int) $p['id'];
+            $nombresPlacas[$idPlaca] = $p['nombre'];
+            $hermanas = array_values(array_diff($miembrosPorRaiz[$raizDe($idPlaca)] ?? [], [$idPlaca]));
+            if ($hermanas !== []) {
+                $gruposReparto[$idPlaca] = ['raiz' => $raizDe($idPlaca), 'hermanas' => $hermanas];
             }
         }
 
@@ -1434,6 +1484,9 @@ class Web extends BaseController
             'resumenes'          => $resumenes,
             'origenNombres'      => $origenNombres,
             'sugerenciasReparto' => $sugerenciasReparto,
+            'cuadrosPorPlaca'    => $cuadrosPorPlaca,
+            'gruposReparto'      => $gruposReparto,
+            'nombresPlacas'      => $nombresPlacas,
             'bloques'       => [
                 'guardada' => ['titulo' => 'Guardadas para después', 'grupos' => $this->agruparPorPeriodo($guardadas, 'creado_en')],
                 'lista'    => ['titulo' => 'Listas para imprimir', 'grupos' => $this->agruparPorPeriodo($listas, 'creado_en')],
@@ -1722,6 +1775,7 @@ class Web extends BaseController
                 $nuevaId = $this->placaModel->insert([
                     'nombre'          => mb_substr($placa['nombre'] . ' (parte)', 0, 150),
                     'origen_placa_id' => $id,
+                    'es_reparto'      => 1,
                     'descargada_en'   => $placa['descargada_en'],
                     'pedido_id'       => $placa['pedido_id'],
                     'exposicion'      => $placa['exposicion'],
@@ -1754,6 +1808,60 @@ class Web extends BaseController
 
         return redirect()->to(site_url('piezas/placas'))
             ->with('success', $piezasMovidas . ' pieza(s) (' . $movidas . ' referencia(s)) repartidas en "' . $nueva['nombre'] . '".');
+    }
+
+    /**
+     * Deshace un "Repartir en otra placa": junta de vuelta las filas de esta
+     * placa con las de la placa origen (sumando cantidad si ya había una
+     * fila igual, o si no volviendo a colgar la fila de la origen tal cual)
+     * y borra esta. Hace falta porque un reparto calculado a ojo puede
+     * resultar mal — a veces no se nota hasta montar la placa de verdad — y
+     * entonces hay que poder deshacerlo, no solo repartir hacia delante.
+     */
+    public function placaDeshacerReparto(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+        if (!$placa['es_reparto'] || !$placa['origen_placa_id']) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esta placa no viene de un reparto.');
+        }
+
+        $origen = $this->placaModel->find((int) $placa['origen_placa_id']);
+        if (!$origen) {
+            return redirect()->to(site_url('piezas/placas'))
+                ->with('error', 'La placa de origen ya no existe: no se puede deshacer el reparto.');
+        }
+
+        foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $fila) {
+            $gemela = $this->placaVersionModel->where('placa_id', $origen['id'])
+                ->where('version_id', $fila['version_id'])
+                ->where('notas', $fila['notas'])
+                ->first();
+
+            if ($gemela) {
+                $this->placaVersionModel->update((int) $gemela['id'], ['cantidad' => (int) $gemela['cantidad'] + (int) $fila['cantidad']]);
+                $this->placaVersionModel->delete((int) $fila['id']);
+            } else {
+                $this->placaVersionModel->update((int) $fila['id'], ['placa_id' => $origen['id']]);
+            }
+        }
+
+        // Fotos, preguntas y enlaces propios de esta placa vuelven con ella:
+        // deshacer el reparto es volver a como estaba, no perder lo anotado.
+        $this->placaImagenModel->where('placa_id', $id)->set(['placa_id' => $origen['id']])->update();
+        $this->placaPruebaModel->where('placa_id', $id)->set(['placa_id' => $origen['id']])->update();
+        $this->placaEnlaceModel->where('placa_id', $id)->set(['placa_id' => $origen['id']])->update();
+
+        // Si de esta placa había salido a su vez otro reparto, ese trozo pasa
+        // a colgar directamente de la origen en vez de quedarse huérfano.
+        $this->placaModel->where('origen_placa_id', $id)->set(['origen_placa_id' => $origen['id']])->update();
+
+        $this->placaModel->delete($id);
+
+        return redirect()->to(site_url('piezas/placas'))
+            ->with('success', 'Reparto deshecho: vuelto a juntar con "' . $origen['nombre'] . '".');
     }
 
     // ---- Bitácora de una placa (fase 38) ---------------------------------

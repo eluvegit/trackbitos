@@ -767,6 +767,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // placa nueva, enlazada a esta como origen (spec: "repartir en otra
     // placa").
     $routes->POST('placa/(:num)/repartir', 'Web::placaRepartir/$1');
+    // Deshace un reparto: junta esta placa de vuelta con la que la originó.
+    $routes->POST('placa/(:num)/deshacer-reparto', 'Web::placaDeshacerReparto/$1');
 
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
