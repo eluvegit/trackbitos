@@ -2459,29 +2459,48 @@ class Web extends BaseController
      * devuelve los items en bruto (uno por copia×trozo), que sirven para
      * calcular pero no para leer de un vistazo.
      *
-     * @return list<array{porcentajeUsado: float, piezas: list<array{etiqueta: string, cantidad: int}>}>
+     * @return array{
+     *     bins: list<array{porcentajeUsado: float, piezas: list<array{etiqueta: string, cantidad: int}>}>,
+     *     piezasPrimeraPlacaPorSuperficie: int,
+     *     piezasPrimeraPlacaConMargen: int,
+     *     placasPorSuperficie: int
+     * }
      */
     private function repartoLegible(array $piezas): array
     {
-        $bins = $this->empaquetado->repartir($this->itemsParaEmpaquetar($piezas)['items']);
+        $items = $this->itemsParaEmpaquetar($piezas)['items'];
         $areaPlaca = PiezaEmpaquetadoService::PLACA_ANCHO_MM * PiezaEmpaquetadoService::PLACA_FONDO_MM;
 
-        return array_map(function (array $bin) use ($areaPlaca): array {
-            $porFila = [];
-            foreach ($bin['piezas'] as $item) {
-                $id = $item['filaId'];
-                $porFila[$id]['etiqueta'] = $item['etiquetaBase'];
-                $porFila[$id]['copias'][$item['copia']] = true;
-            }
+        // Dos versiones del mismo cálculo por superficie (spec: enseñar las
+        // dos, no solo la conservadora): sin ningún colchón (el máximo
+        // teórico, "las piezas caben si se pudieran tocar entre sí") y con
+        // el 10% de la placa reservado como margen de seguridad. 'bins' —
+        // lo que de verdad se usa para sugerir qué mover a otra placa — sale
+        // siempre de la versión con margen, la conservadora.
+        $binsPorSuperficie = $this->empaquetado->repartir($items, 0.0);
+        $bins = $this->empaquetado->repartir($items);
 
-            return [
-                'porcentajeUsado' => $areaPlaca > 0 ? min(100, $bin['areaUsadaMm2'] / $areaPlaca * 100) : 0,
-                'piezas' => array_values(array_map(
-                    static fn(array $f) => ['etiqueta' => $f['etiqueta'], 'cantidad' => count($f['copias'])],
-                    $porFila
-                )),
-            ];
-        }, $bins);
+        return [
+            'bins' => array_map(function (array $bin) use ($areaPlaca): array {
+                $porFila = [];
+                foreach ($bin['piezas'] as $item) {
+                    $id = $item['filaId'];
+                    $porFila[$id]['etiqueta'] = $item['etiquetaBase'];
+                    $porFila[$id]['copias'][$item['copia']] = true;
+                }
+
+                return [
+                    'porcentajeUsado' => $areaPlaca > 0 ? min(100, $bin['areaUsadaMm2'] / $areaPlaca * 100) : 0,
+                    'piezas' => array_values(array_map(
+                        static fn(array $f) => ['etiqueta' => $f['etiqueta'], 'cantidad' => count($f['copias'])],
+                        $porFila
+                    )),
+                ];
+            }, $bins),
+            'piezasPrimeraPlacaPorSuperficie' => count($binsPorSuperficie[0]['piezas'] ?? []),
+            'piezasPrimeraPlacaConMargen'     => count($bins[0]['piezas'] ?? []),
+            'placasPorSuperficie'             => count($binsPorSuperficie),
+        ];
     }
 
     /**
