@@ -11,6 +11,7 @@ use App\Models\PiezaRenderModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use App\Services\PiezaAlmacen;
+use App\Services\PiezaImagenesPublicas;
 
 /**
  * API dedicada a la integración con sterclicks (token propio, filtro
@@ -50,21 +51,31 @@ class SterclicksApi extends BaseController
 
         $renderModel = new PiezaRenderModel();
         $referenciaModel = new PiezaReferenciaModel();
+        $imagenesPublicas = new PiezaImagenesPublicas();
         $token = urlencode((string) env('sterclicks.apiToken'));
         $piezas = [];
         foreach ($filas as $fila) {
             $render = $renderModel->where('version_id', $fila['version_id'])->orderBy('id', 'DESC')->first()
                 ?? $renderModel->where('variante_id', $fila['variante_id'])->orderBy('id', 'DESC')->first();
 
+            // Se prefiere siempre la copia pública estática (public/piezas-img,
+            // servida directo por Apache) sobre el controlador: con el catálogo
+            // entero pintando miniaturas a la vez, pasar cada una por el
+            // framework saturaba el hosting y hacía que unas u otras fallaran
+            // al azar en cada recarga. Solo se cae al controlador si esa
+            // imagen concreta todavía no se ha publicado con
+            // `piezas:publicar-imagenes`.
             $imagenUrl = null;
             if ($render) {
-                $imagenUrl = site_url('piezas/sterclicks-api/render/' . $render['id'] . '/imagen') . '?token=' . $token;
+                $imagenUrl = $imagenesPublicas->url($render['hash_imagen'] ?? null, PiezaImagenesPublicas::VISTA)
+                    ?? site_url('piezas/sterclicks-api/render/' . $render['id'] . '/imagen') . '?token=' . $token;
             } else {
                 // Sin render todavía: cae en la foto de referencia del original,
                 // igual que hace la galería de trackbitos (Web::fotosDe()).
                 $referencia = $referenciaModel->deVariante((int) $fila['familia_id'] ?: 0, (int) $fila['variante_id'])[0] ?? null;
                 if ($referencia) {
-                    $imagenUrl = site_url('piezas/sterclicks-api/referencia/' . $referencia['id'] . '/imagen') . '?token=' . $token;
+                    $imagenUrl = $imagenesPublicas->url($referencia['hash_imagen'] ?? null, PiezaImagenesPublicas::VISTA)
+                        ?? site_url('piezas/sterclicks-api/referencia/' . $referencia['id'] . '/imagen') . '?token=' . $token;
                 }
             }
 

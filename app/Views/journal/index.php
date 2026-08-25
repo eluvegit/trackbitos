@@ -324,7 +324,8 @@ foreach ($categories as $category) {
     .jt-subtask-time:hover { color: var(--bs-emphasis-color); text-decoration: underline; }
 
     .jt-subtask-edit,
-    .jt-subtask-delete {
+    .jt-subtask-delete,
+    .jt-subtask-move {
         flex: 0 0 auto;
         width: 22px;
         height: 22px;
@@ -338,6 +339,7 @@ foreach ($categories as $category) {
     }
     .jt-subtask-edit:hover { background: rgba(13,110,253,.12); color: #0d6efd; }
     .jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
+    .jt-subtask-move:hover { background: var(--bs-tertiary-bg); color: var(--bs-emphasis-color); }
 
     .jt-subtask-add { display: flex; gap: 6px; }
     .jt-subtask-add .form-control { flex: 1 1 auto; }
@@ -572,6 +574,12 @@ foreach ($categories as $category) {
                                                         data-task-id="<?= $task['id'] ?>">
                                                         <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
                                                     </span>
+                                                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
+                                                        <i class="bi bi-arrow-bar-up"></i>
+                                                    </button>
+                                                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
+                                                        <i class="bi bi-arrow-bar-down"></i>
+                                                    </button>
                                                     <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
                                                         <i class="bi bi-pencil"></i>
                                                     </button>
@@ -1257,11 +1265,18 @@ foreach ($categories as $category) {
                 <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
                 <span class="jt-subtask-title"></span>
                 <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" data-task-id="${taskId}">0.00 h</span>
+                <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
+                <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
                 <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
                 <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
             `;
             item.querySelector('.jt-subtask-title').textContent = subtask.title;
             return item;
+        }
+
+        function persistSubtaskOrder(list) {
+            const orden = [...list.querySelectorAll('.jt-subtask-item')].map(item => item.dataset.id);
+            postJSON('<?= site_url('journal/subtasks/reordenar') ?>', { orden });
         }
 
         function updateToggleBadge(taskId) {
@@ -1380,6 +1395,22 @@ foreach ($categories as $category) {
                     return;
                 }
 
+                const moveTopBtn = e.target.closest('.js-move-top-subtask');
+                if (moveTopBtn) {
+                    const item = moveTopBtn.closest('.jt-subtask-item');
+                    list.prepend(item);
+                    persistSubtaskOrder(list);
+                    return;
+                }
+
+                const moveBottomBtn = e.target.closest('.js-move-bottom-subtask');
+                if (moveBottomBtn) {
+                    const item = moveBottomBtn.closest('.jt-subtask-item');
+                    list.appendChild(item);
+                    persistSubtaskOrder(list);
+                    return;
+                }
+
                 const editBtn = e.target.closest('.js-edit-subtask');
                 if (editBtn) {
                     subtaskEditItem = editBtn.closest('.jt-subtask-item');
@@ -1410,10 +1441,7 @@ foreach ($categories as $category) {
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
-                onEnd: () => {
-                    const orden = [...list.querySelectorAll('.jt-subtask-item')].map(item => item.dataset.id);
-                    postJSON('<?= site_url('journal/subtasks/reordenar') ?>', { orden });
-                },
+                onEnd: () => persistSubtaskOrder(list),
             });
         });
     });
