@@ -144,11 +144,36 @@ class PedidosController extends BaseController
         $nueva = max(0, min((int) $linea['cantidad'], (int) $linea['cantidad_completada'] + $delta));
 
         $lineaModel->update($lineaId, ['cantidad_completada' => $nueva]);
+        $this->autocompletarPedidoSiProcede((int) $linea['pedido_id']);
 
         if ($this->request->isAJAX()) {
             return $this->response->setJSON(['ok' => true, 'cantidad_completada' => $nueva]);
         }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);
+    }
+
+    /**
+     * Si todas las líneas del pedido ya tienen su cantidad completada, el
+     * pedido pasa a "completado" solo, sin esperar a que alguien cambie el
+     * estado a mano — da igual en qué estado estuviera (incluso cancelado),
+     * salvo que ya estuviera completado.
+     */
+    private function autocompletarPedidoSiProcede(int $pedidoId): void
+    {
+        $pedidoModel = new PiezaPedidoModel();
+        $pedido = $pedidoModel->find($pedidoId);
+        if (!$pedido || $pedido['estado'] === 'completado') {
+            return;
+        }
+
+        $lineas = (new PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)->findAll();
+        foreach ($lineas as $linea) {
+            if ((int) $linea['cantidad_completada'] < (int) $linea['cantidad']) {
+                return;
+            }
+        }
+
+        $pedidoModel->update($pedidoId, ['estado' => 'completado', 'actualizado_en' => date('Y-m-d H:i:s')]);
     }
 }
