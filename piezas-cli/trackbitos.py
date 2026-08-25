@@ -1091,8 +1091,7 @@ def cmd_subir(args) -> int:
 
     _verificar_subida(config, directorio, blend, sentinel, subida)
 
-    print("\n  → Cuando cierres Blender: trackbitos cerrar")
-    print("     Si esto ya es la versión buena: trackbitos promocionar --cambio \"...\"\n")
+    print("\n  → Cuando cierres Blender: trackbitos cerrar\n")
     return 0
 
 
