@@ -736,7 +736,12 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('pedido/(:num)', 'PedidosController::ver/$1');
     $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');
     $routes->POST('pedido/(:num)/cargar-placa', 'Web::pedidoCargarACarrito/$1');
+    $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');
+    $routes->POST('pedido/(:num)/linea', 'PedidosController::agregarLinea/$1');
     $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
+    $routes->POST('pedido-linea/(:num)/editar', 'PedidosController::editarLinea/$1');
+    $routes->POST('pedido-linea/(:num)/borrar', 'PedidosController::borrarLinea/$1');
+    $routes->GET('pedido-variante-buscar', 'PedidosController::buscarVariante');
 
     // Pendientes de crear: subtareas sin marcar de una tarea de Journal
     // (spec: journal es el punto de entrada, esto es una vista filtrada

@@ -107,6 +107,137 @@ class PedidosController extends BaseController
         ]);
     }
 
+    /** Borrado duro: las líneas se van solas por el ON DELETE CASCADE. */
+    public function borrar(int $id)
+    {
+        $model = new PiezaPedidoModel();
+        if (!$model->find($id)) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+        }
+
+        $model->delete($id);
+
+        return redirect()->to('/piezas/pedidos')->with('success', 'Pedido borrado.');
+    }
+
+    /**
+     * Nueva línea a mano: con variante_id (elegida en el buscador) o, si no
+     * hay variante todavía, solo una descripción libre — para apuntar piezas
+     * futuras que aún no existen en el catálogo.
+     */
+    public function agregarLinea(int $pedidoId)
+    {
+        $pedidoModel = new PiezaPedidoModel();
+        if (!$pedidoModel->find($pedidoId)) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+        }
+
+        $varianteId = (int) $this->request->getPost('variante_id') ?: null;
+        $descripcionLibre = trim((string) $this->request->getPost('descripcion_libre'));
+        $cantidad = (int) $this->request->getPost('cantidad');
+
+        $variante = $varianteId ? (new PiezaVarianteModel())->find($varianteId) : null;
+        if (!$variante && $descripcionLibre === '') {
+            return redirect()->back()->with('error', 'Elige una pieza del catálogo o escribe una descripción.');
+        }
+        if ($cantidad < 1) {
+            return redirect()->back()->with('error', 'La cantidad debe ser al menos 1.');
+        }
+
+        $lineaModel = new PiezaPedidoLineaModel();
+        $lineaModel->insert([
+            'pedido_id'         => $pedidoId,
+            'variante_id'       => $variante['id'] ?? null,
+            'sku'               => $variante['sku'] ?? null,
+            'descripcion_libre' => $variante ? null : $descripcionLibre,
+            'cantidad'          => $cantidad,
+            'notas'             => trim((string) $this->request->getPost('notas')) ?: null,
+        ]);
+
+        return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', 'Línea añadida.');
+    }
+
+    /** Cambia producto (o descripción libre), cantidad y notas de una línea existente. */
+    public function editarLinea(int $lineaId)
+    {
+        $lineaModel = new PiezaPedidoLineaModel();
+        $linea = $lineaModel->find($lineaId);
+        if (!$linea) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Línea no encontrada.');
+        }
+
+        $varianteId = (int) $this->request->getPost('variante_id') ?: null;
+        $descripcionLibre = trim((string) $this->request->getPost('descripcion_libre'));
+        $cantidad = (int) $this->request->getPost('cantidad');
+
+        $variante = $varianteId ? (new PiezaVarianteModel())->find($varianteId) : null;
+        if (!$variante && $descripcionLibre === '') {
+            return redirect()->back()->with('error', 'Elige una pieza del catálogo o escribe una descripción.');
+        }
+        if ($cantidad < 1) {
+            return redirect()->back()->with('error', 'La cantidad debe ser al menos 1.');
+        }
+
+        $lineaModel->update($lineaId, [
+            'variante_id'         => $variante['id'] ?? null,
+            'sku'                 => $variante['sku'] ?? null,
+            'descripcion_libre'   => $variante ? null : $descripcionLibre,
+            'cantidad'            => $cantidad,
+            'cantidad_completada' => min((int) $linea['cantidad_completada'], $cantidad),
+            'notas'               => trim((string) $this->request->getPost('notas')) ?: null,
+        ]);
+
+        return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', 'Línea actualizada.');
+    }
+
+    public function borrarLinea(int $lineaId)
+    {
+        $lineaModel = new PiezaPedidoLineaModel();
+        $linea = $lineaModel->find($lineaId);
+        if (!$linea) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Línea no encontrada.');
+        }
+
+        $lineaModel->delete($lineaId);
+
+        return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', 'Línea borrada.');
+    }
+
+    /** Mismo criterio de búsqueda que Web::piezaBuscar(), pero sin exigir versión imprimible: aquí solo hace falta el catálogo. */
+    public function buscarVariante()
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($q) < 2) {
+            return $this->response->setJSON(['resultados' => []]);
+        }
+
+        $familiaModel = new PiezaFamiliaModel();
+        $varianteModel = new PiezaVarianteModel();
+
+        $familiasQueEncajan = $familiaModel->where('borrado_en', null)->like('nombre', $q)->findAll();
+        $idsFamilia = array_column($familiasQueEncajan, 'id') ?: [0];
+
+        $variantes = $varianteModel->where('borrado_en', null)
+            ->groupStart()
+                ->like('nombre', $q)
+                ->orLike('sku', $q)
+                ->orWhereIn('familia_id', $idsFamilia)
+            ->groupEnd()
+            ->orderBy('nombre')
+            ->findAll(15);
+
+        $resultados = [];
+        foreach ($variantes as $variante) {
+            $familia = $familiaModel->find($variante['familia_id']);
+            $resultados[] = [
+                'variante_id' => (int) $variante['id'],
+                'texto'       => ($familia['nombre'] ?? '?') . ' · ' . $variante['nombre'],
+            ];
+        }
+
+        return $this->response->setJSON(['resultados' => $resultados]);
+    }
+
     public function cambiarEstado(int $id)
     {
         $model = new PiezaPedidoModel();

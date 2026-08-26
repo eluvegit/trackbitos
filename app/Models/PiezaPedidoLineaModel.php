@@ -10,11 +10,12 @@ class PiezaPedidoLineaModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
-    protected $allowedFields = ['pedido_id', 'variante_id', 'sku', 'cantidad', 'cantidad_completada', 'notas'];
+    protected $allowedFields = ['pedido_id', 'variante_id', 'sku', 'descripcion_libre', 'cantidad', 'cantidad_completada', 'notas'];
 
     protected $validationRules = [
-        'pedido_id' => 'required|is_natural_no_zero',
-        'sku'       => 'required|max_length[50]',
-        'cantidad'  => 'required|is_natural_no_zero',
+        'pedido_id'         => 'required|is_natural_no_zero',
+        'sku'               => 'permit_empty|max_length[50]',
+        'descripcion_libre' => 'permit_empty|max_length[150]',
+        'cantidad'          => 'required|is_natural_no_zero',
     ];
 }

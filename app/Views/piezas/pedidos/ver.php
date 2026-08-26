@@ -21,6 +21,13 @@
             <i class="bi bi-file-earmark-arrow-down"></i> Cargar piezas a la placa
         </button>
     </form>
+    <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/borrar') ?>"
+        onsubmit="return confirm('¿Borrar el pedido #<?= (int) $pedido['id'] ?> y todas sus líneas? No se puede deshacer.');">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-sm btn-outline-danger" title="Borrar este pedido">
+            <i class="bi bi-trash"></i>
+        </button>
+    </form>
 </h5>
 
 <?php if (session('success')): ?>
@@ -95,11 +102,18 @@
                 <td>
                     <?php if ($linea['nombreVariante']): ?>
                         <?= esc($linea['nombreFamilia']) ?> <span class="text-muted">· <?= esc($linea['nombreVariante']) ?></span>
-                    <?php else: ?>
+                    <?php elseif (!empty($linea['descripcion_libre'])): ?>
+                        <span class="fst-italic"><?= esc($linea['descripcion_libre']) ?></span>
+                        <span class="badge text-bg-info ms-1" title="Aún no existe en el catálogo">futura</span>
+                    <?php elseif ($linea['variante_id']): ?>
                         <span class="text-muted small fst-italic">pieza borrada</span>
+                    <?php else: ?>
+                        <span class="text-muted small fst-italic">sin referencia</span>
                     <?php endif; ?>
-                    <br>
-                    <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($linea['sku']) ?></span>
+                    <?php if ($linea['sku']): ?>
+                        <br>
+                        <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($linea['sku']) ?></span>
+                    <?php endif; ?>
                 </td>
                 <td><?= (int) $linea['cantidad'] ?></td>
                 <td>
@@ -123,15 +137,154 @@
                     </div>
                 </td>
                 <td class="text-muted small"><?= esc($linea['notas'] ?? '') ?></td>
-                <td>
+                <td class="text-nowrap">
                     <?php if ($linea['variante_id']): ?>
-                        <a href="<?= site_url('piezas/variante/' . $linea['variante_id']) ?>" class="btn btn-sm btn-outline-primary">Ver pieza</a>
+                        <a href="<?= site_url('piezas/variante/' . $linea['variante_id']) ?>" class="btn btn-sm btn-outline-primary" title="Ver pieza">
+                            <i class="bi bi-eye"></i>
+                        </a>
                     <?php endif; ?>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle-editar-linea="<?= (int) $linea['id'] ?>" title="Editar línea">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/borrar') ?>" class="d-inline"
+                        onsubmit="return confirm('¿Borrar esta línea del pedido?');">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Borrar línea">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            <tr id="editar-linea-<?= (int) $linea['id'] ?>" class="d-none">
+                <td></td>
+                <td colspan="5">
+                    <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/editar') ?>" class="row g-1 align-items-center py-2">
+                        <?= csrf_field() ?>
+                        <div class="col-md-4 position-relative">
+                            <input type="text" class="form-control form-control-sm" data-buscar-variante autocomplete="off"
+                                placeholder="Buscar pieza del catálogo…"
+                                value="<?= $linea['nombreVariante'] ? esc($linea['nombreFamilia'] . ' · ' . $linea['nombreVariante'], 'attr') : '' ?>">
+                            <input type="hidden" name="variante_id" data-variante-id value="<?= (int) ($linea['variante_id'] ?? 0) ?>">
+                            <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1060; display: none;" data-resultados-variante></div>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" name="descripcion_libre" class="form-control form-control-sm"
+                                placeholder="…o descripción (pieza futura)" value="<?= esc($linea['descripcion_libre'] ?? '', 'attr') ?>">
+                        </div>
+                        <div class="col-md-1">
+                            <input type="number" name="cantidad" class="form-control form-control-sm" min="1" required
+                                value="<?= (int) $linea['cantidad'] ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" name="notas" class="form-control form-control-sm" maxlength="150"
+                                placeholder="Notas" value="<?= esc($linea['notas'] ?? '', 'attr') ?>">
+                        </div>
+                        <div class="col-md-2 d-flex gap-1">
+                            <button type="submit" class="btn btn-sm btn-primary">Guardar</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle-editar-linea="<?= (int) $linea['id'] ?>">Cancelar</button>
+                        </div>
+                    </form>
                 </td>
             </tr>
         <?php endforeach; ?>
     </tbody>
 </table>
+
+<div class="card card-body mb-3">
+    <h6 class="mb-2"><i class="bi bi-plus-lg"></i> Añadir línea</h6>
+    <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/linea') ?>" class="row g-1 align-items-center">
+        <?= csrf_field() ?>
+        <div class="col-md-4 position-relative">
+            <input type="text" class="form-control form-control-sm" data-buscar-variante autocomplete="off"
+                placeholder="Buscar pieza del catálogo…">
+            <input type="hidden" name="variante_id" data-variante-id value="">
+            <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1060; display: none;" data-resultados-variante></div>
+        </div>
+        <div class="col-md-3">
+            <input type="text" name="descripcion_libre" class="form-control form-control-sm"
+                placeholder="…o descripción (pieza futura, aún sin hacer)">
+        </div>
+        <div class="col-md-1">
+            <input type="number" name="cantidad" class="form-control form-control-sm" min="1" value="1" required>
+        </div>
+        <div class="col-md-2">
+            <input type="text" name="notas" class="form-control form-control-sm" maxlength="150" placeholder="Notas">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-sm btn-success w-100">Añadir</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-toggle-editar-linea]').forEach(function (boton) {
+        boton.addEventListener('click', function () {
+            var fila = document.getElementById('editar-linea-' + boton.getAttribute('data-toggle-editar-linea'));
+            if (fila) fila.classList.toggle('d-none');
+        });
+    });
+
+    var espera = null;
+    document.addEventListener('input', function (e) {
+        if (!e.target.matches('[data-buscar-variante]')) return;
+        var caja = e.target;
+        var contenedor = caja.closest('.position-relative');
+        var resultados = contenedor.querySelector('[data-resultados-variante]');
+        var hidden = contenedor.querySelector('[data-variante-id]');
+
+        clearTimeout(espera);
+        hidden.value = '';
+        var q = caja.value.trim();
+        if (q.length < 2) {
+            resultados.style.display = 'none';
+            resultados.innerHTML = '';
+            return;
+        }
+
+        espera = setTimeout(function () {
+            fetch('<?= site_url('piezas/pedido-variante-buscar') ?>?q=' + encodeURIComponent(q), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var lista = d.resultados || [];
+                    resultados.innerHTML = lista.length
+                        ? lista.map(function (v) {
+                            var textoHtml = v.texto.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                            var textoAttr = textoHtml.replace(/"/g, '&quot;');
+                            return '<button type="button" class="list-group-item list-group-item-action py-1 small" '
+                                + 'data-elegir-variante data-variante-id="' + v.variante_id + '" data-texto="' + textoAttr + '">' + textoHtml + '</button>';
+                        }).join('')
+                        : '<div class="list-group-item py-1 small text-muted">Sin resultados</div>';
+                    resultados.style.display = 'block';
+                });
+        }, 250);
+    });
+
+    document.addEventListener('click', function (e) {
+        var boton = e.target.closest('[data-elegir-variante]');
+        if (!boton) return;
+        var contenedor = boton.closest('.position-relative');
+        var caja = contenedor.querySelector('[data-buscar-variante]');
+        var resultados = contenedor.querySelector('[data-resultados-variante]');
+        var hidden = contenedor.querySelector('[data-variante-id]');
+
+        hidden.value = boton.getAttribute('data-variante-id');
+        caja.value = boton.getAttribute('data-texto');
+        resultados.style.display = 'none';
+    });
+
+    document.addEventListener('focusout', function (e) {
+        if (!e.target.matches('[data-buscar-variante]')) return;
+        var contenedor = e.target.closest('.position-relative');
+        setTimeout(function () {
+            contenedor.querySelector('[data-resultados-variante]').style.display = 'none';
+        }, 200);
+    });
+});
+</script>
 
 <?php // Qué placas se han marcado como salidas de este pedido (a mano, al pulsar
       // "Cargar piezas a la placa" arriba) — solo un listado, sin intentar cuadrar
