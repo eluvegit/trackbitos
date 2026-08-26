@@ -46,7 +46,17 @@ class Dashboard extends BaseController
             'mostrarAlerta' => $mostrarAlerta,
             'recordatoriosUrgentes' => $recordatoriosUrgentes,
             'secciones' => $this->secciones(),
+            'enlacesRapidos' => $this->enlacesRapidos(),
         ]);
+    }
+
+    // Placeholder editable: accesos directos del sidebar de escritorio.
+    private function enlacesRapidos(): array
+    {
+        return [
+            ['ruta' => 'journal', 'icono' => 'bi-list-check', 'titulo' => 'Journal'],
+            ['ruta' => 'comidas/diario/hoy', 'icono' => 'bi-egg-fried', 'titulo' => 'Comida de hoy'],
+        ];
     }
 
     private function secciones(): array
