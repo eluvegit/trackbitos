@@ -39,11 +39,11 @@
                     <?php endif; ?>
 
                     <?php if ($t['nunca'] && $t['tiene_frecuencia']): ?>
-                        <span class="pend-badge pend-badge-danger"><i class="bi bi-exclamation-triangle-fill"></i> Nunca hecha</span>
+                        <span class="pend-badge pend-badge-danger"><i class="bi bi-arrow-repeat"></i> Nunca hecha</span>
                     <?php elseif ($t['diff_dias'] !== null && $t['diff_dias'] > 0): ?>
-                        <span class="pend-badge pend-badge-danger"><i class="bi bi-exclamation-triangle-fill"></i> Atrasada <?= (int)$t['diff_dias'] ?> día<?= (int)$t['diff_dias'] === 1 ? '' : 's' ?></span>
+                        <span class="pend-badge pend-badge-danger"><i class="bi bi-arrow-repeat"></i> Atrasada <?= (int)$t['diff_dias'] ?> día<?= (int)$t['diff_dias'] === 1 ? '' : 's' ?></span>
                     <?php elseif ($t['diff_dias'] === 0): ?>
-                        <span class="pend-badge pend-badge-danger"><i class="bi bi-exclamation-triangle-fill"></i> Toca hoy</span>
+                        <span class="pend-badge pend-badge-danger"><i class="bi bi-arrow-repeat"></i> Toca hoy</span>
                     <?php elseif ($t['diff_dias'] !== null): ?>
                         <span class="pend-badge pend-badge-info">Faltan <?= (int)abs($t['diff_dias']) ?> día<?= (int)abs($t['diff_dias']) === 1 ? '' : 's' ?></span>
                     <?php endif; ?>
@@ -80,9 +80,10 @@
     border: 1px solid var(--bs-border-color);
     background: var(--bs-body-bg);
 }
+/* Aviso suave (no alarmante): ámbar cálido en vez de rojo intenso. */
 .pend-item.is-atrasada {
-    border-color: rgba(220,53,69,.4);
-    background: rgba(220,53,69,.06);
+    border-color: rgba(217,173,107,.35);
+    background: rgba(217,173,107,.07);
 }
 
 .pend-check {
@@ -138,7 +139,7 @@
     gap: .3rem;
     font-weight: 600;
 }
-.pend-badge-danger { color: #dc3545; }
+.pend-badge-danger { color: #d9ad6b; }
 .pend-badge-info { color: #6366f1; }
 
 .pend-empty {

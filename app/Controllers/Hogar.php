@@ -25,6 +25,8 @@ class Hogar extends BaseController
      */
     public function index()
     {
+        $this->tareaModel->desmarcarVencidas();
+
         $habitaciones = $this->habitacionModel->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
 
         $totalPendientes = 0;
@@ -58,6 +60,8 @@ class Hogar extends BaseController
      */
     public function pendientes()
     {
+        $this->tareaModel->desmarcarVencidas();
+
         $tareas = $this->tareaModel->where('estado', 0)->findAll();
 
         $habitaciones = [];
@@ -102,6 +106,8 @@ class Hogar extends BaseController
         if (!$habitacion) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Habitación no encontrada');
         }
+
+        $this->tareaModel->desmarcarVencidas($id);
 
         $tareas = $this->tareaModel->porHabitacion($id);
         foreach ($tareas as &$t) {

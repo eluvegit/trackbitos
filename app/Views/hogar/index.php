@@ -81,13 +81,13 @@
     height: 22px;
     padding: 0 6px;
     border-radius: 999px;
-    background: #dc3545;
-    color: #fff;
+    background: #d9ad6b;
+    color: #1c1c1c;
     font-size: .72rem;
     font-weight: 700;
     display: grid;
     place-items: center;
-    box-shadow: 0 2px 6px rgba(220,53,69,.5);
+    box-shadow: 0 2px 6px rgba(217,173,107,.35);
 }
 
 .hogar-progress {

@@ -46,7 +46,7 @@
                         <span class="tarea-frecuencia">· cada <?= (int)$t['frecuencia_dias'] ?> día<?= (int)$t['frecuencia_dias'] === 1 ? '' : 's' ?></span>
                     <?php endif; ?>
                     <?php if ($t['atrasada']): ?>
-                        <span class="tarea-atrasada-tag"><i class="bi bi-exclamation-triangle-fill"></i> Toca hacerla</span>
+                        <span class="tarea-atrasada-tag"><i class="bi bi-arrow-repeat"></i> Toca hacerla</span>
                     <?php endif; ?>
                 </div>
             </div>
@@ -113,9 +113,10 @@
 
 .tarea-item.is-hecha { opacity: .6; }
 
+/* Aviso suave (no alarmante): ámbar cálido en vez de rojo intenso. */
 .tarea-item.is-atrasada {
-    border-color: rgba(220,53,69,.4);
-    background: rgba(220,53,69,.06);
+    border-color: rgba(217,173,107,.35);
+    background: rgba(217,173,107,.07);
 }
 
 .tarea-handle {
@@ -161,8 +162,8 @@
 .tarea-item.is-hecha .tarea-nombre { font-weight: 400; color: var(--bs-secondary-color); }
 
 .tarea-meta { font-size: .75rem; color: var(--bs-secondary-color); display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
-.tarea-item.is-atrasada .tarea-tiempo { color: #dc3545; font-weight: 600; }
-.tarea-atrasada-tag { color: #dc3545; font-weight: 600; display: inline-flex; align-items: center; gap: .25rem; }
+.tarea-item.is-atrasada .tarea-tiempo { color: #d9ad6b; font-weight: 500; }
+.tarea-atrasada-tag { color: #d9ad6b; font-weight: 600; display: inline-flex; align-items: center; gap: .25rem; }
 
 .tarea-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 
@@ -231,7 +232,7 @@
         if (data.atrasada && !atrasadaTag) {
             atrasadaTag = document.createElement('span');
             atrasadaTag.className = 'tarea-atrasada-tag';
-            atrasadaTag.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Toca hacerla';
+            atrasadaTag.innerHTML = '<i class="bi bi-arrow-repeat"></i> Toca hacerla';
             item.querySelector('.tarea-meta').appendChild(atrasadaTag);
         } else if (!data.atrasada && atrasadaTag) {
             atrasadaTag.remove();
