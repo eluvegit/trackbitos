@@ -52,6 +52,7 @@ $routes->group('reading', ['filter' => 'auth'], function ($routes) {
     $routes->POST('libro/(:num)/estado', 'Reading::actualizarEstado/$1');
     $routes->POST('libro/(:num)/borrar', 'Reading::borrarLibro/$1');
     $routes->POST('libro/(:num)/sesion', 'Reading::registrarSesion/$1');
+    $routes->POST('libro/(:num)/pagina', 'Reading::actualizarPagina/$1');
     $routes->POST('libro/(:num)/hoy-no-toca', 'Reading::registrarSkip/$1');
 });
 

@@ -168,6 +168,40 @@ class Reading extends BaseController
     }
 
     /**
+     * Actualiza solo "por qué página voy" desde el editor inline de la ficha,
+     * sin registrar una sesión ni pasar por Ajustes. Sincroniza el progreso
+     * con la task de Journal al vuelo.
+     */
+    public function actualizarPagina(int $id)
+    {
+        $libro = $this->bookModel->find($id);
+        if (!$libro) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $page  = max(0, (int) ($input['page'] ?? 0));
+
+        $total = (int) ($libro['total_pages'] ?? 0);
+        if ($total > 0) {
+            $page = min($page, $total);
+        }
+
+        $this->bookModel->update($id, ['current_page' => $page]);
+
+        if (!empty($libro['task_id'])) {
+            $libro['current_page'] = $page;
+            $this->syncService->pushBookSettingsToTask((int) $libro['task_id'], $libro);
+        }
+
+        return $this->response->setJSON([
+            'success'      => true,
+            'current_page' => $page,
+            'progreso'     => $this->bookModel->progreso($this->bookModel->find($id)),
+        ]);
+    }
+
+    /**
      * Transiciones de fecha: solo se rellenan la primera vez, nunca se
      * pisan ni se usan para comparar "deberías haber terminado ya". La
      * valoración solo tiene sentido si el libro está terminado.
@@ -182,6 +216,16 @@ class Reading extends BaseController
         }
         if ($data['status'] !== 'terminado') {
             $data['rating'] = null;
+        }
+
+        // "Leído" => se dan todas las páginas por hechas. "Dejado" (abandonado)
+        // deja la página actual como esté: en Journal saldrá hecho pero con el
+        // progreso a medias.
+        if ($data['status'] === 'terminado') {
+            $total = (int) ($data['total_pages'] ?? $libro['total_pages'] ?? 0);
+            if ($total > 0) {
+                $data['current_page'] = $total;
+            }
         }
 
         return $data;

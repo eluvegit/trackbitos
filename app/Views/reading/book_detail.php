@@ -31,8 +31,18 @@
             <div class="rd-progress mt-2">
                 <div class="rd-progress-fill" style="width: <?= (int) $libro['progreso'] ?>%"></div>
             </div>
-            <div class="rd-summary-pages"><?= (int) $libro['current_page'] ?> / <?= (int) $libro['total_pages'] ?> páginas</div>
         <?php endif; ?>
+
+        <div class="rd-summary-pages rd-page-tracker mt-2" data-book-id="<?= (int) $libro['id'] ?>">
+            <label for="rdPageTracker">Voy por la pág.</label>
+            <input type="number" id="rdPageTracker" class="rd-page-input" min="0"
+                   <?= !empty($libro['total_pages']) ? 'max="' . (int) $libro['total_pages'] . '"' : '' ?>
+                   value="<?= (int) $libro['current_page'] ?>">
+            <?php if (!empty($libro['total_pages'])): ?>
+                <span>/ <?= (int) $libro['total_pages'] ?></span>
+            <?php endif; ?>
+            <i class="bi bi-check2 rd-page-saved" id="rdPageSaved" hidden></i>
+        </div>
 
         <?php if (!empty($libro['anchor_routine'])): ?>
             <div class="rd-anchor"><i class="bi bi-link-45deg"></i> Enganchado a: <?= esc($libro['anchor_routine']) ?></div>
@@ -235,6 +245,19 @@
 .rd-summary-title { font-weight: 600; font-size: 1.05rem; }
 .rd-summary-author { color: var(--bs-secondary-color); font-size: .85rem; }
 .rd-summary-pages { font-size: .75rem; color: var(--bs-secondary-color); margin-top: 2px; }
+.rd-page-tracker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rd-page-tracker label { margin: 0; }
+.rd-page-input {
+    width: 4.5em;
+    padding: 1px 6px;
+    font-size: .8rem;
+    border-radius: 6px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    color: var(--bs-emphasis-color);
+}
+.rd-page-input:focus { outline: none; border-color: var(--bs-primary); }
+.rd-page-saved { color: var(--bs-success); font-size: .9rem; }
 .rd-anchor { font-size: .8rem; color: var(--bs-secondary-color); margin-top: 6px; }
 
 .rd-progress { height: 5px; border-radius: 3px; background: var(--bs-tertiary-bg); overflow: hidden; }
@@ -561,6 +584,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 picker.querySelectorAll('.rd-status-btn').forEach((b) => b.disabled = false);
             }
         });
+    });
+});
+</script>
+
+<!-- Editor inline de "por qué página voy": guarda al vuelo (blur / Enter) y
+     refleja el progreso en la barra y en la task de Journal vinculada. -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tracker = document.getElementById('rdPageTracker');
+    if (!tracker) return;
+
+    const bookId = tracker.closest('.rd-page-tracker').dataset.bookId;
+    const savedFlag = document.getElementById('rdPageSaved');
+    const fill = document.querySelector('.rd-progress-fill');
+    let ultimoGuardado = tracker.value;
+
+    async function guardar() {
+        const page = Math.max(0, parseInt(tracker.value, 10) || 0);
+        if (String(page) === String(ultimoGuardado)) return;
+
+        tracker.disabled = true;
+        try {
+            const res = await fetch('<?= site_url('reading/libro') ?>/' + bookId + '/pagina', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': '<?= csrf_hash() ?>',
+                },
+                body: JSON.stringify({ page }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                tracker.value = data.current_page;
+                ultimoGuardado = String(data.current_page);
+                if (fill && data.progreso !== null && data.progreso !== undefined) {
+                    fill.style.width = data.progreso + '%';
+                }
+                if (savedFlag) {
+                    savedFlag.hidden = false;
+                    setTimeout(() => { savedFlag.hidden = true; }, 1500);
+                }
+            }
+        } finally {
+            tracker.disabled = false;
+        }
+    }
+
+    tracker.addEventListener('blur', guardar);
+    tracker.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); tracker.blur(); }
     });
 });
 </script>

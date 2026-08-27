@@ -10,6 +10,7 @@ use App\Models\TaskFileModel;
 use App\Models\TaskLinkModel;
 use App\Services\ClaudeService;
 use App\Services\JournalSuggestionService;
+use App\Services\ReadingJournalSyncService;
 
 class Journal extends BaseController
 {
@@ -19,6 +20,7 @@ class Journal extends BaseController
     protected SubtaskModel $subtaskModel;
     protected TaskFileModel $taskFileModel;
     protected TaskLinkModel $taskLinkModel;
+    protected ReadingJournalSyncService $readingSync;
 
     public function __construct()
     {
@@ -28,6 +30,7 @@ class Journal extends BaseController
         $this->subtaskModel = new SubtaskModel();
         $this->taskFileModel = new TaskFileModel();
         $this->taskLinkModel = new TaskLinkModel();
+        $this->readingSync   = new ReadingJournalSyncService();
     }
 
     /**
@@ -316,6 +319,7 @@ class Journal extends BaseController
             }
 
             $this->taskModel->update($taskId, $data);
+            $this->readingSync->pushTaskToBook($taskId, true);
 
             return redirect()->to('/journal/edit/' . $taskId)->with('success', 'Registro actualizado correctamente.');
         }
@@ -584,6 +588,7 @@ class Journal extends BaseController
 
         $isCurrent = $task['is_current'] ? 0 : 1;
         $this->taskModel->update($taskId, ['is_current' => $isCurrent]);
+        $this->readingSync->pushTaskToBook($taskId);
 
         return $this->response->setJSON(['success' => true, 'is_current' => $isCurrent]);
     }
@@ -955,6 +960,7 @@ class Journal extends BaseController
         }
 
         $this->taskModel->update($taskId, $data);
+        $this->readingSync->pushTaskToBook($taskId);
         $task = $this->taskModel->find($taskId);
 
         return $this->response->setJSON([
