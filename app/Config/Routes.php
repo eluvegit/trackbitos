@@ -8,6 +8,9 @@ use CodeIgniter\Router\RouteCollection;
 $routes->GET('/', 'Home::index');
 
 $routes->GET('dashboard', 'Dashboard::index', ['filter' => 'auth']);
+$routes->POST('dashboard/tarea-fijada', 'Dashboard::fijarTarea', ['filter' => 'auth']);
+$routes->POST('dashboard/tarea-fijada/(:num)/quitar', 'Dashboard::desfijarTarea/$1', ['filter' => 'auth']);
+$routes->GET('dashboard/tarea-buscar', 'Dashboard::buscarTarea', ['filter' => 'auth']);
 
 /* LENTILLAS */
 // Página principal de Lentillas
@@ -649,6 +652,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // patrón numérico.
     $routes->GET('papelera', 'Web::papelera');
     $routes->POST('familia/(:num)/nombre', 'Web::renombrarFamilia/$1');
+    $routes->POST('familia/(:num)/notas', 'Web::editarNotasFamilia/$1');
     $routes->POST('familia/(:num)/borrar', 'Web::borrarFamilia/$1');
     $routes->POST('familia/(:num)/restaurar', 'Web::restaurarFamilia/$1');
 
@@ -663,6 +667,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('familia/(:num)/categoria', 'Web::clasificarFamilia/$1');
     $routes->POST('familia/(:num)/visibilidad', 'Web::toggleVisibilidadFamilia/$1');
 
+    // Pautas de promoción: checklist recordatorio, editable como un solo
+    // texto (una pauta por línea) desde el desplegable del índice.
+    $routes->POST('pautas', 'Web::guardarPautas');
+
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.
     $routes->GET('maquinas', 'Web::maquinas');
@@ -672,6 +680,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('sesiones-activas', 'Web::sesionesActivas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
+    $routes->POST('variante/(:num)/notas', 'Web::editarNotasVariante/$1');
     $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
     $routes->POST('variante/(:num)/visibilidad', 'Web::toggleVisibilidadVariante/$1');
     $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
@@ -693,6 +702,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('descarga/(:num)/forzar-cierre', 'Web::forzarCierre/$1');
     $routes->POST('sesion/(:num)/forzar-cierre', 'Web::forzarCierreSesion/$1');
     $routes->POST('sesion/(:num)/descartar-fichero', 'Web::descartarFicheroSesion/$1');
+    $routes->POST('version/(:num)/purgar-sesiones', 'Web::purgarSesionesVersion/$1');
 
     // Imágenes: referencias (por variante) y renders (variante, opcionalmente
     // también de una versión concreta — fase 31, antes exigía versión
@@ -731,9 +741,12 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // en sesión, para bajarlos todos de golpe y meterlos en un laminador.
     $routes->GET('galeria', 'Web::galeria');
 
-    // Pedidos entrantes desde sterclicks (recibidos por SterclicksApi::pedidos).
+    // Pedidos: los entrantes desde sterclicks (recibidos por
+    // SterclicksApi::pedidos) y los de alta manual, aquí mismo.
     $routes->GET('pedidos', 'PedidosController::index');
+    $routes->POST('pedido', 'PedidosController::crear');
     $routes->GET('pedido/(:num)', 'PedidosController::ver/$1');
+    $routes->POST('pedido/(:num)/datos', 'PedidosController::editarDatos/$1');
     $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');
     $routes->POST('pedido/(:num)/cargar-placa', 'Web::pedidoCargarACarrito/$1');
     $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');

@@ -646,6 +646,38 @@ class PiezaService
     }
 
     /**
+     * Notas de la pieza entera (familia). Solo se pedían al crearla y
+     * después no había forma de tocarlas — se quedaban fijas para siempre.
+     */
+    public function actualizarNotasFamilia(int $familiaId, ?string $notas): array
+    {
+        if (!$this->familiaModel->find($familiaId)) {
+            throw new RuntimeException("Pieza {$familiaId} no encontrada.");
+        }
+
+        $notas = trim((string) $notas);
+        $this->familiaModel->update($familiaId, ['notas' => $notas === '' ? null : $notas]);
+
+        return $this->familiaModel->find($familiaId);
+    }
+
+    /**
+     * Notas de esta línea de diseño (variante), igual que las de la
+     * familia: editables después de crearla, no solo al darla de alta.
+     */
+    public function actualizarNotasVariante(int $varianteId, ?string $notas): array
+    {
+        if (!$this->varianteModel->find($varianteId)) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $notas = trim((string) $notas);
+        $this->varianteModel->update($varianteId, ['notas' => $notas === '' ? null : $notas]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
      * Dónde vive el máster de máxima calidad de esta variante (p. ej. la
      * malla en bruto de una generación por IA, sin decimar ni limpiar de
      * texturas): fuera del tracker, normalmente en Drive — no hace falta
@@ -840,8 +872,9 @@ class PiezaService
         }
 
         // La versión se lleva su propia copia del fichero, no la ruta de la
-        // sesión: las sesiones se purgan al validar (invariante 5) y esa purga
-        // se llevaría por delante justo el fichero que nunca debe perderse.
+        // sesión: las sesiones se pueden purgar a mano en cualquier momento
+        // y esa purga se llevaría por delante justo el fichero que nunca
+        // debe perderse.
         $numero      = $this->versionModel->siguienteNumero($varianteId);
         $almacen     = new PiezaAlmacen();
         $rutaVersion = $almacen->rutaVersion($varianteId, $numero);
@@ -1059,28 +1092,31 @@ class PiezaService
 
     /**
      * "Validar": impresa -> validada. Degrada la anterior validada de la
-     * misma variante a superada (invariante 1, PiezaVersionModel::marcarValidada)
-     * y habilita la purga de las sesiones que llevaron hasta ella.
+     * misma variante a superada (invariante 1, PiezaVersionModel::marcarValidada).
+     *
+     * Ya NO purga sola las sesiones que llevaron hasta ella (hasta aquí,
+     * invariante 5): validada y descartada reciben el mismo trato — ninguna
+     * se purga en automático. El motivo es guardar versiones antiguas
+     * enteras (sesiones incluidas) más allá del momento de validar, para
+     * poder mirarlas más tarde; la purga queda como decisión manual, a
+     * conveniencia, vía `purgarSesionesDe` (botón "Purgar sesiones" del
+     * historial) o `descartarFicheroSesion` (una sesión suelta).
      */
     public function validar(int $versionId, ?string $resultado = null): array
     {
         $this->exigirEstado($versionId, ['impresa'], 'validar');
 
-        $version = $this->versionModel->marcarValidada($versionId, $resultado);
-
-        // Invariante 5: las sesiones se purgan al VALIDAR, no al promocionar.
-        // Si la impresión sale mal, los .blend intermedios aún hacen falta
-        // para entender qué se probó; una vez la pieza física funciona, ya
-        // no. Va fuera de la transacción de marcarValidada a propósito: mover
-        // ficheros no es reversible con un rollback, y un fallo purgando no
-        // debe deshacer una validación que es correcta.
-        $this->purgarSesionesDe($versionId);
-
-        return $version;
+        return $this->versionModel->marcarValidada($versionId, $resultado);
     }
 
     /**
-     * Aparta los .blend de las sesiones de la rama que cerró esta versión.
+     * Aparta a mano los .blend de TODAS las sesiones (sin purgar todavía) de
+     * la rama que cerró esta versión — el equivalente en bloque de ir
+     * sesión por sesión con `descartarFicheroSesion`. Ya no se llama sola al
+     * validar (antes sí, invariante 5): ahora es siempre una decisión
+     * explícita, para poder quedarse con las sesiones de una versión
+     * mientras convenga y liberar el sitio cuando se decida.
+     *
      * Las filas NO se borran: se marcan `purgada` y conservan número, hashes,
      * máquina y log. Lo que ocupa sitio es el fichero; lo que da valor al
      * historial es el registro, y eso se queda.
@@ -1139,14 +1175,12 @@ class PiezaService
     }
 
     /**
-     * Aparta a mano el .blend de una sesión ya cerrada que no va a llegar a
-     * promocionarse tal cual (p. ej. una subida de prueba que resultó
-     * demasiado pesada y se va a reemplazar por otra reducida). Es lo mismo
-     * que hace `purgarSesionesDe` al validar, pero disparado antes de ese
-     * punto: la rama sigue abierta, así que ni el invariante 5 ni ningún
-     * "descartar" de versión se aplican todavía — sin esto, un .blend de
-     * prueba se queda ocupando sitio para siempre porque el módulo nunca
-     * llegaría a purgar solo esa rama.
+     * Aparta a mano el .blend de UNA sesión concreta ya cerrada — sea de la
+     * rama actualmente abierta (p. ej. una subida de prueba demasiado
+     * pesada que se va a reemplazar) o de una rama ya cerrada por una
+     * versión antigua. Es el equivalente sesión-a-sesión de
+     * `purgarSesionesDe`, que hace lo mismo pero de golpe con todas las de
+     * una versión.
      *
      * La fila NO se borra, igual que el resto del módulo (invariante 6): se
      * marca `purgada` y conserva número, hashes, máquina y log. Solo se
@@ -1190,26 +1224,36 @@ class PiezaService
 
     /**
      * Deshacer un juicio: vuelve la versión a borrador, como estaba recién
-     * promocionada. Solo desde `impresa` y `descartada`, y solo para arreglar
-     * un error tuyo — te equivocaste de botón, o escribiste mal el motivo o
-     * los parámetros de impresión.
+     * promocionada. Solo desde `impresa`, `descartada` y `validada`, y solo
+     * para arreglar un error tuyo — te equivocaste de botón, o escribiste
+     * mal el motivo, el resultado o los parámetros de impresión.
      *
      * No es una vía para "cambiar de opinión" sobre una pieza física: si la
-     * imprimiste y no sirve, eso es descartar; si sirve, validar. Por eso
-     * `validada` y `superada` se quedan fuera — ahí ya hay una cadena montada
-     * encima (invariante 1) que esto desharía en silencio.
+     * imprimiste y no sirve, eso es descartar; si sirve, validar. `superada`
+     * se queda fuera de todos modos — ya no es el juicio vivo de la
+     * variante, es historial de una que ya fue reemplazada.
      *
-     * Se limpia el texto que acompañaba al estado (el motivo del descarte,
-     * los parámetros de la impresión que se deshace) porque describía un
-     * juicio que ya no existe; los `params_impresion` sí sobreviven a deshacer
-     * un descarte, que no era lo que estaba mal.
+     * `validada` sí entra (a diferencia de antes): también es un juicio, y
+     * un motivo mal escrito o un validar-por-error pesan tanto como un
+     * descarte equivocado. OJO con la invariante 1: si esta versión había
+     * reemplazado a otra (que quedó "superada"), esa NO vuelve a validarse
+     * sola — la variante se queda sin ninguna validada hasta que alguien
+     * valide de nuevo. No hay ambigüedad posible sobre a cuál restaurar (una
+     * variante puede llevar varias superada/descartada detrás) así que la
+     * única salida honesta es no adivinar, y dejarlo dicho en el aviso de
+     * arriba (variante.php) antes de que se pulse el botón.
+     *
+     * Se limpia el texto que acompañaba al estado (el motivo del descarte o
+     * el resultado de la validación, según cuál era) porque describía un
+     * juicio que ya no existe; los `params_impresion` sí sobreviven a
+     * deshacer un descarte o una validación, que no era lo que estaba mal.
      */
     public function devolverABorrador(int $versionId): array
     {
-        $version = $this->exigirEstado($versionId, ['impresa', 'descartada'], 'deshacer');
+        $version = $this->exigirEstado($versionId, ['impresa', 'descartada', 'validada'], 'deshacer');
 
         $datos = ['estado' => 'borrador'];
-        if ($version['estado'] === 'descartada') {
+        if (in_array($version['estado'], ['descartada', 'validada'], true)) {
             $datos['resultado'] = null;
         } else {
             $datos['params_impresion'] = null;

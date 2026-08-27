@@ -13,9 +13,10 @@ use RuntimeException;
  * quedaría rota o sería un agujero de path traversal.
  *
  * Sesión y versión guardan ficheros SEPARADOS aunque su contenido sea el
- * mismo al promocionar: las sesiones se purgan al validar (invariante 5) y
- * si la versión apuntase al fichero de la sesión, esa purga se llevaría por
- * delante el fichero de la versión, que es justo el que nunca debe perderse.
+ * mismo al promocionar: las sesiones se pueden purgar a mano (a conveniencia,
+ * ya no en automático al validar) y si la versión apuntase al fichero de la
+ * sesión, esa purga se llevaría por delante el fichero de la versión, que es
+ * justo el que nunca debe perderse.
  */
 class PiezaAlmacen
 {

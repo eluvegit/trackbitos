@@ -36,6 +36,92 @@ $tamanoLegible = function (?int $bytes): string {
 };
 
 /**
+ * Lista de sesiones de una rama — la actualmente abierta ("Trabajo en
+ * curso") o una ya cerrada por una versión antigua (historial) — con sus
+ * subidas, descarga de solo lectura y "liberar sitio" para las que están
+ * cerradas y sin purgar todavía. Misma lista en los dos sitios: una sesión
+ * de una versión vieja que nunca llegó a validarse (p. ej. descartada) no
+ * se purga sola, y sin esto no había manera de verla ni de vaciarla.
+ */
+$bloqueSesiones = function (array $sesiones, int $varianteId, string $vacioTexto = 'Sin sesiones.') use ($tamanoLegible): string {
+    if (empty($sesiones)) {
+        return '<p class="text-muted small mb-0">' . esc($vacioTexto) . '</p>';
+    }
+
+    ob_start();
+    ?>
+    <ul class="list-unstyled small mb-0">
+        <?php foreach ($sesiones as $s): ?>
+            <li class="border-top py-1">
+                <span class="fw-semibold">Sesión <?= (int) $s['numero'] ?></span>
+                <span class="text-muted">· <?= esc($s['maquina'] ?? '?') ?></span>
+                <?php if (empty($s['cerrada_en'])): ?>
+                    <span class="badge text-bg-warning">abierta</span>
+                <?php endif; ?>
+                <?php if (!empty($s['purgada'])): ?>
+                    <span class="badge text-bg-dark" title="Su fichero se apartó a la papelera a mano">purgada</span>
+                <?php endif; ?>
+                <?php if (!empty($s['subida_en'])): ?>
+                    <div class="text-muted">
+                        subida <?= esc($s['subida_en']) ?>
+                        <?php if (!empty($s['tamano_bytes'])): ?>
+                            · <?= $tamanoLegible((int) $s['tamano_bytes']) ?>
+                        <?php endif; ?>
+                        <?php if (empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
+                            <a href="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/blend/descargar') ?>"
+                                class="text-orange text-decoration-none"
+                                title="Bajar el .blend de esta sesión (copia de solo lectura, para revisar que la subida llegó bien — no cuenta como descarga de trabajo)">
+                                <i class="bi bi-download"></i></a>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="text-muted">sin subir</div>
+                <?php endif; ?>
+                <?php if (!empty($s['log'])): ?>
+                    <div class="text-muted fst-italic"><?= esc($s['log']) ?></div>
+                <?php endif; ?>
+
+                <?php // Histórico de subidas (fase 41): cada subida dentro de esta sesión, no solo la última que sobrevive en $s['ruta_blend']. ?>
+                <?php if (!empty($s['subidas']) && count($s['subidas']) > 1): ?>
+                    <ul class="list-unstyled ms-3 mt-1 mb-0">
+                        <?php foreach ($s['subidas'] as $sub): ?>
+                            <li class="text-muted">
+                                subida #<?= (int) $sub['numero'] ?> ·
+                                <?= esc($sub['subida_en']) ?>
+                                <?php if (!empty($sub['tamano_bytes'])): ?>
+                                    · <?= $tamanoLegible((int) $sub['tamano_bytes']) ?>
+                                <?php endif; ?>
+                                <?php if (empty($sub['purgada'])): ?>
+                                    <a href="<?= site_url('piezas/subida/' . (int) $sub['id'] . '/blend/descargar') ?>"
+                                        class="text-orange text-decoration-none"
+                                        title="Bajar el .blend de esta subida concreta (copia de solo lectura, para revisar — no cuenta como descarga de trabajo)">
+                                        <i class="bi bi-download"></i></a>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+
+                <?php // Cerrada, sin promocionar todavía y sin purgar ya: candidata a liberar sitio a mano (p.ej. una subida de prueba demasiado pesada, o una sesión de una versión que nunca llegó a validarse). ?>
+                <?php if (!empty($s['cerrada_en']) && empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
+                    <form method="post" class="mt-1"
+                        action="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/descartar-fichero') ?>"
+                        onsubmit="return confirm('¿Apartar el .blend de la sesión <?= (int) $s['numero'] ?> a la papelera? Sigue en el historial, pero deja de ocupar sitio.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="variante_id" value="<?= $varianteId ?>">
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Apartar el fichero a la papelera y liberar sitio">
+                            <i class="bi bi-trash"></i> liberar sitio
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+    return ob_get_clean();
+};
+
+/**
  * Por qué esta versión no admite ciertos verbos. Va como texto visible bajo
  * los botones y no como title: un botón deshabilitado no recibe eventos de
  * ratón, así que su tooltip no llega a mostrarse nunca — y la spec (7.1)
@@ -54,13 +140,21 @@ $tamanoLegible = function (?int $bytes): string {
  * `rounded-pill` y más aire entre botones (gap-2 en el contenedor, en vez
  * de gap-1) para que la fila se vea menos apretada.
  */
-$boton = function (bool $activo, string $color, string $modal, string $texto): string {
+/**
+ * $icono: cuando se pasa, el botón es solo símbolo (sin texto visible) — el
+ * texto pasa a title, como tooltip. Pensado para "Deshacer": entre Marcar
+ * impresa/Validar/Descartar/Devolver/Derivar ya hay bastante texto en la
+ * fila, y "deshacer" se lee de sobra con la flecha de retroceso sola.
+ */
+$boton = function (bool $activo, string $color, string $modal, string $texto, ?string $icono = null): string {
     return sprintf(
-        '<button class="btn btn-sm btn-outline-%s rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#%s"%s>%s</button>',
+        '<button class="btn btn-sm btn-outline-%s rounded-pill %s" data-bs-toggle="modal" data-bs-target="#%s" title="%s"%s>%s</button>',
         $activo ? $color : 'secondary',
+        $icono ? 'px-2' : 'px-3',
         $modal,
+        esc($texto, 'attr'),
         $activo ? '' : ' disabled',
-        esc($texto)
+        $icono ? '<i class="bi bi-' . esc($icono, 'attr') . '"></i>' : esc($texto)
     );
 };
 
@@ -83,7 +177,7 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
     $lineas[] = match ($v['estado']) {
         'borrador'   => 'En borrador: aún no hay pieza física. Solo se puede marcar como impresa o descartar.',
         'impresa'    => 'Impresa y pendiente de juicio: toca validarla o descartarla.',
-        'validada'   => 'Es la versión buena: ya no se marca ni se descarta. Para cambiarla, valida otra.',
+        'validada'   => 'Es la versión buena: ya no se marca ni se descarta. Para cambiarla de verdad, valida otra — "Deshacer" es solo para arreglar un error de anotación.',
         'superada'   => 'Fue la buena y la reemplazó otra. Se conserva: se puede retomar o derivar desde ella.',
         'descartada' => 'Descartada, con su motivo. Se conserva para no repetir el error, y se puede retomar.',
         default      => '',
@@ -194,6 +288,18 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <button class="btn btn-sm btn-primary">Guardar</button>
                 </form>
 
+                <label class="form-label small mb-1">Notas de la pieza</label>
+                <p class="small text-muted mb-2">
+                    Válidas para todas sus variantes (material, escala, uso previsto...).
+                </p>
+                <form method="post" class="d-flex gap-1 mb-3"
+                    action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/notas') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
+                    <textarea name="notas" class="form-control form-control-sm" rows="2"><?= esc($familia['notas'] ?? '') ?></textarea>
+                    <button class="btn btn-sm btn-primary align-self-start">Guardar</button>
+                </form>
+
                 <hr>
 
                 <label class="form-label small mb-1">Nombre de la variante</label>
@@ -208,6 +314,17 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <input type="text" name="nombre" class="form-control form-control-sm"
                         value="<?= esc($variante['nombre'], 'attr') ?>" maxlength="150" required>
                     <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <label class="form-label small mb-1">Notas de la variante</label>
+                <p class="small text-muted mb-2">
+                    Propias de esta línea de diseño (qué la distingue de las demás variantes de la pieza).
+                </p>
+                <form method="post" class="d-flex gap-1 mb-3"
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/notas') ?>">
+                    <?= csrf_field() ?>
+                    <textarea name="notas" class="form-control form-control-sm" rows="2"><?= esc($variante['notas'] ?? '') ?></textarea>
+                    <button class="btn btn-sm btn-primary align-self-start">Guardar</button>
                 </form>
 
                 <hr>
@@ -390,16 +507,26 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
         <div class="card shadow-sm mb-3">
             <div class="card-body p-3">
                 <?php if ($validada): ?>
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <span class="badge text-bg-success fs-6">
-                            <i class="bi bi-check-circle-fill"></i> <?= $etiqueta($validada) ?>
-                        </span>
-                        <span class="fw-semibold">es la versión buena</span>
+                    <?php $imagenValidada = $validada['renders'][0] ?? null; ?>
+                    <div class="d-flex align-items-center gap-3">
+                        <?php if ($imagenValidada): ?>
+                            <img src="<?= imagen_pieza($imagenValidada, 'render') ?>"
+                                class="rounded border flex-shrink-0" style="width: 110px; height: 110px; object-fit: cover;"
+                                alt="<?= esc($etiqueta($validada), 'attr') ?>">
+                        <?php endif; ?>
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge text-bg-success fs-6">
+                                    <i class="bi bi-check-circle-fill"></i> <?= $etiqueta($validada) ?>
+                                </span>
+                                <span class="fw-semibold">es la versión buena</span>
+                            </div>
+                            <div class="small text-muted"><?= esc($validada['cambio']) ?></div>
+                            <?php if (!empty($validada['medidas'])): ?>
+                                <div class="small text-muted mt-1"><i class="bi bi-rulers"></i> <?= esc($validada['medidas']) ?></div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    <div class="small text-muted"><?= esc($validada['cambio']) ?></div>
-                    <?php if (!empty($validada['medidas'])): ?>
-                        <div class="small text-muted mt-1"><i class="bi bi-rulers"></i> <?= esc($validada['medidas']) ?></div>
-                    <?php endif; ?>
                 <?php else: ?>
                     <div class="text-muted">
                         <i class="bi bi-hourglass"></i>
@@ -413,8 +540,11 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         <?= $etiqueta($origen) ?>
                     </div>
                 <?php endif; ?>
+                <?php if (!empty($familia['notas'])): ?>
+                    <div class="small text-muted mt-2"><i class="bi bi-sticky"></i> <?= esc($familia['notas']) ?></div>
+                <?php endif; ?>
                 <?php if (!empty($variante['notas'])): ?>
-                    <div class="small text-muted mt-2"><?= esc($variante['notas']) ?></div>
+                    <div class="small text-muted mt-2"><i class="bi bi-sticky"></i> <?= esc($variante['notas']) ?></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -459,13 +589,40 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                             <div class="small text-muted"><i class="bi bi-clipboard-check"></i> <?= esc($v['resultado']) ?></div>
                         <?php endif; ?>
 
+                        <?php
+                            /**
+                             * Contador siempre visible, lista plegada por defecto: desplegar
+                             * la lista entera en cada tarjeta del historial lo haría
+                             * ilegible. Ninguna versión purga sus sesiones sola (validar y
+                             * descartar ya no lo hacen: se guardan enteras, a propósito,
+                             * hasta que se decida liberar el sitio a mano) — "Purgar
+                             * sesiones" hace de una vez lo que si no habría que hacer
+                             * sesión por sesión con "liberar sitio".
+                             */
+                        ?>
                         <?php if ($v['sesiones']['total'] > 0): ?>
-                            <div class="small text-muted">
-                                <i class="bi bi-layers"></i>
-                                <?= (int) $v['sesiones']['total'] ?> sesión(es) de trabajo detrás
-                                <?php if ($v['sesiones']['purgadas'] > 0): ?>
-                                    · <?= (int) $v['sesiones']['purgadas'] ?> con el .blend ya purgado
-                                    <span class="text-muted">(el fichero bueno es el de esta versión)</span>
+                            <div class="small text-muted mt-1">
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted text-decoration-none"
+                                    data-bs-toggle="collapse" data-bs-target="#sesiones-v<?= (int) $v['id'] ?>">
+                                    <i class="bi bi-layers"></i>
+                                    <?= (int) $v['sesiones']['total'] ?> sesión(es) de trabajo detrás
+                                    <?php if ($v['sesiones']['purgadas'] > 0): ?>
+                                        · <?= (int) $v['sesiones']['purgadas'] ?> con el .blend ya purgado
+                                    <?php endif; ?>
+                                    <i class="bi bi-chevron-down"></i>
+                                </button>
+                            </div>
+                            <div class="collapse mt-1" id="sesiones-v<?= (int) $v['id'] ?>">
+                                <?= $bloqueSesiones($v['sesiones']['lista'], (int) $variante['id']) ?>
+                                <?php if ($v['sesiones']['purgadas'] < $v['sesiones']['total']): ?>
+                                    <form method="post" class="mt-1"
+                                        action="<?= site_url('piezas/version/' . $v['id'] . '/purgar-sesiones') ?>"
+                                        onsubmit="return confirm('¿Purgar todas las sesiones de <?= $etiqueta($v) ?>? Sus .blend se apartan a la papelera (30 días). El registro de cada sesión se conserva.');">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Aparta a la papelera el .blend de todas las sesiones sin purgar de esta versión">
+                                            <i class="bi bi-trash"></i> Purgar sesiones
+                                        </button>
+                                    </form>
                                 <?php endif; ?>
                             </div>
                         <?php endif; ?>
@@ -634,9 +791,12 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                             <?= $boton($v['estado'] === 'impresa', 'success', 'modalValidar' . $v['id'], 'Validar') ?>
                             <?= $boton(in_array($v['estado'], ['borrador', 'impresa'], true), 'danger', 'modalDescartar' . $v['id'], 'Descartar') ?>
                             <?php // Solo aparece donde sirve de algo: un botón "Deshacer" apagado en
-                                  // todas las tarjetas invitaría a leerlo como que se puede deshacer todo. ?>
-                            <?php if (in_array($v['estado'], ['impresa', 'descartada'], true)): ?>
-                                <?= $boton(true, 'primary', 'modalDeshacer' . $v['id'], 'Deshacer') ?>
+                                  // todas las tarjetas invitaría a leerlo como que se puede deshacer todo.
+                                  // "validada" entra aquí igual que "descartada": es para arreglar un
+                                  // error de anotación (botón mal pulsado, resultado mal escrito), no
+                                  // para cambiar de opinión sobre una pieza que ya imprimiste. ?>
+                            <?php if (in_array($v['estado'], ['impresa', 'descartada', 'validada'], true)): ?>
+                                <?= $boton(true, 'primary', 'modalDeshacer' . $v['id'], 'Deshacer', 'arrow-counterclockwise') ?>
                             <?php endif; ?>
                             <?= $boton($puedeDevolver($v), 'primary', 'modalDevolver' . $v['id'], 'Devolver a trabajo') ?>
                             <?= $boton(true, 'primary', 'modalDerivar' . $v['id'], 'Derivar variante') ?>
@@ -775,7 +935,7 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     </div>
                 </div>
 
-                <?php if (in_array($v['estado'], ['impresa', 'descartada'], true)): ?>
+                <?php if (in_array($v['estado'], ['impresa', 'descartada', 'validada'], true)): ?>
                     <div class="modal fade" id="modalDeshacer<?= $v['id'] ?>" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <form class="modal-content" method="post" action="<?= site_url('piezas/version/' . $v['id'] . '/deshacer') ?>">
@@ -790,11 +950,18 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                         arreglar un botón mal pulsado o un texto mal escrito, no para cambiar de opinión
                                         sobre una pieza que ya imprimiste.
                                     </p>
-                                    <?php if ($v['estado'] === 'descartada'): ?>
+                                    <?php if (in_array($v['estado'], ['descartada', 'validada'], true)): ?>
                                         <div class="alert alert-warning py-2 small mb-0">
-                                            Se pierde el motivo del descarte:
+                                            Se pierde <?= $v['estado'] === 'validada' ? 'el resultado de la validación' : 'el motivo del descarte' ?>:
                                             <em><?= esc($v['resultado'] ?: '(sin motivo)') ?></em>
                                         </div>
+                                        <?php if ($v['estado'] === 'validada' && array_filter($versiones, fn($vv) => $vv['estado'] === 'superada')): ?>
+                                            <div class="alert alert-warning py-2 small mt-2 mb-0">
+                                                Esta pieza se queda <strong>sin ninguna versión validada</strong>: la que esta
+                                                reemplazó (marcada "superada") no vuelve a validarse sola — eso no se deshace
+                                                solo. Si esa era la buena, retómala o derívala y vuelve a validar desde ahí.
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <div class="alert alert-warning py-2 small mb-0">
                                             Se pierden los parámetros de impresión<?= empty($v['params_impresion']) ? '' : ': <em>' . esc($v['params_impresion']) . '</em>' ?>.
@@ -975,77 +1142,7 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         </div>
                     <?php endif; ?>
 
-                    <?php if (empty($sesiones)): ?>
-                        <p class="text-muted small mb-0">Sin sesiones en esta rama todavía.</p>
-                    <?php else: ?>
-                        <ul class="list-unstyled small mb-0">
-                            <?php foreach ($sesiones as $s): ?>
-                                <li class="border-top py-1">
-                                    <span class="fw-semibold">Sesión <?= (int) $s['numero'] ?></span>
-                                    <span class="text-muted">· <?= esc($s['maquina'] ?? '?') ?></span>
-                                    <?php if (empty($s['cerrada_en'])): ?>
-                                        <span class="badge text-bg-warning">abierta</span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($s['purgada'])): ?>
-                                        <span class="badge text-bg-dark" title="Su fichero se apartó a la papelera al validarse la versión">purgada</span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($s['subida_en'])): ?>
-                                        <div class="text-muted">
-                                            subida <?= esc($s['subida_en']) ?>
-                                            <?php if (!empty($s['tamano_bytes'])): ?>
-                                                · <?= $tamanoLegible((int) $s['tamano_bytes']) ?>
-                                            <?php endif; ?>
-                                            <?php if (empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
-                                                <a href="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/blend/descargar') ?>"
-                                                    class="text-orange text-decoration-none"
-                                                    title="Bajar el .blend de esta sesión (copia de solo lectura, para revisar que la subida llegó bien — no cuenta como descarga de trabajo)">
-                                                    <i class="bi bi-download"></i></a>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="text-muted">sin subir</div>
-                                    <?php endif; ?>
-                                    <?php if (!empty($s['log'])): ?>
-                                        <div class="text-muted fst-italic"><?= esc($s['log']) ?></div>
-                                    <?php endif; ?>
-
-                                    <?php // Histórico de subidas (fase 41): cada subida dentro de esta sesión, no solo la última que sobrevive en $s['ruta_blend']. ?>
-                                    <?php if (!empty($s['subidas']) && count($s['subidas']) > 1): ?>
-                                        <ul class="list-unstyled ms-3 mt-1 mb-0">
-                                            <?php foreach ($s['subidas'] as $sub): ?>
-                                                <li class="text-muted">
-                                                    subida #<?= (int) $sub['numero'] ?> ·
-                                                    <?= esc($sub['subida_en']) ?>
-                                                    <?php if (!empty($sub['tamano_bytes'])): ?>
-                                                        · <?= $tamanoLegible((int) $sub['tamano_bytes']) ?>
-                                                    <?php endif; ?>
-                                                    <?php if (empty($sub['purgada'])): ?>
-                                                        <a href="<?= site_url('piezas/subida/' . (int) $sub['id'] . '/blend/descargar') ?>"
-                                                            class="text-orange text-decoration-none"
-                                                            title="Bajar el .blend de esta subida concreta (copia de solo lectura, para revisar — no cuenta como descarga de trabajo)">
-                                                            <i class="bi bi-download"></i></a>
-                                                    <?php endif; ?>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    <?php endif; ?>
-
-                                    <?php // Cerrada, sin promocionar todavía y sin purgar ya: candidata a liberar sitio a mano (p.ej. una subida de prueba demasiado pesada). ?>
-                                    <?php if (!empty($s['cerrada_en']) && empty($s['purgada']) && !empty($s['ruta_blend'])): ?>
-                                        <form method="post" class="mt-1"
-                                            action="<?= site_url('piezas/sesion/' . (int) $s['id'] . '/descartar-fichero') ?>"
-                                            onsubmit="return confirm('¿Apartar el .blend de la sesión <?= (int) $s['numero'] ?> a la papelera? Sigue en el historial, pero deja de ocupar sitio.');">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="variante_id" value="<?= (int) $variante['id'] ?>">
-                                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Apartar el fichero a la papelera y liberar sitio">
-                                                <i class="bi bi-trash"></i> liberar sitio
-                                            </button>
-                                        </form>
-                                    <?php endif; ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
+                    <?= $bloqueSesiones($sesiones, (int) $variante['id'], 'Sin sesiones en esta rama todavía.') ?>
                 <?php endif; ?>
             </div>
         </div>
@@ -1072,7 +1169,15 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     // cambia es la pregunta, para que se pueda responder.
                     $primeraVersion = empty($versiones);
                 ?>
-                <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/promocionar') ?>">
+                <?php
+                    // Con pautas configuradas, el botón no envía el formulario
+                    // directo: abre el aviso con el checklist primero (spec:
+                    // recordatorio antes de promocionar). Sin pautas, no hay
+                    // nada que mostrar y se promociona como siempre.
+                    $conPautas = $acciones['puede_promocionar'] && !empty($pautas);
+                ?>
+                <form method="post" id="formPromocionar"
+                    action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/promocionar') ?>">
                     <?= csrf_field() ?>
                     <label class="form-label small">
                         <?= $primeraVersion ? 'Qué es esta pieza (obligatorio)' : 'Qué se modificó (obligatorio)' ?>
@@ -1084,13 +1189,43 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <input type="text" name="medidas" class="form-control form-control-sm mb-2"
                         placeholder="eje 4.9mm, pared 1.2mm"
                         <?= $acciones['puede_promocionar'] ? '' : 'disabled' ?>>
-                    <button class="btn btn-sm w-100 <?= $acciones['puede_promocionar'] ? 'btn-primary' : 'btn-secondary' ?>"
+                    <button type="<?= $conPautas ? 'button' : 'submit' ?>"
+                        class="btn btn-sm w-100 <?= $acciones['puede_promocionar'] ? 'btn-primary' : 'btn-secondary' ?>"
+                        <?= $conPautas ? 'data-bs-toggle="modal" data-bs-target="#modalPautasPromocion"' : '' ?>
                         <?= $acciones['puede_promocionar'] ? '' : 'disabled' ?>>
                         Promocionar
                     </button>
                 </form>
             </div>
         </div>
+
+        <?php if ($conPautas): ?>
+            <!-- Aviso de pautas antes de promocionar: solo recordatorio, los
+                 checks no se guardan ni afectan a la promoción. -->
+            <div class="modal fade" id="modalPautasPromocion" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h6 class="modal-title"><i class="bi bi-award"></i> Antes de promocionar...</h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">Repasa el checklist. Marcar es solo para ti, no cambia nada.</p>
+                            <?php foreach ($pautas as $i => $pauta): ?>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="pauta<?= $i ?>">
+                                    <label class="form-check-label small" for="pauta<?= $i ?>"><?= esc($pauta) ?></label>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" form="formPromocionar" class="btn btn-sm btn-primary">Promocionar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <!-- Referencias del original: de esta variante concreta -->
         <div class="card shadow-sm mb-3">

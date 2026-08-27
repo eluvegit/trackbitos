@@ -12,9 +12,13 @@ use App\Models\PiezaVarianteModel;
 use App\Services\PiezaImagenesPublicas;
 
 /**
- * Vista web de los pedidos entrantes desde sterclicks (recibidos por
- * App\Controllers\Piezas\SterclicksApi::pedidos). Solo lectura + cambio de
- * estado; las líneas en sí no se editan aquí.
+ * Vista web de los pedidos: los entrantes desde sterclicks (recibidos por
+ * App\Controllers\Piezas\SterclicksApi::pedidos) y los de alta manual
+ * (crear()). Sus líneas se editan aquí mismo, en la ficha del pedido — los
+ * verbos que la tocan (agregarLinea, editarLinea, borrarLinea,
+ * ajustarCompletada) responden con JSON y el HTML ya renderizado de la fila
+ * cuando la petición viene por AJAX, para que ver.php pueda guardar sin
+ * recargar la página.
  */
 class PedidosController extends BaseController
 {
@@ -63,6 +67,25 @@ class PedidosController extends BaseController
         return view('piezas/pedidos/index', ['columnas' => $columnas, 'estados' => PiezaPedidoModel::ESTADOS]);
     }
 
+    /**
+     * Alta manual de un pedido (a diferencia de los que llegan solos desde
+     * sterclicks por SterclicksApi::pedidos). Nace sin líneas — se añaden
+     * después desde la ficha, con el mismo formulario que usa cualquier
+     * otro pedido (agregarLinea).
+     */
+    public function crear()
+    {
+        $pedidoId = (new PiezaPedidoModel())->insert([
+            'origen'             => 'manual',
+            'estado'             => 'nuevo',
+            'referencia_externa' => trim((string) $this->request->getPost('referencia_externa')) ?: null,
+            'notas'              => trim((string) $this->request->getPost('notas')) ?: null,
+            'creado_en'          => date('Y-m-d H:i:s'),
+        ]);
+
+        return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', 'Pedido creado. Añade sus líneas aquí abajo.');
+    }
+
     /** Misma cascada que Web::fotosDe(), pero por variante suelta (sin versión concreta). */
     private function miniaturaDeVariante(array $variante): ?string
     {
@@ -76,6 +99,38 @@ class PedidosController extends BaseController
         return imagen_pieza($registro, $render ? 'render' : 'referencia', PiezaImagenesPublicas::MINIATURA);
     }
 
+    /**
+     * Nombre de familia/variante y foto de una línea, a partir de su
+     * variante_id — lo que necesita _linea_fila para pintarse. Aparte para
+     * poder reusarlo también al responder por AJAX a añadir/editar/marcar
+     * completada una línea, sin duplicar esta resolución en cada verbo.
+     */
+    private function enriquecerLinea(array $linea): array
+    {
+        $variante = $linea['variante_id'] ? (new PiezaVarianteModel())->find($linea['variante_id']) : null;
+        $linea['nombreFamilia']  = $variante ? ((new PiezaFamiliaModel())->find($variante['familia_id'])['nombre'] ?? null) : null;
+        $linea['nombreVariante'] = $variante['nombre'] ?? null;
+        $linea['foto']           = $variante ? $this->miniaturaDeVariante($variante) : null;
+
+        return $linea;
+    }
+
+    /**
+     * Respuesta de error común a los verbos de línea: JSON 422 si la
+     * petición viene por AJAX (así el JS de ver.php puede mostrarlo sin
+     * recargar), redirect con flash si no.
+     */
+    private function fallo(string $mensaje, ?string $redirectA = null)
+    {
+        if ($this->request->isAJAX()) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
+        }
+
+        return $redirectA
+            ? redirect()->to($redirectA)->with('error', $mensaje)
+            : redirect()->back()->with('error', $mensaje);
+    }
+
     public function ver(int $id)
     {
         $pedido = (new PiezaPedidoModel())->conLineas($id);
@@ -85,13 +140,8 @@ class PedidosController extends BaseController
 
         // Foto y nombre de cada línea: el SKU solo no dice nada de un
         // vistazo, y esta ficha es justo donde se decide qué imprimir.
-        $varianteModel = new PiezaVarianteModel();
-        $familiaModel  = new PiezaFamiliaModel();
         foreach ($pedido['lineas'] as &$linea) {
-            $variante = $linea['variante_id'] ? $varianteModel->find($linea['variante_id']) : null;
-            $linea['nombreFamilia']  = $variante ? ($familiaModel->find($variante['familia_id'])['nombre'] ?? null) : null;
-            $linea['nombreVariante'] = $variante['nombre'] ?? null;
-            $linea['foto']           = $variante ? $this->miniaturaDeVariante($variante) : null;
+            $linea = $this->enriquecerLinea($linea);
         }
         unset($linea);
 
@@ -129,7 +179,7 @@ class PedidosController extends BaseController
     {
         $pedidoModel = new PiezaPedidoModel();
         if (!$pedidoModel->find($pedidoId)) {
-            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+            return $this->fallo('Pedido no encontrado.', '/piezas/pedidos');
         }
 
         $varianteId = (int) $this->request->getPost('variante_id') ?: null;
@@ -138,21 +188,32 @@ class PedidosController extends BaseController
 
         $variante = $varianteId ? (new PiezaVarianteModel())->find($varianteId) : null;
         if (!$variante && $descripcionLibre === '') {
-            return redirect()->back()->with('error', 'Elige una pieza del catálogo o escribe una descripción.');
+            return $this->fallo('Elige una pieza del catálogo o escribe una descripción.');
         }
         if ($cantidad < 1) {
-            return redirect()->back()->with('error', 'La cantidad debe ser al menos 1.');
+            return $this->fallo('La cantidad debe ser al menos 1.');
         }
 
         $lineaModel = new PiezaPedidoLineaModel();
-        $lineaModel->insert([
+        $lineaId = $lineaModel->insert([
             'pedido_id'         => $pedidoId,
             'variante_id'       => $variante['id'] ?? null,
             'sku'               => $variante['sku'] ?? null,
             'descripcion_libre' => $variante ? null : $descripcionLibre,
             'cantidad'          => $cantidad,
             'notas'             => trim((string) $this->request->getPost('notas')) ?: null,
-        ]);
+        ], true);
+
+        if ($this->request->isAJAX()) {
+            $linea = $this->enriquecerLinea($lineaModel->find($lineaId));
+
+            return $this->response->setJSON([
+                'ok'       => true,
+                'mensaje'  => 'Línea añadida.',
+                'formHtml' => view('piezas/pedidos/_linea_form', ['linea' => $linea]),
+                'rowHtml'  => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+            ]);
+        }
 
         return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', 'Línea añadida.');
     }
@@ -163,7 +224,7 @@ class PedidosController extends BaseController
         $lineaModel = new PiezaPedidoLineaModel();
         $linea = $lineaModel->find($lineaId);
         if (!$linea) {
-            return redirect()->to('/piezas/pedidos')->with('error', 'Línea no encontrada.');
+            return $this->fallo('Línea no encontrada.', '/piezas/pedidos');
         }
 
         $varianteId = (int) $this->request->getPost('variante_id') ?: null;
@@ -172,10 +233,10 @@ class PedidosController extends BaseController
 
         $variante = $varianteId ? (new PiezaVarianteModel())->find($varianteId) : null;
         if (!$variante && $descripcionLibre === '') {
-            return redirect()->back()->with('error', 'Elige una pieza del catálogo o escribe una descripción.');
+            return $this->fallo('Elige una pieza del catálogo o escribe una descripción.');
         }
         if ($cantidad < 1) {
-            return redirect()->back()->with('error', 'La cantidad debe ser al menos 1.');
+            return $this->fallo('La cantidad debe ser al menos 1.');
         }
 
         $lineaModel->update($lineaId, [
@@ -187,6 +248,16 @@ class PedidosController extends BaseController
             'notas'               => trim((string) $this->request->getPost('notas')) ?: null,
         ]);
 
+        if ($this->request->isAJAX()) {
+            $linea = $this->enriquecerLinea($lineaModel->find($lineaId));
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'mensaje' => 'Línea actualizada.',
+                'rowHtml' => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+            ]);
+        }
+
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', 'Línea actualizada.');
     }
 
@@ -195,10 +266,14 @@ class PedidosController extends BaseController
         $lineaModel = new PiezaPedidoLineaModel();
         $linea = $lineaModel->find($lineaId);
         if (!$linea) {
-            return redirect()->to('/piezas/pedidos')->with('error', 'Línea no encontrada.');
+            return $this->fallo('Línea no encontrada.', '/piezas/pedidos');
         }
 
         $lineaModel->delete($lineaId);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'mensaje' => 'Línea borrada.']);
+        }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', 'Línea borrada.');
     }
@@ -236,6 +311,23 @@ class PedidosController extends BaseController
         }
 
         return $this->response->setJSON(['resultados' => $resultados]);
+    }
+
+    /** Referencia externa y notas del pedido — lo mismo que se pide al darlo de alta a mano. */
+    public function editarDatos(int $id)
+    {
+        $model = new PiezaPedidoModel();
+        if (!$model->find($id)) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+        }
+
+        $model->update($id, [
+            'referencia_externa' => trim((string) $this->request->getPost('referencia_externa')) ?: null,
+            'notas'              => trim((string) $this->request->getPost('notas')) ?: null,
+            'actualizado_en'     => date('Y-m-d H:i:s'),
+        ]);
+
+        return redirect()->to('/piezas/pedido/' . $id)->with('success', 'Pedido actualizado.');
     }
 
     public function cambiarEstado(int $id)
@@ -278,7 +370,12 @@ class PedidosController extends BaseController
         $this->autocompletarPedidoSiProcede((int) $linea['pedido_id']);
 
         if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['ok' => true, 'cantidad_completada' => $nueva]);
+            $linea = $this->enriquecerLinea($lineaModel->find($lineaId));
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'rowHtml' => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+            ]);
         }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);

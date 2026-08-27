@@ -6,8 +6,11 @@ use App\Controllers\BaseController;
 use CodeIgniter\HTTP\ResponseInterface;
 use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaComposicionModel;
+use App\Models\PiezaConfigModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
+use App\Models\PiezaPedidoLineaModel;
+use App\Models\PiezaPedidoModel;
 use App\Models\PiezaPlacaEnlaceModel;
 use App\Models\PiezaPlacaImagenModel;
 use App\Models\PiezaPlacaModel;
@@ -21,6 +24,7 @@ use App\Models\PiezaSesionModel;
 use App\Models\PiezaSubidaModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
+use App\Models\SubtaskModel;
 use App\Services\PiezaAlmacen;
 use App\Services\PiezaEmpaquetadoService;
 use App\Services\PiezaImagenesPublicas;
@@ -202,7 +206,62 @@ class Web extends BaseController
             'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
                 + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
             'sesionesActivas'  => $this->calcularSesionesActivas(),
+            'ultimoPedido'     => $this->ultimoPedidoEntrante(),
+            'pendientesResumen' => $this->pendientesResumen(),
+            // Para el textarea del desplegable "Pautas": el texto tal cual
+            // se guardó, no la lista ya filtrada de pautasPromocion().
+            'pautasTexto'      => (new PiezaConfigModel())->find(1)['pautas_promocion'] ?? '',
         ]);
+    }
+
+    /**
+     * Las subtareas sin marcar de la tarea de Journal enlazada (mismo
+     * cálculo que PendientesController::index()), para el vistazo rápido
+     * desde el índice (modal junto al botón "Pendientes") sin entrar a
+     * /piezas/pendientes. Solo el título de cada una — nada de adjuntos ni
+     * de los dos verbos ("Ya existe" / "Crear pieza"): para eso está la
+     * pantalla completa, a la que lleva "Ir a pendientes".
+     */
+    private function pendientesResumen(): array
+    {
+        $tareaId = (new PiezaConfigModel())->tareaJournalId();
+        if (!$tareaId) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            (new SubtaskModel())->getForTask($tareaId),
+            static fn(array $s) => empty($s['is_done'])
+        ));
+    }
+
+    /**
+     * El pedido más reciente, para el vistazo rápido desde el índice (modal
+     * junto al botón "Pedidos") sin tener que entrar a /piezas/pedidos.
+     * Vista simple a propósito — solo qué pide y con qué notas, nada de
+     * fotos ni de cambiar estado: para eso está la ficha del pedido.
+     */
+    private function ultimoPedidoEntrante(): ?array
+    {
+        $pedido = (new PiezaPedidoModel())->recientes(1)[0] ?? null;
+        if (!$pedido) {
+            return null;
+        }
+
+        $lineaModel = new PiezaPedidoLineaModel();
+        $lineas = $lineaModel->where('pedido_id', $pedido['id'])->findAll();
+
+        foreach ($lineas as &$linea) {
+            $variante = $linea['variante_id'] ? $this->varianteModel->find($linea['variante_id']) : null;
+            $linea['descripcionPieza'] = $variante
+                ? (($this->familiaModel->find($variante['familia_id'])['nombre'] ?? '?') . ' · ' . $variante['nombre'])
+                : ($linea['descripcion_libre'] ?: '(sin referencia)');
+        }
+        unset($linea);
+
+        $pedido['lineas'] = $lineas;
+
+        return $pedido;
     }
 
     /**
@@ -666,6 +725,24 @@ class Web extends BaseController
 
     // ---- Categorías -----------------------------------------------------
 
+    /**
+     * Pautas de promoción: se reescriben enteras cada vez (el textarea del
+     * desplegable manda el texto completo, una pauta por línea), no hay
+     * alta/borrado de una pauta suelta.
+     */
+    public function guardarPautas()
+    {
+        return $this->ejecutar(
+            function () {
+                (new PiezaConfigModel())->guardarPautas((string) $this->request->getPost('texto'));
+
+                return true;
+            },
+            fn() => site_url('piezas'),
+            fn() => 'Pautas guardadas.'
+        );
+    }
+
     public function crearCategoria()
     {
         return $this->ejecutar(
@@ -867,6 +944,17 @@ class Web extends BaseController
 
         $historialPlacas = $this->placasDeLaVariante($id);
 
+        // Misma fila que ya está en $versiones (con sus 'renders' ya cargados),
+        // no una consulta aparte: así la cabecera puede mostrar la imagen de
+        // la versión buena sin duplicar la carga de renders.
+        $validada = null;
+        foreach ($versiones as $v) {
+            if ($v['estado'] === 'validada') {
+                $validada = $v;
+                break;
+            }
+        }
+
         return view('piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
@@ -881,7 +969,7 @@ class Web extends BaseController
                 ->where('variante_id', $id)->where('version_id', null)->orderBy('subida_en', 'DESC')->findAll(),
             'origen'    => $this->versionDeOrigen($variante),
             'versiones' => $versiones,
-            'validada'  => $this->versionModel->where('variante_id', $id)->where('estado', 'validada')->first(),
+            'validada'  => $validada,
             'rama'      => $estado['rama'],
             'ramaNombre' => $estado['rama'] ? $this->ramaModel->nombre($estado['rama']) : null,
             'sesiones'  => $this->sesionesDeRama($estado['rama']),
@@ -889,6 +977,9 @@ class Web extends BaseController
             'bloqueo'   => $this->descripcionBloqueo($estado['sesion_abierta'], $estado['descargas_pendientes']),
             'pendientes' => $this->descripcionPendientes($estado['descargas_pendientes']),
             'acciones'  => $this->accionesDisponibles($estado, $versiones),
+            // Checklist recordatorio antes de promocionar (spec: pautas de
+            // promoción). Vacío cuando aún no se ha configurado ninguna.
+            'pautas'    => (new PiezaConfigModel())->pautasPromocion(),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
             'carrito'   => $this->carritoActual(),
             // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban
@@ -2703,6 +2794,33 @@ class Web extends BaseController
     }
 
     /**
+     * Notas de la pieza entera. Se edita desde la ficha de la variante que
+     * se estaba mirando, así que vuelve a ella.
+     */
+    public function editarNotasFamilia(int $familiaId)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->actualizarNotasFamilia($familiaId, $this->request->getPost('notas')),
+            fn($familia) => site_url('piezas/variante/' . $varianteId),
+            fn($familia) => 'Notas de la pieza guardadas.'
+        );
+    }
+
+    /**
+     * Notas de esta línea de diseño (variante).
+     */
+    public function editarNotasVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->actualizarNotasVariante($varianteId, $this->request->getPost('notas')),
+            fn($variante) => site_url('piezas/variante/' . $variante['id']),
+            fn($variante) => 'Notas de la variante guardadas.'
+        );
+    }
+
+    /**
      * Enlace al máster de máxima calidad (Drive u otro sitio fuera del
      * tracker), no un fichero: aquí solo se guarda dónde está.
      */
@@ -2810,9 +2928,9 @@ class Web extends BaseController
     }
 
     /**
-     * Deshacer un botón mal pulsado (impresa/descartada -> borrador). El
-     * mensaje se elige antes de tocar nada: después ya está en borrador y no
-     * se sabría de dónde venía.
+     * Deshacer un botón mal pulsado (impresa/descartada/validada ->
+     * borrador). El mensaje se elige antes de tocar nada: después ya está
+     * en borrador y no se sabría de dónde venía.
      */
     public function deshacer(int $versionId)
     {
@@ -2823,9 +2941,12 @@ class Web extends BaseController
             $versionId,
             fn() => $this->servicio->devolverABorrador($versionId),
             fn($version) => sprintf(
-                $desde === 'descartada'
-                    ? 'Descarte deshecho: v%03d vuelve a borrador, sin el motivo. Márcala impresa cuando toque.'
-                    : 'v%03d vuelve a borrador. Los parámetros de impresión se han borrado: vuelve a marcarla impresa con los buenos.',
+                match ($desde) {
+                    'descartada' => 'Descarte deshecho: v%03d vuelve a borrador, sin el motivo. Márcala impresa cuando toque.',
+                    'validada'   => 'Validación deshecha: v%03d vuelve a borrador, sin el resultado. Si reemplazaba a una '
+                        . 'versión "superada", esa no se restaura sola.',
+                    default      => 'v%03d vuelve a borrador. Los parámetros de impresión se han borrado: vuelve a marcarla impresa con los buenos.',
+                },
                 (int) $version['numero']
             )
         );
@@ -2875,9 +2996,9 @@ class Web extends BaseController
     }
 
     /**
-     * Aparta a mano el .blend de una sesión ya cerrada y sin promocionar
-     * (p. ej. una subida de prueba demasiado pesada que se va a reemplazar):
-     * libera el sitio en disco sin perder el registro de que existió.
+     * Aparta a mano el .blend de una sesión ya cerrada (de la rama actual o
+     * de una ya cerrada por una versión antigua) — libera el sitio en disco
+     * sin perder el registro de que existió.
      */
     public function descartarFicheroSesion(int $sesionId)
     {
@@ -2887,6 +3008,22 @@ class Web extends BaseController
             fn() => $this->servicio->descartarFicheroSesion($sesionId, (string) $this->request->getPost('motivo')),
             fn($resultado) => site_url('piezas/variante/' . $varianteId),
             fn($resultado) => 'Fichero apartado a la papelera. La sesión sigue en el historial, sin ocupar sitio.'
+        );
+    }
+
+    /**
+     * Purga de golpe todas las sesiones (sin purgar todavía) de la rama que
+     * llevó a esta versión. Validar y descartar ya no lo hacen solas — es
+     * una decisión aparte, a conveniencia, desde el historial de la versión.
+     */
+    public function purgarSesionesVersion(int $versionId)
+    {
+        return $this->verboDeVersion(
+            $versionId,
+            fn() => $this->servicio->purgarSesionesDe($versionId),
+            fn($n) => $n > 0
+                ? sprintf('%d sesión(es) purgada(s): sus .blend se apartaron a la papelera.', $n)
+                : 'No había ninguna sesión pendiente de purgar.'
         );
     }
 
@@ -3763,23 +3900,27 @@ class Web extends BaseController
     }
 
     /**
-     * Cuánto trabajo hubo detrás de una versión, y cuánto de él ya se purgó.
-     * Es la única ventana a las ramas cerradas: sus sesiones no se listan en
-     * "trabajo en curso" (ya no lo son) pero su rastro es justo lo que da
-     * sentido al historial dentro de tres meses.
+     * Cuánto trabajo hubo detrás de una versión, y cuánto de él ya se purgó
+     * — más la lista completa (con sus subidas), para poder verla y liberar
+     * sitio a mano igual que en "Trabajo en curso". Es la única ventana a
+     * las ramas cerradas: sus sesiones no se listan ahí (ya no lo son) pero
+     * su rastro es justo lo que da sentido al historial dentro de tres
+     * meses, y algunas (las que su versión nunca llegó a validarse) pueden
+     * seguir sin purgar años después si nadie las aparta a mano.
      */
     private function sesionesQueLlevaronA(int $versionId): array
     {
         $rama = $this->ramaModel->where('cerrada_por_version_id', $versionId)->first();
         if (!$rama) {
-            return ['total' => 0, 'purgadas' => 0];
+            return ['total' => 0, 'purgadas' => 0, 'lista' => []];
         }
 
-        $sesiones = $this->sesionModel->where('rama_id', $rama['id'])->findAll();
+        $lista = $this->sesionesDeRama($rama);
 
         return [
-            'total'    => count($sesiones),
-            'purgadas' => count(array_filter($sesiones, fn($s) => !empty($s['purgada']))),
+            'total'    => count($lista),
+            'purgadas' => count(array_filter($lista, fn($s) => !empty($s['purgada']))),
+            'lista'    => $lista,
         ];
     }
 

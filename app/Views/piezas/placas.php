@@ -2,19 +2,19 @@
 <?= $this->section('content') ?>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-clock-history text-primary"></i>
+    <i class="bi bi-printer text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
     <a href="<?= site_url('piezas/galeria') ?>" class="text-decoration-none text-muted fw-normal">Galería</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Placas</strong>
 
-    
+
     <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos
     </a>
     <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary " title="Galería de piezas">
-        <i class="bi bi-cart-check"></i> Galería
+        <i class="bi bi-grid-3x3-gap"></i> Galería
     </a>
 </h5>
 

@@ -7,13 +7,50 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Pedidos</strong>
 
-    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Piezas listas para imprimir">
+    <button type="button" class="btn btn-sm btn-primary ms-auto" data-bs-toggle="modal" data-bs-target="#modalNuevoPedido">
+        <i class="bi bi-plus-lg"></i> Nuevo pedido
+    </button>
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary" title="Piezas listas para imprimir">
         <i class="bi bi-grid-3x3-gap"></i> Galería
     </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
-        <i class="bi bi-clock-history"></i> Placas
+        <i class="bi bi-printer"></i> Placas
     </a>
 </h5>
+
+<?php
+/**
+ * Alta manual (a diferencia de los que llegan solos desde sterclicks): nace
+ * sin líneas, se rellena en la propia ficha con el mismo formulario que
+ * cualquier otro pedido. Referencia externa es opcional a propósito — no
+ * todo pedido de mano viene con un número que apuntar.
+ */
+?>
+<div class="modal fade" id="modalNuevoPedido" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/pedido') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title">Pedido nuevo</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small">Referencia (opcional)</label>
+                <input type="text" name="referencia_externa" class="form-control form-control-sm mb-2"
+                    placeholder="nº de pedido, si viene de fuera" maxlength="50">
+                <label class="form-label small">Notas</label>
+                <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
+                <p class="text-muted small mt-2 mb-0">
+                    Nace sin líneas — se añaden en la ficha del pedido, buscando cada pieza en el catálogo.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Crear</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>

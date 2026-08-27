@@ -120,12 +120,13 @@ class PiezaSyncService
             );
         }
         if (!empty($sesion['purgada'])) {
-            // Invariante 5: su rama terminó en una versión que se validó, así
-            // que el fichero bueno es el de la versión. La sesión conserva su
+            // Su fichero ya se apartó a la papelera — a mano, o al validar
+            // (ya no es automático, pero sigue pasando cuando alguien pulsa
+            // "purgar sesiones" o "liberar sitio"). La sesión conserva su
             // registro (hashes, log), pero ya no es un sitio del que partir.
             throw new RuntimeException(
-                "La sesión {$sesionOrigenId} está purgada: su rama acabó en una versión validada. "
-                . 'Parte de la versión, que es la que conserva el fichero bueno.',
+                "La sesión {$sesionOrigenId} está purgada: su fichero ya no está. "
+                . 'Parte de la versión, si la rama llegó a promocionar una, o de otra sesión con fichero.',
                 409
             );
         }

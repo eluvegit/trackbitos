@@ -36,13 +36,19 @@ $filaSesionActiva = static function (array $s): string {
 
     <?php
         /**
-         * Galería, Placas, Pedidos y "+ Pieza" fuera, sueltos — son los que
-         * se usan a diario. El resto (Organizar, Categorías, Máquinas,
-         * Estadísticas, Papelera) es de uso ocasional y va agrupado en el
-         * desplegable, en vez de sumar más botones sueltos a la cabecera.
-         * "+ Variante" no va ni ahí: se quita — crear una variante nace de
-         * una pieza concreta, así que su sitio natural es la ficha, no un
-         * selector suelto de "elige la pieza" aquí en el índice.
+         * Backup, Pendientes, Placas, Pedidos, Galería y "+ Pieza" fuera,
+         * sueltos — son los que se usan a diario. El resto (Organizar,
+         * Categorías, Máquinas, Estadísticas, Papelera) es de uso ocasional
+         * y va agrupado en el desplegable, en vez de sumar más botones
+         * sueltos a la cabecera. "+ Variante" no va ni ahí: se quita —
+         * crear una variante nace de una pieza concreta, así que su sitio
+         * natural es la ficha, no un selector suelto de "elige la pieza"
+         * aquí en el índice.
+         *
+         * Solo icono, sin texto: son muchos para llevar etiqueta cada uno
+         * sin saturar la cabecera, y el título (tooltip) sigue diciendo qué
+         * es cada uno al pasar el ratón. Los del desplegable si llevan
+         * texto — ahí no hay problema de espacio.
          */
     ?>
     <div class="dropdown ms-auto">
@@ -65,6 +71,12 @@ $filaSesionActiva = static function (array $s): string {
             </li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/maquinas') ?>"><i class="bi bi-pc-display"></i> Máquinas</a></li>
             <li><a class="dropdown-item" href="<?= site_url('piezas/estadisticas') ?>"><i class="bi bi-hdd-stack"></i> Estadísticas</a></li>
+            <?php // Checklist recordatorio que aparece antes de promocionar una variante. ?>
+            <li>
+                <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalPautas">
+                    <i class="bi bi-check2-square"></i> Pautas
+                </button>
+            </li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
             <?php if (!empty($papeleraCount)): ?>
                 <li>
@@ -77,25 +89,148 @@ $filaSesionActiva = static function (array $s): string {
         </ul>
     </div>
 
-    <a href="<?= site_url('piezas/pendientes') ?>" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-list-check"></i> Pendientes
+    <?php // Copia de seguridad: mismo destino que "Estadísticas > Backup" en el
+          // desplegable, pero de un clic — es de las cosas que se hacen sin pensar,
+          // no algo de uso ocasional que merezca estar escondido. ?>
+    <a href="<?= site_url('piezas/estadisticas/backup') ?>" class="btn btn-sm btn-outline-secondary"
+        title="Copia de seguridad: el .blend de referencia de cada pieza más su historial en texto. Sin STL ni fotos.">
+        <i class="bi bi-download"></i>
     </a>
-    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-clock-history"></i> Placas
+    <div class="btn-group">
+        <a href="<?= site_url('piezas/pendientes') ?>" class="btn btn-sm btn-outline-secondary" title="Pendientes">
+            <i class="bi bi-list-check"></i>
+        </a>
+        <?php // Mismo anexo que en Pedidos: vistazo rápido sin entrar a la pantalla completa. ?>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+            data-bs-target="#modalPendientes" title="Ver pendientes de crear">
+            <i class="bi bi-eye"></i>
+        </button>
+    </div>
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Placas">
+        <i class="bi bi-printer"></i>
     </a>
-    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-cart-check"></i> Pedidos
-    </a>
-    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-grid-3x3-gap"></i> Galería
+    <div class="btn-group">
+        <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary" title="Pedidos">
+            <i class="bi bi-cart-check"></i>
+        </a>
+        <?php // Vistazo rápido al último pedido sin entrar al tablero — mismo
+              // hueco que ya usan otros botones "..." de detalle suelto. ?>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+            data-bs-target="#modalUltimoPedido" title="Ver el último pedido entrante">
+            <i class="bi bi-eye"></i>
+        </button>
+    </div>
+    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary" title="Galería">
+        <i class="bi bi-grid-3x3-gap"></i>
         <?php if (!empty($carritoCount)): ?>
             <span class="badge text-bg-primary"><?= (int) $carritoCount ?></span>
         <?php endif; ?>
     </a>
-    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia">
-        <i class="bi bi-plus-lg"></i> Pieza
+    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia" title="Pieza nueva">
+        <i class="bi bi-plus-lg"></i>
     </button>
 </h5>
+
+<?php
+/**
+ * Vista simple del último pedido: solo qué se pide y con qué notas, sin
+ * fotos ni botones de estado — para eso está la ficha completa
+ * (piezas/pedido/N), a la que lleva "Ir al pedido". Aparte del tablero
+ * (piezas/pedidos) porque este es un vistazo de "¿ha entrado algo nuevo?",
+ * no un sitio para trabajar el pedido.
+ */
+?>
+<div class="modal fade" id="modalUltimoPedido" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">
+                    <i class="bi bi-cart-check"></i> Último pedido entrante
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <?php if (!$ultimoPedido): ?>
+                    <p class="text-muted small mb-0">Todavía no ha entrado ningún pedido.</p>
+                <?php else: ?>
+                    <p class="text-muted small">
+                        Pedido #<?= (int) $ultimoPedido['id'] ?> · <?= esc($ultimoPedido['origen']) ?> ·
+                        <?= esc($ultimoPedido['creado_en']) ?>
+                        <?php if ($ultimoPedido['referencia_externa']): ?>
+                            · Ref: <?= esc($ultimoPedido['referencia_externa']) ?>
+                        <?php endif; ?>
+                    </p>
+                    <?php if ($ultimoPedido['notas']): ?>
+                        <p class="small"><i class="bi bi-sticky"></i> <?= esc($ultimoPedido['notas']) ?></p>
+                    <?php endif; ?>
+
+                    <?php if (empty($ultimoPedido['lineas'])): ?>
+                        <p class="text-muted small mb-0">Sin líneas todavía.</p>
+                    <?php else: ?>
+                        <ul class="list-group list-group-flush">
+                            <?php foreach ($ultimoPedido['lineas'] as $linea): ?>
+                                <li class="list-group-item px-0">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <span><?= esc($linea['descripcionPieza']) ?></span>
+                                        <span class="text-muted small text-nowrap">× <?= (int) $linea['cantidad'] ?></span>
+                                    </div>
+                                    <?php if ($linea['notas']): ?>
+                                        <div class="text-muted small mt-1"><i class="bi bi-sticky"></i> <?= esc($linea['notas']) ?></div>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <?php if ($ultimoPedido): ?>
+                    <a href="<?= site_url('piezas/pedido/' . (int) $ultimoPedido['id']) ?>" class="btn btn-sm btn-primary">
+                        Ir al pedido
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php
+/**
+ * Vista simple de pendientes: solo el título de cada subtarea sin marcar,
+ * sin los verbos "Ya existe"/"Crear pieza" — para eso está la pantalla
+ * completa (piezas/pendientes), a la que lleva "Ir a pendientes".
+ */
+?>
+<div class="modal fade" id="modalPendientes" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">
+                    <i class="bi bi-list-check"></i> Pendientes de crear
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <?php if (empty($pendientesResumen)): ?>
+                    <p class="text-muted small mb-0">No queda ninguna pendiente.</p>
+                <?php else: ?>
+                    <ul class="list-group list-group-flush">
+                        <?php foreach ($pendientesResumen as $p): ?>
+                            <li class="list-group-item px-0"><?= esc($p['title']) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <a href="<?= site_url('piezas/pendientes') ?>" class="btn btn-sm btn-primary">
+                    Ir a pendientes
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
@@ -692,6 +827,31 @@ foreach ($grupos as $grupo) {
                 </p>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Pautas de promoción: checklist recordatorio que aparece antes de promocionar una variante -->
+<div class="modal fade" id="modalPautas" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/pautas') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title">Pautas de promoción</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Una por línea. Aparecerán como checklist antes de promocionar una variante —
+                    solo de recordatorio, marcarlas no cambia nada en la pieza.
+                </p>
+                <textarea name="texto" class="form-control form-control-sm" rows="6"
+                    placeholder="Has metido los objetos importantes en una colección exclusiva&#10;Has cambiado los nombres de los objetos y shapekeys a mayúsculas"><?= esc($pautasTexto) ?></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+            </div>
+        </form>
     </div>
 </div>
 

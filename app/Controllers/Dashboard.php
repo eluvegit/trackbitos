@@ -3,8 +3,10 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\DashboardTareaFijadaModel;
 use App\Models\LentillasSustitucionesModel;
 use App\Models\RecordatorioModel;
+use App\Models\TaskModel;
 
 class Dashboard extends BaseController
 {
@@ -47,6 +49,7 @@ class Dashboard extends BaseController
             'recordatoriosUrgentes' => $recordatoriosUrgentes,
             'secciones' => $this->secciones(),
             'enlacesRapidos' => $this->enlacesRapidos(),
+            'tareasFijadas' => (new DashboardTareaFijadaModel())->fijadasConTarea(),
         ]);
     }
 
@@ -57,6 +60,72 @@ class Dashboard extends BaseController
             ['ruta' => 'journal', 'icono' => 'bi-list-check', 'titulo' => 'Journal'],
             ['ruta' => 'comidas/diario/hoy', 'icono' => 'bi-egg-fried', 'titulo' => 'Comida de hoy'],
         ];
+    }
+
+    /**
+     * Fija una tarea de Journal en el sidebar del dashboard (aparte de los
+     * "enlaces rápidos" de arriba, que son fijos en código: esto lo elige
+     * el usuario, y puede ser más de una).
+     */
+    public function fijarTarea()
+    {
+        $taskId = (int) $this->request->getPost('task_id');
+        $tarea  = $taskId ? (new TaskModel())->find($taskId) : null;
+
+        if (!$tarea) {
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => 'Esa tarea no existe.'])
+                : redirect()->to(site_url('dashboard'))->with('error', 'Esa tarea no existe.');
+        }
+
+        (new DashboardTareaFijadaModel())->fijar($taskId);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'ok'    => true,
+                'tarea' => ['id' => (int) $tarea['id'], 'title' => $tarea['title'], 'category' => $tarea['category']],
+            ]);
+        }
+
+        return redirect()->to(site_url('dashboard'))->with('success', 'Tarea fijada.');
+    }
+
+    public function desfijarTarea(int $taskId)
+    {
+        (new DashboardTareaFijadaModel())->desfijar($taskId);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true]);
+        }
+
+        return redirect()->to(site_url('dashboard'))->with('success', 'Tarea desfijada.');
+    }
+
+    /** Buscador para el selector de "fijar tarea" — por título, sin filtrar por estado. */
+    public function buscarTarea()
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($q) < 2) {
+            return $this->response->setJSON(['resultados' => []]);
+        }
+
+        $ya = array_column((new DashboardTareaFijadaModel())->findAll(), 'task_id');
+
+        $tareas = (new TaskModel())
+            ->like('title', $q)
+            ->orderBy('title', 'ASC')
+            ->findAll(15);
+
+        $resultados = [];
+        foreach ($tareas as $t) {
+            $resultados[] = [
+                'id'       => (int) $t['id'],
+                'texto'    => $t['title'] . ($t['category'] ? ' · ' . $t['category'] : ''),
+                'fijada'   => in_array((int) $t['id'], $ya, true),
+            ];
+        }
+
+        return $this->response->setJSON(['resultados' => $resultados]);
     }
 
     private function secciones(): array

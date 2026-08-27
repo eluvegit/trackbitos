@@ -13,7 +13,7 @@
         <i class="bi bi-grid-3x3-gap"></i> Galería
     </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
-        <i class="bi bi-clock-history"></i> Placas
+        <i class="bi bi-printer"></i> Placas
     </a>
     <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/cargar-placa') ?>">
         <?= csrf_field() ?>
@@ -37,10 +37,41 @@
     <div class="alert alert-warning py-2"><?= esc(session('error')) ?></div>
 <?php endif; ?>
 
-<p class="text-muted small">
-    Origen: <?= esc($pedido['origen']) ?> · Creado: <?= esc($pedido['creado_en']) ?>
-    <?php if ($pedido['notas']): ?> · Notas: <?= esc($pedido['notas']) ?><?php endif; ?>
+<p class="text-muted small d-flex align-items-center gap-1 flex-wrap">
+    <span>
+        Origen: <?= esc($pedido['origen']) ?> · Creado: <?= esc($pedido['creado_en']) ?>
+        <?php if ($pedido['referencia_externa']): ?> · Ref: <?= esc($pedido['referencia_externa']) ?><?php endif; ?>
+        <?php if ($pedido['notas']): ?> · Notas: <?= esc($pedido['notas']) ?><?php endif; ?>
+    </span>
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar referencia y notas"
+        data-bs-toggle="modal" data-bs-target="#modalDatosPedido">
+        <i class="bi bi-pencil"></i>
+    </button>
 </p>
+
+<div class="modal fade" id="modalDatosPedido" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/datos') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title">Editar pedido #<?= (int) $pedido['id'] ?></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small">Referencia (opcional)</label>
+                <input type="text" name="referencia_externa" class="form-control form-control-sm mb-2"
+                    value="<?= esc($pedido['referencia_externa'] ?? '', 'attr') ?>"
+                    placeholder="nº de pedido, si viene de fuera" maxlength="50">
+                <label class="form-label small">Notas</label>
+                <textarea name="notas" class="form-control form-control-sm" rows="2"><?= esc($pedido['notas'] ?? '') ?></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php
     $etiquetas = ['nuevo' => 'Pendiente', 'en_produccion' => 'Produciendo', 'completado' => 'Hecho', 'cancelado' => 'Cancelado'];
@@ -72,6 +103,27 @@
     .fila-completa .btn-outline-primary { color: #052e16 !important; border-color: rgba(5, 46, 22, .4) !important; }
 </style>
 
+<?php
+    /**
+     * Cada línea es editable in situ, siempre — no hay un estado "viendo" y
+     * otro "editando" distintos: eso obligaba a un clic solo para llegar a
+     * poder tocar algo, y la fila cambiaba de forma al entrar a editar. El
+     * formulario de cada línea vive fuera de la tabla (un <form> no puede
+     * envolver <tr> sueltas) y sus campos, repartidos por las celdas, se
+     * asocian a él con el atributo `form` — así la fila es una sola, no dos.
+     *
+     * Guardar, añadir, borrar y ajustar completado van todos por AJAX (ver
+     * el <script> más abajo): el servidor sigue siendo quien decide cómo se
+     * pinta la fila (misma vista parcial _linea_fila que en la carga
+     * inicial), el JS solo la sustituye entera con lo que responde.
+     */
+?>
+<div id="lineas-forms">
+    <?php foreach ($pedido['lineas'] as $linea): ?>
+        <?= view('piezas/pedidos/_linea_form', ['linea' => $linea]) ?>
+    <?php endforeach; ?>
+</div>
+
 <table class="table table-sm align-middle">
     <thead>
         <tr>
@@ -86,145 +138,43 @@
             <th></th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="lineas-tbody">
         <?php foreach ($pedido['lineas'] as $linea): ?>
-            <?php $completa = (int) $linea['cantidad_completada'] >= (int) $linea['cantidad']; ?>
-            <tr class="<?= $completa ? 'fila-completa' : '' ?>">
-                <td style="width: 34px;">
-                    <?php if ($linea['foto']): ?>
-                        <img src="<?= esc($linea['foto'], 'attr') ?>" alt="" loading="lazy" class="rounded border"
-                            style="width: 34px; height: 34px; object-fit: contain;">
-                    <?php else: ?>
-                        <span class="d-inline-flex align-items-center justify-content-center rounded border text-body-tertiary"
-                            style="width: 34px; height: 34px;"><i class="bi bi-box" style="font-size: .8rem;"></i></span>
-                    <?php endif; ?>
-                </td>
-                <td>
-                    <?php if ($linea['nombreVariante']): ?>
-                        <?= esc($linea['nombreFamilia']) ?> <span class="text-muted">· <?= esc($linea['nombreVariante']) ?></span>
-                    <?php elseif (!empty($linea['descripcion_libre'])): ?>
-                        <span class="fst-italic"><?= esc($linea['descripcion_libre']) ?></span>
-                        <span class="badge text-bg-info ms-1" title="Aún no existe en el catálogo">futura</span>
-                    <?php elseif ($linea['variante_id']): ?>
-                        <span class="text-muted small fst-italic">pieza borrada</span>
-                    <?php else: ?>
-                        <span class="text-muted small fst-italic">sin referencia</span>
-                    <?php endif; ?>
-                    <?php if ($linea['sku']): ?>
-                        <br>
-                        <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($linea['sku']) ?></span>
-                    <?php endif; ?>
-                </td>
-                <td><?= (int) $linea['cantidad'] ?></td>
-                <td>
-                    <div class="d-flex align-items-center gap-1">
-                        <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/completada') ?>">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="delta" value="-1">
-                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Una menos"
-                                <?= (int) $linea['cantidad_completada'] <= 0 ? 'disabled' : '' ?>>−</button>
-                        </form>
-                        <span class="small" style="min-width: 3em; text-align: center;">
-                            <?= (int) $linea['cantidad_completada'] ?>/<?= (int) $linea['cantidad'] ?>
-                            <?= $completa ? '<i class="bi bi-check-circle-fill text-success"></i>' : '' ?>
-                        </span>
-                        <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/completada') ?>">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="delta" value="1">
-                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Una más"
-                                <?= $completa ? 'disabled' : '' ?>>+</button>
-                        </form>
-                    </div>
-                </td>
-                <td class="text-muted small"><?= esc($linea['notas'] ?? '') ?></td>
-                <td class="text-nowrap">
-                    <?php if ($linea['variante_id']): ?>
-                        <a href="<?= site_url('piezas/variante/' . $linea['variante_id']) ?>" class="btn btn-sm btn-outline-primary" title="Ver pieza">
-                            <i class="bi bi-eye"></i>
-                        </a>
-                    <?php endif; ?>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle-editar-linea="<?= (int) $linea['id'] ?>" title="Editar línea">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/borrar') ?>" class="d-inline"
-                        onsubmit="return confirm('¿Borrar esta línea del pedido?');">
-                        <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Borrar línea">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </form>
-                </td>
-            </tr>
-            <tr id="editar-linea-<?= (int) $linea['id'] ?>" class="d-none">
-                <td></td>
-                <td colspan="5">
-                    <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/editar') ?>" class="row g-1 align-items-center py-2">
-                        <?= csrf_field() ?>
-                        <div class="col-md-4 position-relative">
-                            <input type="text" class="form-control form-control-sm" data-buscar-variante autocomplete="off"
-                                placeholder="Buscar pieza del catálogo…"
-                                value="<?= $linea['nombreVariante'] ? esc($linea['nombreFamilia'] . ' · ' . $linea['nombreVariante'], 'attr') : '' ?>">
-                            <input type="hidden" name="variante_id" data-variante-id value="<?= (int) ($linea['variante_id'] ?? 0) ?>">
-                            <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1060; display: none;" data-resultados-variante></div>
-                        </div>
-                        <div class="col-md-3">
-                            <input type="text" name="descripcion_libre" class="form-control form-control-sm"
-                                placeholder="…o descripción (pieza futura)" value="<?= esc($linea['descripcion_libre'] ?? '', 'attr') ?>">
-                        </div>
-                        <div class="col-md-1">
-                            <input type="number" name="cantidad" class="form-control form-control-sm" min="1" required
-                                value="<?= (int) $linea['cantidad'] ?>">
-                        </div>
-                        <div class="col-md-2">
-                            <input type="text" name="notas" class="form-control form-control-sm" maxlength="150"
-                                placeholder="Notas" value="<?= esc($linea['notas'] ?? '', 'attr') ?>">
-                        </div>
-                        <div class="col-md-2 d-flex gap-1">
-                            <button type="submit" class="btn btn-sm btn-primary">Guardar</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle-editar-linea="<?= (int) $linea['id'] ?>">Cancelar</button>
-                        </div>
-                    </form>
-                </td>
-            </tr>
+            <?= view('piezas/pedidos/_linea_fila', ['linea' => $linea]) ?>
         <?php endforeach; ?>
     </tbody>
 </table>
 
 <div class="card card-body mb-3">
     <h6 class="mb-2"><i class="bi bi-plus-lg"></i> Añadir línea</h6>
-    <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/linea') ?>" class="row g-1 align-items-center">
+    <form id="form-nueva-linea" method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/linea') ?>" class="row g-1 align-items-center">
         <?= csrf_field() ?>
-        <div class="col-md-4 position-relative">
+        <div class="col-md-2 position-relative">
             <input type="text" class="form-control form-control-sm" data-buscar-variante autocomplete="off"
                 placeholder="Buscar pieza del catálogo…">
             <input type="hidden" name="variante_id" data-variante-id value="">
             <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1060; display: none;" data-resultados-variante></div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <input type="text" name="descripcion_libre" class="form-control form-control-sm"
                 placeholder="…o descripción (pieza futura, aún sin hacer)">
         </div>
-        <div class="col-md-1">
-            <input type="number" name="cantidad" class="form-control form-control-sm" min="1" value="1" required>
+        <div class="col-auto">
+            <input type="number" name="cantidad" class="form-control form-control-sm" min="1" value="1" required style="width: 4.5em;">
         </div>
-        <div class="col-md-2">
-            <input type="text" name="notas" class="form-control form-control-sm" maxlength="150" placeholder="Notas">
+        <div class="col">
+            <textarea name="notas" class="form-control form-control-sm" maxlength="150" rows="2" placeholder="Notas"></textarea>
         </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-sm btn-success w-100">Añadir</button>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-success" title="Añadir línea">
+                <i class="bi bi-plus-lg"></i>
+            </button>
         </div>
     </form>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-toggle-editar-linea]').forEach(function (boton) {
-        boton.addEventListener('click', function () {
-            var fila = document.getElementById('editar-linea-' + boton.getAttribute('data-toggle-editar-linea'));
-            if (fila) fila.classList.toggle('d-none');
-        });
-    });
-
     var espera = null;
     document.addEventListener('input', function (e) {
         if (!e.target.matches('[data-buscar-variante]')) return;
@@ -283,6 +233,99 @@ document.addEventListener('DOMContentLoaded', function () {
             contenedor.querySelector('[data-resultados-variante]').style.display = 'none';
         }, 200);
     });
+
+    // ---- Guardar / añadir / borrar / ajustar completado, sin recargar ----
+    // El servidor sigue siendo quien decide cómo se pinta cada fila (misma
+    // vista parcial _linea_fila que en la carga inicial); el JS solo manda
+    // el formulario por fetch y sustituye la fila entera por lo que responde.
+    var tbody = document.getElementById('lineas-tbody');
+    var formsOcultos = document.getElementById('lineas-forms');
+
+    function enviar(form) {
+        return fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(form),
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json(); });
+    }
+
+    function reemplazarFila(id, html) {
+        var fila = tbody.querySelector('tr[data-linea-id="' + id + '"]');
+        if (fila) fila.outerHTML = html;
+    }
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        var boton = e.submitter;
+
+        // Añadir línea: el servidor devuelve el <form> oculto y la <tr> de
+        // la línea nueva, listos para insertar tal cual.
+        if (form.id === 'form-nueva-linea') {
+            e.preventDefault();
+            if (boton) boton.disabled = true;
+            enviar(form).then(function (datos) {
+                if (!datos.ok) { alert(datos.mensaje || 'No se pudo añadir.'); return; }
+                formsOcultos.insertAdjacentHTML('beforeend', datos.formHtml);
+                tbody.insertAdjacentHTML('beforeend', datos.rowHtml);
+                form.reset();
+                form.querySelector('[data-variante-id]').value = '';
+                form.querySelector('[data-buscar-variante]').focus();
+            }).catch(function () {
+                alert('No se pudo conectar con el servidor.');
+            }).finally(function () {
+                if (boton) boton.disabled = false;
+            });
+            return;
+        }
+
+        // Guardar cambios de una línea existente.
+        if (form.id.indexOf('form-linea-') === 0) {
+            e.preventDefault();
+            var idGuardar = form.id.replace('form-linea-', '');
+            if (boton) boton.disabled = true;
+            enviar(form).then(function (datos) {
+                if (!datos.ok) { alert(datos.mensaje || 'No se pudo guardar.'); return; }
+                reemplazarFila(idGuardar, datos.rowHtml);
+            }).catch(function () {
+                alert('No se pudo conectar con el servidor.');
+                if (boton) boton.disabled = false;
+            });
+            return;
+        }
+
+        // Borrar línea.
+        if (form.matches('[data-form-borrar-linea]')) {
+            e.preventDefault();
+            if (!confirm('¿Borrar esta línea del pedido?')) return;
+            var filaBorrar = form.closest('tr');
+            var idBorrar = filaBorrar ? filaBorrar.getAttribute('data-linea-id') : null;
+            enviar(form).then(function (datos) {
+                if (!datos.ok) { alert(datos.mensaje || 'No se pudo borrar.'); return; }
+                if (filaBorrar) filaBorrar.remove();
+                var formLinea = idBorrar ? document.getElementById('form-linea-' + idBorrar) : null;
+                if (formLinea) formLinea.remove();
+            }).catch(function () {
+                alert('No se pudo conectar con el servidor.');
+            });
+            return;
+        }
+
+        // Ajustar completado (+/-).
+        if (form.matches('[data-form-completada]')) {
+            e.preventDefault();
+            var filaCompletada = form.closest('tr');
+            var idCompletada = filaCompletada ? filaCompletada.getAttribute('data-linea-id') : null;
+            form.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+            enviar(form).then(function (datos) {
+                if (!datos.ok) { alert(datos.mensaje || 'No se pudo actualizar.'); return; }
+                reemplazarFila(idCompletada, datos.rowHtml);
+            }).catch(function () {
+                alert('No se pudo conectar con el servidor.');
+            });
+            return;
+        }
+    });
 });
 </script>
 
@@ -291,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // qué cubre cada una: eso se sigue viendo a ojo abriendo la placa. ?>
 <?php if (!empty($placas)): ?>
     <h6 class="mt-4 mb-2 d-flex align-items-center gap-2">
-        <i class="bi bi-clock-history"></i> Placas de este pedido
+        <i class="bi bi-printer"></i> Placas de este pedido
         <span class="badge text-bg-secondary"><?= count($placas) ?></span>
     </h6>
     <ul class="list-group">

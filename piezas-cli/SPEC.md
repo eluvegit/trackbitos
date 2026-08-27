@@ -1390,11 +1390,11 @@ del histórico de trabajo que hay que conservar.
 Disposición real (`PiezaAlmacen`, bajo `writable/piezas/`):
 
 ```
-variante-3/rama-5/sesion-41.blend                      ← trabajo en curso, purgable (invariante 5)
+variante-3/rama-5/sesion-41.blend                      ← trabajo en curso, purgable a mano
 variante-3/version-v002.blend                          ← copia propia de la versión, nunca se purga
 familia-2/referencia-7.jpg                              ← foto de referencia (fase 8)
 variante-3/version-9/render-4.jpg                       ← render de una versión concreta (fase 8)
-papelera/20260816-154424-variante-3-rama-5-sesion-41.blend   ← apartado al validar, caduca a los 30 días
+papelera/20260816-154424-variante-3-rama-5-sesion-41.blend   ← apartado a mano, caduca a los 30 días
 ```
 
 La versión se lleva **su propia copia** aunque el contenido sea idéntico al de la sesión que promocionó. Si apuntase al fichero de la sesión, la purga de la fase 7 se llevaría por delante justo el fichero que nunca debe perderse.

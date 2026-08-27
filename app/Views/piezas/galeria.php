@@ -18,7 +18,7 @@
         <i class="bi bi-cart-check"></i> Pedidos
     </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
-        <i class="bi bi-clock-history"></i> Placas
+        <i class="bi bi-printer"></i> Placas
     </a>
 
     <div class="d-flex gap-2 <?= empty($carrito) ? 'd-none' : '' ?>" id="cabeceraCarrito">
