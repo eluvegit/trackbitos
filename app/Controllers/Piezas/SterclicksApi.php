@@ -12,6 +12,7 @@ use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 use App\Services\PiezaAlmacen;
 use App\Services\PiezaImagenesPublicas;
+use App\Services\PiezaPedidoNotificador;
 
 /**
  * API dedicada a la integración con sterclicks (token propio, filtro
@@ -190,6 +191,8 @@ class SterclicksApi extends BaseController
         if ($db->transStatus() === false) {
             return $this->response->setJSON(['error' => 'No se pudo guardar el pedido.'])->setStatusCode(500);
         }
+
+        (new PiezaPedidoNotificador())->avisarNuevoPedido($pedidoId);
 
         return $this->response->setJSON(['pedido_id' => $pedidoId])->setStatusCode(201);
     }
