@@ -137,23 +137,28 @@
                         <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
                     </button>
                     <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
-                    <?php if ($attachCount > 0): ?>
-                        <button type="button" class="jt-subtask-attach-toggle" data-bs-toggle="collapse" data-bs-target="#subAttach<?= (int)$s['id'] ?>" title="Ver materiales/enlaces asociados">
-                            <i class="bi bi-paperclip"></i> <?= $attachCount ?>
+                    <div class="jt-subtask-actions">
+                        <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="<?= (int)$s['id'] ?>" title="Añadir tiempo">
+                            <?= number_format(((int)($s['time_spent'] ?? 0)) / 60, 2) ?> h
+                        </span>
+                        <?php if ($attachCount > 0): ?>
+                            <button type="button" class="jt-subtask-attach-toggle" data-bs-toggle="collapse" data-bs-target="#subAttach<?= (int)$s['id'] ?>" title="Ver materiales/enlaces asociados">
+                                <i class="bi bi-paperclip"></i> <?= $attachCount ?>
+                            </button>
+                        <?php endif; ?>
+                        <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
+                            <i class="bi bi-arrow-bar-up"></i>
                         </button>
-                    <?php endif; ?>
-                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
-                        <i class="bi bi-arrow-bar-up"></i>
-                    </button>
-                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
-                        <i class="bi bi-arrow-bar-down"></i>
-                    </button>
-                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                        <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
+                            <i class="bi bi-arrow-bar-down"></i>
+                        </button>
+                        <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 <?php if ($attachCount > 0): ?>
                     <div class="collapse jt-subtask-attachments" id="subAttach<?= (int)$s['id'] ?>">
@@ -331,6 +336,25 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                 <button class="btn btn-primary btn-sm" id="subtaskEditSaveBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL AÑADIR TIEMPO A SUBTAREA -->
+<div class="modal fade" id="subtaskTimeModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Añadir tiempo a subtarea</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="number" id="subtaskTimeMinutes" class="form-control" placeholder="Minutos" min="1">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="subtaskTimeSaveBtn">Guardar</button>
             </div>
         </div>
     </div>
@@ -606,6 +630,15 @@
     align-items: center;
     gap: 6px;
 }
+/* Botonera secundaria de la subtarea (mover/renombrar/borrar/adjuntos).
+   En escritorio: grupo al final de la misma fila. En móvil: baja a su
+   propia línea (ver media query al final de la hoja). */
+.jt-subtask-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
 .jt-subtask-item.sortable-ghost { opacity: .3; }
 .jt-subtask-item.sortable-chosen { background: var(--bs-tertiary-bg); }
 .jt-subtask-item.is-done { opacity: .6; }
@@ -680,6 +713,15 @@
     text-decoration: line-through;
     color: var(--bs-secondary-color);
 }
+
+.jt-subtask-time {
+    flex: 0 0 auto;
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.jt-subtask-time:hover { color: var(--bs-emphasis-color); text-decoration: underline; }
 
 .jt-subtask-edit,
 .jt-subtask-delete,
@@ -765,6 +807,22 @@
 
 @media (max-width: 400px) {
     .jt-title-input { font-size: 1rem; }
+}
+
+/* Móvil: la subtarea pasa a dos líneas. Línea 1: asa + check + texto.
+   Línea 2: el resto de botones, porque no cabe todo en una sola fila. */
+@media (max-width: 575.98px) {
+    .jt-subtask-row { flex-wrap: wrap; align-items: flex-start; }
+    .jt-subtask-title { flex: 1 1 0; }
+    .jt-subtask-actions {
+        flex: 1 1 100%;
+        gap: 4px;
+        padding-left: 30px;
+    }
+    /* Ergonomía: borrar a la izquierda, lejos del borde derecho (zona del
+       pulgar). El tiempo pasa al extremo derecho, donde antes caía borrar. */
+    .jt-subtask-delete { order: -1; }
+    .jt-subtask-time { order: 5; margin-left: auto; }
 }
 </style>
 
@@ -906,6 +964,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtaskEditSaveBtn = document.getElementById('subtaskEditSaveBtn');
     let subtaskEditItem = null;
 
+    const subtaskTimeModal = new bootstrap.Modal(document.getElementById('subtaskTimeModal'));
+    const subtaskTimeMinutes = document.getElementById('subtaskTimeMinutes');
+    const subtaskTimeSaveBtn = document.getElementById('subtaskTimeSaveBtn');
+    let subtaskTimeItem = null;
+
     async function postJSON(url, body) {
         const res = await fetch(url, {
             method: 'POST',
@@ -928,10 +991,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
                 <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
                 <span class="jt-subtask-title"></span>
-                <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
-                <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
-                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
-                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+                <div class="jt-subtask-actions">
+                    <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" title="Añadir tiempo">0.00 h</span>
+                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
+                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
+                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+                </div>
             </div>
         `;
         item.querySelector('.jt-subtask-title').textContent = subtask.title;
@@ -980,6 +1046,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     subtaskList.addEventListener('click', async (e) => {
+        const timeTrigger = e.target.closest('.subtask-time-trigger');
+        if (timeTrigger) {
+            subtaskTimeItem = timeTrigger.closest('.jt-subtask-item');
+            subtaskTimeMinutes.value = '';
+            subtaskTimeModal.show();
+            return;
+        }
+
         const toggleBtn = e.target.closest('.js-toggle-subtask');
         if (toggleBtn) {
             const item = toggleBtn.closest('.jt-subtask-item');
@@ -1030,6 +1104,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 subtaskEmptyMsg.classList.remove('d-none');
             }
             applyProgress(data.progress);
+        }
+    });
+
+    subtaskTimeSaveBtn.addEventListener('click', async () => {
+        if (!subtaskTimeItem) return;
+
+        const minutes = parseInt(subtaskTimeMinutes.value, 10) || 0;
+        if (minutes <= 0) return;
+
+        subtaskTimeSaveBtn.disabled = true;
+        try {
+            const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskTimeItem.dataset.id + '/add-time', { minutes });
+            if (!data.success) throw new Error();
+
+            const span = subtaskTimeItem.querySelector('.jt-subtask-time');
+            if (span) span.textContent = (data.subtask_minutes / 60).toFixed(2) + ' h';
+
+            // El servidor ya ha sumado esos minutos al total de la tarea; reflejarlo
+            // en el campo del formulario para que al guardar no se pise con el valor viejo.
+            if (data.task_minutes !== undefined) {
+                timeInput.value = data.task_minutes;
+                actualizarHint();
+            }
+
+            subtaskTimeModal.hide();
+        } catch (err) {
+            alert('No se pudo añadir el tiempo.');
+        } finally {
+            subtaskTimeSaveBtn.disabled = false;
         }
     });
 

@@ -343,6 +343,33 @@ foreach ($categories as $category) {
 
     .jt-subtask-add { display: flex; gap: 6px; }
     .jt-subtask-add .form-control { flex: 1 1 auto; }
+
+    /* Botonera secundaria de la subtarea (mover/renombrar/borrar).
+       En escritorio: grupo al final de la misma fila. En móvil: baja a su
+       propia línea (ver media query). */
+    .jt-subtask-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+    }
+
+    /* Móvil: la subtarea pasa a dos líneas. Línea 1: asa + check + texto.
+       Línea 2: horas + resto de botones. El flex-basis:0 del título evita que
+       el navegador lo empuje solo a su propia línea al hacer wrap. */
+    @media (max-width: 575.98px) {
+        .jt-subtask-item { flex-wrap: wrap; align-items: flex-start; }
+        .jt-subtask-title { flex: 1 1 0; }
+        .jt-subtask-actions {
+            flex: 1 1 100%;
+            gap: 2px;
+            padding-left: 22px;
+        }
+        /* Ergonomía: borrar a la izquierda, lejos del borde derecho (zona del
+           pulgar). El tiempo pasa al extremo derecho, donde antes caía borrar. */
+        .jt-subtask-delete { order: -1; }
+        .jt-subtask-time { order: 5; margin-left: auto; }
+    }
 </style>
 
 <div class="journal-grid">
@@ -569,23 +596,25 @@ foreach ($categories as $category) {
                                                         <i class="bi <?= $sDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
                                                     </button>
                                                     <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
-                                                    <span class="jt-subtask-time subtask-time-trigger"
-                                                        data-subtask-id="<?= (int)$s['id'] ?>"
-                                                        data-task-id="<?= $task['id'] ?>">
-                                                        <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
-                                                    </span>
-                                                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
-                                                        <i class="bi bi-arrow-bar-up"></i>
-                                                    </button>
-                                                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
-                                                        <i class="bi bi-arrow-bar-down"></i>
-                                                    </button>
-                                                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
+                                                    <div class="jt-subtask-actions">
+                                                        <span class="jt-subtask-time subtask-time-trigger"
+                                                            data-subtask-id="<?= (int)$s['id'] ?>"
+                                                            data-task-id="<?= $task['id'] ?>">
+                                                            <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
+                                                        </span>
+                                                        <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
+                                                            <i class="bi bi-arrow-bar-up"></i>
+                                                        </button>
+                                                        <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
+                                                            <i class="bi bi-arrow-bar-down"></i>
+                                                        </button>
+                                                        <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
@@ -1264,11 +1293,13 @@ foreach ($categories as $category) {
                 <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
                 <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
                 <span class="jt-subtask-title"></span>
-                <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" data-task-id="${taskId}">0.00 h</span>
-                <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
-                <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
-                <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
-                <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+                <div class="jt-subtask-actions">
+                    <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" data-task-id="${taskId}">0.00 h</span>
+                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
+                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
+                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+                </div>
             `;
             item.querySelector('.jt-subtask-title').textContent = subtask.title;
             return item;

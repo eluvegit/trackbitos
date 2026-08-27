@@ -38,12 +38,6 @@
         <div class="col d-flex">
             <a href="<?= site_url('hogar/' . $h['id']) ?>" class="text-decoration-none w-100 hogar-card-link">
                 <div class="card shadow-sm w-100 h-100 hogar-card">
-                    <?php if ($h['atrasadas'] > 0): ?>
-                        <span class="hogar-badge" title="<?= (int)$h['atrasadas'] ?> tarea(s) atrasada(s)">
-                            <?= (int)$h['atrasadas'] ?>
-                        </span>
-                    <?php endif; ?>
-
                     <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
                         <i class="bi bi-<?= esc($h['icono'] ?: 'house') ?> fs-2 text-primary mb-2"></i>
                         <h6 class="card-title mb-1"><?= esc($h['nombre']) ?></h6>
@@ -71,23 +65,6 @@
 .hogar-card-link:hover .hogar-card {
     transform: translateY(-2px);
     box-shadow: 0 10px 24px rgba(0,0,0,.15);
-}
-
-.hogar-badge {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: #d9ad6b;
-    color: #1c1c1c;
-    font-size: .72rem;
-    font-weight: 700;
-    display: grid;
-    place-items: center;
-    box-shadow: 0 2px 6px rgba(217,173,107,.35);
 }
 
 .hogar-progress {
