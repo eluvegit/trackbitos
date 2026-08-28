@@ -486,6 +486,16 @@ def resolver_variante(config: dict, texto: str) -> dict:
         if not exactas:
             exactas = [v for v in variantes if (v.get("familia_nombre") or "").lower() == texto_l]
 
+        # 2b) Pieza exacta con varias variantes: la que se crea sola ("base")
+        # es la respuesta por defecto. Sin esto, en cuanto una pieza gana una
+        # variante derivada, escribir solo el nombre de la pieza deja de
+        # resolver. Para la derivada se escribe su nombre ("brazos desnudos
+        # cristo"), que ya resuelve por el paso 4.
+        if len(exactas) > 1:
+            bases = [v for v in exactas if v["nombre"].lower() == "base"]
+            if len(bases) == 1:
+                exactas = bases
+
         # 3) "pieza variante" completos y exactos, en ese orden — para
         # cuando la pieza exacta (paso 2) tiene más de una variante, p. ej.
         # "Brazo base" con "Brazo integral" y "Brazo y mano" también en el
@@ -1050,15 +1060,31 @@ def cmd_subir(args) -> int:
     # de carpeta/fichero que el servidor no puede ver. Escribir el nombre a
     # mano obliga a leerlo, no solo a pulsar Enter por costumbre.
     identidad = sentinel.get("variante", "?")
+
+    # Tolerante a lo que no cambia de qué variante hablamos: mayúsculas,
+    # espacios de más y los espacios alrededor de la "/". Antes exigía el
+    # nombre calcado y un "brazos desnudos/base" cualquiera abortaba la
+    # subida sin decir qué esperaba ni dejar reintentar.
+    def _norm(s: str) -> str:
+        return " ".join(s.lower().replace("/", " / ").split())
+
     print(f"\n{identidad} · rama {sentinel.get('rama', '?')}\n")
     print(f"  Vas a subir {blend.name} a esta variante.")
-    print(f"  Para confirmarlo, escribe el nombre exacto: {identidad}")
-    try:
-        tecleado = input("\n  > ").strip()
-    except EOFError:
-        tecleado = ""
-    if tecleado.lower() != identidad.lower():
-        print("\n  ✗ No coincide. No se ha subido nada.\n")
+    print(f"  Para confirmarlo, escribe el nombre: {identidad}")
+    confirmado = False
+    for intento in range(2):
+        try:
+            tecleado = input("\n  > ").strip()
+        except EOFError:
+            tecleado = ""
+            break
+        if _norm(tecleado) == _norm(identidad):
+            confirmado = True
+            break
+        if intento == 0:
+            print(f"\n  ✗ Has escrito «{tecleado}» y toca «{identidad}». Otra vez:")
+    if not confirmado:
+        print("\n  ✗ El nombre no coincide. No se ha subido nada.\n")
         return 1
 
     sesion_id = sentinel.get("sesion_id")
@@ -1184,8 +1210,30 @@ def cmd_cerrar(args) -> int:
             print("\n  → Súbelo antes de cerrar: trackbitos subir\n")
             return 1
 
-    api_post(config, f"/sesion/{sesion_id}/cerrar")
     numero = sentinel.get("sesion", "?")
+
+    # Si al bajar se abrió un asiento de descarga y nunca se subió nada, sigue
+    # abierto: cerrarlo "sin cambios" cierra también la sesión (el servidor los
+    # cuadra juntos). Antes esto se hacía con `/sesion/cerrar` a secas, que
+    # dejaba el asiento huérfano y obligaba a forzar el cierre desde la web.
+    # Los guardas de arriba ya han confirmado que el .blend es idéntico al que
+    # se entregó, así que "sin cambios" es cierto.
+    descarga_id = sentinel.get("descarga_id")
+    if descarga_id:
+        if not blend:
+            print("\n  ⚠ Esta sesión tiene una descarga sin cerrar y no encuentro el .blend")
+            print("    para probar que no lo has tocado.")
+            print("\n  → Si el fichero ya no existe, fuerza el cierre desde la web.\n")
+            return 1
+        api_post(config, f"/descarga/{descarga_id}/cerrar-sin-cambios", {"hash_local": sha256_de(blend)})
+        actualizar_sentinel(directorio, {"descarga_id": None, "sesion_id": None, "sesion": None})
+        print(f"\n{sentinel.get('variante', '?')} · sesión {numero} cerrada\n")
+        print("  ✓ El asiento de descarga cuadra: no se subió nada porque no hacía falta.")
+        print("  ✓ La máquina queda libre: ya puedes trabajar desde el otro equipo.")
+        print("\n  → Si esta es la versión buena: trackbitos promocionar --cambio \"...\"\n")
+        return 0
+
+    api_post(config, f"/sesion/{sesion_id}/cerrar")
     actualizar_sentinel(directorio, {"sesion_id": None, "sesion": None, "descarga_id": None})
 
     print(f"\n{sentinel.get('variante', '?')} · sesión {numero} cerrada\n")

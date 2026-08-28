@@ -831,11 +831,31 @@ class PiezaService
     /**
      * "Cerrar sesión": libera el bloqueo de máquina. No exige que se haya
      * subido nada — cerrar sin subir es legítimo (p.ej. sesión de consulta).
+     *
+     * Sí exige que no quede ningún asiento de descarga abierto colgando de
+     * esta sesión: cerrar la sesión sin cerrarlo dejaba el asiento huérfano
+     * (el servidor seguía creyendo que había una copia viva sin rendir
+     * cuentas en esa máquina) y la única salida era el cierre forzado desde
+     * la web. La vía buena es `cerrar --sin-cambios` (cuadra el hash y cierra
+     * ambos) o `subir`; aquí solo se avisa, no se cierra el asiento a ciegas
+     * porque la prueba de que el fichero no se tocó es justo su hash.
      */
     public function cerrarSesion(int $sesionId): array
     {
         if (!$this->sesionModel->find($sesionId)) {
             throw new RuntimeException("Sesión {$sesionId} no encontrada.");
+        }
+
+        $descargaAbierta = (new PiezaDescargaModel())
+            ->where('sesion_id', $sesionId)->where('cerrada', 0)->first();
+        if ($descargaAbierta) {
+            throw new RuntimeException(
+                "Esta sesión tiene la descarga {$descargaAbierta['id']} sin cerrar. "
+                . 'Si no tocaste el fichero: `trackbitos cerrar --sin-cambios`. '
+                . 'Si lo tocaste: `trackbitos subir`. '
+                . 'Si la copia ya no existe: cierre forzado desde la web.',
+                409
+            );
         }
 
         return $this->sesionModel->cerrar($sesionId);
