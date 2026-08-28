@@ -190,11 +190,19 @@ class Web extends BaseController
         $familias = $this->familiaModel->where('borrado_en', null)->orderBy('nombre', 'ASC')->findAll();
 
         foreach ($familias as &$familia) {
-            $familia['variantes'] = array_map(
+            $variantes = array_map(
                 fn($v) => $this->resumen($v),
                 $this->varianteModel->where('familia_id', $familia['id'])->where('borrado_en', null)
                     ->orderBy('nombre', 'ASC')->findAll()
             );
+            // Mismo orden que las piezas dentro de su categoría: sin empezar,
+            // modificándose, descartadas, consolidadas y el resto. Estable,
+            // así que a igual tramo se mantiene el orden alfabético.
+            usort(
+                $variantes,
+                fn(array $a, array $b) => $this->rangoMadurezVariante($a) <=> $this->rangoMadurezVariante($b)
+            );
+            $familia['variantes'] = $variantes;
         }
         unset($familia);
 
@@ -358,7 +366,90 @@ class Web extends BaseController
             $grupos[] = ['categoria' => null, 'piezas' => $sinCategoria];
         }
 
+        // Dentro de cada categoría, por fase de madurez: sin empezar,
+        // modificándose, descartadas y por último las consolidadas (con
+        // versión validada). El resto ("para imprimir", "sin validar") cae
+        // al final. usort es estable desde PHP 8.0, así que a igual rango se
+        // conserva el orden alfabético que ya traía la consulta.
+        foreach ($grupos as &$grupo) {
+            usort(
+                $grupo['piezas'],
+                fn(array $a, array $b) => $this->rangoDeMadurez($a) <=> $this->rangoDeMadurez($b)
+            );
+        }
+        unset($grupo);
+
         return $grupos;
+    }
+
+    /**
+     * En qué tramo del listado va una pieza, mirando todas sus variantes.
+     * Menor = más arriba. El orden lo pidió el usuario tal cual: primero lo
+     * que ni se ha empezado, luego lo que se está tocando, después lo
+     * descartado y al final lo que ya tiene una versión buena.
+     */
+    private function rangoDeMadurez(array $familia): int
+    {
+        $conVersion = false;
+        $enCurso    = false;
+        $validada   = false;
+        $descartada = false;
+
+        foreach ($familia['variantes'] as $v) {
+            if (!empty($v['validada'])) {
+                $validada = true;
+            }
+            if (!empty($v['trabajo_en_curso'])) {
+                $enCurso = true;
+            }
+            if (($v['ultima_version_estado'] ?? null) === 'descartada') {
+                $descartada = true;
+            }
+            if (($v['ultima_version_estado'] ?? null) !== null || !empty($v['validada'])) {
+                $conVersion = true;
+            }
+        }
+
+        if (!$conVersion && !$enCurso) {
+            return 0; // sin empezar
+        }
+        if ($enCurso) {
+            return 1; // modificándose
+        }
+        if ($descartada && !$validada) {
+            return 2; // la última no sirve
+        }
+        if ($validada) {
+            return 3; // versión consolidada
+        }
+
+        return 4; // para imprimir, sin validar, sin versión...
+    }
+
+    /**
+     * Lo mismo para una sola variante: en qué tramo cae por sí sola. Se usa
+     * para ordenar las variantes dentro de su pieza con el mismo criterio
+     * que las piezas dentro de su categoría.
+     */
+    private function rangoMadurezVariante(array $v): int
+    {
+        $estado    = $v['ultima_version_estado'] ?? null;
+        $validada  = !empty($v['validada']);
+
+        if ($estado === null && !$validada && empty($v['trabajo_en_curso'])) {
+            return 0; // sin empezar
+        }
+        if (!empty($v['trabajo_en_curso'])) {
+            return 1; // modificándose
+        }
+        if ($estado === 'descartada' && !$validada) {
+            return 2; // la última no sirve
+        }
+        if ($validada) {
+            return 3; // versión consolidada
+        }
+
+        return 4; // para imprimir, sin validar, sin versión...
     }
 
     // ---- Máquinas -------------------------------------------------------
@@ -3819,6 +3910,9 @@ class Web extends BaseController
             // "impresa, pendiente de juzgar" y "la última se descartó" son
             // cuatro sitios muy distintos de la vida de una pieza.
             'ultima_version_estado' => $ultimaVersion['estado'] ?? null,
+            // El número de la última, para el listado: si es un borrador
+            // posterior a la validada, se enseña al lado de esta ("v001 v003").
+            'ultima_version_numero' => isset($ultimaVersion['numero']) ? (int) $ultimaVersion['numero'] : null,
             // El otro eje: si además hay trabajo encima ahora mismo. Basta
             // con una sesión abierta (alguien la tiene en su máquina) o con
             // una ya subida y sin promocionar — ese segundo caso no se veía

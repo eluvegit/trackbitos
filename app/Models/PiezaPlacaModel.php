@@ -29,7 +29,7 @@ class PiezaPlacaModel extends Model
      */
     public const VEREDICTOS = [
         'buena'   => 'Salió bien',
-        'regular' => 'Regular, aprovechable',
+        'regular' => 'Bien, pero con fallos',
         'repetir' => 'Hay que repetirla',
     ];
 

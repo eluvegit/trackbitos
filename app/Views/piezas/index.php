@@ -1,6 +1,16 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<style>
+    /* Dos tonos alternos por pieza: una pieza y sus variantes comparten
+       fondo, y la siguiente pieza cae en el tono alterno — el mismo fondo
+       un punto más oscuro. Así se ve de un vistazo dónde acaba una y
+       empieza otra. */
+    #tablaPiezas tr.pieza-alt > td {
+        background-color: rgba(0, 0, 0, .18);
+    }
+</style>
+
 <?php
 /**
  * Quién está trabajando en qué, ahora mismo — arriba del todo, antes que
@@ -271,8 +281,20 @@ $filaSesionActiva = static function (array $s): string {
  */
 $badgeMadurez = static function (array $v): string {
     if ($v['validada']) {
-        return '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> v'
-            . sprintf('%03d', (int) $v['validada']['numero']) . '</span>';
+        $numValidada = (int) $v['validada']['numero'];
+        $html = '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> v'
+            . sprintf('%03d', $numValidada) . '</span>';
+
+        // Hay un borrador posterior a la validada, esperando prueba: se
+        // anexa al lado ("v001 v003") para no tener que entrar a la ficha
+        // a ver que la buena ya tiene relevo pendiente de imprimir.
+        if ($v['ultima_version_estado'] === 'borrador'
+            && ($v['ultima_version_numero'] ?? 0) > $numValidada) {
+            $html .= ' <span class="badge text-bg-secondary" title="Hay una versión más nueva pendiente de imprimir">'
+                . '<i class="bi bi-printer"></i> para imprimir v' . sprintf('%03d', (int) $v['ultima_version_numero']) . '</span>';
+        }
+
+        return $html;
     }
     if ($v['ultima_version_estado'] === 'impresa') {
         return '<span class="badge text-bg-primary" title="Impresa, pendiente de juzgar el resultado">'
@@ -678,9 +700,11 @@ foreach ($grupos as $grupo) {
                 <tr><td colspan="7" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
+            <?php $filaAlterna = false; ?>
             <?php foreach ($grupo['piezas'] as $familia): ?>
                 <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
-                <tr data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
+                <?php $filaAlterna = !$filaAlterna; $claseAlterna = $filaAlterna ? '' : ' pieza-alt'; ?>
+                <tr class="pieza<?= $claseAlterna ?>" data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
                     <?php // Misma regla que el resto de columnas: la fila de la pieza solo
                           // habla de una variante cuando hay una sola. Con varias, cada una
                           // trae su foto en su propia subfila. ?>
@@ -741,7 +765,7 @@ foreach ($grupos as $grupo) {
                 <?php if (count($variantes) > 1): ?>
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
-                        <tr data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
+                        <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
                             <td style="width: 34px;"><?= $colFoto($v) ?></td>
                             <td class="ps-4">
                                 <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
