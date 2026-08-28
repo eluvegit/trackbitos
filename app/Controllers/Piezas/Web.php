@@ -1787,21 +1787,21 @@ class Web extends BaseController
     }
 
     /**
-     * La versión que se ofrece para imprimir de una variante: la validada
-     * si la hay, y si no la más reciente en borrador/impresa. Misma
-     * cascada que usa galeria() para elegir la miniatura/STL de cada
+     * La versión que se ofrece para imprimir de una variante: la más
+     * reciente que siga siendo imprimible. 'validada' es la buena
+     * confirmada, pero si DESPUÉS se ha promocionado otra ('borrador' o
+     * 'impresa'), esa es el modelo actual y es lo que se quiere imprimir —
+     * antes se devolvía siempre la validada aunque hubiera una posterior.
+     * 'descartada'/'superada' no cuentan: de esas ya se sabe que no sirven.
+     * Misma cascada que usa galeria() para elegir la miniatura/STL de cada
      * tarjeta — aquí se reutiliza para que "cargar pedido en la placa" saque
      * exactamente la misma versión que el usuario ya ve ofrecida allí.
      */
     private function versionParaImprimir(int $varianteId): ?array
     {
-        $version = $this->versionModel->where('variante_id', $varianteId)->where('estado', 'validada')->first();
-        if ($version) {
-            return $version;
-        }
-
         return $this->versionModel->where('variante_id', $varianteId)
-            ->whereIn('estado', ['borrador', 'impresa'])->orderBy('numero', 'DESC')->first();
+            ->whereIn('estado', ['validada', 'borrador', 'impresa'])
+            ->orderBy('numero', 'DESC')->first();
     }
 
     public function placaRenombrar(int $id)
