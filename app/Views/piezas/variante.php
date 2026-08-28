@@ -1128,6 +1128,20 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         <span class="text-muted">· abierta el <?= esc($rama['abierta_en']) ?></span>
                     </div>
 
+                    <?php // Solo cuando la pieza se ha modificado desde su promoción:
+                          // la rama abierta ya tiene una sesión subida ($estado['ultima_subida']).
+                          // Una rama recién abierta sin cambios aún no "mejora" nada.
+                          // $versiones viene ordenado por numero DESC: [0] es la última. ?>
+                    <?php if (!empty($versiones) && !empty($estado['ultima_subida'])): ?>
+                        <?php $numEnCurso = (int) $versiones[0]['numero']; ?>
+                        <div class="alert alert-warning py-1 px-2 small mb-2 d-flex align-items-center gap-2">
+                            <i class="bi bi-arrow-up-circle-fill"></i>
+                            <span>Mejoras de versión
+                                <strong>v<?= sprintf('%03d', $numEnCurso) ?></strong> a la
+                                <strong>v<?= sprintf('%03d', $numEnCurso + 1) ?></strong></span>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($estado['hash_nube']): ?>
                         <!-- Spec 7.2: mostrar el hash de la nube para que el cliente pueda contrastar. -->
                         <div class="small text-muted mb-2">
