@@ -773,11 +773,17 @@ foreach ($grupos as $grupo) {
                             <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
                             <a href="<?= site_url('piezas/variante/' . (int) $variantes[0]['id']) ?>"
                                 class="text-decoration-none text-body"><?= esc($familia['nombre']) ?></a>
-                        <?php else: ?>
+                        <?php elseif (count($variantes) > 0): ?>
                             <?= esc($familia['nombre']) ?>
-                            <span class="text-muted small">
-                                (<?= count($variantes) > 0 ? count($variantes) . ' variantes' : 'sin variantes' ?>)
-                            </span>
+                            <span class="text-muted small">(<?= count($variantes) ?> variantes)</span>
+                        <?php else: ?>
+                            <?php // Sin ninguna línea de diseño viva: su única variante acabó en la
+                                  // papelera. No hay ficha a la que enlazar — se manda a la papelera,
+                                  // que es donde se puede recuperar (o borrar la pieza entera). ?>
+                            <?= esc($familia['nombre']) ?>
+                            <a href="<?= site_url('piezas/papelera') ?>" class="text-danger small text-decoration-none">
+                                (sin variantes — recuperar en la papelera)
+                            </a>
                         <?php endif; ?>
                         <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad') ?>" class="d-inline"
                             data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">

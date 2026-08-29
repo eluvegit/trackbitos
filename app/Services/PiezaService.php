@@ -375,6 +375,23 @@ class PiezaService
             );
         }
 
+        // Una pieza viva siempre tiene al menos una línea de diseño (nace con
+        // su "base"): quitar la última dejaría la familia sin nada a lo que
+        // enlazar en el índice —una fila muerta que solo se puede tocar desde
+        // "Organizar"—. Para deshacerse de ella entera está borrarFamilia.
+        $hermanasVivas = $this->varianteModel
+            ->where('familia_id', $variante['familia_id'])
+            ->where('borrado_en', null)
+            ->where('id !=', $varianteId)
+            ->countAllResults();
+        $familia = $this->familiaModel->find($variante['familia_id']);
+        if ($hermanasVivas === 0 && $familia !== null && $familia['borrado_en'] === null) {
+            throw new RuntimeException(
+                'Es la única línea de diseño de la pieza. Para quitarla, borra la pieza entera '
+                . '(botón de papelera en «Organizar»), o crea antes otra variante.'
+            );
+        }
+
         $this->varianteModel->update($varianteId, ['borrado_en' => date('Y-m-d H:i:s')]);
 
         return $this->varianteModel->find($varianteId);
