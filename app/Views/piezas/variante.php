@@ -559,6 +559,26 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             </p>
         <?php else: ?>
             <?php foreach ($versiones as $v): ?>
+                <?php
+                    /**
+                     * Renders de las OTRAS versiones (más los sueltos): lo que
+                     * se puede copiar a esta versión con "Reutilizar imagen"
+                     * cuando no tiene ninguno propio. Se calcula una vez aquí
+                     * y lo usan el botón y su modal, más abajo.
+                     */
+                    $rendersReutilizables = [];
+                    foreach ($versiones as $otraVersion) {
+                        if ((int) $otraVersion['id'] === (int) $v['id']) {
+                            continue;
+                        }
+                        foreach ($otraVersion['renders'] as $rReutil) {
+                            $rendersReutilizables[] = $rReutil + ['_origen' => $etiqueta($otraVersion)];
+                        }
+                    }
+                    foreach ($rendersSueltos as $rReutil) {
+                        $rendersReutilizables[] = $rReutil + ['_origen' => 'suelto'];
+                    }
+                ?>
                 <div class="card shadow-sm mb-2" id="version-<?= (int) $v['id'] ?>">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
@@ -650,6 +670,14 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                 data-bs-toggle="modal" data-bs-target="#modalRender<?= $v['id'] ?>" title="Añadir render">
                                 <i class="bi bi-image"></i> <i class="bi bi-plus-lg"></i>
                             </button>
+                            <?php // Sin imagen propia pero hay otras versiones que sí tienen: copiar una aquí de un clic. ?>
+                            <?php if (empty($v['renders']) && !empty($rendersReutilizables)): ?>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                    data-bs-toggle="modal" data-bs-target="#modalReutilizarRender<?= $v['id'] ?>"
+                                    title="Copiar aquí la imagen de otra versión">
+                                    <i class="bi bi-copy"></i> Reutilizar imagen
+                                </button>
+                            <?php endif; ?>
                         </div>
 
                         <!--
@@ -1068,6 +1096,46 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                         </form>
                     </div>
                 </div>
+
+                <?php // Reutilizar la imagen de otra versión: una miniatura por
+                      // cada render de otra versión (o suelto); al pulsar, se
+                      // copia a esta versión. Solo si esta no tiene imagen propia. ?>
+                <?php if (empty($v['renders']) && !empty($rendersReutilizables)): ?>
+                    <div class="modal fade" id="modalReutilizarRender<?= $v['id'] ?>" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h6 class="modal-title">Reutilizar imagen en <?= $etiqueta($v) ?></h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="text-muted small">
+                                        Se copia a <?= $etiqueta($v) ?>; la original se queda donde está.
+                                        Pulsa la que quieras usar.
+                                    </p>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <?php foreach ($rendersReutilizables as $rReutil): ?>
+                                            <form method="post" class="text-center m-0"
+                                                action="<?= site_url('piezas/version/' . (int) $v['id'] . '/render/reutilizar') ?>">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="render_id" value="<?= (int) $rReutil['id'] ?>">
+                                                <button class="btn btn-link p-0 border-0" title="Usar esta imagen">
+                                                    <img src="<?= imagen_pieza($rReutil, 'render') ?>"
+                                                        class="rounded border" style="width: 84px; height: 84px; object-fit: cover;"
+                                                        alt="Render" loading="lazy">
+                                                </button>
+                                                <div class="small text-muted"><?= esc($rReutil['_origen']) ?></div>
+                                            </form>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <div class="modal fade" id="modalStl<?= $v['id'] ?>" tabindex="-1">
                     <div class="modal-dialog modal-dialog-centered">

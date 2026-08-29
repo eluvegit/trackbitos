@@ -510,9 +510,9 @@ $filtrosImprimir = [
  * validada que además se está retocando sale en "Definitivas" y en
  * "Modificando", que es justo lo que pasa.
  *
- * El STL se lee tal cual lo pinta $colStl (la versión validada si la hay, la
- * última si no): filtrar por algo distinto de lo que se ve en la columna
- * daría resultados que parecen un error.
+ * El STL se lee tal cual lo pinta $colStl (el de la versión vigente: la
+ * última promocionada que no sea «superada»): filtrar por algo distinto de
+ * lo que se ve en la columna daría resultados que parecen un error.
  */
 $tokensDe = static function (array $v): array {
     $tokens = [];

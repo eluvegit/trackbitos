@@ -716,6 +716,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('variante/(:num)/render', 'Web::subirRender/$1');
     $routes->POST('render/(:num)/borrar', 'Web::borrarRender/$1');
     $routes->GET('render/(:num)/imagen', 'Web::imagenRender/$1');
+    // Copiar el render de otra versión (o uno suelto) a una versión que no
+    // tiene imagen propia — misma variante, se copia el fichero, no se comparte.
+    $routes->POST('version/(:num)/render/reutilizar', 'Web::reutilizarRender/$1');
 
     // STL para imprimir: se adjunta aparte del .blend (spec 8), inmutable
     // una vez puesto.

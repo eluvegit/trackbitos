@@ -342,9 +342,15 @@ class Web extends BaseController
      * solo aparece si hay alguna — no es una categoría más, es un "todavía
      * no colocadas".
      *
+     * `$ordenarPorMadurez` solo tiene sentido para el índice, cuyas filas
+     * son piezas con su lista de `variantes` dentro. La galería reutiliza
+     * este reparto por categoría pero sus filas son de una variante suelta
+     * (sin esa clave) y ya vienen ordenadas alfabéticamente: ahí se pasa
+     * `false` y no se toca el orden.
+     *
      * @return list<array{categoria: array|null, piezas: list<array>}>
      */
-    private function agruparPorCategoria(array $familias): array
+    private function agruparPorCategoria(array $familias, bool $ordenarPorMadurez = true): array
     {
         $grupos = [];
         foreach ($this->categoriaModel->ordenadas() as $categoria) {
@@ -371,13 +377,15 @@ class Web extends BaseController
         // versión validada). El resto ("para imprimir", "sin validar") cae
         // al final. usort es estable desde PHP 8.0, así que a igual rango se
         // conserva el orden alfabético que ya traía la consulta.
-        foreach ($grupos as &$grupo) {
-            usort(
-                $grupo['piezas'],
-                fn(array $a, array $b) => $this->rangoDeMadurez($a) <=> $this->rangoDeMadurez($b)
-            );
+        if ($ordenarPorMadurez) {
+            foreach ($grupos as &$grupo) {
+                usort(
+                    $grupo['piezas'],
+                    fn(array $a, array $b) => $this->rangoDeMadurez($a) <=> $this->rangoDeMadurez($b)
+                );
+            }
+            unset($grupo);
         }
-        unset($grupo);
 
         return $grupos;
     }
@@ -395,7 +403,7 @@ class Web extends BaseController
         $validada   = false;
         $descartada = false;
 
-        foreach ($familia['variantes'] as $v) {
+        foreach ($familia['variantes'] ?? [] as $v) {
             if (!empty($v['validada'])) {
                 $validada = true;
             }
@@ -1229,7 +1237,10 @@ class Web extends BaseController
         usort($piezas, fn($a, $b) => [$a['familiaNombre'], $a['variante']['nombre']] <=> [$b['familiaNombre'], $b['variante']['nombre']]);
 
         return view('piezas/galeria', [
-            'grupos'  => $this->agruparPorCategoria($piezas),
+            // Filas de una variante suelta (no piezas con `variantes` dentro)
+            // y ya ordenadas alfabéticamente: sin el reordenado por madurez,
+            // que es cosa del índice.
+            'grupos'  => $this->agruparPorCategoria($piezas, false),
             'carrito' => $this->carritoActual(),
         ]);
     }
@@ -1892,6 +1903,27 @@ class Web extends BaseController
     {
         return $this->versionModel->where('variante_id', $varianteId)
             ->whereIn('estado', ['validada', 'borrador', 'impresa'])
+            ->orderBy('numero', 'DESC')->first();
+    }
+
+    /**
+     * La versión VIGENTE de una variante: aquella cuyos ficheros (.blend y
+     * STL) son los que valen ahora mismo. Es la última promocionada que
+     * sigue en juego — la de mayor `numero` que NO sea `superada`.
+     *
+     * Se diferencia de `versionParaImprimir` en que aquí SÍ cuenta una
+     * `descartada` si es lo último que hay: mientras nadie promocione algo
+     * por encima, sus ficheros siguen siendo el último estado consolidado
+     * del modelo, y el índice debe reflejar en qué punto está la pieza, no
+     * solo lo que está listo para mandar a la impresora. `superada` se
+     * salta porque, por definición, ya tiene una `validada` más nueva
+     * encima. Y a diferencia de "la validada si la hay", un `borrador`
+     * posterior a la validada gana: es la iteración vigente.
+     */
+    private function versionVigente(int $varianteId): ?array
+    {
+        return $this->versionModel->where('variante_id', $varianteId)
+            ->where('estado !=', 'superada')
             ->orderBy('numero', 'DESC')->first();
     }
 
@@ -3443,12 +3475,96 @@ class Web extends BaseController
         $version = $this->versionModel->find($render['version_id']);
 
         $this->almacen->aPapelera($render['ruta_imagen']);
-        $this->publicas->retirar($render['hash_imagen'] ?? null);
+        // Las copias públicas se nombran por el hash del contenido: si otra
+        // fila de render tiene la misma imagen (se reutilizó de una versión a
+        // otra con "Reutilizar imagen"), retirarlas dejaría a esa otra sin
+        // miniatura hasta el próximo `piezas:publicar-imagenes`.
+        $hash = $render['hash_imagen'] ?? null;
+        $compartida = $hash !== null && $hash !== ''
+            && $this->renderModel->where('hash_imagen', $hash)->where('id !=', $id)->countAllResults() > 0;
+        if (!$compartida) {
+            $this->publicas->retirar($hash);
+        }
         $this->renderModel->delete($id);
 
         $destino = $version ? site_url('piezas/variante/' . $version['variante_id']) : site_url('piezas');
 
         return redirect()->to($destino)->with('success', 'Render apartado a la papelera.');
+    }
+
+    /**
+     * Reutiliza en ESTA versión el render de otra versión de la misma
+     * variante (o uno suelto): copia su imagen a una fila de render nueva
+     * colgada de esta versión. Para cuando una iteración salió idéntica por
+     * fuera y no merece una foto propia, pero se quiere que la versión —
+     * sobre todo la validada, que es la miniatura del índice y la galería —
+     * tenga imagen.
+     *
+     * Se COPIA el fichero, no se comparte la fila: cada render sigue siendo
+     * dueño de su copia y borrar uno no toca al otro. Las copias públicas
+     * (nombradas por hash) sí coincidirían — `borrarRender` ya comprueba si
+     * otra fila las respalda antes de retirarlas.
+     */
+    public function reutilizarRender(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa versión no existe.');
+        }
+        $volver = site_url('piezas/variante/' . (int) $version['variante_id']);
+
+        $origenId = (int) ($this->request->getPost('render_id') ?: 0);
+        $origen   = $origenId > 0 ? $this->renderModel->find($origenId) : null;
+        if (!$origen || (int) $origen['variante_id'] !== (int) $version['variante_id']) {
+            return redirect()->to($volver)->with('error', 'Esa imagen no es de esta pieza.');
+        }
+        if ((int) ($origen['version_id'] ?? 0) === $versionId) {
+            return redirect()->to($volver)->with('error', 'Esa imagen ya es de esta versión.');
+        }
+        if (!$this->almacen->existe($origen['ruta_imagen'])) {
+            return redirect()->to($volver)->with('error', 'El fichero de esa imagen ya no está.');
+        }
+
+        return $this->ejecutar(
+            function () use ($versionId, $version, $origen) {
+                $extension = strtolower(pathinfo((string) $origen['ruta_imagen'], PATHINFO_EXTENSION)) ?: 'jpg';
+
+                // Alta en dos pasos, como subirRender: la fila primero porque
+                // su id va dentro de la ruta del fichero.
+                $id = $this->renderModel->insert([
+                    'variante_id' => (int) $version['variante_id'],
+                    'version_id'  => $versionId,
+                    'ruta_imagen' => '',
+                    'notas'       => $origen['notas'] ?? null,
+                    'subida_en'   => date('Y-m-d H:i:s'),
+                ], true);
+                if (!$id) {
+                    throw new RuntimeException('No se pudo registrar el render: ' . implode(' ', $this->renderModel->errors()));
+                }
+
+                $ruta = $this->almacen->rutaRender((int) $version['variante_id'], $versionId, $id, $extension);
+                try {
+                    $this->almacen->copiar($origen['ruta_imagen'], $ruta);
+                    $hash = $this->almacen->hash($ruta);
+                } catch (Throwable $e) {
+                    $this->renderModel->delete($id);
+
+                    throw $e;
+                }
+
+                $this->renderModel->update($id, [
+                    'ruta_imagen'  => $ruta,
+                    'hash_imagen'  => $hash,
+                    'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                ]);
+
+                $this->publicarCopias($ruta, $hash);
+
+                return (int) $version['variante_id'];
+            },
+            fn(int $varianteId) => site_url('piezas/variante/' . $varianteId),
+            fn() => sprintf('Imagen reutilizada en v%03d.', (int) $version['numero'])
+        );
     }
 
     /**
@@ -3899,6 +4015,7 @@ class Web extends BaseController
         $estado       = $this->sync->estadoDeSincronizacion((int) $variante['id']);
         $validada     = $this->versionModel->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
         $ultimaVersion = $this->versionModel->where('variante_id', $variante['id'])->orderBy('numero', 'DESC')->first();
+        $vigente       = $this->versionVigente((int) $variante['id']);
 
         return $variante + [
             'validada'      => $validada,
@@ -3920,19 +4037,18 @@ class Web extends BaseController
             // pendiente que avisar. Recién promocionada NO cuenta: la rama
             // nueva nace vacía, y si contase saldría en casi todas siempre.
             'trabajo_en_curso' => $estado['sesion_abierta'] !== null || $estado['ultima_subida'] !== null,
-            // ¿Está lista para mandar a imprimir? Sin esto había que entrar
-            // pieza por pieza a comprobar si el STL llegó a adjuntarse, que
-            // es un paso aparte de promocionar y por eso se olvida.
-            //
-            // Se mira la versión validada si la hay, y si no la última: es la
-            // que imprimirías, no cualquiera del historial.
-            'stl' => $this->estadoStl($validada ?: $ultimaVersion),
+            // El .blend y el STL de la fila: los de la versión VIGENTE — la
+            // última promocionada que sigue en juego (borrador, impresa,
+            // validada o incluso descartada si es lo último que hay), nunca
+            // una `superada`. Ver versionVigente(): son los ficheros
+            // utilizables ahora mismo, no forzosamente los de la validada.
+            'stl' => $this->estadoStl($vigente),
             // La foto en el listado: en una lista de treinta nombres, «Cabeza
             // – calva» y «Cabeza – base» son la misma línea de texto, y hay
             // que entrar en las dos para saber cuál es cuál. Misma versión
-            // que el STL de arriba (la validada, o la última) para que la
-            // foto y el estado de la fila hablen de lo mismo.
-            'miniatura' => $this->fotosDe($validada ?: $ultimaVersion, $variante)['miniatura'],
+            // que el STL de arriba (la vigente) para que la foto y el estado
+            // de la fila hablen de lo mismo.
+            'miniatura' => $this->fotosDe($vigente, $variante)['miniatura'],
         ];
     }
 
