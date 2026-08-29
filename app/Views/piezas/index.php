@@ -487,6 +487,9 @@ $filtros = [
     // Secondary y no dark: sobre el tema oscuro, btn-outline-dark pinta negro
     // sobre negro y del chip solo se veía flotando su contador.
     'sin-empezar' => ['Sin empezar', 'bi-circle', 'secondary', 'Dadas de alta y sin ningún .blend'],
+    // No tienen foto de miniatura (ni render ni referencia): para localizarlas
+    // y ponerles una. Mira lo mismo que la columna de foto de la izquierda.
+    'sin-imagen'  => ['Sin imagen', 'bi-image', 'secondary', 'No tienen ninguna foto de miniatura todavía — para añadírsela'],
 ];
 
 /**
@@ -542,6 +545,11 @@ $tokensDe = static function (array $v): array {
     }
     if ($estado === null && empty($v['trabajo_en_curso'])) {
         $tokens[] = 'sin-empezar';
+    }
+    // Sin foto de miniatura: la misma condición que usa $colFoto para pintar
+    // el hueco vacío en la columna de la izquierda.
+    if (empty($v['miniatura'])) {
+        $tokens[] = 'sin-imagen';
     }
 
     return $tokens;
