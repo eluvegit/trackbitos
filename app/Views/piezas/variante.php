@@ -809,6 +809,46 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                             </div>
                         </div>
 
+                        <?php
+                            /*
+                             * Revisión de malla (fase 54): lo que se ve al abrir el STL en el
+                             * laminador y hay que arreglar antes de imprimir — no manifold,
+                             * normales invertidas, agujeros. Por versión, no por trozo: es el
+                             * "¿lista para el laminador?" de un vistazo, y es lo que sale en el
+                             * índice. El botón de "sin comprobar" solo aparece si hay algo que
+                             * borrar — de partida ya está en ese estado.
+                             */
+                            $rm = $v['revision_malla'] ?? null;
+                        ?>
+                        <div class="d-flex align-items-center flex-wrap gap-1 mt-3 small">
+                            <span class="text-muted me-1"><i class="bi bi-bounding-box-circles"></i> Malla:</span>
+                            <form method="post" action="<?= site_url('piezas/version/' . (int) $v['id'] . '/revision-malla') ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="estado" value="ok">
+                                <button class="btn btn-sm <?= $rm === 'ok' ? 'btn-success' : 'btn-outline-secondary' ?> py-0 px-2"
+                                    title="Revisada en el laminador: sin fallos">
+                                    <i class="bi bi-check-circle-fill"></i> Limpia
+                                </button>
+                            </form>
+                            <form method="post" action="<?= site_url('piezas/version/' . (int) $v['id'] . '/revision-malla') ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="estado" value="fallos">
+                                <button class="btn btn-sm <?= $rm === 'fallos' ? 'btn-danger' : 'btn-outline-secondary' ?> py-0 px-2"
+                                    title="Tiene fallos por arreglar antes de imprimir (manifold, normales invertidas...)">
+                                    <i class="bi bi-x-circle-fill"></i> Con fallos
+                                </button>
+                            </form>
+                            <?php if ($rm !== null): ?>
+                                <form method="post" action="<?= site_url('piezas/version/' . (int) $v['id'] . '/revision-malla') ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="estado" value="">
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" title="Volver a «sin comprobar»">
+                                        <i class="bi bi-question-circle"></i>
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+
                         <div class="d-flex flex-wrap gap-2 mt-4 mb-3">
                             <!--
                                 Botones siempre visibles, deshabilitados con explicación cuando

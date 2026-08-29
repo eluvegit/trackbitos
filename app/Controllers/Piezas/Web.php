@@ -3691,6 +3691,32 @@ class Web extends BaseController
     }
 
     /**
+     * Revisión de malla de una versión (fase 54): manifold, normales
+     * invertidas, agujeros... — lo que se ve al abrirla en el laminador y
+     * hay que arreglar antes de imprimir. `estado` llega como 'ok',
+     * 'fallos' o vacío (= sin comprobar, se guarda NULL). Por versión, no
+     * por STL: es el "¿lista para el laminador?" que se ve en el índice.
+     */
+    public function actualizarRevisionMalla(int $versionId)
+    {
+        return $this->verboDeVersion(
+            $versionId,
+            function () use ($versionId) {
+                $estado = (string) $this->request->getPost('estado');
+                $valor  = in_array($estado, ['ok', 'fallos'], true) ? $estado : null;
+                $this->versionModel->update($versionId, ['revision_malla' => $valor]);
+
+                return $valor;
+            },
+            fn($valor) => match ($valor) {
+                'ok'     => 'Malla marcada como revisada y limpia.',
+                'fallos' => 'Malla marcada con fallos por arreglar.',
+                default  => 'Malla marcada como sin comprobar.',
+            }
+        );
+    }
+
+    /**
      * A diferencia de las imágenes, el STL se sirve para descargar (no
      * inline): se abre en el laminador, no en el navegador.
      */
@@ -4016,6 +4042,9 @@ class Web extends BaseController
         $validada     = $this->versionModel->where('variante_id', $variante['id'])->where('estado', 'validada')->first();
         $ultimaVersion = $this->versionModel->where('variante_id', $variante['id'])->orderBy('numero', 'DESC')->first();
         $vigente       = $this->versionVigente((int) $variante['id']);
+        // Una sola lectura de los STL de la vigente: la usan la columna de
+        // STL y la de medidas de placa.
+        $stlsVigente   = $vigente ? $this->servicio->stlsDe((int) $vigente['id']) : [];
 
         return $variante + [
             'validada'      => $validada,
@@ -4042,7 +4071,16 @@ class Web extends BaseController
             // validada o incluso descartada si es lo último que hay), nunca
             // una `superada`. Ver versionVigente(): son los ficheros
             // utilizables ahora mismo, no forzosamente los de la validada.
-            'stl' => $this->estadoStl($vigente),
+            'stl' => $this->estadoStl($vigente, $stlsVigente),
+            // Medidas de placa (fase 53) de la versión vigente: cuánto ocupa
+            // en la plataforma. Con varios trozos se suma el área de todos.
+            // Solo cuenta como "medida" cuando TODOS los trozos lo están.
+            'medidas_placa' => $this->estadoMedidasPlaca($stlsVigente),
+            // Revisión de malla (fase 54) de la versión vigente: 'ok',
+            // 'fallos' o null (sin comprobar). tiene_vigente distingue el
+            // "sin comprobar" real de "aún no hay ninguna versión".
+            'revision_malla' => $vigente['revision_malla'] ?? null,
+            'tiene_vigente'  => $vigente !== null,
             // La foto en el listado: en una lista de treinta nombres, «Cabeza
             // – calva» y «Cabeza – base» son la misma línea de texto, y hay
             // que entrar en las dos para saber cuál es cuál. Misma versión
@@ -4061,19 +4099,56 @@ class Web extends BaseController
      *         (descarga directa desde el índice); con varios trozos hay que
      *         elegir cuál, así que el índice manda a la ficha en su lugar.
      */
-    private function estadoStl(?array $version): array
+    private function estadoStl(?array $version, ?array $stls = null): array
     {
         if (!$version) {
             return ['aplica' => false, 'trozos' => 0, 'version_id' => null, 'stl_id' => null];
         }
 
-        $stls = $this->servicio->stlsDe((int) $version['id']);
+        $stls ??= $this->servicio->stlsDe((int) $version['id']);
 
         return [
             'aplica'     => true,
             'trozos'     => count($stls),
             'version_id' => (int) $version['id'],
             'stl_id'     => count($stls) === 1 ? (int) $stls[0]['id'] : null,
+        ];
+    }
+
+    /**
+     * Estado de las medidas de placa de un conjunto de STL (los trozos de la
+     * versión vigente). Una pieza a trozos ocupa la SUMA de las cajas de sus
+     * partes, así que el índice mira el conjunto: solo cuenta como "medida"
+     * si todos los trozos lo están, y el área es la suma.
+     *
+     * `aplica=false` si no hay ningún STL: no faltan medidas, es que aún no
+     * hay nada que medir.
+     *
+     * @param list<array> $stls filas de piezas_version_stls
+     * @return array{aplica: bool, completas: bool, medidos: int, total: int, area_mm2: float}
+     */
+    private function estadoMedidasPlaca(array $stls): array
+    {
+        $total = count($stls);
+        if ($total === 0) {
+            return ['aplica' => false, 'completas' => false, 'medidos' => 0, 'total' => 0, 'area_mm2' => 0.0];
+        }
+
+        $medidos = 0;
+        $areaMm2 = 0.0;
+        foreach ($stls as $stl) {
+            if ($stl['ancho_mm'] !== null && $stl['fondo_mm'] !== null) {
+                $medidos++;
+                $areaMm2 += (float) $stl['ancho_mm'] * (float) $stl['fondo_mm'];
+            }
+        }
+
+        return [
+            'aplica'    => true,
+            'completas' => $medidos === $total,
+            'medidos'   => $medidos,
+            'total'     => $total,
+            'area_mm2'  => $areaMm2,
         ];
     }
 

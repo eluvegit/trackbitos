@@ -415,6 +415,57 @@ $colStl = static function (array $v): string {
     return $html;
 };
 
+/**
+ * Medidas de placa (fase 53) de la versión vigente: cuánto ocupa en la
+ * plataforma, la caja de ocupación de Chitubox. Con varios trozos se suma
+ * el área de todos — una pieza a trozos ocupa la suma de sus partes. Solo
+ * cuenta como medida cuando TODOS los trozos lo están; si falta alguno, un
+ * icono de regla atenuado (pendiente de medir): esa pieza no entra en el
+ * cálculo de cuántas placas hacen falta hasta que se mida. Vacío del todo
+ * cuando no hay ningún STL: no es que falte la medida, es que aún no hay
+ * nada que medir.
+ */
+$colMedidas = static function (array $v): string {
+    $m = $v['medidas_placa'] ?? ['aplica' => false];
+    if (empty($m['aplica'])) {
+        return '';
+    }
+    if (!empty($m['completas'])) {
+        $cm2 = (float) $m['area_mm2'] / 100;
+        $txt = $cm2 >= 10 ? number_format($cm2, 0) : number_format($cm2, 1);
+        $detalle = (int) $m['total'] > 1 ? ' (suma de ' . (int) $m['total'] . ' trozos)' : '';
+
+        return '<span class="badge border text-body-secondary fw-normal text-nowrap"'
+            . ' title="Ocupa ' . $txt . ' cm² en la placa' . $detalle . '">' . $txt . ' cm²</span>';
+    }
+
+    return '<i class="bi bi-rulers text-body-tertiary"'
+        . ' title="Sin medir (' . (int) $m['medidos'] . '/' . (int) $m['total']
+        . ' trozos): no entra en el reparto de placas"></i>';
+};
+
+/**
+ * Revisión de malla (fase 54) de la versión vigente — manifold, normales
+ * invertidas, agujeros: lo que aparece al abrirla en el laminador. Cruz
+ * roja = tiene fallos por arreglar antes de imprimir; check verde = ya
+ * revisada y limpia; interrogación = nadie la ha mirado todavía. Vacío
+ * cuando aún no hay ninguna versión.
+ */
+$colMalla = static function (array $v): string {
+    if (empty($v['tiene_vigente'])) {
+        return '';
+    }
+    switch ($v['revision_malla'] ?? null) {
+        case 'fallos':
+            return '<i class="bi bi-x-circle-fill text-danger"'
+                . ' title="Malla con fallos por arreglar (manifold, normales invertidas...)"></i>';
+        case 'ok':
+            return '<i class="bi bi-check-circle-fill text-success" title="Malla revisada y limpia"></i>';
+        default:
+            return '<i class="bi bi-question-circle text-body-tertiary" title="Malla sin comprobar"></i>';
+    }
+};
+
 $colAviso = static function (array $v): string {
     if ($v['bloqueo']) {
         return '<span class="badge text-bg-warning"><i class="bi bi-lock-fill"></i> '
@@ -649,7 +700,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="7" class="py-1 bg-body-secondary">
+                <td colspan="9" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -705,7 +756,7 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="7" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="9" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php $filaAlterna = false; ?>
@@ -740,6 +791,8 @@ foreach ($grupos as $grupo) {
                     <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
+                    <td><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
+                    <td class="text-center"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
                     <td class="zona-organizar d-none">
                         <div class="d-flex gap-1 justify-content-end">
@@ -790,6 +843,8 @@ foreach ($grupos as $grupo) {
                             <td><?= $colSku($v) ?></td>
                             <td><?= $colEstado($v) ?></td>
                             <td><?= $colStl($v) ?></td>
+                            <td><?= $colMedidas($v) ?></td>
+                            <td class="text-center"><?= $colMalla($v) ?></td>
                             <td><?= $colAviso($v) ?></td>
                             <td class="zona-organizar d-none">
                                 <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>

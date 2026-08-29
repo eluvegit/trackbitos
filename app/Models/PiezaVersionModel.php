@@ -34,17 +34,19 @@ class PiezaVersionModel extends Model
     protected $allowedFields = [
         'variante_id', 'numero', 'estado', 'promocionada_en',
         'ruta_blend', 'hash_blend',
-        'cambio', 'medidas', 'params_impresion', 'resultado',
+        'cambio', 'medidas', 'params_impresion', 'resultado', 'revision_malla',
     ];
 
     protected $validationRules = [
-        'variante_id' => 'required|integer',
-        'numero'      => 'required|integer',
-        'estado'      => 'permit_empty|in_list[borrador,impresa,validada,superada,descartada]',
-        'ruta_blend'  => 'required|max_length[500]',
-        'hash_blend'  => 'required|max_length[64]',
+        'variante_id'    => 'required|integer',
+        'numero'         => 'required|integer',
+        'estado'         => 'permit_empty|in_list[borrador,impresa,validada,superada,descartada]',
+        'ruta_blend'     => 'required|max_length[500]',
+        'hash_blend'     => 'required|max_length[64]',
         // Invariante 7: el cambio es obligatorio, nunca vacío.
-        'cambio'      => 'required',
+        'cambio'         => 'required',
+        // NULL = sin comprobar; solo estos dos valores explícitos.
+        'revision_malla' => 'permit_empty|in_list[ok,fallos]',
     ];
 
     /**

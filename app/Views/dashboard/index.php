@@ -56,6 +56,30 @@ $hayCaducado = !empty(array_filter($recordatoriosUrgentes, fn($r) => $r['nivel']
             </div>
         <?php endif; ?>
 
+        <?php // Libros en curso: lista mínima (título · autor · %), enlace a su ficha. ?>
+        <?php if (!empty($librosLeyendo)): ?>
+            <div class="mb-4">
+                <h6 class="text-uppercase text-muted small mb-2">Leyendo</h6>
+                <div class="list-group list-group-flush">
+                    <?php foreach ($librosLeyendo as $libro): ?>
+                        <a href="<?= site_url('reading/libro/' . $libro['id']) ?>"
+                            class="list-group-item list-group-item-action bg-transparent d-flex align-items-center gap-2 px-0">
+                            <i class="bi bi-book text-muted"></i>
+                            <span class="flex-grow-1 text-truncate">
+                                <?= esc($libro['title']) ?>
+                                <?php if ($libro['author'] !== ''): ?>
+                                    <span class="text-muted small">· <?= esc($libro['author']) ?></span>
+                                <?php endif; ?>
+                            </span>
+                            <?php if ($libro['progreso'] !== null): ?>
+                                <span class="text-muted small"><?= (int) $libro['progreso'] ?>%</span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <?php
         /**
          * Tareas de Journal fijadas a mano por el usuario — aparte de

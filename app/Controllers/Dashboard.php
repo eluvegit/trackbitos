@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\BookModel;
 use App\Models\DashboardTareaFijadaModel;
 use App\Models\LentillasSustitucionesModel;
 use App\Models\RecordatorioModel;
@@ -50,7 +51,26 @@ class Dashboard extends BaseController
             'secciones' => $this->secciones(),
             'enlacesRapidos' => $this->enlacesRapidos(),
             'tareasFijadas' => (new DashboardTareaFijadaModel())->fijadasConTarea(),
+            'librosLeyendo' => $this->librosLeyendo(),
         ]);
+    }
+
+    /**
+     * Los libros en curso ("leyendo"), para la lista minimalista del
+     * sidebar: título, autor y el % si el libro tiene páginas totales. Van
+     * ordenados por el más tocado recientemente (getByStatus), que es el
+     * que tienes en la cabeza.
+     */
+    private function librosLeyendo(): array
+    {
+        $model = new BookModel();
+
+        return array_map(static fn(array $libro) => [
+            'id'       => (int) $libro['id'],
+            'title'    => $libro['title'],
+            'author'   => $libro['author'] ?? '',
+            'progreso' => $model->progreso($libro),
+        ], $model->getByStatus('leyendo'));
     }
 
     // Placeholder editable: accesos directos del sidebar de escritorio.

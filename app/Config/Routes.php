@@ -689,6 +689,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
     $routes->POST('version/(:num)/validar', 'Web::validar/$1');
+    // Revisión de malla (manifold, normales…): ok / fallos / vacío = sin comprobar.
+    $routes->POST('version/(:num)/revision-malla', 'Web::actualizarRevisionMalla/$1');
     $routes->POST('version/(:num)/descartar', 'Web::descartar/$1');
     $routes->POST('version/(:num)/devolver-a-trabajo', 'Web::devolverATrabajo/$1');
     // Arreglar un botón mal pulsado: impresa/descartada -> borrador.
