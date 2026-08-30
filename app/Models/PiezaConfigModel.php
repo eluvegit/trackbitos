@@ -16,9 +16,26 @@ class PiezaConfigModel extends Model
 {
     protected $table = 'piezas_config';
     protected $primaryKey = 'id';
-    protected $allowedFields = ['id', 'tarea_journal_id', 'pautas_promocion', 'actualizado_en'];
+    protected $allowedFields = [
+        'id',
+        'tarea_journal_id',
+        'pautas_promocion',
+        'calc_capas_referencia',
+        'calc_minutos_referencia',
+        'calc_minutos_preparacion',
+        'actualizado_en',
+    ];
 
     private const FILA = 1;
+
+    /**
+     * Punto de partida de la calculadora de tiempo mientras no se haya
+     * guardado nada: 600 capas medidas tardaron 92 minutos (≈ 0,1533
+     * min/capa) y se cuentan 45 minutos fijos de preparación.
+     */
+    private const CALC_CAPAS_REF_DEFECTO   = 600;
+    private const CALC_MINUTOS_REF_DEFECTO  = 92.0;
+    private const CALC_MINUTOS_PREP_DEFECTO = 45.0;
 
     public function tareaJournalId(): ?int
     {
@@ -65,6 +82,51 @@ class PiezaConfigModel extends Model
     public function guardarPautas(string $texto): void
     {
         $datos = ['pautas_promocion' => trim($texto) !== '' ? $texto : null, 'actualizado_en' => date('Y-m-d H:i:s')];
+
+        if ($this->find(self::FILA)) {
+            $this->update(self::FILA, $datos);
+        } else {
+            $this->insert(['id' => self::FILA] + $datos);
+        }
+    }
+
+    /**
+     * Ajustes de la calculadora de tiempo del índice, con los valores por
+     * defecto ya aplicados cuando la fila todavía no existe o algún campo
+     * está a null. `minutosPorCapa` es derivado (referencia ÷ capas), no se
+     * guarda: así basta con reeditar la medición para recalibrarla.
+     */
+    public function calculadoraTiempo(): array
+    {
+        $fila = $this->find(self::FILA) ?: [];
+
+        $capasRef = isset($fila['calc_capas_referencia']) && $fila['calc_capas_referencia'] !== null
+            ? (int) $fila['calc_capas_referencia']
+            : self::CALC_CAPAS_REF_DEFECTO;
+        $minutosRef = isset($fila['calc_minutos_referencia']) && $fila['calc_minutos_referencia'] !== null
+            ? (float) $fila['calc_minutos_referencia']
+            : self::CALC_MINUTOS_REF_DEFECTO;
+        $minutosPrep = isset($fila['calc_minutos_preparacion']) && $fila['calc_minutos_preparacion'] !== null
+            ? (float) $fila['calc_minutos_preparacion']
+            : self::CALC_MINUTOS_PREP_DEFECTO;
+
+        return [
+            'capasReferencia'    => $capasRef,
+            'minutosReferencia'  => $minutosRef,
+            'minutosPreparacion' => $minutosPrep,
+            'minutosPorCapa'     => $capasRef > 0 ? $minutosRef / $capasRef : 0.0,
+        ];
+    }
+
+    /** Mismo motivo que enlazarTarea(): save() no crea la fila si aún no existe. */
+    public function guardarCalculadoraTiempo(int $capasReferencia, float $minutosReferencia, float $minutosPreparacion): void
+    {
+        $datos = [
+            'calc_capas_referencia'    => max(1, $capasReferencia),
+            'calc_minutos_referencia'  => max(0, $minutosReferencia),
+            'calc_minutos_preparacion' => max(0, $minutosPreparacion),
+            'actualizado_en'           => date('Y-m-d H:i:s'),
+        ];
 
         if ($this->find(self::FILA)) {
             $this->update(self::FILA, $datos);

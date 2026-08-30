@@ -136,6 +136,10 @@ $filaSesionActiva = static function (array $s): string {
             <span class="badge text-bg-primary"><?= (int) $carritoCount ?></span>
         <?php endif; ?>
     </a>
+    <?php // Calculadora: cuánto tarda una placa a partir de su número de capas. ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalCalcTiempo" title="Calcular tiempo estimado por capas">
+        <i class="bi bi-stopwatch"></i>
+    </button>
     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFamilia" title="Pieza nueva">
         <i class="bi bi-plus-lg"></i>
     </button>
@@ -948,6 +952,107 @@ foreach ($grupos as $grupo) {
     </div>
 </div>
 
+<?php
+/**
+ * Calculadora de tiempo estimado de una placa a partir de su número de
+ * capas. El minuto/capa no se guarda como constante suelta: sale de una
+ * medición real (capas de referencia ÷ minutos de referencia), así que
+ * recalibrar es reeditar esa medición. A eso se le suman siempre unos
+ * minutos fijos de preparación. Todo el cálculo es en el navegador y en
+ * vivo; el formulario de abajo solo persiste los tres ajustes.
+ */
+$calcPorCapa = $calcTiempo['minutosPorCapa'];
+?>
+<div class="modal fade" id="modalCalcTiempo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content"
+            data-capas-ref="<?= esc($calcTiempo['capasReferencia'], 'attr') ?>"
+            data-minutos-ref="<?= esc($calcTiempo['minutosReferencia'], 'attr') ?>"
+            data-minutos-prep="<?= esc($calcTiempo['minutosPreparacion'], 'attr') ?>">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-stopwatch"></i> Tiempo estimado por capas</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small" for="calcCapas">Número de capas de la placa</label>
+                <input type="number" min="0" step="1" id="calcCapas" class="form-control form-control-sm"
+                    placeholder="p. ej. 600" autocomplete="off" inputmode="numeric">
+                <?php // Altura de la placa: 0,5 mm por capa (altura de capa fija del laminador). ?>
+                <p class="text-muted small mb-3 mt-1" id="calcAltura"></p>
+
+                <p id="calcVacio" class="text-muted small mb-0">
+                    Escribe el número de capas para ver el tiempo estimado.
+                </p>
+
+                <table id="calcResultado" class="table table-sm align-middle mb-0 d-none">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted">Impresión</td>
+                            <td class="text-end">
+                                <span class="fw-semibold" id="calcImpresionBonito">—</span><br>
+                                <span class="text-muted small" id="calcImpresionMin"></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Preparación</td>
+                            <td class="text-end">
+                                <span class="fw-semibold" id="calcPrepBonito">—</span><br>
+                                <span class="text-muted small" id="calcPrepMin"></span>
+                            </td>
+                        </tr>
+                        <tr class="border-top">
+                            <td class="fw-semibold">Total</td>
+                            <td class="text-end">
+                                <span class="fw-bold fs-6" id="calcTotalBonito">—</span><br>
+                                <span class="text-muted small" id="calcTotalMin"></span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <hr>
+
+                <?php // Los tres números de calibración están plegados: se
+                      // miran/tocan de uvas a peras, el resto del tiempo solo
+                      // estorban al cálculo. ?>
+                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none collapsed" id="calcAjustesToggle"
+                    data-bs-toggle="collapse" data-bs-target="#calcAjustes" aria-expanded="false" aria-controls="calcAjustes">
+                    <i class="bi bi-chevron-right"></i> Ajustes
+                    <span class="text-muted">(<span id="calcRefTexto"><?= (int) $calcTiempo['capasReferencia'] ?> capas =
+                    <?= rtrim(rtrim(number_format($calcTiempo['minutosReferencia'], 2, ',', '.'), '0'), ',') ?> min</span>
+                    &rarr; <span id="calcPorCapaTexto"><?= number_format($calcPorCapa, 4, ',', '.') ?></span> min/capa)</span>
+                </button>
+
+                <form method="post" action="<?= site_url('piezas/calculadora-tiempo') ?>" class="collapse mt-2" id="calcAjustes">
+                    <?= csrf_field() ?>
+                    <p class="text-muted small mb-2">
+                        La referencia fija cuánto tarda cada capa; a partir de ahí se estima la impresión.
+                        Los minutos de preparación se suman siempre.
+                    </p>
+                    <div class="row g-2">
+                        <div class="col">
+                            <label class="form-label small" for="cfgCapasRef">Capas de referencia</label>
+                            <input type="number" min="1" step="1" name="capas_referencia" id="cfgCapasRef"
+                                class="form-control form-control-sm" value="<?= (int) $calcTiempo['capasReferencia'] ?>" required>
+                        </div>
+                        <div class="col">
+                            <label class="form-label small" for="cfgMinRef">Minutos de referencia</label>
+                            <input type="number" min="0" step="0.01" name="minutos_referencia" id="cfgMinRef"
+                                class="form-control form-control-sm" value="<?= rtrim(rtrim(number_format($calcTiempo['minutosReferencia'], 2, '.', ''), '0'), '.') ?>" required>
+                        </div>
+                    </div>
+                    <label class="form-label small mt-2" for="cfgMinPrep">Minutos de preparación (fijos)</label>
+                    <input type="number" min="0" step="0.01" name="minutos_preparacion" id="cfgMinPrep"
+                        class="form-control form-control-sm" value="<?= rtrim(rtrim(number_format($calcTiempo['minutosPreparacion'], 2, '.', ''), '0'), '.') ?>" required>
+                    <div class="text-end mt-3">
+                        <button class="btn btn-sm btn-primary">Guardar ajustes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Alta de pieza (en el esquema, "familia": ver la nota de vocabulario en SPEC.md) -->
 <div class="modal fade" id="modalFamilia" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -1293,6 +1398,112 @@ foreach ($grupos as $grupo) {
 
             aplicarFiltros();
         });
+    }
+
+    // ---- Calculadora de tiempo estimado por capas ---------------------
+    // Todo en vivo y en el navegador: al teclear capas (o al retocar los
+    // ajustes, aunque aún no se hayan guardado) se recalcula. El
+    // minuto/capa sale de la referencia, nunca es una constante suelta.
+    var calcModal = document.getElementById('modalCalcTiempo');
+    if (calcModal) {
+        var calcCaja      = calcModal.querySelector('.modal-content');
+        var campoCapas    = document.getElementById('calcCapas');
+        var campoCapasRef = document.getElementById('cfgCapasRef');
+        var campoMinRef   = document.getElementById('cfgMinRef');
+        var campoMinPrep  = document.getElementById('cfgMinPrep');
+
+        var elVacio      = document.getElementById('calcVacio');
+        var elTabla      = document.getElementById('calcResultado');
+        var elImpBonito  = document.getElementById('calcImpresionBonito');
+        var elImpMin     = document.getElementById('calcImpresionMin');
+        var elPrepBonito = document.getElementById('calcPrepBonito');
+        var elPrepMin    = document.getElementById('calcPrepMin');
+        var elTotBonito  = document.getElementById('calcTotalBonito');
+        var elTotMin     = document.getElementById('calcTotalMin');
+        var elRefTexto   = document.getElementById('calcRefTexto');
+        var elPorCapa    = document.getElementById('calcPorCapaTexto');
+        var elAltura     = document.getElementById('calcAltura');
+
+        // Altura de capa fija del laminador, para pasar capas -> cm.
+        var MM_POR_CAPA = 0.05;
+
+        // Número con coma decimal a la española y sin ceros de relleno.
+        function nEs(n, decs) {
+            var s = n.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: decs });
+            return s;
+        }
+
+        // Minutos -> "1 d 2 h 30 min", quitando los tramos a cero.
+        function bonito(mins) {
+            mins = Math.round(mins);
+            var d = Math.floor(mins / 1440);
+            var h = Math.floor((mins % 1440) / 60);
+            var m = mins % 60;
+            var partes = [];
+            if (d) partes.push(d + ' d');
+            if (h) partes.push(h + ' h');
+            if (m || !partes.length) partes.push(m + ' min');
+            return partes.join(' ');
+        }
+
+        function leer(campo, porDefectoAttr) {
+            var v = parseFloat(String(campo.value).replace(',', '.'));
+            if (isFinite(v) && v >= 0) return v;
+            return parseFloat(calcCaja.getAttribute(porDefectoAttr)) || 0;
+        }
+
+        function recalcular() {
+            var capasRef = leer(campoCapasRef, 'data-capas-ref');
+            var minRef   = leer(campoMinRef, 'data-minutos-ref');
+            var minPrep  = leer(campoMinPrep, 'data-minutos-prep');
+            var porCapa  = capasRef > 0 ? minRef / capasRef : 0;
+
+            elRefTexto.textContent = nEs(capasRef, 0) + ' capas = ' + nEs(minRef, 2) + ' min';
+            elPorCapa.textContent  = nEs(porCapa, 4);
+
+            var capas = parseFloat(String(campoCapas.value).replace(',', '.'));
+            if (!isFinite(capas) || capas <= 0) {
+                elAltura.textContent = '';
+                elTabla.classList.add('d-none');
+                elVacio.classList.remove('d-none');
+                return;
+            }
+
+            elAltura.textContent = '≈ ' + nEs(capas * MM_POR_CAPA / 10, 1) + ' cm de alto (' + nEs(MM_POR_CAPA, 2) + ' mm/capa)';
+
+            var impresion = capas * porCapa;
+            var total     = impresion + minPrep;
+
+            elImpBonito.textContent  = bonito(impresion);
+            elImpMin.textContent     = nEs(impresion, 1) + ' min · ' + nEs(capas, 0) + ' capas × ' + nEs(porCapa, 4);
+            elPrepBonito.textContent = bonito(minPrep);
+            elPrepMin.textContent    = nEs(minPrep, 1) + ' min fijos';
+            elTotBonito.textContent  = bonito(total);
+            elTotMin.textContent     = nEs(total, 1) + ' min';
+
+            elVacio.classList.add('d-none');
+            elTabla.classList.remove('d-none');
+        }
+
+        [campoCapas, campoCapasRef, campoMinRef, campoMinPrep].forEach(function (c) {
+            c.addEventListener('input', recalcular);
+        });
+        calcModal.addEventListener('shown.bs.modal', function () {
+            campoCapas.focus();
+            recalcular();
+        });
+
+        // Chevron del plegable de ajustes: apunta a la derecha plegado, abajo abierto.
+        var ajustes = document.getElementById('calcAjustes');
+        var ajustesIcono = document.querySelector('#calcAjustesToggle i');
+        if (ajustes && ajustesIcono) {
+            ajustes.addEventListener('show.bs.collapse', function () {
+                ajustesIcono.classList.replace('bi-chevron-right', 'bi-chevron-down');
+            });
+            ajustes.addEventListener('hide.bs.collapse', function () {
+                ajustesIcono.classList.replace('bi-chevron-down', 'bi-chevron-right');
+            });
+        }
     }
 })();
 </script>

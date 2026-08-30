@@ -19,6 +19,10 @@
             </span>
         </h5>
         <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnEnfoque"
+                title="Modo enfoque: revisar los resultados de uno en uno (E)">
+                <i class="bi bi-fullscreen"></i>
+            </button>
             <a class="btn btn-sm btn-primary" href="<?= site_url('enlaces/crear') ?>">
                 <i class="bi bi-plus-lg"></i> Agregar
             </a>
@@ -49,7 +53,12 @@
         <div class="enl-searchbar mb-2">
             <div class="enl-search-input">
                 <i class="bi bi-search"></i>
-                <input type="text" name="q" value="<?= esc($q) ?>" class="form-control" placeholder="Buscar por título, URL, nota, categoría o etiqueta…">
+                <input type="text" name="q" value="<?= esc($q) ?>" class="form-control" autocomplete="off"
+                    placeholder="Buscar por título, URL, nota, categoría o etiqueta…  ( / )">
+                <button type="button" class="enl-search-clear<?= $q === '' ? ' d-none' : '' ?>" id="btnLimpiarTexto"
+                    title="Quitar solo el texto" aria-label="Quitar solo el texto">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
             <button type="button" class="btn btn-outline-secondary enl-btn-filtros" id="btnToggleFiltros">
                 <i class="bi bi-sliders"></i> Filtros
@@ -106,13 +115,28 @@
             </div>
             <div class="d-flex gap-2 mt-3">
                 <button type="submit" class="btn btn-primary btn-sm">Aplicar filtros</button>
-                <a href="<?= site_url('enlaces') ?>" class="btn btn-light btn-sm" data-enl-nav>Limpiar</a>
+                <?php // Solo los filtros del panel (categorías, etiquetas, estado); el texto se queda. ?>
+                <button type="button" class="btn btn-light btn-sm" id="btnQuitarFiltros">Quitar filtros</button>
             </div>
         </div>
     </form>
 
     <!-- Lista (se re-renderiza en cada búsqueda en vivo) -->
     <div id="enlResultados"><?= $this->include('enlaces/_resultados') ?></div>
+</div>
+
+<!-- Modo enfoque: recorre los resultados de uno en uno (se rellena desde el DOM de la lista) -->
+<div class="enl-focus" id="enlFocus" hidden>
+    <div class="enl-focus-bar">
+        <span class="enl-focus-pos" id="focusPos">1 / 1</span>
+        <div class="enl-focus-bar-actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-focus="prev" title="Anterior (←)"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-focus="next" title="Siguiente (→)"><i class="bi bi-chevron-right"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-focus="close" title="Salir (Esc)"><i class="bi bi-x-lg"></i></button>
+        </div>
+    </div>
+    <div class="enl-focus-card" id="focusCard"><!-- contenido dinámico --></div>
+    <div class="enl-focus-hint text-muted small">← → moverse · O abrir · V visto · Esc salir</div>
 </div>
 
 <style>
@@ -136,7 +160,23 @@
     }
     .enl-search-input .form-control {
         padding-left: 34px;
+        padding-right: 34px;
     }
+    .enl-search-clear {
+        position: absolute;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--bs-secondary-color);
+        cursor: pointer;
+        font-size: .8rem;
+    }
+    .enl-search-clear:hover { background: var(--bs-tertiary-bg); color: var(--bs-emphasis-color); }
     .enl-btn-filtros {
         display: inline-flex;
         align-items: center;
@@ -449,6 +489,54 @@
     @media (max-width: 575.98px) {
         .enl-item { padding: 8px; gap: 8px; }
     }
+
+    /* ================= Modo enfoque ================= */
+    .enl-focus {
+        position: fixed;
+        inset: 0;
+        z-index: 1080;
+        background: var(--bs-body-bg);
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        gap: 14px;
+    }
+    .enl-focus[hidden] { display: none; }
+    .enl-focus-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .enl-focus-pos { font-size: .85rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+    .enl-focus-bar-actions { display: flex; gap: 6px; }
+    .enl-focus-card {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        max-width: 720px;
+        width: 100%;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .enl-focus-domain { font-size: .85rem; color: var(--bs-secondary-color); font-weight: 600; }
+    .enl-focus-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--bs-emphasis-color);
+        overflow-wrap: anywhere;
+    }
+    .enl-focus-meta { font-size: .85rem; color: var(--bs-secondary-color); }
+    .enl-focus-extra {
+        font-size: .95rem;
+        color: var(--bs-body-color);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    .enl-focus-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .enl-focus-hint { text-align: center; }
 </style>
 
 <script>
@@ -717,6 +805,7 @@
             pintarBadgeFiltros(data.panelActiveCount);
             // El picker de etiquetas refleja las presentes en estos resultados.
             tagPicker.setOptions(data.tagsDisp || []);
+            refrescarEnfoque();
         } catch (err) {
             // fallo puntual de red: se reintenta en el siguiente cambio
         } finally {
@@ -728,6 +817,7 @@
     function applyUrl(href, push) {
         const p = new URL(href, location.origin).searchParams;
         inputQ.value = p.get('q') || '';
+        btnLimpiarTexto.classList.toggle('d-none', inputQ.value === '');
         inputVisto.value = (p.get('visto') === '0' || p.get('visto') === '1') ? p.get('visto') : '';
         inputMatch.value = p.get('match') === 'all' ? 'all' : 'any';
         const cats = p.getAll('cats[]').concat(p.getAll('cats'));
@@ -749,10 +839,53 @@
         liveSearch(true);
     });
 
-    // Al teclear: debounce corto.
+    // Al teclear: debounce corto + mostrar/ocultar la ✕ de "quitar texto".
+    const btnLimpiarTexto = document.getElementById('btnLimpiarTexto');
     inputQ.addEventListener('input', () => {
+        btnLimpiarTexto.classList.toggle('d-none', inputQ.value === '');
         clearTimeout(liveTimer);
         liveTimer = setTimeout(() => liveSearch(false), 300);
+    });
+
+    // Quitar SOLO el texto (los filtros del panel se quedan).
+    btnLimpiarTexto.addEventListener('click', () => {
+        inputQ.value = '';
+        btnLimpiarTexto.classList.add('d-none');
+        inputQ.focus();
+        clearTimeout(liveTimer);
+        liveSearch(true);
+    });
+
+    // Quitar SOLO los filtros del panel (el texto se queda).
+    document.getElementById('btnQuitarFiltros').addEventListener('click', () => {
+        catSel.clear();
+        tagPicker.selected.clear();
+        inputVisto.value = '';
+        inputMatch.value = 'any';
+        renderCatPills();
+        tagPicker.renderChips();
+        syncSegmented();
+        updateMatchVisibility();
+        liveSearch(true);
+    });
+
+    function escribiendo(t) {
+        return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    }
+
+    // Atajos de teclado: "/" enfoca el buscador, "E" abre modo enfoque,
+    // y dentro del modo enfoque ← → O V Esc (se gestionan más abajo).
+    document.addEventListener('keydown', (ev) => {
+        if (!elFocus.hidden) return; // modo enfoque tiene sus propias teclas
+        if (ev.metaKey || ev.ctrlKey || ev.altKey || escribiendo(ev.target)) return;
+        if (ev.key === '/') {
+            ev.preventDefault();
+            inputQ.focus();
+            inputQ.select();
+        } else if (ev.key.toLowerCase() === 'e') {
+            ev.preventDefault();
+            abrirEnfoque();
+        }
     });
 
     // Chips de filtro activo, "Limpiar todo", atajos de "afina": navegan sin recargar.
@@ -767,15 +900,156 @@
     window.addEventListener('popstate', () => applyUrl(location.href, false));
 
     // ============= Toggle visto (delegado: la lista se re-renderiza) =============
+    const TOGGLE_VISTO_URL = '<?= site_url('enlaces/toggle-visto') ?>';
     elResultados.addEventListener('click', async (ev) => {
         const b = ev.target.closest('.btn-toggle-visto');
         if (!b) return;
         b.disabled = true;
         try {
-            const res = await fetch('<?= site_url('enlaces/toggle-visto') ?>/' + b.getAttribute('data-id'), { method: 'POST' });
+            const res = await fetch(TOGGLE_VISTO_URL + '/' + b.getAttribute('data-id'), { method: 'POST' });
             if (res.ok) liveSearch(false);
         } catch (err) {
             b.disabled = false;
+        }
+    });
+
+    // ============= Modo enfoque: recorrer los resultados de uno en uno =============
+    const elFocus = document.getElementById('enlFocus');
+    const focusCard = document.getElementById('focusCard');
+    const focusPos = document.getElementById('focusPos');
+    let focusItems = [];
+    let focusIdx = 0;
+
+    // Extrae lo que hace falta de una fila ya renderizada de la lista.
+    function leerFila(node) {
+        const titulo = node.querySelector('.enl-item-title');
+        const vistoBtn = node.querySelector('.btn-toggle-visto');
+        const q = sel => (node.querySelector(sel)?.textContent || '').replace(/\s+/g, ' ').trim();
+        return {
+            node,
+            id: vistoBtn ? vistoBtn.getAttribute('data-id') : null,
+            url: titulo ? titulo.getAttribute('href') : '#',
+            titulo: titulo ? titulo.textContent.trim() : '(sin título)',
+            meta: q('.enl-item-meta'),
+            coincide: q('.enl-item-match'),
+            nota: q('.enl-item-extra'),
+            badges: node.querySelector('.enl-item-badges')?.innerHTML || '',
+            editar: node.querySelector('.enl-item-actions a[href*="/editar/"]')?.getAttribute('href') || null,
+            verPagina: node.querySelector('.enl-item-favicon')?.getAttribute('href') || null,
+            visto: node.classList.contains('is-visto'),
+        };
+    }
+
+    function pintarEnfoque() {
+        const it = focusItems[focusIdx];
+        if (!it) return;
+        focusPos.textContent = (focusIdx + 1) + ' / ' + focusItems.length;
+        focusCard.innerHTML = '';
+
+        const add = (cls, text) => {
+            if (!text) return;
+            const d = document.createElement('div');
+            d.className = cls;
+            d.textContent = text;
+            focusCard.appendChild(d);
+        };
+
+        const dom = (it.meta.split('·')[0] || '').trim();
+        add('enl-focus-domain', dom);
+
+        const h = document.createElement('a');
+        h.className = 'enl-focus-title';
+        h.href = it.url;
+        h.target = '_blank';
+        h.rel = 'noopener';
+        h.style.textDecoration = 'none';
+        h.textContent = it.titulo;
+        focusCard.appendChild(h);
+
+        add('enl-focus-meta', it.meta);
+        add('enl-focus-meta', it.coincide);
+        add('enl-focus-extra', it.nota);
+
+        if (it.badges) {
+            const b = document.createElement('div');
+            b.className = 'enl-item-badges';
+            b.innerHTML = it.badges;
+            focusCard.appendChild(b);
+        }
+
+        const acc = document.createElement('div');
+        acc.className = 'enl-focus-actions';
+        acc.innerHTML =
+            `<a class="btn btn-sm btn-primary" href="${it.url}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Abrir (O)</a>`
+            + (it.verPagina ? `<a class="btn btn-sm btn-outline-secondary" href="${it.verPagina}"><i class="bi bi-file-text"></i> Página</a>` : '')
+            + (it.editar ? `<a class="btn btn-sm btn-outline-secondary" href="${it.editar}"><i class="bi bi-pencil"></i> Editar</a>` : '')
+            + `<button type="button" class="btn btn-sm ${it.visto ? 'btn-success' : 'btn-outline-secondary'}" data-focus="visto">`
+            + `<i class="bi ${it.visto ? 'bi-check-square-fill' : 'bi-square'}"></i> ${it.visto ? 'Visto' : 'Marcar visto'} (V)</button>`;
+        focusCard.appendChild(acc);
+    }
+
+    function abrirEnfoque() {
+        focusItems = Array.from(elResultados.querySelectorAll('.enl-item')).map(leerFila);
+        if (!focusItems.length) return;
+        focusIdx = 0;
+        elFocus.hidden = false;
+        document.body.style.overflow = 'hidden';
+        pintarEnfoque();
+    }
+
+    function cerrarEnfoque() {
+        elFocus.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    function moverEnfoque(d) {
+        focusIdx = (focusIdx + d + focusItems.length) % focusItems.length;
+        pintarEnfoque();
+    }
+
+    // Tras una búsqueda en vivo con el modo enfoque abierto: rehace la lista de filas.
+    function refrescarEnfoque() {
+        if (elFocus.hidden) return;
+        focusItems = Array.from(elResultados.querySelectorAll('.enl-item')).map(leerFila);
+        if (!focusItems.length) { cerrarEnfoque(); return; }
+        if (focusIdx >= focusItems.length) focusIdx = focusItems.length - 1;
+        pintarEnfoque();
+    }
+
+    async function toggleVistoEnfoque() {
+        const it = focusItems[focusIdx];
+        if (!it || !it.id) return;
+        const res = await fetch(TOGGLE_VISTO_URL + '/' + it.id, { method: 'POST' });
+        if (!res.ok) return;
+        it.visto = !it.visto;
+        it.node.classList.toggle('is-visto', it.visto);
+        const ico = it.node.querySelector('.btn-toggle-visto i');
+        if (ico) ico.className = 'bi ' + (it.visto ? 'bi-check-square-fill' : 'bi-square');
+        pintarEnfoque();
+    }
+
+    document.getElementById('btnEnfoque').addEventListener('click', abrirEnfoque);
+
+    elFocus.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-focus]');
+        if (!b) return;
+        const a = b.getAttribute('data-focus');
+        if (a === 'prev') moverEnfoque(-1);
+        else if (a === 'next') moverEnfoque(1);
+        else if (a === 'close') cerrarEnfoque();
+        else if (a === 'visto') toggleVistoEnfoque();
+    });
+
+    document.addEventListener('keydown', (ev) => {
+        if (elFocus.hidden || escribiendo(ev.target)) return;
+        if (ev.key === 'Escape') cerrarEnfoque();
+        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); moverEnfoque(-1); }
+        else if (ev.key === 'ArrowRight') { ev.preventDefault(); moverEnfoque(1); }
+        else if (ev.key.toLowerCase() === 'o') {
+            const it = focusItems[focusIdx];
+            if (it) window.open(it.url, '_blank', 'noopener');
+        } else if (ev.key.toLowerCase() === 'v') {
+            toggleVistoEnfoque();
         }
     });
 })();

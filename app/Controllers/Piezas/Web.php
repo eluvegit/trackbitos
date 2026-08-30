@@ -219,6 +219,10 @@ class Web extends BaseController
             // Para el textarea del desplegable "Pautas": el texto tal cual
             // se guardó, no la lista ya filtrada de pautasPromocion().
             'pautasTexto'      => (new PiezaConfigModel())->find(1)['pautas_promocion'] ?? '',
+            // Referencia (capas/minutos) y minutos de preparación de la
+            // calculadora de tiempo del modal; el minuto/capa ya viene
+            // derivado.
+            'calcTiempo'       => (new PiezaConfigModel())->calculadoraTiempo(),
         ]);
     }
 
@@ -839,6 +843,28 @@ class Web extends BaseController
             },
             fn() => site_url('piezas'),
             fn() => 'Pautas guardadas.'
+        );
+    }
+
+    /**
+     * Ajustes de la calculadora de tiempo del índice: la referencia medida a
+     * mano (X capas tardaron Y minutos, de ahí sale el minuto/capa) y los
+     * minutos fijos de preparación. Se reescriben enteros, como las pautas.
+     */
+    public function guardarCalculadoraTiempo()
+    {
+        return $this->ejecutar(
+            function () {
+                (new PiezaConfigModel())->guardarCalculadoraTiempo(
+                    (int) $this->request->getPost('capas_referencia'),
+                    (float) $this->request->getPost('minutos_referencia'),
+                    (float) $this->request->getPost('minutos_preparacion')
+                );
+
+                return true;
+            },
+            fn() => site_url('piezas'),
+            fn() => 'Ajustes de la calculadora guardados.'
         );
     }
 

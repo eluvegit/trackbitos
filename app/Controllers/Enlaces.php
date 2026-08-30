@@ -148,6 +148,17 @@ class Enlaces extends BaseController
             $this->aplicarBusquedaTexto($builder, $qWords, $db);
         }
 
+        // Puntuación de relevancia real (índice FULLTEXT sobre titulo/url/extra):
+        // solo para ordenar, no filtra. Si el índice no está (migración sin
+        // pasar), se ordena por fecha como siempre.
+        $conRanking = $qWords && !$modoReciente && $this->fulltextDisponible($db);
+        if ($conRanking) {
+            $builder->select(
+                'MATCH(e.titulo, e.url, e.extra) AGAINST (' . $db->escape($q) . ' IN NATURAL LANGUAGE MODE) AS _rel',
+                false
+            );
+        }
+
         // Visto
         if ($visto === '0' || $visto === '1') {
             $builder->where('e.visto', (int)$visto);
@@ -188,6 +199,8 @@ class Enlaces extends BaseController
 
         if ($modoReciente) {
             $builder->orderBy('e.id', 'DESC');
+        } elseif ($conRanking) {
+            $builder->orderBy('_rel', 'DESC')->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
         } else {
             $builder->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
         }
@@ -437,6 +450,28 @@ class Enlaces extends BaseController
                 )
                 ->groupEnd();
         }
+    }
+
+    /** Memo por request: ¿existe el índice FULLTEXT de enlaces_items? */
+    private static ?bool $ftDisponible = null;
+
+    /**
+     * ¿Está el índice FULLTEXT (`ft_enlaces_items_titulo_url_extra`)? Se
+     * comprueba para no lanzar `MATCH ... AGAINST` si el código se ha
+     * desplegado antes de pasar la migración — en ese caso la búsqueda
+     * sigue funcionando, solo que ordenada por fecha.
+     */
+    private function fulltextDisponible($db): bool
+    {
+        if (self::$ftDisponible === null) {
+            self::$ftDisponible = (bool) $db->query(
+                "SELECT COUNT(*) c FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enlaces_items'
+                   AND INDEX_NAME = 'ft_enlaces_items_titulo_url_extra'"
+            )->getRow()->c;
+        }
+
+        return self::$ftDisponible;
     }
 
     /**
@@ -699,8 +734,30 @@ class Enlaces extends BaseController
 
     public function etiquetas()
     {
-        $etiquetas = $this->etiquetas->orderBy('nombre', 'ASC')->findAll();
-        return view('enlaces/etiquetas', compact('etiquetas'));
+        $db = \Config\Database::connect();
+
+        $conteos = [];
+        foreach (
+            $db->table('enlaces_item_etiquetas')->select('etiqueta_id, COUNT(*) total')
+               ->groupBy('etiqueta_id')->get()->getResultArray() as $r
+        ) {
+            $conteos[(int) $r['etiqueta_id']] = (int) $r['total'];
+        }
+
+        $etiquetas = $this->etiquetas->findAll();
+        foreach ($etiquetas as &$t) {
+            $t['uso'] = $conteos[(int) $t['id']] ?? 0;
+        }
+        unset($t);
+
+        // Las de menos uso primero: son las que hay que fusionar o quitar.
+        usort($etiquetas, static fn($a, $b) => [$a['uso'], mb_strtolower($a['nombre'])] <=> [$b['uso'], mb_strtolower($b['nombre'])]);
+
+        return view('enlaces/etiquetas', [
+            'etiquetas' => $etiquetas,
+            'sinUso'    => count(array_filter($etiquetas, static fn($t) => $t['uso'] === 0)),
+            'unaVez'    => count(array_filter($etiquetas, static fn($t) => $t['uso'] === 1)),
+        ]);
     }
 
     public function guardarEtiqueta()
@@ -713,11 +770,125 @@ class Enlaces extends BaseController
         return redirect()->back();
     }
 
+    /**
+     * Renombra una etiqueta. Si el nombre nuevo ya lo tiene OTRA etiqueta
+     * (mismo nombre o mismo slug), no crea un duplicado: fusiona esta en
+     * aquella (mueve sus enlaces y la borra).
+     */
+    public function renombrarEtiqueta($id)
+    {
+        $etq = $this->etiquetas->find($id);
+        if (!$etq) {
+            return redirect()->back()->with('error', 'Esa etiqueta no existe.');
+        }
+
+        $nombre = trim((string) $this->request->getPost('nombre'));
+        if ($nombre === '') {
+            return redirect()->back()->with('error', 'El nombre no puede quedar vacío.');
+        }
+
+        $slug  = $this->slugify($nombre);
+        $otra  = $this->etiquetas
+            ->where('id !=', $id)
+            ->groupStart()->where('slug', $slug)->orWhere('nombre', $nombre)->groupEnd()
+            ->first();
+
+        if ($otra) {
+            $movidos = $this->fusionar([(int) $id], (int) $otra['id']);
+            return redirect()->back()->with('mensaje', "«{$etq['nombre']}» fusionada en «{$otra['nombre']}» ({$movidos} enlace(s)).");
+        }
+
+        $this->etiquetas->update($id, ['nombre' => $nombre, 'slug' => $slug]);
+        return redirect()->back()->with('mensaje', 'Etiqueta renombrada.');
+    }
+
+    /**
+     * Fusiona varias etiquetas en una: reasigna sus enlaces a la de destino
+     * (sin duplicar filas) y borra las de origen.
+     */
+    public function fusionarEtiquetas()
+    {
+        $destino = (int) $this->request->getPost('destino');
+        $origen  = array_values(array_unique(array_filter(
+            array_map('intval', (array) $this->request->getPost('origen')),
+            static fn($i) => $i > 0
+        )));
+        $origen  = array_values(array_diff($origen, [$destino]));
+
+        if (!$destino || !$this->etiquetas->find($destino)) {
+            return redirect()->back()->with('error', 'Elige una etiqueta de destino válida.');
+        }
+        if ($origen === []) {
+            return redirect()->back()->with('error', 'No hay etiquetas que fusionar.');
+        }
+
+        $destNombre = $this->etiquetas->find($destino)['nombre'];
+        $movidos    = $this->fusionar($origen, $destino);
+
+        return redirect()->back()->with(
+            'mensaje',
+            count($origen) . ' etiqueta(s) fusionadas en «' . $destNombre . '» (' . $movidos . ' enlace(s) reasignados).'
+        );
+    }
+
+    /**
+     * Núcleo de la fusión, reutilizado por renombrar. Devuelve cuántas
+     * relaciones enlace-etiqueta se han reasignado de verdad.
+     *
+     * @param list<int> $origen ids de etiqueta a absorber
+     */
+    private function fusionar(array $origen, int $destino): int
+    {
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        // Enlaces que ya tienen la de destino: sus filas de origen se borran
+        // sin reasignar (evita chocar con el índice único item+etiqueta).
+        $yaTienenDestino = array_column(
+            $db->table('enlaces_item_etiquetas')->select('item_id')
+               ->where('etiqueta_id', $destino)->get()->getResultArray(),
+            'item_id'
+        );
+
+        $relQuery = $db->table('enlaces_item_etiquetas')->whereIn('etiqueta_id', $origen);
+        if ($yaTienenDestino !== []) {
+            $relQuery->whereNotIn('item_id', $yaTienenDestino);
+        }
+        $relQuery->set('etiqueta_id', $destino)->update();
+        $movidos = $db->affectedRows();
+
+        // Lo que quede de origen (los duplicados que no se movieron) fuera.
+        $db->table('enlaces_item_etiquetas')->whereIn('etiqueta_id', $origen)->delete();
+        $this->etiquetas->whereIn('id', $origen)->delete();
+
+        $db->transComplete();
+
+        return max(0, (int) $movidos);
+    }
 
     public function borrarEtiqueta($id)
     {
+        $this->enlaceEtiquetas->where('etiqueta_id', $id)->delete();
         $this->etiquetas->delete($id);
         return redirect()->back();
+    }
+
+    /** Borra de golpe todas las etiquetas que no está usando ningún enlace. */
+    public function borrarEtiquetasSinUso()
+    {
+        $db = \Config\Database::connect();
+
+        $usadas = array_column(
+            $db->table('enlaces_item_etiquetas')->select('etiqueta_id')->distinct()->get()->getResultArray(),
+            'etiqueta_id'
+        );
+
+        $q = $db->table('enlaces_etiquetas');
+        $q = $usadas !== [] ? $q->whereNotIn('id', $usadas) : $q->where('id >', 0);
+        $q->delete();
+        $borradas = $db->affectedRows();
+
+        return redirect()->back()->with('mensaje', $borradas . ' etiqueta(s) sin uso borradas.');
     }
 
     // API pequeña para marcar visto toggle

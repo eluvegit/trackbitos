@@ -407,6 +407,9 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     // gestión de etiquetas
     $routes->GET('etiquetas', 'Enlaces::etiquetas');
     $routes->POST('etiquetas/guardar', 'Enlaces::guardarEtiqueta');
+    $routes->POST('etiquetas/renombrar/(:num)', 'Enlaces::renombrarEtiqueta/$1');
+    $routes->POST('etiquetas/fusionar', 'Enlaces::fusionarEtiquetas');
+    $routes->POST('etiquetas/borrar-sin-uso', 'Enlaces::borrarEtiquetasSinUso');
     $routes->GET('etiquetas/borrar/(:num)', 'Enlaces::borrarEtiqueta/$1');
 
 
@@ -672,6 +675,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // Pautas de promoción: checklist recordatorio, editable como un solo
     // texto (una pauta por línea) desde el desplegable del índice.
     $routes->POST('pautas', 'Web::guardarPautas');
+
+    // Ajustes de la calculadora de tiempo estimado del índice (referencia
+    // capas/minutos + minutos de preparación), editables desde su modal.
+    $routes->POST('calculadora-tiempo', 'Web::guardarCalculadoraTiempo');
 
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.
