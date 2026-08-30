@@ -8,8 +8,14 @@
         <?php $total = is_countable($enlaces) ? count($enlaces) : 0; ?>
         <h5 class="mb-0 d-flex align-items-center gap-2">
             Enlaces
-            <span class="badge bg-light text-dark border">
-                <?= $total ?> <?= $total === 1 ? 'resultado' : 'resultados' ?>
+            <span class="badge bg-light text-dark border" id="enlCount">
+                <?php if (!empty($hayMas)): ?>
+                    <?= (int) $topeResultados ?>+ resultados
+                <?php elseif (!empty($modoReciente)): ?>
+                    <?= $total ?> recientes
+                <?php else: ?>
+                    <?= $total ?> <?= $total === 1 ? 'resultado' : 'resultados' ?>
+                <?php endif; ?>
             </span>
         </h5>
         <div class="d-flex gap-2">
@@ -43,7 +49,7 @@
         <div class="enl-searchbar mb-2">
             <div class="enl-search-input">
                 <i class="bi bi-search"></i>
-                <input type="text" name="q" value="<?= esc($q) ?>" class="form-control" placeholder="Buscar por título, URL, notas…">
+                <input type="text" name="q" value="<?= esc($q) ?>" class="form-control" placeholder="Buscar por título, URL, nota, categoría o etiqueta…">
             </div>
             <button type="button" class="btn btn-outline-secondary enl-btn-filtros" id="btnToggleFiltros">
                 <i class="bi bi-sliders"></i> Filtros
@@ -54,26 +60,29 @@
             <button type="submit" class="btn btn-primary">Buscar</button>
         </div>
 
-        <!-- Chips de filtros activos -->
-        <?php if (!empty($chipsActivos)): ?>
-            <div class="enl-active-chips mb-2">
-                <?php foreach ($chipsActivos as $chip): ?>
-                    <a href="<?= esc($chip['url'], 'attr') ?>" class="enl-active-chip">
-                        <?= esc($chip['texto']) ?> <i class="bi bi-x"></i>
-                    </a>
-                <?php endforeach; ?>
-                <a href="<?= site_url('enlaces') ?>" class="enl-active-chip enl-active-chip-clear">Limpiar todo</a>
-            </div>
-        <?php endif; ?>
+        <!-- Chips de filtros activos (se re-renderiza en cada búsqueda en vivo) -->
+        <div class="enl-active-chips mb-2" id="enlChips"><?= trim($this->include('enlaces/_chips')) ?></div>
 
         <!-- Panel de filtros (colapsado salvo que ya haya alguno activo) -->
         <div class="enl-filtros-panel <?= $panelActiveCount ? '' : 'd-none' ?>" id="panelFiltros">
             <div class="row g-3">
-                <div class="col-12 col-md-6">
+                <div class="col-12">
                     <label class="enl-label">Categorías</label>
-                    <div class="chip-picker" id="pickerCategorias"></div>
+                    <?php // Todas visibles a la vez, en una fila que hace scroll: son pocas
+                          // y son la forma principal de acotar. Mismo peso visual todas —
+                          // el número al lado es la única pista de cuánto trae cada una. ?>
+                    <div class="enl-cat-pills" id="catPills">
+                        <?php foreach ($categorias as $c): ?>
+                            <button type="button"
+                                class="enl-cat-pill<?= in_array((int) $c['id'], $cats, true) ? ' active' : '' ?>"
+                                data-cat="<?= (int) $c['id'] ?>">
+                                <?= esc($c['nombre']) ?>
+                                <span class="enl-cat-pill-count"><?= (int) ($catCount[$c['id']] ?? 0) ?></span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-                <div class="col-12 col-md-6">
+                <div class="col-12">
                     <label class="enl-label">Etiquetas</label>
                     <div class="chip-picker" id="pickerEtiquetas"></div>
                 </div>
@@ -97,110 +106,13 @@
             </div>
             <div class="d-flex gap-2 mt-3">
                 <button type="submit" class="btn btn-primary btn-sm">Aplicar filtros</button>
-                <a href="<?= site_url('enlaces') ?>" class="btn btn-light btn-sm">Limpiar</a>
+                <a href="<?= site_url('enlaces') ?>" class="btn btn-light btn-sm" data-enl-nav>Limpiar</a>
             </div>
         </div>
     </form>
 
-    <!-- Lista -->
-    <?php
-    if (!function_exists('enl_color_from_string')) {
-        function enl_color_from_string(string $str): array
-        {
-            $hue = crc32($str) % 360;
-            return [
-                "hsl({$hue}, 65%, 70%)",
-                "hsla({$hue}, 65%, 55%, .16)",
-            ];
-        }
-    }
-    ?>
-    <?php if (empty($enlaces)): ?>
-        <?php $hayFiltrosActivos = $q !== '' || $panelActiveCount > 0; ?>
-        <div class="enl-empty text-center text-muted py-5">
-            <?php if ($hayFiltrosActivos): ?>
-                <i class="bi bi-filter-circle fs-1 d-block mb-2"></i>
-                <p class="mb-2">Ningún enlace coincide con la búsqueda o los filtros aplicados.</p>
-                <a href="<?= site_url('enlaces') ?>" class="btn btn-sm btn-outline-secondary">Quitar filtros y ver todos</a>
-            <?php elseif (!empty($totalEnlaces)): ?>
-                <i class="bi bi-search fs-1 d-block mb-2"></i>
-                <p class="mb-2">Tienes <?= $totalEnlaces ?> enlace<?= $totalEnlaces === 1 ? '' : 's' ?> guardado<?= $totalEnlaces === 1 ? '' : 's' ?>. Busca por título, URL o notas, o usa los filtros para verlos.</p>
-            <?php else: ?>
-                <i class="bi bi-link-45deg fs-1 d-block mb-2"></i>
-                <p class="mb-2">Todavía no hay enlaces guardados.</p>
-                <a href="<?= site_url('enlaces/crear') ?>" class="btn btn-sm btn-primary">Agregar el primero</a>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-    <div class="enl-list">
-        <?php foreach ($enlaces as $e): ?>
-            <?php
-            $isVisto = (bool) $e['visto'];
-            $relevancia = (int) $e['relevancia'];
-            $host = parse_url($e['url'], PHP_URL_HOST);
-            $dominio = $host ? preg_replace('/^www\./', '', $host) : '';
-            $tieneBadges = !empty($catsPorEnlace[$e['id']]) || !empty($tagsPorEnlace[$e['id']]);
-            ?>
-            <div class="enl-item <?= $isVisto ? 'is-visto' : '' ?>">
-                <a href="<?= site_url('enlaces/pagina/' . $e['id']) ?>" class="enl-item-favicon" title="Ver página interna">
-                    <?php if ($dominio): ?>
-                        <img src="https://www.google.com/s2/favicons?domain=<?= urlencode($dominio) ?>&sz=32"
-                             alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-                    <?php else: ?>
-                        <i class="bi bi-link-45deg"></i>
-                    <?php endif; ?>
-                </a>
-
-                <div class="enl-item-body">
-                    <div class="enl-item-title-row">
-                        <a href="<?= esc($e['url']) ?>" target="_blank" rel="noopener" class="enl-item-title">
-                            <?= esc($e['titulo']) ?>
-                        </a>
-                    </div>
-
-                    <div class="enl-item-meta">
-                        <?php if ($dominio): ?><span class="enl-item-domain"><?= esc($dominio) ?></span> · <?php endif; ?>
-                        <?= date('d/m/Y', strtotime($e['fecha'])) ?>
-                        <?php if ($relevancia > 0): ?>
-                            · <span class="enl-item-relevancia"><i class="bi bi-star-fill"></i> <?= $relevancia ?></span>
-                        <?php endif; ?>
-                    </div>
-
-                    <?php if (!empty($e['extra'])): ?>
-                        <div class="enl-item-extra"><?= esc(mb_strimwidth(strip_tags($e['extra']), 0, 160, '…')) ?></div>
-                    <?php endif; ?>
-
-                    <?php if ($tieneBadges): ?>
-                        <div class="enl-item-badges">
-                            <?php foreach (($catsPorEnlace[$e['id']] ?? []) as $c): if (!$c) continue;
-                                [$colorTxt, $colorBg] = enl_color_from_string($c['nombre']);
-                            ?>
-                                <span class="enl-badge-cat" style="color: <?= $colorTxt ?>; background: <?= $colorBg ?>;">
-                                    #<?= esc($c['nombre']) ?>
-                                </span>
-                            <?php endforeach; ?>
-                            <?php foreach (($tagsPorEnlace[$e['id']] ?? []) as $t): if (!$t) continue; ?>
-                                <span class="enl-badge-tag"><?= esc($t['nombre']) ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="enl-item-actions">
-                    <button data-id="<?= $e['id'] ?>" class="enl-icon-btn btn-toggle-visto" title="Marcar visto/no visto">
-                        <i class="bi <?= $isVisto ? 'bi-check-square-fill' : 'bi-square' ?>"></i>
-                    </button>
-                    <a class="enl-icon-btn" href="<?= site_url('enlaces/editar/' . $e['id']) ?>" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                    </a>
-                    <a class="enl-icon-btn enl-icon-btn-danger" href="<?= site_url('enlaces/borrar/' . $e['id']) ?>"
-                       onclick="return confirm('¿Eliminar enlace?');" title="Eliminar">
-                        <i class="bi bi-trash"></i>
-                    </a>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    </div>
+    <!-- Lista (se re-renderiza en cada búsqueda en vivo) -->
+    <div id="enlResultados"><?= $this->include('enlaces/_resultados') ?></div>
 </div>
 
 <style>
@@ -238,6 +150,10 @@
         gap: 6px;
         align-items: center;
     }
+    .enl-active-chips:empty { display: none; }
+
+    /* Mientras llega una búsqueda en vivo: se atenúa la lista, sin saltos */
+    #enlResultados.enl-loading { opacity: .55; transition: opacity .12s ease; pointer-events: none; }
     .enl-active-chip {
         display: inline-flex;
         align-items: center;
@@ -256,6 +172,53 @@
         border-color: var(--bs-border-color);
         color: var(--bs-secondary-color);
     }
+
+    /* Aviso "últimos añadidos" cuando no hay búsqueda */
+    .enl-hint {
+        font-size: .8rem;
+        color: var(--bs-secondary-color);
+        display: flex;
+        align-items: center;
+        gap: .4rem;
+        margin-bottom: 8px;
+    }
+
+    /* Aviso "hay más de N, afina" con atajos de etiqueta */
+    .enl-narrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--bs-warning-border-subtle, rgba(255,193,7,.4));
+        background: var(--bs-warning-bg-subtle, rgba(255,193,7,.12));
+        color: var(--bs-emphasis-color);
+        margin-bottom: 8px;
+    }
+    .enl-narrow-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .2rem .55rem;
+        border-radius: 999px;
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        color: var(--bs-emphasis-color);
+        font-size: .78rem;
+        text-decoration: none;
+    }
+    .enl-narrow-chip:hover { background: var(--bs-tertiary-bg); }
+    .enl-narrow-chip span { color: var(--bs-secondary-color); font-size: .72rem; }
+
+    /* "Coincide en …" bajo la meta de cada resultado */
+    .enl-item-match {
+        font-size: .72rem;
+        color: var(--bs-secondary-color);
+        margin-top: 3px;
+    }
+    .enl-item-match i { opacity: .7; }
 
     .enl-filtros-panel {
         border: 1px solid var(--bs-border-color);
@@ -369,6 +332,41 @@
         font-size: .82rem;
         color: var(--bs-secondary-color);
     }
+
+    /* ================= Categorías: pills, en varias líneas si no caben ================= */
+    .enl-cat-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .enl-cat-pill {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        white-space: nowrap;
+        padding: .3rem .7rem;
+        border-radius: 999px;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        color: var(--bs-emphasis-color);
+        font-size: .8rem;
+        line-height: 1;
+        cursor: pointer;
+        transition: background-color .12s ease, border-color .12s ease;
+    }
+    .enl-cat-pill:hover { background: var(--bs-tertiary-bg); }
+    .enl-cat-pill.active {
+        background: #7c3aed;
+        border-color: #7c3aed;
+        color: #fff;
+    }
+    .enl-cat-pill-count {
+        font-size: .68rem;
+        opacity: .6;
+        font-variant-numeric: tabular-nums;
+    }
+    .enl-cat-pill.active .enl-cat-pill-count { opacity: .85; }
 
     /* ================= Lista de resultados ================= */
     .enl-list { display: flex; flex-direction: column; gap: 8px; }
@@ -571,13 +569,6 @@
         }
     }
 
-    const catOptions = <?= json_encode(array_map(fn($c) => [
-        'id' => (int) $c['id'],
-        'nombre' => $c['nombre'],
-        'count' => $catCount[$c['id']] ?? 0,
-    ], $categorias), JSON_UNESCAPED_UNICODE) ?>;
-    const catSelected = <?= json_encode($cats) ?>;
-
     const tagOptions = <?= json_encode(array_map(fn($t) => [
         'id' => (int) $t['etiqueta_id'],
         'nombre' => $t['nombre'],
@@ -585,53 +576,44 @@
     ], $tagsDisp), JSON_UNESCAPED_UNICODE) ?>;
     const tagSelected = <?= json_encode($tagIdsSel) ?>;
 
+    // Categorías: pills siempre visibles (no chip-picker). Selección = un Set
+    // de ids como string, con la misma interfaz `.size`/`.has` que usa el resto.
+    const catSel = new Set(<?= json_encode(array_map('strval', $cats)) ?>);
+    const catPillsEl = document.getElementById('catPills');
+    function renderCatPills() {
+        catPillsEl.querySelectorAll('.enl-cat-pill').forEach(btn => {
+            btn.classList.toggle('active', catSel.has(btn.dataset.cat));
+        });
+    }
+
     function updateMatchVisibility() {
-        const total = catPicker.selected.size + tagPicker.selected.size;
+        const total = catSel.size + tagPicker.selected.size;
         document.getElementById('matchWrap').style.display = total >= 2 ? '' : 'none';
     }
 
-    // Refresca en vivo las etiquetas disponibles según las categorías
-    // seleccionadas ahora mismo (sin haber pulsado "Aplicar filtros" todavía).
-    let refreshTagsSeq = 0;
-    async function refreshTagOptions() {
-        const seq = ++refreshTagsSeq;
-        const params = new URLSearchParams();
-        catPicker.selected.forEach(id => params.append('cats[]', id));
-        <?php if ($q !== ''): ?>
-            params.set('q', <?= json_encode($q) ?>);
-        <?php endif; ?>
-
-        try {
-            const res = await fetch('<?= site_url('enlaces/etiquetas-disponibles') ?>?' + params.toString(), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            if (!res.ok || seq !== refreshTagsSeq) return; // respuesta obsoleta, ignorar
-
-            const data = await res.json();
-            tagPicker.setOptions((data.tags || []).map(t => ({
-                id: t.id,
-                nombre: t.nombre,
-                count: t.total ?? 0,
-            })));
-        } catch (err) {
-            // sin conexión o fallo puntual: dejamos las opciones de etiquetas tal cual
-        }
-    }
-
-    function onCatChange() {
+    // Cualquier cambio de filtro (categoría, etiqueta) dispara una búsqueda en vivo.
+    function onFilterChange() {
         updateMatchVisibility();
-        refreshTagOptions();
+        liveSearch(true);
     }
 
-    const catPicker = new ChipPicker(document.getElementById('pickerCategorias'), catOptions, catSelected, 'cats[]', onCatChange);
-    const tagPicker = new ChipPicker(document.getElementById('pickerEtiquetas'), tagOptions, tagSelected, 'tag_ids[]', updateMatchVisibility);
+    const tagPicker = new ChipPicker(document.getElementById('pickerEtiquetas'), tagOptions, tagSelected, 'tag_ids[]', onFilterChange);
+
+    catPillsEl.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('.enl-cat-pill');
+        if (!btn) return;
+        const id = btn.dataset.cat;
+        catSel.has(id) ? catSel.delete(id) : catSel.add(id);
+        renderCatPills();
+        onFilterChange();
+    });
+
     updateMatchVisibility();
 
     const form = document.getElementById('filtrosForm');
-    form.addEventListener('submit', () => {
-        catPicker.injectHiddenInputs(form);
-        tagPicker.injectHiddenInputs(form);
-    });
+    const inputQ = form.querySelector('input[name="q"]');
+    const inputVisto = document.getElementById('inputVisto');
+    const inputMatch = document.getElementById('inputMatch');
 
     // ============= Panel de filtros: mostrar/ocultar =============
     const btnToggleFiltros = document.getElementById('btnToggleFiltros');
@@ -650,20 +632,152 @@
                 container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 hidden.value = btn.dataset.value;
+                liveSearch(true);
+            });
+        });
+    }
+    function syncSegmented() {
+        [['segEstado', inputVisto], ['segMatch', inputMatch]].forEach(([cid, hidden]) => {
+            document.getElementById(cid).querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active', b.dataset.value === hidden.value);
             });
         });
     }
     initSegmented('segEstado', 'inputVisto');
     initSegmented('segMatch', 'inputMatch');
 
-    // ============= Toggle visto (fila de resultados) =============
-    for (const b of document.querySelectorAll('.btn-toggle-visto')) {
-        b.addEventListener('click', async () => {
-            const id = b.getAttribute('data-id');
-            const res = await fetch('<?= site_url('enlaces/toggle-visto') ?>/' + id, { method: 'POST' });
-            if (res.ok) location.reload();
-        });
+    // ============= Búsqueda en vivo =============
+    const RES_URL  = '<?= site_url('enlaces/buscar-resultados') ?>';
+    const BASE_URL = '<?= site_url('enlaces') ?>';
+    const elResultados = document.getElementById('enlResultados');
+    const elChips = document.getElementById('enlChips');
+    const elCount = document.getElementById('enlCount');
+    let liveSeq = 0;
+    let liveTimer = null;
+
+    // Reúne el estado actual de buscador + filtros en un querystring.
+    function currentParams() {
+        const p = new URLSearchParams();
+        const q = inputQ.value.trim();
+        if (q) p.set('q', q);
+        if (inputVisto.value === '0' || inputVisto.value === '1') p.set('visto', inputVisto.value);
+        catSel.forEach(id => p.append('cats[]', id));
+        tagPicker.selected.forEach(id => p.append('tag_ids[]', id));
+        if ((catSel.size + tagPicker.selected.size) >= 2 && inputMatch.value === 'all') {
+            p.set('match', 'all');
+        }
+        return p;
     }
+
+    function pintarContador(data) {
+        if (!elCount) return;
+        elCount.textContent = data.hayMas
+            ? (data.topeResultados + '+ resultados')
+            : data.modoReciente
+                ? (data.total + ' recientes')
+                : (data.total + (data.total === 1 ? ' resultado' : ' resultados'));
+    }
+
+    function pintarBadgeFiltros(n) {
+        let badge = btnToggleFiltros.querySelector('.badge');
+        if (n > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'badge rounded-pill bg-primary';
+                btnToggleFiltros.appendChild(badge);
+            }
+            badge.textContent = n;
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+
+    async function liveSearch(push) {
+        const seq = ++liveSeq;
+        const params = currentParams();
+        const qs = params.toString();
+
+        // La URL sigue al estado: recargar o Atrás reproducen la misma vista.
+        const url = qs ? (BASE_URL + '?' + qs) : BASE_URL;
+        if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+        document.title = params.get('q') ? ('Enlaces · ' + params.get('q')) : 'Enlaces';
+
+        elResultados.classList.add('enl-loading');
+        try {
+            const res = await fetch(RES_URL + (qs ? ('?' + qs) : ''), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok || seq !== liveSeq) return;
+            const data = await res.json();
+            if (seq !== liveSeq) return;
+
+            elResultados.innerHTML = data.resultados;
+            elChips.innerHTML = (data.chips || '').trim();
+            pintarContador(data);
+            pintarBadgeFiltros(data.panelActiveCount);
+            // El picker de etiquetas refleja las presentes en estos resultados.
+            tagPicker.setOptions(data.tagsDisp || []);
+        } catch (err) {
+            // fallo puntual de red: se reintenta en el siguiente cambio
+        } finally {
+            elResultados.classList.remove('enl-loading');
+        }
+    }
+
+    // Aplica una URL de chip/atajo al estado de los controles y busca.
+    function applyUrl(href, push) {
+        const p = new URL(href, location.origin).searchParams;
+        inputQ.value = p.get('q') || '';
+        inputVisto.value = (p.get('visto') === '0' || p.get('visto') === '1') ? p.get('visto') : '';
+        inputMatch.value = p.get('match') === 'all' ? 'all' : 'any';
+        const cats = p.getAll('cats[]').concat(p.getAll('cats'));
+        const tags = p.getAll('tag_ids[]').concat(p.getAll('tag_ids'));
+        catSel.clear();
+        cats.map(String).filter(Boolean).forEach(id => catSel.add(id));
+        tagPicker.selected = new Set(tags.map(String).filter(Boolean));
+        renderCatPills();
+        tagPicker.renderChips();
+        syncSegmented();
+        updateMatchVisibility();
+        liveSearch(push);
+    }
+
+    // Enter en el buscador → búsqueda inmediata, sin recargar.
+    form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        clearTimeout(liveTimer);
+        liveSearch(true);
+    });
+
+    // Al teclear: debounce corto.
+    inputQ.addEventListener('input', () => {
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => liveSearch(false), 300);
+    });
+
+    // Chips de filtro activo, "Limpiar todo", atajos de "afina": navegan sin recargar.
+    document.addEventListener('click', (ev) => {
+        const a = ev.target.closest('a[data-enl-nav]');
+        if (!a || ev.metaKey || ev.ctrlKey) return;
+        ev.preventDefault();
+        applyUrl(a.getAttribute('href'), true);
+    });
+
+    // Botón Atrás/Adelante del navegador.
+    window.addEventListener('popstate', () => applyUrl(location.href, false));
+
+    // ============= Toggle visto (delegado: la lista se re-renderiza) =============
+    elResultados.addEventListener('click', async (ev) => {
+        const b = ev.target.closest('.btn-toggle-visto');
+        if (!b) return;
+        b.disabled = true;
+        try {
+            const res = await fetch('<?= site_url('enlaces/toggle-visto') ?>/' + b.getAttribute('data-id'), { method: 'POST' });
+            if (res.ok) liveSearch(false);
+        } catch (err) {
+            b.disabled = false;
+        }
+    });
 })();
 </script>
 <?php $this->endSection(); ?>

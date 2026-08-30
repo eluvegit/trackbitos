@@ -30,13 +30,65 @@ class Enlaces extends BaseController
         $this->enlaceEtiquetas  = new EnlaceEtiquetasModel();
     }
 
+    /** Cuántos enlaces se listan sin buscar ni filtrar: los más recientes, para no dejar la pantalla en blanco. */
+    private const RECIENTES_POR_DEFECTO = 30;
+
+    /** Tope de resultados de una búsqueda antes de pedir que se afine. */
+    private const TOPE_RESULTADOS = 50;
+
+    /** Palabras de `q` que se tienen en cuenta (evita consultas absurdas si alguien pega un párrafo). */
+    private const MAX_PALABRAS_BUSQUEDA = 8;
+
     public function index()
+    {
+        return view('enlaces/index', $this->resolverBusqueda());
+    }
+
+    /**
+     * AJAX (búsqueda en vivo): recalcula la búsqueda con los parámetros de la
+     * URL y devuelve solo lo que cambia — la lista de resultados y los chips
+     * ya renderizados, más los contadores y las etiquetas presentes para que
+     * el JS refresque el picker. El resto de la página no se toca.
+     */
+    public function buscarResultados()
+    {
+        $data = $this->resolverBusqueda();
+
+        return $this->response->setJSON([
+            'resultados'       => view('enlaces/_resultados', $data),
+            'chips'            => view('enlaces/_chips', $data),
+            'total'            => count($data['enlaces']),
+            'hayMas'           => $data['hayMas'],
+            'modoReciente'     => $data['modoReciente'],
+            'topeResultados'   => $data['topeResultados'],
+            'panelActiveCount' => $data['panelActiveCount'],
+            // Para refrescar el selector de etiquetas con las presentes en estos resultados.
+            'tagsDisp'         => array_map(static fn($t) => [
+                'id'     => (int) $t['etiqueta_id'],
+                'nombre' => $t['nombre'],
+                'count'  => (int) $t['total'],
+            ], $data['tagsDisp']),
+        ]);
+    }
+
+    /**
+     * Lee los parámetros de búsqueda/filtro de la request y devuelve TODO lo
+     * que la vista (o el fragmento AJAX) necesita para pintar los resultados.
+     * Compartido por `index()` y `buscarResultados()`.
+     */
+    private function resolverBusqueda(): array
     {
         $req   = service('request');
         $db    = \Config\Database::connect();
 
         // --- Parámetros de filtro ---
         $q      = trim((string) $req->getGet('q'));
+        // Multi-palabra: cada término tiene que aparecer (AND) en ALGÚN campo
+        // — título, URL, nota, o el nombre de una categoría/etiqueta del enlace.
+        $qWords = $q === ''
+            ? []
+            : array_slice(preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY), 0, self::MAX_PALABRAS_BUSQUEDA);
+
         $visto  = $req->getGet('visto'); // '', '0', '1'
         $match  = strtolower((string) $req->getGet('match')) === 'all' ? 'all' : 'any';
 
@@ -76,72 +128,74 @@ class Enlaces extends BaseController
             $tagIds = array_values(array_unique(array_merge($tagIds, array_map('intval', $tagIdsFromCb))));
         }
 
-        // Sin ningún filtro/búsqueda activo no se lanza la consulta: con miles
-        // de enlaces guardados, listarlos todos por defecto no es útil ni
-        // rápido — hay que buscar o filtrar por algo primero.
         $hayFiltro = $q !== '' || $visto === '0' || $visto === '1' || !empty($cats) || !empty($tagIds);
 
-        if (!$hayFiltro) {
-            $enlaces = [];
-            // Para distinguir en la vista "no hay ningún enlace todavía" de
-            // "hay enlaces pero no se listan sin buscar/filtrar primero".
-            $totalEnlaces = (int) $db->table('enlaces_items')->countAllResults();
-        } else {
-            $totalEnlaces = null;
-            // --- Query base ---
-            $builder = $db->table('enlaces_items e')->select('e.*');
+        // Nunca pantalla en blanco: sin búsqueda ni filtro se listan los más
+        // recientes (por id, que es el orden de alta real — la fecha suele ser
+        // la del import). Con búsqueda/filtro, hasta el tope y se pide afinar.
+        $modoReciente = !$hayFiltro;
+        $limite       = $modoReciente ? self::RECIENTES_POR_DEFECTO : self::TOPE_RESULTADOS;
 
-            // Texto libre
-            if ($q !== '') {
-                $builder->groupStart()
-                    ->like('e.titulo', $q)
-                    ->orLike('e.url', $q)
-                    ->orLike('e.extra', $q)
-                    ->groupEnd();
-            }
+        // Sirve para distinguir en la vista "no hay ningún enlace" de "hay,
+        // pero estás viendo solo una parte".
+        $totalEnlaces = (int) $db->table('enlaces_items')->countAllResults();
 
-            // Visto
-            if ($visto === '0' || $visto === '1') {
-                $builder->where('e.visto', (int)$visto);
-            }
+        // --- Query base ---
+        $builder = $db->table('enlaces_items e')->select('e.*');
 
-            // --- Filtro CATEGORÍAS ---
-            if (!empty($cats)) {
-                $builder->join('enlaces_item_categorias eic', 'eic.item_id = e.id', 'inner');
-
-                if ($match === 'any') {
-                    $builder->whereIn('eic.categoria_id', $cats);
-                    $builder->groupBy('e.id');
-                } else {
-                    $builder->whereIn('eic.categoria_id', $cats)
-                        ->groupBy('e.id')
-                        ->having('COUNT(DISTINCT eic.categoria_id) >=', count($cats));
-                }
-            }
-
-            // --- Filtro ETIQUETAS ---
-            if (!empty($tagIds)) {
-                $builder->join('enlaces_item_etiquetas eie', 'eie.item_id = e.id', 'inner');
-
-                if ($match === 'any') {
-                    $builder->whereIn('eie.etiqueta_id', $tagIds);
-                    $builder->groupBy('e.id');
-                } else {
-                    $builder->whereIn('eie.etiqueta_id', $tagIds)
-                        ->groupBy('e.id')
-                        ->having('COUNT(DISTINCT eie.etiqueta_id) >=', count($tagIds));
-                }
-            }
-
-            // Si no se pidió ALL en ningún filtro, aún necesitamos un groupBy al tener joins múltiples
-            if (empty($builder->QBGroupBy)) {
-                $builder->groupBy('e.id');
-            }
-
-            $builder->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
-
-            $enlaces = $builder->get()->getResultArray();
+        // Texto libre (multi-palabra, AND, en cualquier campo o nombre de cat/etiqueta)
+        if ($qWords) {
+            $this->aplicarBusquedaTexto($builder, $qWords, $db);
         }
+
+        // Visto
+        if ($visto === '0' || $visto === '1') {
+            $builder->where('e.visto', (int)$visto);
+        }
+
+        // --- Filtro CATEGORÍAS ---
+        if (!empty($cats)) {
+            $builder->join('enlaces_item_categorias eic', 'eic.item_id = e.id', 'inner');
+
+            if ($match === 'any') {
+                $builder->whereIn('eic.categoria_id', $cats);
+                $builder->groupBy('e.id');
+            } else {
+                $builder->whereIn('eic.categoria_id', $cats)
+                    ->groupBy('e.id')
+                    ->having('COUNT(DISTINCT eic.categoria_id) >=', count($cats));
+            }
+        }
+
+        // --- Filtro ETIQUETAS ---
+        if (!empty($tagIds)) {
+            $builder->join('enlaces_item_etiquetas eie', 'eie.item_id = e.id', 'inner');
+
+            if ($match === 'any') {
+                $builder->whereIn('eie.etiqueta_id', $tagIds);
+                $builder->groupBy('e.id');
+            } else {
+                $builder->whereIn('eie.etiqueta_id', $tagIds)
+                    ->groupBy('e.id')
+                    ->having('COUNT(DISTINCT eie.etiqueta_id) >=', count($tagIds));
+            }
+        }
+
+        // Si no se pidió ALL en ningún filtro, aún necesitamos un groupBy al tener joins múltiples
+        if (empty($builder->QBGroupBy)) {
+            $builder->groupBy('e.id');
+        }
+
+        if ($modoReciente) {
+            $builder->orderBy('e.id', 'DESC');
+        } else {
+            $builder->orderBy('e.fecha', 'DESC')->orderBy('e.id', 'DESC');
+        }
+
+        // Una fila de más: si viene, es que hay que pedir que se afine.
+        $filas   = $builder->get($limite + 1)->getResultArray();
+        $hayMas  = count($filas) > $limite;
+        $enlaces = array_slice($filas, 0, $limite);
 
         $pendientesRevision = (int) $db->table('enlaces_items')
             ->selectCount('id', 'c')->where('(titulo IS NULL OR titulo = "")', null, false)
@@ -263,7 +317,65 @@ class Enlaces extends BaseController
         // Cuenta solo lo que vive dentro del panel colapsable (para el badge y el auto-expandir)
         $panelActiveCount = count($cats) + count($tagIdsSel) + ($visto === '0' || $visto === '1' ? 1 : 0);
 
-        return view('enlaces/index', [
+        // "Coincidió en…": para cada resultado, en qué casó la búsqueda —
+        // título / URL / nota / categoría «X» / etiqueta «Y». Se calcula sobre
+        // lo ya hidratado, sin más consultas.
+        $coincidencias = [];
+        if ($qWords) {
+            foreach ($enlaces as $e) {
+                $motivos = [];
+                $titulo  = mb_strtolower((string) $e['titulo']);
+                $url     = mb_strtolower((string) $e['url']);
+                $nota    = mb_strtolower(strip_tags((string) ($e['extra'] ?? '')));
+
+                foreach ($qWords as $w) {
+                    $wl = mb_strtolower($w);
+                    if (mb_strpos($titulo, $wl) !== false) {
+                        $motivos['título'] = true;
+                    } elseif (mb_strpos($url, $wl) !== false) {
+                        $motivos['URL'] = true;
+                    } elseif ($nota !== '' && mb_strpos($nota, $wl) !== false) {
+                        $motivos['nota'] = true;
+                    }
+                    foreach ($catsPorEnlace[$e['id']] ?? [] as $c) {
+                        if (mb_strpos(mb_strtolower($c['nombre']), $wl) !== false) {
+                            $motivos['categoría «' . $c['nombre'] . '»'] = true;
+                        }
+                    }
+                    foreach ($tagsPorEnlace[$e['id']] ?? [] as $t) {
+                        if (mb_strpos(mb_strtolower($t['nombre']), $wl) !== false) {
+                            $motivos['etiqueta «' . $t['nombre'] . '»'] = true;
+                        }
+                    }
+                }
+                $coincidencias[$e['id']] = array_keys($motivos);
+            }
+        }
+
+        // Si el resultado se topó: 2-3 etiquetas presentes en estos resultados
+        // como atajo para acotar (datos ya calculados en $tagsDisp).
+        $sugerenciasRefinar = [];
+        if ($hayMas) {
+            foreach ($tagsDisp as $td) {
+                $tid = (int) $td['etiqueta_id'];
+                if (in_array($tid, $tagIdsSel, true)) {
+                    continue;
+                }
+                $sugerenciasRefinar[] = [
+                    'texto' => $td['nombre'],
+                    'total' => (int) $td['total'],
+                    'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                        'cats'    => $cats,
+                        'tag_ids' => array_values(array_merge($tagIdsSel, [$tid])),
+                    ]),
+                ];
+                if (count($sugerenciasRefinar) >= 3) {
+                    break;
+                }
+            }
+        }
+
+        return [
             'enlaces'          => $enlaces,
             'categorias'       => $categorias,
             'catCount'         => $catCount,
@@ -275,13 +387,56 @@ class Enlaces extends BaseController
             'tagIdsSel'        => $tagIdsSel,  // seleccion actual (IDs)
             'tagsDisp'         => $tagsDisp,   // etiquetas disponibles en estos resultados
             'q'                => $q,
+            'qWords'           => $qWords,
             'visto'            => $visto,
             'match'            => $match,
             'chipsActivos'      => $chipsActivos,
             'panelActiveCount'  => $panelActiveCount,
             'pendientesRevision' => $pendientesRevision,
             'totalEnlaces'      => $totalEnlaces,
-        ]);
+            'modoReciente'      => $modoReciente,
+            'hayMas'            => $hayMas,
+            'coincidencias'     => $coincidencias,
+            'sugerenciasRefinar' => $sugerenciasRefinar,
+            'topeResultados'    => self::TOPE_RESULTADOS,
+        ];
+    }
+
+    /**
+     * Añade a un builder sobre `enlaces_items e` la búsqueda de texto libre:
+     * una palabra por término en AND, y cada término casa si aparece en el
+     * título, la URL, la nota (`extra`) o el nombre de alguna categoría o
+     * etiqueta del enlace. Lo de categorías/etiquetas va como EXISTS y no
+     * como JOIN para no dejar fuera los enlaces que no tienen ninguna.
+     *
+     * @param \CodeIgniter\Database\BaseBuilder    $builder
+     * @param list<string>                         $words
+     * @param \CodeIgniter\Database\BaseConnection  $db
+     */
+    private function aplicarBusquedaTexto($builder, array $words, $db): void
+    {
+        foreach ($words as $w) {
+            $like = $db->escape('%' . $db->escapeLikeString($w) . '%');
+            $builder->groupStart()
+                ->like('e.titulo', $w)
+                ->orLike('e.url', $w)
+                ->orLike('e.extra', $w)
+                ->orWhere(
+                    "EXISTS (SELECT 1 FROM enlaces_item_categorias _c "
+                    . "JOIN enlaces_categorias _cn ON _cn.id = _c.categoria_id "
+                    . "WHERE _c.item_id = e.id AND _cn.nombre LIKE {$like} ESCAPE '!')",
+                    null,
+                    false
+                )
+                ->orWhere(
+                    "EXISTS (SELECT 1 FROM enlaces_item_etiquetas _t "
+                    . "JOIN enlaces_etiquetas _tn ON _tn.id = _t.etiqueta_id "
+                    . "WHERE _t.item_id = e.id AND _tn.nombre LIKE {$like} ESCAPE '!')",
+                    null,
+                    false
+                )
+                ->groupEnd();
+        }
     }
 
     /**
@@ -303,15 +458,14 @@ class Enlaces extends BaseController
         }
 
         $q = trim((string) $req->getGet('q'));
+        $qWords = $q === ''
+            ? []
+            : array_slice(preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY), 0, self::MAX_PALABRAS_BUSQUEDA);
 
         $builder = $db->table('enlaces_items e')->select('e.id');
 
-        if ($q !== '') {
-            $builder->groupStart()
-                ->like('e.titulo', $q)
-                ->orLike('e.url', $q)
-                ->orLike('e.extra', $q)
-                ->groupEnd();
+        if ($qWords) {
+            $this->aplicarBusquedaTexto($builder, $qWords, $db);
         }
 
         if (!empty($cats)) {
