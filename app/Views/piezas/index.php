@@ -9,6 +9,48 @@
     #tablaPiezas tr.pieza-alt > td {
         background-color: rgba(0, 0, 0, .18);
     }
+
+    /* Todas las filas de piezas a la misma altura y con más aire arriba y
+       abajo que el que trae table-sm: `height` en una celda actúa como
+       mínimo, así que la fila mide igual haya foto (34px) o no. Solo los
+       <tbody> con id son los de piezas; la cabecera de categoría queda
+       fuera y conserva su py-1. */
+    #tablaPiezas > tbody[id] > tr > td {
+        padding-top: .6rem;
+        padding-bottom: .6rem;
+        height: 2.9rem;
+    }
+
+    /* Modo enfoque: vista limpia de un vistazo. No guarda nada ni cambia
+       datos — solo esconde columnas de apoyo (ojo, SKU, medidas y revisión
+       de malla) y deja los badges de estado a color + icono, sin su texto
+       (el <span class="et">). El título de cada badge sigue explicándolo al
+       pasar el ratón. */
+    #tablaPiezas.modo-focus .col-ojo,
+    #tablaPiezas.modo-focus .col-sku,
+    #tablaPiezas.modo-focus .col-medidas,
+    #tablaPiezas.modo-focus .col-malla {
+        display: none;
+    }
+    #tablaPiezas.modo-focus .col-estado .et {
+        display: none;
+    }
+    #tablaPiezas.modo-focus .col-estado .badge {
+        padding-inline: .45em;
+    }
+
+    /* Vista en cuadrícula: tarjeta estrecha, foto arriba y debajo la tira de
+       info escueta (misma que deja el modo Enfoque). El texto de los badges
+       de estado (.et) se esconde siempre aquí — solo color + icono. */
+    #galeriaPiezas .galeria-tarjeta {
+        width: 9rem;
+    }
+    #galeriaPiezas .galeria-tarjeta .et {
+        display: none;
+    }
+    #galeriaPiezas .galeria-tarjeta .badge {
+        padding-inline: .45em;
+    }
 </style>
 
 <?php
@@ -286,8 +328,8 @@ $filaSesionActiva = static function (array $s): string {
 $badgeMadurez = static function (array $v): string {
     if ($v['validada']) {
         $numValidada = (int) $v['validada']['numero'];
-        $html = '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> v'
-            . sprintf('%03d', $numValidada) . '</span>';
+        $html = '<span class="badge text-bg-success"><i class="bi bi-check-circle-fill"></i> <span class="et">v'
+            . sprintf('%03d', $numValidada) . '</span></span>';
 
         // Hay un borrador posterior a la validada, esperando prueba: se
         // anexa al lado ("v001 v003") para no tener que entrar a la ficha
@@ -295,18 +337,18 @@ $badgeMadurez = static function (array $v): string {
         if ($v['ultima_version_estado'] === 'borrador'
             && ($v['ultima_version_numero'] ?? 0) > $numValidada) {
             $html .= ' <span class="badge text-bg-secondary" title="Hay una versión más nueva pendiente de imprimir">'
-                . '<i class="bi bi-printer"></i> para imprimir v' . sprintf('%03d', (int) $v['ultima_version_numero']) . '</span>';
+                . '<i class="bi bi-printer"></i> <span class="et">para imprimir v' . sprintf('%03d', (int) $v['ultima_version_numero']) . '</span></span>';
         }
 
         return $html;
     }
     if ($v['ultima_version_estado'] === 'impresa') {
         return '<span class="badge text-bg-primary" title="Impresa, pendiente de juzgar el resultado">'
-            . '<i class="bi bi-printer-fill"></i> sin validar</span>';
+            . '<i class="bi bi-printer-fill"></i> <span class="et">sin validar</span></span>';
     }
     if ($v['ultima_version_estado'] === 'descartada') {
         return '<span class="badge text-bg-danger" title="La última versión se descartó: no sirve">'
-            . '<i class="bi bi-x-circle-fill"></i> no sirve</span>';
+            . '<i class="bi bi-x-circle-fill"></i> <span class="et">no sirve</span></span>';
     }
     // Sin ninguna versión promocionada no hay "versión" de la que hablar:
     // el trabajo aún está en la sesión, no ha llegado al historial. Pero eso
@@ -317,11 +359,11 @@ $badgeMadurez = static function (array $v): string {
     if ($v['ultima_version_estado'] === null) {
         if (empty($v['trabajo_en_curso'])) {
             return '<span class="badge text-bg-dark border" title="La pieza está dada de alta, pero todavía no se ha subido ningún .blend: no hay nada dentro">'
-                . '<i class="bi bi-circle"></i> sin empezar</span>';
+                . '<i class="bi bi-circle"></i> <span class="et">sin empezar</span></span>';
         }
 
         return '<span class="badge text-bg-secondary" title="Todavía no se ha promocionado ninguna versión">'
-            . '<i class="bi bi-dash-circle"></i> sin versión</span>';
+            . '<i class="bi bi-dash-circle"></i> <span class="et">sin versión</span></span>';
     }
     // "Para imprimir", no "sin imprimir": lo mismo por fuera, pero uno nombra
     // una carencia y el otro lo siguiente que hay que hacer — que es lo que se
@@ -330,13 +372,14 @@ $badgeMadurez = static function (array $v): string {
     // añadía nada y era la etiqueta más larga de todas.
     if ($v['ultima_version_estado'] === 'borrador') {
         return '<span class="badge text-bg-secondary" title="Promocionada, pendiente de imprimir de prueba">'
-            . '<i class="bi bi-printer"></i> para imprimir</span>';
+            . '<i class="bi bi-printer"></i> <span class="et">para imprimir</span></span>';
     }
 
     // Solo llega aquí una "superada" como última sin haber ninguna validada
     // (posible únicamente si se descartó la validada después). Raro, pero
     // "sin validar" sigue siendo cierto y no se inventa nada.
-    return '<span class="badge text-bg-secondary">sin validar</span>';
+    return '<span class="badge text-bg-secondary" title="Sin validar">'
+        . '<i class="bi bi-dash-circle"></i> <span class="et">sin validar</span></span>';
 };
 
 /**
@@ -352,10 +395,19 @@ $badgeMadurez = static function (array $v): string {
 $colEstado = static function (array $v) use ($badgeMadurez): string {
     $html = $badgeMadurez($v);
 
+    // Advertencia: la pieza vale (funciona y sirve) pero no es perfecta.
+    // Triángulo amarillo translúcido pegado al número de versión; el porqué
+    // va en el tooltip. Se pone y se quita desde el modal de tareas.
+    $advertencia = trim((string) ($v['advertencia'] ?? ''));
+    if ($advertencia !== '') {
+        $html .= ' <i class="bi bi-exclamation-triangle-fill text-warning align-baseline" style="opacity: .6;"'
+            . ' title="' . esc($advertencia, 'attr') . '"></i>';
+    }
+
     if (!empty($v['trabajo_en_curso'])) {
         $html .= ' <span class="badge border text-body-secondary fw-normal"'
             . ' title="Hay trabajo en la rama abierta que todavía no se ha promocionado">'
-            . '<i class="bi bi-pencil"></i> modificando</span>';
+            . '<i class="bi bi-pencil"></i> <span class="et">modificando</span></span>';
     }
 
     return $html;
@@ -409,6 +461,13 @@ $colStl = static function (array $v): string {
         $html .= '<a href="' . site_url('piezas/stl/' . (int) $stl['stl_id'] . '/descargar') . '"'
             . ' class="text-primary text-decoration-none" title="Bajar el STL">'
             . '<i class="bi bi-file-earmark-check-fill"></i></a>';
+    } elseif (!empty($stl['version_id'])) {
+        // Varios trozos: se bajan todos juntos en un zip, sin pasar por la
+        // ficha. El icono de zip avisa de que no es un STL suelto.
+        $html .= '<a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/stl/descargar') . '"'
+            . ' class="text-primary text-decoration-none"'
+            . ' title="Bajar los ' . $trozos . ' STL de esta pieza (se imprime en trozos), juntos en un zip">'
+            . '<i class="bi bi-file-earmark-zip-fill"></i> <span class="small">' . $trozos . '</span></a>';
     } else {
         $html .= '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '"'
             . ' class="text-primary text-decoration-none"'
@@ -491,23 +550,70 @@ $colSku = static function (array $v): string {
 };
 
 /**
+ * El ojo de visibilidad en sterclicks, ahora en su propia columna delante
+ * de la foto (antes vivía suelto en la celda del nombre). Mismo formulario
+ * AJAX de siempre — data-toggle-visibilidad, ver el script de abajo —, solo
+ * que extraído a una función para pintarlo igual en la fila de la pieza y
+ * en cada subfila de variante.
+ */
+$botonOjo = static function (string $accion, bool $visible): string {
+    return '<form method="post" action="' . $accion . '" class="d-inline"'
+        . ' data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">'
+        . csrf_field()
+        . '<button type="submit" class="btn btn-sm py-0 px-1 border-0 ' . ($visible ? 'text-primary' : 'text-muted') . '"'
+        . ' title="' . ($visible ? 'Ocultar de sterclicks' : 'Mostrar en sterclicks') . '">'
+        . '<i class="bi ' . ($visible ? 'bi-eye' : 'bi-eye-slash') . '"></i>'
+        . '</button></form>';
+};
+
+/**
+ * El icono que abre el modal de tareas/advertencia de una pieza, en su
+ * propia columna al final de la línea. Azul si tiene algo apuntado
+ * —tareas o advertencia—, apagado si no; el número es cuántas tareas
+ * (líneas no vacías) hay. Los data-* llevan lo que ya está escrito para
+ * rellenar el modal sin ir al servidor. `$conVariante` añade el nombre de
+ * la línea al título cuando la pieza tiene varias.
+ */
+$botonTareas = static function (array $v, array $familia, bool $conVariante): string {
+    $lineas = array_filter(
+        array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($v['tareas'] ?? ''))),
+        static fn($l) => $l !== ''
+    );
+    $n         = count($lineas);
+    $tieneAdv  = trim((string) ($v['advertencia'] ?? '')) !== '';
+    $nombre    = $familia['nombre'] . ($conVariante ? ' / ' . $v['nombre'] : '');
+
+    return '<button type="button" class="btn btn-sm py-0 px-1 border-0 '
+        . ($n || $tieneAdv ? 'text-primary' : 'text-body-tertiary') . '"'
+        . ' data-bs-toggle="modal" data-bs-target="#modalTareas"'
+        . ' data-accion="' . site_url('piezas/variante/' . (int) $v['id'] . '/tareas') . '"'
+        . ' data-nombre="' . esc($nombre, 'attr') . '"'
+        . ' data-tareas="' . esc((string) ($v['tareas'] ?? ''), 'attr') . '"'
+        . ' data-advertencia="' . esc((string) ($v['advertencia'] ?? ''), 'attr') . '"'
+        . ' title="Tareas pendientes y advertencia de esta pieza">'
+        . ($n ? '<span class="small">' . $n . '</span> ' : '') . '<i class="bi bi-card-checklist"></i>'
+        . '</button>';
+};
+
+/**
  * La foto de la fila, o un hueco de la misma medida cuando la pieza aún no
  * tiene ninguna: así las filas no cambian de alto según haya foto o no, que
  * en una tabla de treinta líneas se nota más que la propia foto.
  *
  * `contain` y no `cover` como en la galería: ahí el recorte cuadra una
- * cuadrícula de tarjetas grandes, pero a 34 px recortar una pieza por los
- * lados la deja irreconocible, que es justo lo contrario de para lo que
+ * cuadrícula de tarjetas grandes, pero a este tamaño recortar una pieza por
+ * los lados la deja irreconocible, que es justo lo contrario de para lo que
  * está puesta.
  */
-$colFoto = static function (array $v): string {
+$colFoto = static function (array $v, int $px = 48): string {
     if (empty($v['miniatura'])) {
         return '<span class="d-inline-flex align-items-center justify-content-center rounded border text-body-tertiary"'
-            . ' style="width: 34px; height: 34px;"><i class="bi bi-box" style="font-size: .8rem;"></i></span>';
+            . ' style="width: ' . $px . 'px; height: ' . $px . 'px;">'
+            . '<i class="bi bi-box" style="font-size: ' . ($px >= 96 ? '2rem' : '1rem') . ';"></i></span>';
     }
 
     return '<img src="' . esc($v['miniatura'], 'attr') . '" alt="" loading="lazy" class="rounded border"'
-        . ' style="width: 34px; height: 34px; object-fit: contain;">';
+        . ' style="width: ' . $px . 'px; height: ' . $px . 'px; object-fit: contain;">';
 };
 
 /** Todo lo que debe encontrar el buscador de una pieza: su nombre y el de sus variantes con sus SKU. */
@@ -620,6 +726,30 @@ $tokensDeFamilia = static function (array $familia) use ($tokensDe): array {
     return array_values(array_unique($tokens));
 };
 
+/**
+ * Una tarjeta de la vista en cuadrícula: foto grande arriba, nombre debajo
+ * y solo la información que sobrevive al modo Enfoque (estado a color +
+ * icono, STL, aviso y tareas). Nada de ojo, SKU, medidas ni malla — para
+ * eso está la tabla. Lleva data-buscar/data-tokens para que el buscador y
+ * los filtros recorten también aquí (ver aplicarFiltros en el script).
+ */
+$tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, string $buscar)
+    use ($colFoto, $colEstado, $colStl, $colAviso, $botonTareas, $tokensDe): string {
+    $nombre = esc($familia['nombre'] . ($conVariante ? ' · ' . $v['nombre'] : ''));
+    $tira   = trim($colEstado($v) . ' ' . $colStl($v) . ' ' . $colAviso($v));
+
+    return '<div class="galeria-tarjeta text-center" data-tarjeta'
+        . ' data-buscar="' . $buscar . '" data-tokens="' . implode(' ', $tokensDe($v)) . '">'
+        . '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '" class="d-block text-decoration-none text-body">'
+        . $colFoto($v, 132)
+        . '<div class="small fw-medium mt-1 text-truncate">' . $nombre . '</div>'
+        . '</a>'
+        . '<div class="d-flex flex-wrap justify-content-center align-items-center gap-1 mt-1">'
+        . $tira . ' ' . $botonTareas($v, $familia, $conVariante)
+        . '</div>'
+        . '</div>';
+};
+
 // El número de cada chip: se cuentan piezas, no variantes, porque es lo que
 // se ve en la tabla y lo que uno tiene en la cabeza ("me faltan 6 STL").
 $cuentaFiltros = array_fill_keys(array_merge(array_keys($filtros), array_keys($filtrosImprimir)), 0);
@@ -642,6 +772,19 @@ foreach ($grupos as $grupo) {
     <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="btnFiltros"
         aria-controls="filtrosPiezas" aria-expanded="false">
         <i class="bi bi-funnel"></i> Filtros
+    </button>
+    <?php // Enfoque: limpia la vista (oculta ojo, SKU, medidas y malla; los
+          // badges de estado quedan a color + icono). No cambia nada, solo lo
+          // que se ve; se recuerda entre cargas como "Filtros" y "Organizar". ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="btnFocus"
+        title="Vista limpia: solo lo esencial" aria-pressed="false">
+        <i class="bi bi-bullseye"></i> Enfoque
+    </button>
+    <?php // Cuadrícula: las mismas piezas como tarjetas con la foto grande y
+          // solo la info escueta del modo Enfoque. Se recuerda entre cargas. ?>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="btnGaleria"
+        title="Ver como cuadrícula de fotos" aria-pressed="false">
+        <i class="bi bi-grid"></i> Cuadrícula
     </button>
 
     <?php // Uno cada vez, no casillas: son preguntas distintas ("qué me falta
@@ -704,7 +847,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="9" class="py-1 bg-body-secondary">
+                <td colspan="11" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -760,7 +903,7 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="9" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="11" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php $filaAlterna = false; ?>
@@ -771,7 +914,20 @@ foreach ($grupos as $grupo) {
                     <?php // Misma regla que el resto de columnas: la fila de la pieza solo
                           // habla de una variante cuando hay una sola. Con varias, cada una
                           // trae su foto en su propia subfila. ?>
-                    <td style="width: 34px;"><?= count($variantes) === 1 ? $colFoto($variantes[0]) : '' ?></td>
+                    <td class="pe-0 col-ojo" style="width: 1%;"><?= $botonOjo(site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad'), !empty($familia['visible_sterclicks'])) ?></td>
+                    <td style="width: 48px;"><?php
+                        // Con una variante, su foto. Con varias, la pieza es un
+                        // contenedor: el icono de las tres cajas (mismo que
+                        // "compuesta de" otras piezas), sin marco y a la altura
+                        // de la foto, en lugar de dejar el hueco vacío.
+                        if (count($variantes) === 1) {
+                            echo $colFoto($variantes[0]);
+                        } elseif (count($variantes) > 1) {
+                            echo '<span class="d-inline-flex align-items-center justify-content-center text-body-secondary"'
+                                . ' style="width: 48px; height: 48px;" title="Pieza con ' . count($variantes) . ' variantes">'
+                                . '<i class="bi bi-boxes" style="font-size: 1.9rem; line-height: 1;"></i></span>';
+                        }
+                    ?></td>
                     <td>
                         <?php if (count($variantes) === 1): ?>
                             <?php // Lo normal: una pieza es una sola cosa, así que la fila lleva directa a su ficha. ?>
@@ -789,21 +945,16 @@ foreach ($grupos as $grupo) {
                                 (sin variantes — recuperar en la papelera)
                             </a>
                         <?php endif; ?>
-                        <form method="post" action="<?= site_url('piezas/familia/' . (int) $familia['id'] . '/visibilidad') ?>" class="d-inline"
-                            data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">
-                            <?= csrf_field() ?>
-                            <button type="submit" class="btn btn-sm py-0 px-1 border-0 <?= empty($familia['visible_sterclicks']) ? 'text-muted' : 'text-primary' ?>"
-                                title="<?= empty($familia['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
-                                <i class="bi <?= empty($familia['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
-                            </button>
-                        </form>
                     </td>
-                    <td><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
-                    <td><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
+                    <td class="col-sku"><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
+                    <td class="col-estado"><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
-                    <td><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
-                    <td class="text-center"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
+                    <td class="col-medidas"><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
+                    <td class="text-center col-malla"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
                     <td><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
+                    <?php // Tareas/advertencia, al final de la línea: solo en la fila de la
+                          // pieza cuando tiene una única variante; con varias van en cada subfila. ?>
+                    <td class="text-end"><?= count($variantes) === 1 ? $botonTareas($variantes[0], $familia, false) : '' ?></td>
                     <td class="zona-organizar d-none">
                         <div class="d-flex gap-1 justify-content-end">
                             <?php // Cambiar de categoría: un select que se envía solo, oculto salvo en modo Organizar. ?>
@@ -837,25 +988,19 @@ foreach ($grupos as $grupo) {
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
                         <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
-                            <td style="width: 34px;"><?= $colFoto($v) ?></td>
+                            <td class="pe-0 col-ojo" style="width: 1%;"><?= $botonOjo(site_url('piezas/variante/' . (int) $v['id'] . '/visibilidad'), !empty($v['visible_sterclicks'])) ?></td>
+                            <td style="width: 48px;"><?= $colFoto($v) ?></td>
                             <td class="ps-4">
                                 <a href="<?= site_url('piezas/variante/' . (int) $v['id']) ?>"
-                                    class="text-decoration-none text-body">↳ <?= esc($v['nombre']) ?></a>
-                                <form method="post" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/visibilidad') ?>" class="d-inline"
-                                    data-toggle-visibilidad data-clase-oculta="text-muted" data-clase-visible="text-primary">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="btn btn-sm py-0 px-1 border-0 <?= empty($v['visible_sterclicks']) ? 'text-muted' : 'text-primary' ?>"
-                                        title="<?= empty($v['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
-                                        <i class="bi <?= empty($v['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
-                                    </button>
-                                </form>
+                                    class="text-decoration-none text-body">– <?= esc($v['nombre']) ?></a>
                             </td>
-                            <td><?= $colSku($v) ?></td>
-                            <td><?= $colEstado($v) ?></td>
+                            <td class="col-sku"><?= $colSku($v) ?></td>
+                            <td class="col-estado"><?= $colEstado($v) ?></td>
                             <td><?= $colStl($v) ?></td>
-                            <td><?= $colMedidas($v) ?></td>
-                            <td class="text-center"><?= $colMalla($v) ?></td>
+                            <td class="col-medidas"><?= $colMedidas($v) ?></td>
+                            <td class="text-center col-malla"><?= $colMalla($v) ?></td>
                             <td><?= $colAviso($v) ?></td>
+                            <td class="text-end"><?= $botonTareas($v, $familia, true) ?></td>
                             <td class="zona-organizar d-none">
                                 <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>
                                 <form method="post" class="text-end" action="<?= site_url('piezas/variante/' . (int) $v['id'] . '/borrar') ?>"
@@ -873,6 +1018,56 @@ foreach ($grupos as $grupo) {
         </tbody>
     <?php endforeach; ?>
 </table>
+
+<?php
+/**
+ * Vista en cuadrícula: los mismos grupos y piezas que la tabla, en tarjetas.
+ * Oculta por defecto (d-none); el botón "Cuadrícula" la intercambia con la
+ * tabla y lo recuerda. Una tarjeta por variante — con varias, el nombre las
+ * distingue. Las categorías pliegan igual que en la tabla y comparten el
+ * mismo estado guardado (CERRADAS), así que plegar una vale para las dos
+ * vistas.
+ */
+?>
+<div id="galeriaPiezas" class="d-none">
+    <?php foreach ($grupos as $grupo): ?>
+        <?php
+            $categoria = $grupo['categoria'];
+            $idGrupo   = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin';
+            $nTarjetas = array_sum(array_map(static fn($f) => count($f['variantes']), $grupo['piezas']));
+        ?>
+        <div data-galgrupo class="mb-3">
+            <?php // Toda la línea pliega; el botón existe para el teclado (su
+                  // clic burbujea hasta aquí). mt-4: separa el título del grupo
+                  // anterior. ?>
+            <div class="d-flex align-items-center gap-2 user-select-none border-bottom pb-1 mb-3 mt-4"
+                style="cursor: pointer" data-galplegar="<?= $idGrupo ?>">
+                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body">
+                    <i class="bi bi-chevron-down" data-galchevron></i>
+                </button>
+                <span class="fw-semibold text-uppercase small <?= $categoria ? 'text-body-secondary' : 'text-muted fst-italic' ?>">
+                    <?= $categoria ? esc($categoria['nombre']) : 'Sin clasificar' ?>
+                </span>
+                <span class="badge border text-body-secondary fw-normal" data-galcontador><?= (int) $nTarjetas ?></span>
+            </div>
+            <div data-galcuerpo="<?= $idGrupo ?>">
+                <?php if ($nTarjetas === 0): ?>
+                    <p class="text-muted small">Vacía.</p>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap gap-3">
+                        <?php foreach ($grupo['piezas'] as $familia): ?>
+                            <?php $buscar = esc($textoBuscable($familia), 'attr'); ?>
+                            <?php $conVariante = count($familia['variantes']) > 1; ?>
+                            <?php foreach ($familia['variantes'] as $v): ?>
+                                <?= $tarjetaGaleria($v, $familia, $conVariante, $buscar) ?>
+                            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endforeach; ?>
+</div>
 
 <p class="text-muted small d-none" id="sinResultados">Ninguna pieza coincide.</p>
 
@@ -1088,6 +1283,49 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
     </div>
 </div>
 
+<?php
+/**
+ * Tareas y advertencia de una pieza. Compartido por todas las filas: el
+ * botón que lo abre (ver $botonTareas) trae en sus data-* la acción del
+ * formulario y lo que ya está escrito, y el JS rellena el modal en
+ * `show.bs.modal`. Al guardar se recarga el índice (redirige a "piezas").
+ */
+?>
+<div class="modal fade" id="modalTareas" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" id="formTareas">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title">
+                    <i class="bi bi-card-checklist"></i> Tareas — <span data-nombre-tareas class="fw-normal text-muted"></span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small mb-1" for="campoAdvertencia">
+                    <i class="bi bi-exclamation-triangle-fill text-warning" style="opacity: .6;"></i> Advertencia
+                </label>
+                <input type="text" id="campoAdvertencia" name="advertencia" maxlength="255"
+                    class="form-control form-control-sm" data-advertencia-tareas
+                    placeholder="Funciona y sirve, pero no es perfecta: qué falla">
+                <p class="text-muted small mt-1">
+                    Sale como un triángulo amarillo junto al número de versión en el índice.
+                    Déjalo en blanco si no hay nada que advertir.
+                </p>
+
+                <label class="form-label small mb-1" for="campoTareas">Tareas pendientes</label>
+                <textarea id="campoTareas" name="tareas" rows="6" class="form-control form-control-sm" data-tareas-tareas
+                    placeholder="Una por línea:&#10;rehacer los soportes de la base&#10;bajar la escala un 5%&#10;revisar el grosor de las paredes"></textarea>
+                <p class="text-muted small mb-0">Una tarea por línea. El icono del índice muestra cuántas quedan.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 (function () {
     // ---- Sesiones activas: refresco parcial cada 20s -------------------
@@ -1216,21 +1454,48 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         if (boton) boton.setAttribute('aria-expanded', abierta ? 'true' : 'false');
     }
 
-    cerradas().forEach(function (id) { pintar(id, false); });
+    // Lo mismo para la cuadrícula. Mismo id de categoría ("cat-N"/"cat-sin")
+    // y mismo estado guardado (CERRADAS) que la tabla, así que las dos
+    // funciones se llaman siempre juntas y las dos vistas quedan igual.
+    function pintarGal(id, abierta) {
+        var cuerpo = document.querySelector('[data-galcuerpo="' + id + '"]');
+        if (cuerpo) cuerpo.classList.toggle('d-none', !abierta);
+
+        var cabecera = document.querySelector('[data-galplegar="' + id + '"]');
+        var chevron = cabecera ? cabecera.querySelector('[data-galchevron]') : null;
+        if (chevron) {
+            chevron.classList.toggle('bi-chevron-down', abierta);
+            chevron.classList.toggle('bi-chevron-right', !abierta);
+        }
+    }
+
+    function pintarAmbas(id, abierta) {
+        pintar(id, abierta);
+        pintarGal(id, abierta);
+    }
+
+    cerradas().forEach(function (id) { pintarAmbas(id, false); });
+
+    function alternarPlegado(id) {
+        var lista = cerradas();
+        var estabaCerrada = lista.indexOf(id) !== -1;
+        lista = estabaCerrada ? lista.filter(function (x) { return x !== id; }) : lista.concat([id]);
+        localStorage.setItem(CERRADAS, JSON.stringify(lista));
+        pintarAmbas(id, estabaCerrada);
+    }
 
     document.querySelectorAll('[data-plegar]').forEach(function (cabecera) {
         cabecera.addEventListener('click', function (e) {
             // Los botones de «Organizar» viven en esta misma línea: mover una
             // categoría de sitio no debe plegarla de paso.
             if (e.target.closest('form, a')) return;
+            alternarPlegado(cabecera.getAttribute('data-plegar'));
+        });
+    });
 
-            var id = cabecera.getAttribute('data-plegar');
-            var lista = cerradas();
-            var estabaCerrada = lista.indexOf(id) !== -1;
-
-            lista = estabaCerrada ? lista.filter(function (x) { return x !== id; }) : lista.concat([id]);
-            localStorage.setItem(CERRADAS, JSON.stringify(lista));
-            pintar(id, estabaCerrada);
+    document.querySelectorAll('[data-galplegar]').forEach(function (cabecera) {
+        cabecera.addEventListener('click', function () {
+            alternarPlegado(cabecera.getAttribute('data-galplegar'));
         });
     });
 
@@ -1245,6 +1510,28 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         if (btnOrganizar) btnOrganizar.classList.toggle('active', encendido);
         document.querySelectorAll('.zona-organizar').forEach(function (zona) {
             zona.classList.toggle('d-none', !encendido);
+        });
+    }
+
+    // ---- Modal de tareas / advertencia --------------------------------
+    // Uno solo para todas las filas: el botón que lo abre trae en sus
+    // data-* la acción del formulario y lo que ya está escrito. Va antes
+    // del posible "return" de abajo (cuando no hay piezas) — sin piezas no
+    // hay botones que lo abran, pero así el bloque no depende de eso.
+    var modalTareas = document.getElementById('modalTareas');
+    if (modalTareas) {
+        var formTareas = document.getElementById('formTareas');
+        modalTareas.addEventListener('show.bs.modal', function (e) {
+            var boton = e.relatedTarget;
+            if (!boton) return;
+            formTareas.setAttribute('action', boton.getAttribute('data-accion') || '');
+            modalTareas.querySelector('[data-nombre-tareas]').textContent = boton.getAttribute('data-nombre') || '';
+            modalTareas.querySelector('[data-advertencia-tareas]').value = boton.getAttribute('data-advertencia') || '';
+            modalTareas.querySelector('[data-tareas-tareas]').value = boton.getAttribute('data-tareas') || '';
+        });
+        modalTareas.addEventListener('shown.bs.modal', function () {
+            var campo = modalTareas.querySelector('[data-tareas-tareas]');
+            if (campo) campo.focus();
         });
     }
 
@@ -1268,6 +1555,61 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
             var abrir = !cajaFiltrosToggle || cajaFiltrosToggle.classList.contains('d-none');
             localStorage.setItem(FILTROS_ABIERTOS, abrir ? '1' : '0');
             pintarFiltros(abrir);
+        });
+    }
+
+    // ---- Modo enfoque -------------------------------------------------
+    // Solo toca la clase de la tabla; el CSS de arriba hace el resto
+    // (oculta ojo/SKU/medidas/malla y quita el texto de los badges de
+    // estado). Se recuerda entre cargas, igual que "Filtros" y "Organizar".
+    var ENFOQUE = 'piezas_enfoque';
+    var btnFocus = document.getElementById('btnFocus');
+    var tablaPiezas = document.getElementById('tablaPiezas');
+
+    function pintarEnfoque(encendido) {
+        if (tablaPiezas) tablaPiezas.classList.toggle('modo-focus', encendido);
+        if (btnFocus) {
+            btnFocus.classList.toggle('active', encendido);
+            btnFocus.setAttribute('aria-pressed', encendido ? 'true' : 'false');
+        }
+    }
+
+    pintarEnfoque(localStorage.getItem(ENFOQUE) === '1');
+
+    if (btnFocus) {
+        btnFocus.addEventListener('click', function () {
+            var encendido = !btnFocus.classList.contains('active');
+            localStorage.setItem(ENFOQUE, encendido ? '1' : '0');
+            pintarEnfoque(encendido);
+        });
+    }
+
+    // ---- Vista tabla / cuadrícula -----------------------------------
+    // Intercambia la tabla por la rejilla de tarjetas y viceversa. El
+    // buscador y los filtros siguen recortando en las dos vistas
+    // (aplicarFiltros mira también los [data-tarjeta]). "Enfoque" solo
+    // tiene sentido en la tabla, así que se esconde en cuadrícula.
+    var VISTA = 'piezas_vista';
+    var btnGaleria = document.getElementById('btnGaleria');
+    var galeriaPiezas = document.getElementById('galeriaPiezas');
+
+    function pintarVista(galeria) {
+        if (tablaPiezas) tablaPiezas.classList.toggle('d-none', galeria);
+        if (galeriaPiezas) galeriaPiezas.classList.toggle('d-none', !galeria);
+        if (btnFocus) btnFocus.classList.toggle('d-none', galeria);
+        if (btnGaleria) {
+            btnGaleria.classList.toggle('active', galeria);
+            btnGaleria.setAttribute('aria-pressed', galeria ? 'true' : 'false');
+        }
+    }
+
+    pintarVista(localStorage.getItem(VISTA) === 'galeria');
+
+    if (btnGaleria) {
+        btnGaleria.addEventListener('click', function () {
+            var galeria = !btnGaleria.classList.contains('active');
+            localStorage.setItem(VISTA, galeria ? 'galeria' : 'tabla');
+            pintarVista(galeria);
         });
     }
 
@@ -1301,7 +1643,9 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         // búsqueda las muestra/oculta juntas. Los tokens sí son propios de
         // cada fila — la de la pieza lleva la unión de los de sus variantes,
         // para que aparezca la cabecera cuando encaja cualquiera de ellas.
-        document.querySelectorAll('[data-pieza], [data-subpieza]').forEach(function (fila) {
+        // También las tarjetas de la cuadrícula ([data-tarjeta]): mismo
+        // data-buscar/data-tokens, así el recorte vale para las dos vistas.
+        document.querySelectorAll('[data-pieza], [data-subpieza], [data-tarjeta]').forEach(function (fila) {
             var visible = fila.getAttribute('data-buscar').indexOf(q) !== -1;
 
             if (visible && filtro !== '') {
@@ -1309,7 +1653,28 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
             }
 
             fila.classList.toggle('d-none', !visible);
-            if (fila.hasAttribute('data-pieza') && visible) encontradas++;
+            if ((fila.hasAttribute('data-pieza') || fila.hasAttribute('data-tarjeta')) && visible) encontradas++;
+        });
+
+        // Grupos de categoría de la cuadrícula: mismo trato que los tbody de
+        // la tabla — mientras se recorta se abren todos y se esconde el que
+        // se quede sin tarjetas; al soltar, se restaura el plegado guardado.
+        document.querySelectorAll('[data-galgrupo]').forEach(function (grupo) {
+            var cabecera = grupo.querySelector('[data-galplegar]');
+            var id = cabecera ? cabecera.getAttribute('data-galplegar') : null;
+            var contador = grupo.querySelector('[data-galcontador]');
+
+            if (!recortando) {
+                grupo.classList.remove('d-none');
+                if (contador) contador.textContent = grupo.querySelectorAll('[data-tarjeta]').length;
+                if (id) pintarGal(id, cerradas().indexOf(id) === -1);
+                return;
+            }
+
+            var visibles = grupo.querySelectorAll('[data-tarjeta]:not(.d-none)').length;
+            grupo.classList.toggle('d-none', visibles === 0);
+            if (contador) contador.textContent = visibles;
+            if (id) pintarGal(id, visibles > 0);
         });
 
         // Un grupo cerrado escondería resultados sin decirlo: mientras se

@@ -65,6 +65,42 @@
     }
 
     /**
+     * Estimación en vivo del tiempo de la placa a partir del número de
+     * capas, con el mismo criterio que la calculadora del índice: el
+     * min/capa sale de la referencia medida (minutos ÷ capas), nunca es una
+     * constante suelta, y siempre se suman los minutos fijos de preparación.
+     * Los tres números de calibración llegan en los data-* del form.
+     */
+    function estimarPorCapas(form) {
+        var salida = form.querySelector('[data-estimado-capas]');
+        if (!salida) return;
+
+        var capas    = parseInt((valor(form, 'numero_capas') || '').replace(/[^\d]/g, ''), 10);
+        var capasRef = parseFloat(form.dataset.calcCapasRef);
+        var minRef   = parseFloat(form.dataset.calcMinutosRef);
+        var minPrep  = parseFloat(form.dataset.calcMinutosPrep) || 0;
+
+        if (!(capas > 0) || !(capasRef > 0) || !(minRef >= 0)) {
+            salida.hidden = true;
+            return;
+        }
+
+        var impresion = capas * (minRef / capasRef);
+        var total     = impresion + minPrep;
+
+        var ayuda = 'El laminador muestra el número de capas al abrir el archivo de la placa. '
+            + 'La estimación usa el mismo criterio que la calculadora del índice: '
+            + 'capas × minutos por capa (de la referencia medida) + minutos fijos de preparación.';
+
+        salida.innerHTML = '<i class="bi bi-stopwatch"></i> Estimado por capas: ≈ <strong>'
+            + duracion(Math.round(total)) + '</strong> ('
+            + duracion(Math.round(impresion)) + ' de impresión + '
+            + duracion(Math.round(minPrep)) + ' de preparación) '
+            + '<i class="bi bi-info-circle" title="' + ayuda + '" style="cursor: help;"></i>';
+        salida.hidden = false;
+    }
+
+    /**
      * Clonar la última fila en vez de construir el HTML aquí: así el marcado
      * vive solo en el PHP y no hay dos versiones que se desincronicen.
      */
@@ -275,8 +311,9 @@
                 });
         });
 
-        form.addEventListener('input', function () { recalcular(form); });
+        form.addEventListener('input', function () { recalcular(form); estimarPorCapas(form); });
         recalcular(form);
+        estimarPorCapas(form);
     };
 
     document.addEventListener('DOMContentLoaded', function () {

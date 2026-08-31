@@ -690,6 +690,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
     $routes->POST('variante/(:num)/notas', 'Web::editarNotasVariante/$1');
+    // Advertencia + tareas pendientes de la pieza, desde el modal del índice.
+    $routes->POST('variante/(:num)/tareas', 'Web::editarTareasVariante/$1');
     $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
     $routes->POST('variante/(:num)/visibilidad', 'Web::toggleVisibilidadVariante/$1');
     $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
@@ -735,6 +737,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // Subir cuelga de la versión (es a lo que se adjunta); descargar y quitar
     // cuelgan del STL concreto, porque una versión puede tener varios.
     $routes->POST('version/(:num)/stl', 'Web::subirStl/$1');
+    // Todos los STL de una versión juntos: fichero suelto si es uno, zip si
+    // son varios trozos (para no bajarlos uno a uno desde la ficha).
+    $routes->GET('version/(:num)/stl/descargar', 'Web::descargarStlsVersion/$1');
     $routes->GET('stl/(:num)/descargar', 'Web::descargarStl/$1');
     $routes->POST('stl/(:num)/quitar', 'Web::quitarStl/$1');
     $routes->POST('stl/(:num)/medidas', 'Web::actualizarMedidasStl/$1');

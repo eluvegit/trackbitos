@@ -15,6 +15,11 @@ $enlaces = $enlaces ?? [];
 $imagenes = $imagenes ?? [];
 $idForm = 'bitacora-form-' . $idPlaca;
 
+// Ajustes de la calculadora de tiempo del índice (referencia capas/minutos
+// + minutos fijos de preparación): el JS los lee de los data-* del form
+// para estimar en vivo la duración a partir del número de capas.
+$calc = $calcTiempo ?? ['capasReferencia' => 0, 'minutosReferencia' => 0, 'minutosPreparacion' => 0];
+
 $paraInput = static fn(?string $fecha) => $fecha ? date('Y-m-d\TH:i', strtotime($fecha)) : '';
 $peso = static fn($v) => $v === null || $v === '' ? '' : rtrim(rtrim(number_format((float) $v, 2, ',', ''), '0'), ',');
 $duracion = static function ($minutos): string {
@@ -40,6 +45,9 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
 
 <form id="<?= $idForm ?>" method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>"
     data-bitacora-form data-placa="<?= $idPlaca ?>"
+    data-calc-capas-ref="<?= esc($calc['capasReferencia'], 'attr') ?>"
+    data-calc-minutos-ref="<?= esc($calc['minutosReferencia'], 'attr') ?>"
+    data-calc-minutos-prep="<?= esc($calc['minutosPreparacion'], 'attr') ?>"
     data-csrf-name="<?= csrf_token() ?>" data-csrf-hash="<?= csrf_hash() ?>">
     <?= csrf_field() ?>
 
@@ -88,6 +96,11 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
     </div>
 
     <div class="small text-muted mt-1" data-calculado hidden></div>
+    <?php // Estimación en vivo del tiempo a partir de las capas — mismo cálculo
+          // que el botón "stopwatch" del índice (ver _bitacora_js.php). Lleva al
+          // final, en la misma línea, un icono de "más información" cuyo tooltip
+          // explica de dónde sale el número y con qué criterio se estima. ?>
+    <div class="small text-body-secondary mt-1" data-estimado-capas hidden></div>
 
     <?php // Ya no plegado: a pantalla completa hay sitio de sobra, y
           // esconderlo solo añadía un clic. ?>

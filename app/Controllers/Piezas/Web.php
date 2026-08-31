@@ -2231,6 +2231,10 @@ class Web extends BaseController
         return [
             'placa'    => $placa,
             'piezas'   => $piezas,
+            // Los tres números de la calculadora de tiempo del índice, para
+            // estimar en vivo la duración de la placa a partir de su número
+            // de capas — mismo criterio que el botón "stopwatch" del índice.
+            'calcTiempo' => (new PiezaConfigModel())->calculadoraTiempo(),
             'pruebas'  => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'enlaces'  => $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'imagenes' => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
@@ -2966,6 +2970,24 @@ class Web extends BaseController
             fn() => $this->servicio->actualizarNotasVariante($varianteId, $this->request->getPost('notas')),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Notas de la variante guardadas.'
+        );
+    }
+
+    /**
+     * Advertencia y tareas pendientes de la pieza, las dos juntas: es el
+     * modal del índice ("un icono para escribir tareas y mostrarlas"), así
+     * que se vuelve al índice, no a la ficha.
+     */
+    public function editarTareasVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->actualizarTareasVariante(
+                $varianteId,
+                $this->request->getPost('tareas'),
+                $this->request->getPost('advertencia')
+            ),
+            fn($variante) => site_url('piezas'),
+            fn($variante) => 'Tareas de la pieza guardadas.'
         );
     }
 
@@ -3761,6 +3783,60 @@ class Web extends BaseController
         // pieza es y, con varios trozos, cuál de ellos.
         return $this->response->download($this->almacen->absoluta($stl['ruta_stl']), null, true)
             ->setFileName($this->nombreArchivo($variante, $version, 'stl', $stl['nombre']));
+    }
+
+    /**
+     * Todos los STL de una versión de golpe. Con un solo trozo se sirve el
+     * fichero suelto (igual que descargarStl); con varios se empaquetan en un
+     * zip para no tener que ir trozo a trozo desde la ficha — es lo que pide
+     * el icono de "varios STL" del índice.
+     */
+    public function descargarStlsVersion(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $stls = array_values(array_filter(
+            $this->servicio->stlsDe($versionId),
+            fn($stl) => !empty($stl['ruta_stl']) && $this->almacen->existe($stl['ruta_stl'])
+        ));
+        if ($stls === []) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $variante = $this->varianteModel->find($version['variante_id']);
+
+        if (count($stls) === 1) {
+            return $this->response->download($this->almacen->absoluta($stls[0]['ruta_stl']), null, true)
+                ->setFileName($this->nombreArchivo($variante, $version, 'stl', $stls[0]['nombre']));
+        }
+
+        $carpetaTmp = WRITEPATH . 'piezas/tmp';
+        if (!is_dir($carpetaTmp) && !mkdir($carpetaTmp, 0775, true) && !is_dir($carpetaTmp)) {
+            throw new RuntimeException('No se pudo crear la carpeta temporal para el zip de STL.');
+        }
+        $rutaZip = $carpetaTmp . '/stls-v' . (int) $version['numero'] . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($rutaZip, \ZipArchive::CREATE) !== true) {
+            throw new RuntimeException('No se pudo crear el zip de STL.');
+        }
+        foreach ($stls as $stl) {
+            $zip->addFile(
+                $this->almacen->absoluta($stl['ruta_stl']),
+                $this->nombreArchivo($variante, $version, 'stl', $stl['nombre'])
+            );
+        }
+        $zip->close();
+
+        register_shutdown_function(static function () use ($rutaZip) {
+            @unlink($rutaZip);
+        });
+
+        return $this->response->download($rutaZip, null, true)
+            ->setFileName($this->nombreArchivo($variante, $version, 'zip'));
     }
 
     /**

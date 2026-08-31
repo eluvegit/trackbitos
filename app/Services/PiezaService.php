@@ -695,6 +695,29 @@ class PiezaService
     }
 
     /**
+     * Advertencia y lista de tareas de la variante: los dos apuntes que se
+     * editan juntos desde el modal del índice. La advertencia es un texto
+     * corto ("funciona pero no es perfecta: ..."); las tareas, un pendiente
+     * por línea. Vacío en cualquiera de los dos deja el campo a null.
+     */
+    public function actualizarTareasVariante(int $varianteId, ?string $tareas, ?string $advertencia): array
+    {
+        if (!$this->varianteModel->find($varianteId)) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+
+        $tareas      = trim((string) $tareas);
+        $advertencia = trim((string) $advertencia);
+
+        $this->varianteModel->update($varianteId, [
+            'tareas'      => $tareas === '' ? null : $tareas,
+            'advertencia' => $advertencia === '' ? null : $advertencia,
+        ]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
      * Dónde vive el máster de máxima calidad de esta variante (p. ej. la
      * malla en bruto de una generación por IA, sin decimar ni limpiar de
      * texturas): fuera del tracker, normalmente en Drive — no hace falta
