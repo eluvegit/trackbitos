@@ -22,14 +22,16 @@
     }
 
     /* Modo enfoque: vista limpia de un vistazo. No guarda nada ni cambia
-       datos — solo esconde columnas de apoyo (ojo, SKU, medidas y revisión
-       de malla) y deja los badges de estado a color + icono, sin su texto
-       (el <span class="et">). El título de cada badge sigue explicándolo al
-       pasar el ratón. */
+       datos — solo esconde las columnas de apoyo (ojo, SKU, y todo lo que
+       hay entre la descarga de .blend/STL y las tareas: medidas, revisión
+       de malla y aviso) y deja los badges de estado a color + icono, sin su
+       texto (el <span class="et">). El título de cada badge sigue
+       explicándolo al pasar el ratón. */
     #tablaPiezas.modo-focus .col-ojo,
     #tablaPiezas.modo-focus .col-sku,
     #tablaPiezas.modo-focus .col-medidas,
-    #tablaPiezas.modo-focus .col-malla {
+    #tablaPiezas.modo-focus .col-malla,
+    #tablaPiezas.modo-focus .col-aviso {
         display: none;
     }
     #tablaPiezas.modo-focus .col-estado .et {
@@ -50,6 +52,28 @@
     }
     #galeriaPiezas .galeria-tarjeta .badge {
         padding-inline: .45em;
+    }
+
+    /* En móvil el buscador se queda fijo abajo de la pantalla, siempre a
+       mano para saltar a una pieza concreta sin volver arriba. En
+       escritorio se queda donde estaba, sobre el listado. */
+    @media (max-width: 767.98px) {
+        #buscadorBarra {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1030;
+            margin: 0 !important;
+            padding: .6rem .75rem calc(.6rem + env(safe-area-inset-bottom));
+            background: var(--bs-body-bg);
+            border-top: 1px solid var(--bs-border-color);
+            box-shadow: 0 -.25rem .75rem rgba(0, 0, 0, .35);
+        }
+        /* Hueco para que la última fila / el pie no queden tapados. */
+        body {
+            padding-bottom: 4.5rem;
+        }
     }
 </style>
 
@@ -296,8 +320,13 @@ $filaSesionActiva = static function (array $s): string {
 <?php endif; ?>
 
 <?php if (!empty($familias)): ?>
-    <input type="search" id="buscadorPiezas" class="form-control form-control-sm mb-3"
-        placeholder="Buscar por nombre o SKU..." autocomplete="off">
+    <?php // En escritorio va aquí, sobre el listado. En móvil (CSS de arriba)
+          // pasa a barra fija abajo de la pantalla, para saltar a una pieza
+          // concreta sin subir a la cabecera. ?>
+    <div id="buscadorBarra" class="mb-3">
+        <input type="search" id="buscadorPiezas" class="form-control form-control-sm"
+            placeholder="Buscar por nombre o SKU..." autocomplete="off">
+    </div>
 <?php endif; ?>
 
 <?php if (empty($familias)): ?>
@@ -951,7 +980,7 @@ foreach ($grupos as $grupo) {
                     <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
                     <td class="col-medidas"><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
                     <td class="text-center col-malla"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
-                    <td><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
+                    <td class="col-aviso"><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
                     <?php // Tareas/advertencia, al final de la línea: solo en la fila de la
                           // pieza cuando tiene una única variante; con varias van en cada subfila. ?>
                     <td class="text-end"><?= count($variantes) === 1 ? $botonTareas($variantes[0], $familia, false) : '' ?></td>
@@ -999,7 +1028,7 @@ foreach ($grupos as $grupo) {
                             <td><?= $colStl($v) ?></td>
                             <td class="col-medidas"><?= $colMedidas($v) ?></td>
                             <td class="text-center col-malla"><?= $colMalla($v) ?></td>
-                            <td><?= $colAviso($v) ?></td>
+                            <td class="col-aviso"><?= $colAviso($v) ?></td>
                             <td class="text-end"><?= $botonTareas($v, $familia, true) ?></td>
                             <td class="zona-organizar d-none">
                                 <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacta. ?>
