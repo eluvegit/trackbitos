@@ -760,14 +760,20 @@ class Web extends BaseController
             $l[] = '## Compuesta de';
             $l[] = '';
             foreach ($componentes as $c) {
-                if (!$c['version'] || !$c['variante'] || !$c['familia']) {
+                if (!$c['variante'] || !$c['familia']) {
                     continue;
                 }
+                $vig  = $c['vigente'];
+                $orig = $c['version'];
+                $ver  = $vig ? sprintf('v%03d (vigente)', (int) $vig['numero']) : 'sin versiones';
+                if ($vig && $orig && (int) $orig['id'] !== (int) $vig['id']) {
+                    $ver .= sprintf(', se añadió con v%03d', (int) $orig['numero']);
+                }
                 $l[] = sprintf(
-                    '- %s / %s · v%03d%s',
+                    '- %s / %s · %s%s',
                     $c['familia']['nombre'],
                     $c['variante']['nombre'],
-                    (int) $c['version']['numero'],
+                    $ver,
                     !empty($c['notas']) ? ' — ' . $c['notas'] : ''
                 );
             }
@@ -4314,8 +4320,10 @@ class Web extends BaseController
     /**
      * Las piezas que ya se anotaron como "presentes en la escena" de esta
      * variante, con lo necesario para leerlas de un vistazo: de qué pieza y
-     * variante son, en qué estado sigue esa versión (para el aviso pasivo
-     * si ya quedó superada/descartada — spec 11.1 ampliado).
+     * variante son, la versión con la que se anotaron (`version`, se
+     * conserva solo como "se añadió con vNNN") y —la que cuenta— la versión
+     * VIGENTE hoy de esa pieza (`vigente`), para trabajar siempre contra la
+     * última y no contra la que estaba cuando se anotó (spec 11.1 ampliado).
      */
     private function componentesDe(int $varianteId): array
     {
@@ -4325,9 +4333,36 @@ class Web extends BaseController
             $version  = $this->versionModel->find($fila['version_componente_id']);
             $variante = $version ? $this->varianteModel->find($version['variante_id']) : null;
             $familia  = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
+            $vigente  = $variante ? $this->versionVigenteDeVariante((int) $variante['id']) : null;
 
-            return $fila + ['version' => $version, 'variante' => $variante, 'familia' => $familia];
+            return $fila + [
+                'version'  => $version,
+                'variante' => $variante,
+                'familia'  => $familia,
+                'vigente'  => $vigente,
+            ];
         }, $filas);
+    }
+
+    /**
+     * La versión "vigente" de una variante: la validada si la hay y, si no,
+     * la de número más alto (sea borrador, impresa o descartada). Es la que
+     * se muestra cuando la variante aparece como componente de otra pieza.
+     */
+    private function versionVigenteDeVariante(int $varianteId): ?array
+    {
+        $validada = $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->where('estado', 'validada')
+            ->first();
+        if ($validada) {
+            return $validada;
+        }
+
+        return $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->orderBy('numero', 'DESC')
+            ->first();
     }
 
     /**

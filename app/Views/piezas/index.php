@@ -1317,7 +1317,10 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
  * Tareas y advertencia de una pieza. Compartido por todas las filas: el
  * botón que lo abre (ver $botonTareas) trae en sus data-* la acción del
  * formulario y lo que ya está escrito, y el JS rellena el modal en
- * `show.bs.modal`. Al guardar se recarga el índice (redirige a "piezas").
+ * `show.bs.modal`. Al guardar se manda por AJAX (el controlador responde
+ * JSON a las peticiones XHR) y se actualizan en el sitio el botón —color,
+ * contador y data-*— y el triángulo de advertencia de la fila, sin recargar
+ * ni perder la posición del scroll.
  */
 ?>
 <div class="modal fade" id="modalTareas" tabindex="-1">
@@ -1561,6 +1564,84 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         modalTareas.addEventListener('shown.bs.modal', function () {
             var campo = modalTareas.querySelector('[data-tareas-tareas]');
             if (campo) campo.focus();
+        });
+
+        // Guardar sin recargar: al recargar, el navegador salta al principio
+        // de la página y se pierde de vista la pieza que se estaba tocando.
+        // El controlador ya responde JSON a las peticiones XHR (ver
+        // Web::ejecutar); aquí solo se refleja el resultado en el sitio.
+        var btnGuardarTareas = formTareas.querySelector('.modal-footer .btn-primary');
+
+        formTareas.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var accion = formTareas.getAttribute('action');
+            if (!accion) return;
+
+            btnGuardarTareas.disabled = true;
+
+            fetch(accion, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(formTareas)
+            })
+                .then(function (resp) { return resp.json(); })
+                .then(function (datos) {
+                    btnGuardarTareas.disabled = false;
+                    if (!datos || !datos.ok) {
+                        alert((datos && datos.mensaje) || 'No se pudo guardar.');
+                        return;
+                    }
+
+                    var tareas = (datos.tareas == null ? '' : String(datos.tareas));
+                    var advertencia = (datos.advertencia == null ? '' : String(datos.advertencia));
+                    var n = tareas.split(/\r\n|\r|\n/)
+                        .map(function (l) { return l.trim(); })
+                        .filter(function (l) { return l !== ''; }).length;
+                    var conAlgo = n > 0 || advertencia !== '';
+
+                    // La tabla y la cuadrícula llevan un botón cada una para la
+                    // misma pieza: se actualizan los dos.
+                    document.querySelectorAll('[data-accion="' + accion + '"]').forEach(function (b) {
+                        b.setAttribute('data-tareas', tareas);
+                        b.setAttribute('data-advertencia', advertencia);
+                        b.classList.toggle('text-primary', conAlgo);
+                        b.classList.toggle('text-body-tertiary', !conAlgo);
+
+                        var cuenta = b.querySelector('span.small');
+                        if (n > 0) {
+                            if (cuenta) { cuenta.textContent = n; }
+                            else { b.insertAdjacentHTML('afterbegin', '<span class="small">' + n + '</span> '); }
+                        } else if (cuenta) {
+                            cuenta.remove();
+                        }
+
+                        // Triángulo de advertencia en la celda de estado de la
+                        // misma fila (solo aplica en la tabla).
+                        var fila = b.closest('tr');
+                        var estado = fila ? fila.querySelector('.col-estado') : null;
+                        if (estado) {
+                            var tri = estado.querySelector('i.bi-exclamation-triangle-fill');
+                            if (advertencia !== '') {
+                                if (!tri) {
+                                    estado.appendChild(document.createTextNode(' '));
+                                    tri = document.createElement('i');
+                                    tri.className = 'bi bi-exclamation-triangle-fill text-warning align-baseline';
+                                    tri.style.opacity = '.6';
+                                    estado.appendChild(tri);
+                                }
+                                tri.setAttribute('title', advertencia);
+                            } else if (tri) {
+                                tri.remove();
+                            }
+                        }
+                    });
+
+                    bootstrap.Modal.getOrCreateInstance(modalTareas).hide();
+                })
+                .catch(function () {
+                    btnGuardarTareas.disabled = false;
+                    alert('No se pudo conectar con el servidor.');
+                });
         });
     }
 

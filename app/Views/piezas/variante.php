@@ -1516,20 +1516,34 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     </p>
                 <?php else: ?>
                     <?php
-                        $avisoEstado = ['superada' => 'quedó superada', 'descartada' => 'se descartó'];
+                        // La versión VIGENTE de cada componente es la que cuenta —
+                        // siempre la última de esa pieza (validada, o la de número
+                        // más alto). La versión con la que se anotó queda como
+                        // nota secundaria ("se añadió con vNNN"), solo si ya no
+                        // coincide. Aviso si la propia vigente está descartada: la
+                        // última de esa pieza no sirve.
                     ?>
                     <ul class="list-group list-group-flush mb-0">
                         <?php foreach ($componentes as $c): ?>
-                            <?php $v = $c['version']; $va = $c['variante']; $fa = $c['familia']; ?>
+                            <?php $va = $c['variante']; $fa = $c['familia']; $vig = $c['vigente']; $orig = $c['version']; ?>
                             <li class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
                                 <div class="flex-grow-1">
-                                    <?php if ($v && $va && $fa): ?>
+                                    <?php if ($vig && $va && $fa): ?>
                                         <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
-                                            <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $v['numero']) ?>
+                                            <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?> · v<?= sprintf('%03d', (int) $vig['numero']) ?>
                                         </a>
-                                        <?php if (isset($avisoEstado[$v['estado']])): ?>
-                                            <span class="badge text-bg-warning ms-1"><?= esc($avisoEstado[$v['estado']]) ?></span>
+                                        <span class="text-muted small">(vigente)</span>
+                                        <?php if ($vig['estado'] === 'descartada'): ?>
+                                            <span class="badge text-bg-warning ms-1">la última se descartó</span>
                                         <?php endif; ?>
+                                        <?php if ($orig && (int) $orig['id'] !== (int) $vig['id']): ?>
+                                            <div class="small text-muted">se añadió con v<?= sprintf('%03d', (int) $orig['numero']) ?></div>
+                                        <?php endif; ?>
+                                    <?php elseif ($va && $fa): ?>
+                                        <a href="<?= site_url('piezas/variante/' . (int) $va['id']) ?>" class="text-decoration-none text-body">
+                                            <?= esc($fa['nombre']) ?> / <?= esc($va['nombre']) ?>
+                                        </a>
+                                        <span class="text-muted small">(sin versiones aún)</span>
                                     <?php else: ?>
                                         <span class="text-muted">(esa pieza ya no existe)</span>
                                     <?php endif; ?>
