@@ -609,11 +609,24 @@ $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Contr
     // Lectura
     $routes->GET('variantes', 'Api::variantes');
     $routes->GET('variante/(:num)/estado', 'Api::varianteEstado/$1');
+    // S4: "Compuesta de" por API, para que stl.py expanda piezas compuestas
+    // recursivamente (decisión "caso 2 siempre" del plan .blend→STL).
+    $routes->GET('variante/(:num)/composicion', 'Api::composicion/$1');
+
+    // Placas (fase stl.py, S3): 'placas' es literal y va antes de
+    // 'placa/(:num)' por el mismo motivo que el resto de rutas literales de
+    // este grupo — no debe competir con un patrón numérico.
+    $routes->GET('placas', 'Api::placas');
+    $routes->GET('placa/(:num)', 'Api::placa/$1');
 
     // Sesiones de trabajo y ficheros
     $routes->POST('variante/(:num)/sesion/abrir', 'Api::abrirSesion/$1');
     $routes->GET('sesion/(:num)/descargar', 'Api::descargarSesion/$1');
     $routes->GET('version/(:num)/descargar', 'Api::descargarVersion/$1');
+    // Solo-lectura del .blend inmutable de una versión: sin asiento, sin
+    // X-Maquina-Uuid (ver Api::descargarVersionBlend). Sirve tanto a la
+    // vigente como a versiones viejas de una placa.
+    $routes->GET('version/(:num)/blend', 'Api::descargarVersionBlend/$1');
     $routes->GET('sesion/(:num)/descargar-verificacion', 'Api::descargarVerificacion/$1');
     $routes->POST('sesion/(:num)/subir', 'Api::subirSesion/$1');
     $routes->POST('sesion/(:num)/cerrar', 'Api::cerrarSesion/$1');

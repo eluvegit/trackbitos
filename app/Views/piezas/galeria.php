@@ -46,7 +46,9 @@
     Piezas validadas, y también las que ya tienen una versión "para imprimir" o "impresa, sin
     validar" — esta pantalla es para meter STL en placas, y esas dos ya pueden tener uno adjunto
     aunque el resultado físico no esté juzgado todavía. Añade a la placa las que quieras imprimir
-    juntas y descarga todos los STL de golpe en un .zip para el laminador.
+    juntas y descarga todos los STL de golpe en un .zip para el laminador. Si a alguna pieza le
+    falta el STL, el zip trae igualmente un <code>FALTAN.txt</code> con la lista de qué falta y
+    por qué.
 </p>
 
 <?php

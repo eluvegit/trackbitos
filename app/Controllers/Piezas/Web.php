@@ -1565,11 +1565,29 @@ class Web extends BaseController
         $porVersion = $this->servicio->stlsDeVersiones(array_map(static fn($v) => (int) $v['id'], $versiones));
 
         $aEmpaquetar = [];
+        // Antes, una versión sin ningún STL disponible simplemente no
+        // aportaba nada al zip y nadie se enteraba salvo contando piezas a
+        // mano en el laminador. Se anota aparte para escribir FALTAN.txt.
+        $faltantes = [];
         foreach ($versiones as $version) {
-            foreach ($porVersion[(int) $version['id']] ?? [] as $stl) {
-                if ($this->almacen->existe($stl['ruta_stl'])) {
-                    $aEmpaquetar[] = [$version, $stl];
-                }
+            $stlsVersion = $porVersion[(int) $version['id']] ?? [];
+            $disponibles = array_filter($stlsVersion, fn($stl) => $this->almacen->existe($stl['ruta_stl']));
+
+            foreach ($disponibles as $stl) {
+                $aEmpaquetar[] = [$version, $stl];
+            }
+
+            if ($disponibles === []) {
+                $variante = $this->varianteModel->find($version['variante_id']);
+                $familia  = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
+                $faltantes[] = sprintf(
+                    '%s - %s v%03d (%s): %s',
+                    $familia['nombre'] ?? '?',
+                    $variante['nombre'] ?? ('variante ' . $version['variante_id']),
+                    (int) $version['numero'],
+                    $version['estado'],
+                    $stlsVersion === [] ? 'sin ningún STL subido nunca' : 'STL subido pero ya no está en el almacén'
+                );
             }
         }
 
@@ -1592,6 +1610,12 @@ class Web extends BaseController
             $zip->addFile(
                 $this->almacen->absoluta($stl['ruta_stl']),
                 $this->nombreArchivo($variante, $version, 'stl', $stl['nombre'])
+            );
+        }
+        if ($faltantes !== []) {
+            $zip->addFromString(
+                'FALTAN.txt',
+                "Piezas de esta placa sin STL en el zip:\n\n" . implode("\n", $faltantes) . "\n"
             );
         }
         $zip->close();

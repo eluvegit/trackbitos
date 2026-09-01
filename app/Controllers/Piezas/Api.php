@@ -4,13 +4,17 @@ namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
 use App\Models\PiezaCategoriaModel;
+use App\Models\PiezaComposicionModel;
 use App\Models\PiezaDescargaModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
+use App\Models\PiezaPlacaModel;
+use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
+use App\Services\PiezaAlmacen;
 use App\Services\PiezaService;
 use App\Services\PiezaSyncService;
 use RuntimeException;
@@ -38,19 +42,27 @@ class Api extends BaseController
     private PiezaSesionModel $sesionModel;
     private PiezaDescargaModel $descargaModel;
     private PiezaMaquinaModel $maquinaModel;
+    private PiezaPlacaModel $placaModel;
+    private PiezaPlacaVersionModel $placaVersionModel;
+    private PiezaComposicionModel $composicionModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
+    private PiezaAlmacen $almacen;
 
     public function __construct()
     {
-        $this->varianteModel = new PiezaVarianteModel();
-        $this->versionModel  = new PiezaVersionModel();
-        $this->ramaModel     = new PiezaRamaModel();
-        $this->sesionModel   = new PiezaSesionModel();
-        $this->descargaModel = new PiezaDescargaModel();
-        $this->maquinaModel  = new PiezaMaquinaModel();
-        $this->servicio      = new PiezaService();
-        $this->sync          = new PiezaSyncService();
+        $this->varianteModel    = new PiezaVarianteModel();
+        $this->versionModel     = new PiezaVersionModel();
+        $this->ramaModel        = new PiezaRamaModel();
+        $this->sesionModel      = new PiezaSesionModel();
+        $this->descargaModel    = new PiezaDescargaModel();
+        $this->maquinaModel     = new PiezaMaquinaModel();
+        $this->placaModel       = new PiezaPlacaModel();
+        $this->placaVersionModel = new PiezaPlacaVersionModel();
+        $this->composicionModel = new PiezaComposicionModel();
+        $this->servicio         = new PiezaService();
+        $this->sync             = new PiezaSyncService();
+        $this->almacen          = new PiezaAlmacen();
     }
 
     /**
@@ -217,6 +229,215 @@ class Api extends BaseController
         }
 
         return $this->entregarFichero(fn(int $maquinaId, string $motivo, bool $ignorar) => $this->sync->entregarVersion($versionId, $varianteId, $maquinaId, $motivo, $ignorar));
+    }
+
+    /**
+     * El .blend inmutable de una versión concreta, de solo lectura — gemelo
+     * API de Web::descargarBlend(). A diferencia de descargarVersion(), NO
+     * abre asiento ni exige identidad de máquina (X-Maquina-Uuid): el
+     * `.blend` de una versión ya promocionada no cambia, así que leerlo no
+     * es "trabajar sobre una copia" que el sistema deba cuadrar luego. Sirve
+     * tanto para la versión vigente de una variante como para versiones
+     * viejas referenciadas desde una placa (stl.py `--como-anotado`).
+     */
+    public function descargarVersionBlend(int $versionId)
+    {
+        $version = $this->versionModel->find($versionId);
+        if (!$version || !$this->almacen->existe($version['ruta_blend'] ?? null)) {
+            return $this->response->setJSON(['error' => 'Versión no encontrada o sin .blend en el almacén.'])->setStatusCode(404);
+        }
+
+        $variante = $this->varianteModel->find($version['variante_id']);
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/octet-stream')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $this->nombreBlendVersion($variante, $version) . '"')
+            ->setHeader('X-Hash-Blend', (string) $version['hash_blend'])
+            ->setBody(file_get_contents($this->almacen->absoluta($version['ruta_blend'])));
+    }
+
+    /** Mismo esquema de nombre que Web::nombreArchivo(), sin sufijo: sku-familia-variante-vNNN.blend. */
+    private function nombreBlendVersion(?array $variante, array $version): string
+    {
+        $familia = $variante ? (new PiezaFamiliaModel())->find($variante['familia_id']) : null;
+
+        $partes = array_filter([
+            $this->paraNombreDeArchivo($variante['sku'] ?? null),
+            $this->paraNombreDeArchivo($familia['nombre'] ?? null),
+            $this->paraNombreDeArchivo($variante['nombre'] ?? null) ?: 'variante-' . $version['variante_id'],
+        ]);
+
+        return sprintf('%s-v%03d.blend', implode('-', $partes), (int) $version['numero']);
+    }
+
+    /**
+     * Histórico de placas (id, nombre, fecha) — hasta ahora eran solo-web
+     * (PiezaPlacaModel/PiezaPlacaVersionModel). stl.py la usa para resolver
+     * "placa <nombre>" a un id antes de pedir /placa/(:num).
+     */
+    public function placas()
+    {
+        $placas = $this->placaModel->orderBy('creado_en', 'DESC')->findAll();
+
+        return $this->response->setJSON([
+            'ok'     => true,
+            'placas' => array_map(fn(array $p) => $this->resumenPlaca($p), $placas),
+        ]);
+    }
+
+    /**
+     * Qué versiones lleva una placa y con cuántas copias cada una, con lo
+     * que stl.py necesita para reproducirla: familia/variante/categoría
+     * (para el nombre de fichero), hash_blend (para pedir /version/(:num)/
+     * blend) y qué STL ya tiene subidos y si siguen en el almacén. Mismo
+     * dato que Web::piezasDeLaPlaca(), pero aplanado a JSON.
+     */
+    public function placa(int $placaId)
+    {
+        $placa = $this->placaModel->find($placaId);
+        if (!$placa) {
+            return $this->response->setJSON(['error' => 'Placa no encontrada.'])->setStatusCode(404);
+        }
+
+        return $this->response->setJSON([
+            'ok'         => true,
+            'placa'      => $this->resumenPlaca($placa),
+            'versiones'  => $this->versionesDePlaca($placaId),
+        ]);
+    }
+
+    private function resumenPlaca(array $placa): array
+    {
+        return [
+            'id'     => (int) $placa['id'],
+            'nombre' => $placa['nombre'],
+            'fecha'  => $placa['creado_en'],
+        ];
+    }
+
+    /** @return array<int, array> una fila por versión de la placa, en el orden en que se añadieron */
+    private function versionesDePlaca(int $placaId): array
+    {
+        $categorias   = array_column((new PiezaCategoriaModel())->findAll(), 'nombre', 'id');
+        $familiaModel = new PiezaFamiliaModel();
+
+        $lista = [];
+        foreach ($this->placaVersionModel->where('placa_id', $placaId)->orderBy('id')->findAll() as $fila) {
+            $version = $this->versionModel->find($fila['version_id']);
+            if (!$version) {
+                continue; // versión purgada (invariante 6): la fila ya no aporta nada al CLI
+            }
+
+            $variante    = $this->varianteModel->find($version['variante_id']);
+            $familia     = $variante ? $familiaModel->find($variante['familia_id']) : null;
+            $categoriaId = $familia['categoria_id'] ?? null;
+
+            $stls = [];
+            foreach ($this->servicio->stlsDe((int) $version['id']) as $stl) {
+                $stls[] = [
+                    'nombre'     => $stl['nombre'],
+                    'hash'       => $stl['hash_stl'],
+                    'disponible' => $this->almacen->existe($stl['ruta_stl']),
+                ];
+            }
+
+            $lista[] = [
+                'version_id' => (int) $version['id'],
+                'familia'    => $familia['nombre'] ?? null,
+                'variante'   => $variante['nombre'] ?? null,
+                'categoria'  => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
+                'numero'     => (int) $version['numero'],
+                'estado'     => $version['estado'],
+                'cantidad'   => (int) $fila['cantidad'],
+                'hash_blend' => $version['hash_blend'],
+                'stls'       => $stls,
+            ];
+        }
+
+        return $lista;
+    }
+
+    /**
+     * "Compuesta de" (piezas_composiciones) traducido a JSON, mismo dato que
+     * Web::componentesDe(): la pieza ES la suma de sus componentes (decisión
+     * "caso 2 siempre" — sin geometría propia), así que stl.py expande
+     * recursivamente llamando aquí por cada `variante_id` que devuelve, hasta
+     * agotar componentes. Sin detección de ciclos aquí: hoy el servidor solo
+     * impide que una variante se componga de sí misma, no ciclos
+     * transitivos — stl.py es quien debe abortar si los encuentra.
+     */
+    public function composicion(int $varianteId)
+    {
+        if (!$this->varianteModel->find($varianteId)) {
+            return $this->response->setJSON(['error' => 'Variante no encontrada.'])->setStatusCode(404);
+        }
+
+        return $this->response->setJSON([
+            'ok'          => true,
+            'variante_id' => $varianteId,
+            'componentes' => $this->componentesDeApi($varianteId),
+        ]);
+    }
+
+    /** @return array<int, array> una fila por componente, en el orden en que se anotaron */
+    private function componentesDeApi(int $varianteId): array
+    {
+        $categorias   = array_column((new PiezaCategoriaModel())->findAll(), 'nombre', 'id');
+        $familiaModel = new PiezaFamiliaModel();
+
+        $lista = [];
+        foreach ($this->composicionModel->where('variante_id', $varianteId)->orderBy('creado_en', 'ASC')->findAll() as $fila) {
+            $versionAnotada = $this->versionModel->find($fila['version_componente_id']);
+            $componente     = $versionAnotada ? $this->varianteModel->find($versionAnotada['variante_id']) : null;
+            $familia        = $componente ? $familiaModel->find($componente['familia_id']) : null;
+            $categoriaId    = $familia['categoria_id'] ?? null;
+            $versionVigente = $componente ? $this->versionVigenteDeVariante((int) $componente['id']) : null;
+
+            $lista[] = [
+                'variante_id'     => $componente ? (int) $componente['id'] : null,
+                'variante'        => $componente['nombre'] ?? null,
+                'familia'         => $familia['nombre'] ?? null,
+                'categoria'       => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
+                // Solo la nota histórica de "con qué versión se añadió" — la que
+                // de verdad se usa para generar el STL es version_vigente.
+                'notas'           => $fila['notas'],
+                'version_anotada' => $versionAnotada ? $this->resumenVersion($versionAnotada) : null,
+                'version_vigente' => $versionVigente ? $this->resumenVersion($versionVigente) : null,
+            ];
+        }
+
+        return $lista;
+    }
+
+    /**
+     * Réplica de Web::versionVigenteDeVariante(): la validada si la hay; si
+     * no, la de número más alto (aunque sea descartada) — es el último
+     * estado consolidado del modelo, no el "listo para imprimir" de
+     * versionParaImprimir(). Es la que cuenta para "Compuesta de": una pieza
+     * compuesta debe llevar la geometría más reciente de cada componente,
+     * no quedarse en una validada vieja mientras hay trabajo posterior sin
+     * promocionar a validada.
+     */
+    private function versionVigenteDeVariante(int $varianteId): ?array
+    {
+        $validada = $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->where('estado', 'validada')
+            ->first();
+        if ($validada) {
+            return $validada;
+        }
+
+        return $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->orderBy('numero', 'DESC')
+            ->first();
+    }
+
+    /** Deja solo lo que sobrevive intacto a cualquier sistema de ficheros. */
+    private function paraNombreDeArchivo(?string $texto): string
+    {
+        return trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $texto), '-');
     }
 
     /**
@@ -643,6 +864,16 @@ class Api extends BaseController
             ->orderBy('numero', 'DESC')
             ->first();
 
+        // Réplica de Web::versionParaImprimir(): la que se usa SIEMPRE para
+        // imprimir/exportar. La validada si la hay; si no, la última
+        // borrador/impresa. Nunca descartada ni superada. stl.py y demás
+        // clientes de piezas la necesitan para saber qué .blend/STL generar.
+        $paraImprimir = $this->versionModel
+            ->where('variante_id', $variante['id'])
+            ->whereIn('estado', ['validada', 'borrador', 'impresa'])
+            ->orderBy('numero', 'DESC')
+            ->first();
+
         $rama = $this->ramaModel->abiertaDe((int) $variante['id']);
         $sesionAbierta = $rama
             ? $this->sesionModel->where('rama_id', $rama['id'])->where('cerrada_en', null)->first()
@@ -666,6 +897,7 @@ class Api extends BaseController
                 'id'     => (int) $validada['id'],
                 'numero' => (int) $validada['numero'],
             ] : null,
+            'version_para_imprimir' => $paraImprimir ? $this->resumenVersion($paraImprimir) : null,
             'versiones'             => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
             // Solo las ramas abiertas a partir de la última versión consolidada:
             // el trabajo de ramas anteriores ya quedó congelado en versiones
