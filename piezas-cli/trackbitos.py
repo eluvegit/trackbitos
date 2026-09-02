@@ -43,6 +43,13 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 PAPELERA_DIR = CONFIG_DIR / "papelera"
 DIAS_PAPELERA = 30
 
+# Punto de partida para una pieza recién estrenada (2026-09-02): una pieza
+# NORMAL con este nombre exacto de familia, sin nada especial en el
+# servidor — se busca con resolver_variante() igual que cualquier pieza que
+# el usuario escriba en la terminal. Se versiona, sube y promociona con los
+# comandos de siempre; ver plantilla_version()/descargar_plantilla().
+PLANTILLA_BUSQUEDA = "Plantilla base"
+
 # Dónde "trabajar" deja escrita la carpeta que resolvió (fase 26), para que
 # una función de shell pueda leerla y hacer `cd` de verdad — ver
 # _recordar_directorio() más abajo y la sección 3 del TUTORIAL.
@@ -54,7 +61,7 @@ ULTIMO_DIRECTORIO_PATH = CONFIG_DIR / "ultimo_directorio"
 # allí era mayor, y eso se retiró: las dos máquinas se ponen al día con git,
 # así que el script se actualiza como cualquier otro fichero del repo. Súbela
 # cuando el cambio merezca distinguirse.
-VERSION = "1.12.0"
+VERSION = "1.14.0"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -128,12 +135,18 @@ def a_papelera(ruta: Path) -> Path:
     return destino
 
 
+def _slug(texto: str) -> str:
+    """Sin acentos ni espacios: la ruta acaba escrita a mano en la terminal y
+    pegada en rutas de Blender, y las dos máquinas son Windows y macOS —
+    lo que aquí es legal allí puede no serlo."""
+    plano = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    plano = re.sub(r"[^A-Za-z0-9]+", "-", plano).strip("-").lower()
+    return plano or "pieza"
+
+
 def carpeta_para(variante: dict) -> str:
     """
     Nombre de carpeta para una pieza: "Pincel de pintura" → "pincel-de-pintura".
-    Sin acentos ni espacios porque esa ruta acaba escrita a mano en la terminal
-    y pegada en rutas de Blender, y porque las dos máquinas son Windows y
-    macOS: lo que aquí es legal allí puede no serlo.
 
     La variante solo se añade cuando no es la `base` — igual que en los
     listados: "base" está en todas las piezas y no distingue nada, así que
@@ -142,10 +155,7 @@ def carpeta_para(variante: dict) -> str:
     nombre = nombre_completo(variante) if variante.get("nombre") != PIEZA_VARIANTE_BASE \
         else (variante.get("familia_nombre") or variante["nombre"])
 
-    plano = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode()
-    plano = re.sub(r"[^A-Za-z0-9]+", "-", plano).strip("-").lower()
-
-    return plano or "pieza"
+    return _slug(nombre)
 
 
 def abrir_en_el_sistema(ruta: Path) -> bool:
@@ -350,6 +360,43 @@ def _nombre_de_cabecera(disposicion: Optional[str]) -> str:
     return "pieza.blend"
 
 
+def descargar_plantilla(config: dict, version_id: int, destino: Path) -> bool:
+    """
+    Trae el .blend de la versión vigente de "Plantilla base" (solo lectura —
+    mismo endpoint que sirve el .blend de cualquier versión ya promocionada,
+    sin sesión ni identidad de máquina: version/(:num)/blend). Devuelve
+    False sin tocar nada si el servidor ya no lo tiene (404: versión
+    borrada, o sin fichero en el almacén) — no es un fallo, es quedarse sin
+    plantilla esta vez.
+
+    No usa _abrir()/api_get() a propósito: necesita distinguir un 404 (sin
+    plantilla, seguir sin más) de cualquier otro fallo (sí avisar), y
+    _abrir() convierte todo HTTPError en el mismo RuntimeError con el
+    código solo dentro del texto del mensaje.
+    """
+    peticion = urllib.request.Request(
+        config["url_base"].rstrip("/") + f"/version/{version_id}/blend",
+        headers=_cabeceras(config),
+    )
+    try:
+        with urllib.request.urlopen(peticion, timeout=60) as resp:
+            cuerpo = resp.read()
+            hash_esperado = resp.headers.get("X-Hash-Blend")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise RuntimeError(f"no se pudo traer la plantilla (HTTP {e.code}).") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"no se pudo conectar con {config.get('url_base')}: {e.reason}") from e
+
+    destino.write_bytes(cuerpo)
+    if hash_esperado and sha256_de(destino) != hash_esperado:
+        destino.unlink(missing_ok=True)
+        raise RuntimeError("la plantilla descargada no coincide con el hash declarado por el servidor.")
+
+    return True
+
+
 def asegurar_maquina(config: dict) -> dict:
     """
     Alta automática / ping (spec 4.5). Se llama antes de cualquier escritura:
@@ -532,6 +579,25 @@ def resolver_variante(config: dict, texto: str) -> dict:
         f"{_listado_agrupado(exactas, categorias_orden)}\n\n"
         "    Concreta añadiendo la pieza, p.ej.: trackbitos descargar \"pincel base\""
     )
+
+
+def plantilla_version(config: dict) -> Optional[dict]:
+    """
+    La versión "para imprimir" (validada si la hay; si no, la última
+    borrador/impresa) de la pieza "Plantilla base" — una pieza NORMAL, sin
+    nada especial en el servidor; lo único distinto es que el CLI la busca
+    por este nombre al estrenar una pieza nueva (ver _bajar).
+
+    Sin argumentos fantasma: si esa pieza no existe, el nombre es ambiguo, o
+    todavía no tiene ninguna versión, no hay plantilla y punto — bajar/
+    trabajar siguen funcionando exactamente igual que sin esto.
+    """
+    try:
+        variante = resolver_variante(config, PLANTILLA_BUSQUEDA)
+    except RuntimeError:
+        return None
+
+    return variante.get("version_para_imprimir")
 
 
 # --------------------------------------------------------------------------
@@ -889,8 +955,28 @@ def _bajar(args, motivo: str) -> int:
         })
 
         print(f"\n{variante_nombre} · rama {rama.get('nombre')} · sesión {sesion['numero']} abierta")
-        print("  (pieza recién estrenada: no había ningún fichero que descargar)\n")
-        print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
+
+        # Punto de partida (2026-09-02): si existe la pieza "Plantilla base",
+        # su versión vigente se trae como primer .blend en vez de dejar la
+        # carpeta vacía. Si falla al traerla (red, servidor) no se aborta el
+        # comando: la sesión ya está abierta, y seguir con la carpeta vacía
+        # (como antes de esto) sigue siendo un estado válido.
+        destino = None
+        version = plantilla_version(config)
+        if version:
+            try:
+                ruta = directorio / f"{_slug(variante_nombre)}.blend"
+                if descargar_plantilla(config, version["id"], ruta):
+                    destino = ruta
+            except RuntimeError as e:
+                print(f"  ⚠ No se pudo traer la plantilla ({e}). Se sigue sin ella.")
+
+        if destino:
+            print(f"  (pieza recién estrenada: se parte de la plantilla — {destino.name})\n")
+            print(f"  → Edita {destino.name} y, cuando quieras dejar constancia: trackbitos subir\n")
+        else:
+            print("  (pieza recién estrenada: no había ningún fichero que descargar)\n")
+            print(f"  → Guarda tu .blend en {directorio} y ejecuta: trackbitos subir\n")
         return 0
 
     # 'variante' declara para quién es la descarga (fase 34): el servidor lo

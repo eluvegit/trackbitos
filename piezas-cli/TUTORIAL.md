@@ -44,9 +44,9 @@ mkdir ~/Piezas/torso-recto && cd ~/Piezas/torso-recto
    ```
    trackbitos bajar torso-recto
    ```
-   Como es una variante nueva, no hay nada que descargar: el propio comando lo detecta solo y se limita a reclamar la máquina y abrir la sesión 1. El nombre admite la pieza, la variante o ambas (ver el truco de la sección 5).
+   Como es una variante nueva, no hay nada que descargar: el propio comando lo detecta solo y se limita a reclamar la máquina y abrir la sesión 1. El nombre admite la pieza, la variante o ambas (ver el truco de la sección 5). Si existe una pieza llamada **"Plantilla base"** (ver más abajo), la carpeta no queda vacía: se trae ya su versión vigente como primer `.blend`.
 
-3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta.
+3. **Modelar en Blender**, guardando el `.blend` en esa misma carpeta (el que trajo la plantilla, si la había, o uno nuevo si no).
 
 4. **Subir** cuando quieras dejar constancia (se puede subir varias veces dentro de la misma sesión):
    ```
@@ -88,6 +88,12 @@ trackbitos trabajar "pincel"
 ```
 
 Crea la carpeta con el nombre de la pieza (`pincel-de-pintura`) donde estés, baja dentro el `.blend`, abre la sesión y lanza Blender. Si ya estás dentro de esa carpeta, trabaja ahí en vez de anidar otra. Si el nombre encaja con varias piezas, te las lista y **no crea ninguna carpeta** hasta que concretes. `--no-abrir` hace todo menos lanzar el programa.
+
+### Plantilla: no partir de un `.blend` en blanco
+
+`trackbitos bajar`/`trabajar` sobre una pieza recién estrenada normalmente deja la carpeta vacía (nunca hubo nada que descargar) y toca crear el `.blend` a mano en Blender. Si prefieres partir siempre de una base con sus collections y ajustes ya hechos, no hace falta nada especial: crea una pieza más, en la web, llamada exactamente **"Plantilla base"** (en la categoría que quieras — es solo organización).
+
+Es una pieza normal: se sube, se promociona, se actualiza como cualquier otra ("mejorar" la plantilla es promocionar una versión nueva en ella). Lo único distinto es que, al estrenar cualquier OTRA pieza, `bajar`/`trabajar` la buscan por ese nombre exacto y se traen su versión vigente (la validada, o si no hay, la última) como primer `.blend` — en vez de dejar la carpeta vacía. Si no existe esa pieza, o no tiene ninguna versión todavía, el comportamiento es el de siempre.
 
 Es `bajar` con los pasos de alrededor, no un camino distinto: se niega exactamente en los mismos casos (copia viva en la otra máquina, impresión sin juzgar, cambios sin subir aquí), y si se niega no abre nada.
 
