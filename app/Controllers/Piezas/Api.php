@@ -383,6 +383,65 @@ class Api extends BaseController
         ]);
     }
 
+    /**
+     * Los STL ya subidos a mano (`piezas_version_stls`) de la versión para
+     * imprimir de esta variante — para que `stl.py revisar` compare su hash
+     * contra el que generaría ahora mismo desde el `.blend` y avise si han
+     * divergido. Los dos sistemas conviven a propósito (decisión 6 del plan
+     * .blend->STL: "el .blend genera, los STL subidos NO son autoridad") —
+     * esto no es para fusionarlos, es para detectar cuándo se han
+     * desincronizado.
+     */
+    public function stls(int $varianteId)
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return $this->response->setJSON(['error' => 'Variante no encontrada.'])->setStatusCode(404);
+        }
+
+        $version = $this->versionParaImprimir($varianteId);
+        if (!$version) {
+            return $this->response->setJSON([
+                'ok'          => true,
+                'variante_id' => $varianteId,
+                'version'     => null,
+                'stls'        => [],
+            ]);
+        }
+
+        $stls = [];
+        foreach ($this->servicio->stlsDe((int) $version['id']) as $stl) {
+            $stls[] = [
+                'nombre'     => $stl['nombre'],
+                'hash'       => $stl['hash_stl'],
+                'disponible' => $this->almacen->existe($stl['ruta_stl']),
+            ];
+        }
+
+        return $this->response->setJSON([
+            'ok'          => true,
+            'variante_id' => $varianteId,
+            'version'     => $this->resumenVersion($version),
+            'stls'        => $stls,
+        ]);
+    }
+
+    /**
+     * Réplica de Web::versionParaImprimir() (decisión 4 del plan
+     * .blend->STL): la validada si la hay; si no, la última
+     * borrador/impresa. Nunca descartada ni superada. Compartido por
+     * resumenVariante() (campo `version_para_imprimir` del catálogo) y por
+     * stls() — antes estaba duplicado en los dos sitios.
+     */
+    private function versionParaImprimir(int $varianteId): ?array
+    {
+        return $this->versionModel
+            ->where('variante_id', $varianteId)
+            ->whereIn('estado', ['validada', 'borrador', 'impresa'])
+            ->orderBy('numero', 'DESC')
+            ->first();
+    }
+
     /** @return array<int, array> una fila por componente, en el orden en que se anotaron */
     private function componentesDeApi(int $varianteId): array
     {
@@ -868,15 +927,7 @@ class Api extends BaseController
             ->orderBy('numero', 'DESC')
             ->first();
 
-        // Réplica de Web::versionParaImprimir(): la que se usa SIEMPRE para
-        // imprimir/exportar. La validada si la hay; si no, la última
-        // borrador/impresa. Nunca descartada ni superada. stl.py y demás
-        // clientes de piezas la necesitan para saber qué .blend/STL generar.
-        $paraImprimir = $this->versionModel
-            ->where('variante_id', $variante['id'])
-            ->whereIn('estado', ['validada', 'borrador', 'impresa'])
-            ->orderBy('numero', 'DESC')
-            ->first();
+        $paraImprimir = $this->versionParaImprimir((int) $variante['id']);
 
         $rama = $this->ramaModel->abiertaDe((int) $variante['id']);
         $sesionAbierta = $rama

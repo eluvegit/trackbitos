@@ -38,6 +38,8 @@ from trackbitos import (
     api_get,
     cargar_config,
     nombre_completo,
+    resolver_variante,
+    sha256_de,
 )
 
 VERSION = "0.1.0"
@@ -156,8 +158,8 @@ def ejecutar_export(blender_exe: str, ruta_blend: Path, carpeta_salida: Path, es
     """
     Un .blend a la vez, en background. El resultado se lee de la última
     línea de stdout con prefijo EXPORT_BATCH_RESULT: — el código de salida
-    de Blender por sí solo no distingue "no había ningún STL_*" (normal, se
-    apunta en FALTAN.txt) de "reventó a mitad" (error real).
+    de Blender por sí solo no distingue "no había ninguna collection STL"
+    (normal, se apunta en FALTAN.txt) de "reventó a mitad" (error real).
     """
     proceso = subprocess.run(
         [blender_exe, "--background", str(ruta_blend), "--python", str(EXPORT_SCRIPT), "--", str(carpeta_salida), str(escala)],
@@ -179,7 +181,8 @@ def ejecutar_export(blender_exe: str, ruta_blend: Path, carpeta_salida: Path, es
 def _procesar_simple(config: dict, blender_exe: str, escala: float, carpeta: Path, version: dict, sin_blend: bool) -> str:
     """
     Devuelve "omitida" (nada cambió desde la última vez), "vacia" (se
-    exportó pero el .blend no tenía ningún STL_* dentro) o "exportada".
+    exportó pero el .blend no tenía ninguna collection "STL" dentro) o
+    "exportada".
     """
     anterior = _leer_json(carpeta / "manifest.json")
     if anterior and anterior.get("hash_blend") == version["hash_blend"] and anterior.get("script_version") == VERSION:
@@ -321,7 +324,7 @@ def _veredicto_biblioteca(backup_dir, exportadas, omitidas, referencias, sin_ver
     if referencias:
         print(f"  → {len(referencias)} compuesta(s): solo composicion.json (+ .blend si no había --sin-blend)")
     if vacias:
-        print(f"  ⚠ {len(vacias)} con .blend pero sin ninguna STL_* dentro:")
+        print(f"  ⚠ {len(vacias)} con .blend pero sin ninguna collection \"STL\" dentro:")
         for nombre in vacias:
             print(f"      - {nombre}")
     if sin_version:
@@ -331,6 +334,62 @@ def _veredicto_biblioteca(backup_dir, exportadas, omitidas, referencias, sin_ver
         for e in errores:
             print(f"      - {e}")
     print()
+
+
+# --------------------------------------------------------------------------
+# generar
+# --------------------------------------------------------------------------
+
+def cmd_generar(args) -> int:
+    """
+    Igual que un paso suelto de `biblioteca`, pero para una sola pieza: para
+    comprobar rápido si el nombrado de collections "STL" de un .blend
+    concreto ya funciona, sin esperar a que pase por las 51 variantes del
+    catálogo.
+    Mismo criterio de versión que el resto del plan (decisión 4: la "para
+    imprimir"; sin --version, ver plan del 2026-09-02).
+    """
+    config = cargar_config()
+    stl_cfg = cargar_stl_config()
+    blender_exe = exigir_blender(stl_cfg)
+    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
+
+    variante = resolver_variante(config, args.pieza)
+    etiqueta = nombre_completo(variante)
+
+    version = variante.get("version_para_imprimir")
+    if not version:
+        print(f"\n  · {etiqueta} todavía no tiene ninguna versión para imprimir.\n")
+        return 0
+
+    carpeta = carpeta_version(backup_dir, variante.get("categoria_nombre"), variante.get("familia_nombre"), variante["nombre"], version["numero"])
+
+    componentes = api_get(config, f"/variante/{variante['id']}/composicion").get("componentes", [])
+
+    if componentes:
+        resultado = _procesar_compuesta(config, carpeta, version, componentes, args.sin_blend)
+        print(f"\n  {etiqueta} v{version['numero']:03d} es compuesta ({len(componentes)} componente(s)).")
+        if resultado == "omitida":
+            print(f"  · sin cambios desde la última vez — {carpeta}\n")
+        else:
+            print(f"  → composicion.json escrito en {carpeta}")
+            print("    (el STL de cada componente vive en su propia carpeta — corre `stl.py generar` sobre cada uno.)\n")
+        return 0
+
+    resultado = _procesar_simple(config, blender_exe, escala, carpeta, version, args.sin_blend)
+
+    print(f"\n  {etiqueta} v{version['numero']:03d} ({version['estado']}) en {carpeta}\n")
+    if resultado == "omitida":
+        print("  · sin cambios desde la última vez, no se ha tocado nada.\n")
+        return 0
+    if resultado == "vacia":
+        print("  ⚠ el .blend no tiene ninguna collection STL_* dentro — nada que exportar todavía.\n")
+        return 1
+
+    manifest = _leer_json(carpeta / "manifest.json") or {}
+    print(f"  ✓ exportado(s): {', '.join(manifest.get('collections', [])) or '?'}\n")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -527,6 +586,126 @@ def cmd_placa(args) -> int:
 
 
 # --------------------------------------------------------------------------
+# revisar
+# --------------------------------------------------------------------------
+
+def cmd_revisar(args) -> int:
+    """
+    Recorre el catálogo entero comparando lo que stl.py generaría ahora
+    desde cada .blend contra lo que ya hay subido a mano al servidor
+    (`piezas_version_stls`). Decisión 3: el .blend es la autoridad absoluta,
+    pero los dos sistemas conviven a propósito — esto no fusiona nada, solo
+    avisa cuándo han divergido (el .blend cambió sin resubir, o al revés).
+
+    También aplica el guardarraíl de la decisión 12: si una pieza tiene
+    componentes anotados (`piezas_composiciones`) Y ADEMÁS ya tiene algún
+    STL subido a mano, se señala en vez de asumir en silencio que sigue
+    siendo "caso 2" (compuesta sin geometría propia, decisión 11) — es la
+    señal barata de "esto podría tener geometría propia" sin invocar
+    Blender para piezas que, por diseño, ni siquiera se exportan.
+    """
+    config = cargar_config()
+    stl_cfg = cargar_stl_config()
+    blender_exe = exigir_blender(stl_cfg)
+    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
+
+    variantes = api_get(config, "/variantes").get("variantes", [])
+    if not variantes:
+        print("\n  · no hay ninguna variante todavía en el catálogo.\n")
+        return 0
+
+    ok, divergencias, solo_local, solo_servidor = [], [], [], []
+    guardarrail, vacias, sin_version, errores = [], [], [], []
+
+    for v in variantes:
+        etiqueta = nombre_completo(v)
+        version = v.get("version_para_imprimir")
+        if not version:
+            sin_version.append(etiqueta)
+            continue
+
+        try:
+            componentes = api_get(config, f"/variante/{v['id']}/composicion").get("componentes", [])
+            subidos = {s["nombre"]: s["hash"] for s in api_get(config, f"/variante/{v['id']}/stls").get("stls", [])}
+        except RuntimeError as e:
+            errores.append(f"{etiqueta}: {e}")
+            continue
+
+        if componentes:
+            if subidos:
+                guardarrail.append(
+                    f"{etiqueta} v{version['numero']:03d}: tiene {len(componentes)} componente(s) Y "
+                    f"{len(subidos)} STL subido(s) a mano — revisa si de verdad sigue siendo 'caso 2'."
+                )
+            continue
+
+        carpeta = carpeta_version(backup_dir, v.get("categoria_nombre"), v.get("familia_nombre"), v["nombre"], version["numero"])
+        try:
+            _procesar_simple(config, blender_exe, escala, carpeta, version, sin_blend=True)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            errores.append(f"{etiqueta}: {e}")
+            continue
+
+        generados = {stl.stem: sha256_de(stl) for stl in carpeta.glob("*.stl")}
+        if not generados:
+            nota = f" (hay {len(subidos)} STL subido(s) sin nada que comparar)" if subidos else ""
+            vacias.append(f"{etiqueta} v{version['numero']:03d}: sin STL_* en el .blend{nota}.")
+            continue
+
+        for nombre in sorted(set(generados) | set(subidos)):
+            local_hash = generados.get(nombre)
+            servidor_hash = subidos.get(nombre)
+            etiqueta_pieza = f"{etiqueta} v{version['numero']:03d} / {nombre}"
+
+            if local_hash and servidor_hash:
+                if local_hash == servidor_hash:
+                    ok.append(etiqueta_pieza)
+                else:
+                    divergencias.append(f"{etiqueta_pieza}: .blend={local_hash[:12]}... servidor={servidor_hash[:12]}...")
+            elif local_hash:
+                solo_local.append(f"{etiqueta_pieza}: el .blend lo genera, nunca se subió (o se subió con otro nombre).")
+            else:
+                solo_servidor.append(f"{etiqueta_pieza}: subido a mano, el .blend ya no lo genera con ese nombre.")
+
+    _veredicto_revisar(ok, divergencias, solo_local, solo_servidor, guardarrail, vacias, sin_version, errores)
+
+    return 0 if not (divergencias or guardarrail or errores) else 1
+
+
+def _veredicto_revisar(ok, divergencias, solo_local, solo_servidor, guardarrail, vacias, sin_version, errores) -> None:
+    print("\n  Revisión del catálogo\n")
+    print(f"  ✓ {len(ok)} coinciden (.blend y servidor de acuerdo)")
+    if divergencias:
+        print(f"\n  ✗ {len(divergencias)} DIVERGEN (el .blend cambió sin resubir el STL, o al revés):")
+        for d in divergencias:
+            print(f"      - {d}")
+    if guardarrail:
+        print(f"\n  ⚠ {len(guardarrail)} con componentes Y STL subido a la vez (decisión 12):")
+        for g in guardarrail:
+            print(f"      - {g}")
+    if solo_local:
+        print(f"\n  · {len(solo_local)} solo en el .blend, nunca subidos:")
+        for s in solo_local:
+            print(f"      - {s}")
+    if solo_servidor:
+        print(f"\n  · {len(solo_servidor)} solo subidos, el .blend ya no los genera:")
+        for s in solo_servidor:
+            print(f"      - {s}")
+    if vacias:
+        print(f"\n  · {len(vacias)} sin nada que comparar:")
+        for vv in vacias:
+            print(f"      - {vv}")
+    if sin_version:
+        print(f"\n  · {len(sin_version)} sin ninguna versión para imprimir todavía")
+    if errores:
+        print(f"\n  ✗ {len(errores)} con error:")
+        for e in errores:
+            print(f"      - {e}")
+    print()
+
+
+# --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 
@@ -539,15 +718,23 @@ def main(argv: Optional[list] = None) -> int:
     subs = parser.add_subparsers(dest="comando", required=True)
 
     p = subs.add_parser(
-        "biblioteca",
-        help="Backup local de STL + .blend de todo el catálogo, con salto incremental por hash.",
+        "biblioteca", aliases=["b"],
+        help="Backup local de STL + .blend de todo el catálogo, con salto incremental por hash. (alias: b)",
     )
     p.add_argument("--sin-blend", action="store_true", dest="sin_blend", help="No guardar copia del .blend, solo los STL.")
     p.set_defaults(func=cmd_biblioteca)
 
     p = subs.add_parser(
-        "placa",
-        help="STL de una placa (id o nombre) en una carpeta plana, lista para ChituBox.",
+        "generar", aliases=["g"],
+        help="Exporta solo una pieza (rápido, sin recorrer el catálogo entero) — para probar un .blend recién preparado. (alias: g)",
+    )
+    p.add_argument("pieza", help="Nombre o id de la pieza (mismo criterio que trackbitos.py).")
+    p.add_argument("--sin-blend", action="store_true", dest="sin_blend", help="No guardar copia del .blend, solo los STL.")
+    p.set_defaults(func=cmd_generar)
+
+    p = subs.add_parser(
+        "placa", aliases=["p"],
+        help="STL de una placa (id o nombre) en una carpeta plana, lista para ChituBox. (alias: p)",
     )
     p.add_argument("placa", help="Id o nombre (o trozo del nombre) de la placa.")
     p.add_argument(
@@ -555,6 +742,12 @@ def main(argv: Optional[list] = None) -> int:
         help="Usa la versión anotada de cada componente en vez de la vigente, para reproducir la placa bit a bit.",
     )
     p.set_defaults(func=cmd_placa)
+
+    p = subs.add_parser(
+        "revisar", aliases=["r"],
+        help="Compara todo el catálogo: lo que generaría el .blend ahora mismo vs lo ya subido a mano. (alias: r)",
+    )
+    p.set_defaults(func=cmd_revisar)
 
     args = parser.parse_args(argv)
 

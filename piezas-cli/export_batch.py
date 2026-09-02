@@ -1,6 +1,6 @@
 """
-Exporta a STL las collections `STL_*` de un .blend, una vez por collection.
-Se ejecuta DENTRO de Blender, nunca a mano:
+Exporta a STL las collections "STL" / "STL <trozo>" de un .blend, una vez
+por collection. Se ejecuta DENTRO de Blender, nunca a mano:
 
     blender --background <fichero.blend> --python export_batch.py -- <carpeta_salida> [escala]
 
@@ -10,12 +10,19 @@ stdout (prefijo EXPORT_BATCH_RESULT:), no del código de salida a solas — el
 código de salida solo distingue "algo se abortó" de "terminó", no qué se
 exportó.
 
-Convención del catálogo (decisión 16 del plan): cada trozo imprimible de la
-escena vive en su propia collection cuyo nombre empieza por "STL_"; lo que no
-lleva ese prefijo (referencias, guías, el Playmobil de calibre) se ignora sin
-más. Una collection SIN ningún mesh dentro (de referencia, vacía a
-propósito) no cuenta como exportada: ni error ni fichero, simplemente no
-aporta nada a este .blend.
+Convención real del catálogo del usuario (corregida el 2026-09-02 sobre la
+decisión 16 original del plan, que asumía un prefijo "STL_" con guion bajo
+que ningún .blend real usa):
+- Collection llamada exactamente "STL" → la pieza es un solo trozo; se
+  exporta como "completo.stl".
+- Collections "STL <nombre del trozo>" (con espacio) → una por trozo, p.ej.
+  "STL Brazo izquierdo" y "STL Brazo derecho" en el mismo .blend.
+- Cualquier otra collection (referencias, guías, el Playmobil de calibre,
+  o algo que solo empiece por las letras "STL" sin ese espacio o coincidencia
+  exacta, como "STLibrary") se ignora sin más.
+- Una collection SIN ningún mesh dentro (de referencia, vacía a propósito)
+  no cuenta como exportada: ni error ni fichero, simplemente no aporta nada
+  a este .blend.
 """
 from __future__ import annotations
 
@@ -25,7 +32,23 @@ from pathlib import Path
 
 import bpy
 
-PREFIJO = "STL_"
+NOMBRE_TROZO_UNICO = "completo"
+
+
+def _nombre_trozo(nombre_coleccion: str) -> str | None:
+    """
+    "STL" a secas → pieza de un solo trozo (NOMBRE_TROZO_UNICO). "STL
+    <resto>" → el trozo se llama <resto>. Cualquier otra cosa (incluido
+    "STLibrary" o "STLalgo", que empiezan por las letras pero no por la
+    palabra suelta) no es una collection de exportación → None.
+    """
+    texto = nombre_coleccion.strip()
+    if texto == "STL":
+        return NOMBRE_TROZO_UNICO
+    if texto.startswith("STL "):
+        resto = texto[len("STL "):].strip()
+        return resto or NOMBRE_TROZO_UNICO
+    return None
 
 
 def _argumentos() -> list:
@@ -54,18 +77,15 @@ def main() -> None:
     vistos = set()
 
     for coleccion in bpy.data.collections:
-        if not coleccion.name.startswith(PREFIJO):
-            continue
-
-        nombre = coleccion.name[len(PREFIJO):].strip()
-        if not nombre:
+        nombre = _nombre_trozo(coleccion.name)
+        if nombre is None:
             continue
 
         if nombre in vistos:
             # Ruidoso a propósito (decisión 16): dos trozos con el mismo
             # nombre en el mismo .blend se pisarían en el zip de la placa sin
             # que nadie lo notara hasta imprimir de menos.
-            _error(f"colisión de nombre: dos collections '{PREFIJO}{nombre}' (o equivalentes) en el mismo .blend.")
+            _error(f"colisión de nombre: dos collections resuelven al trozo '{nombre}' en el mismo .blend.")
         vistos.add(nombre)
 
         # all_objects, no .objects: una collection puede anidar otras (p.ej.
@@ -89,9 +109,10 @@ def main() -> None:
         )
         exportados.append(nombre)
 
-    # Sin ningún STL_* exportado no se aborta (decisión 16): se lista en
-    # FALTAN.txt más arriba, en stl.py, que es quien conoce el resto del
-    # catálogo — este script solo sabe de ESTE .blend.
+    # Sin ninguna collection "STL"/"STL <trozo>" exportada no se aborta
+    # (decisión 16): se lista en FALTAN.txt más arriba, en stl.py, que es
+    # quien conoce el resto del catálogo — este script solo sabe de ESTE
+    # .blend.
     print("EXPORT_BATCH_RESULT:" + json.dumps({
         "exportados": exportados,
         "blender_version": bpy.app.version_string,

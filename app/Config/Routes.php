@@ -612,6 +612,9 @@ $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Contr
     // S4: "Compuesta de" por API, para que stl.py expanda piezas compuestas
     // recursivamente (decisión "caso 2 siempre" del plan .blend→STL).
     $routes->GET('variante/(:num)/composicion', 'Api::composicion/$1');
+    // Para stl.py `revisar` (decisión 3): los STL ya subidos, para comparar
+    // su hash contra el que se generaría ahora desde el .blend.
+    $routes->GET('variante/(:num)/stls', 'Api::stls/$1');
 
     // Placas (fase stl.py, S3): 'placas' es literal y va antes de
     // 'placa/(:num)' por el mismo motivo que el resto de rutas literales de
