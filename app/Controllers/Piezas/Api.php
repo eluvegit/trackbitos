@@ -342,15 +342,19 @@ class Api extends BaseController
             }
 
             $lista[] = [
-                'version_id' => (int) $version['id'],
-                'familia'    => $familia['nombre'] ?? null,
-                'variante'   => $variante['nombre'] ?? null,
-                'categoria'  => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
-                'numero'     => (int) $version['numero'],
-                'estado'     => $version['estado'],
-                'cantidad'   => (int) $fila['cantidad'],
-                'hash_blend' => $version['hash_blend'],
-                'stls'       => $stls,
+                'version_id'  => (int) $version['id'],
+                // Añadido para stl.py `placa`: hace falta para pedir
+                // /variante/(:num)/composicion y expandir recursivamente si
+                // esta pieza es compuesta (decisión 11 del plan .blend->STL).
+                'variante_id' => (int) $version['variante_id'],
+                'familia'     => $familia['nombre'] ?? null,
+                'variante'    => $variante['nombre'] ?? null,
+                'categoria'   => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
+                'numero'      => (int) $version['numero'],
+                'estado'      => $version['estado'],
+                'cantidad'    => (int) $fila['cantidad'],
+                'hash_blend'  => $version['hash_blend'],
+                'stls'        => $stls,
             ];
         }
 

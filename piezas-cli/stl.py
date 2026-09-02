@@ -334,6 +334,199 @@ def _veredicto_biblioteca(backup_dir, exportadas, omitidas, referencias, sin_ver
 
 
 # --------------------------------------------------------------------------
+# placa
+# --------------------------------------------------------------------------
+
+def resolver_placa(config: dict, texto: str) -> dict:
+    """
+    Mismo espíritu que resolver_variante() de trackbitos.py, pero más
+    simple: el histórico de placas no crece tan rápido como el catálogo de
+    piezas, así que "el texto está contenido en el nombre" basta — no hace
+    falta la escalera de coincidencias exactas.
+    """
+    placas = api_get(config, "/placas").get("placas", [])
+    if not placas:
+        raise RuntimeError("no hay ninguna placa en el histórico todavía.")
+
+    if texto.isdigit():
+        exactas = [p for p in placas if p["id"] == int(texto)]
+    else:
+        texto_l = texto.lower()
+        exactas = [p for p in placas if texto_l in p["nombre"].lower()]
+
+    if len(exactas) == 1:
+        return exactas[0]
+
+    def _listado(items: list) -> str:
+        return "\n".join(f"    {p['id']:>4}  {p['nombre']}  ({p['fecha']})" for p in items)
+
+    if not exactas:
+        raise RuntimeError(f"no hay ninguna placa que sea '{texto}'. Placas disponibles:\n\n{_listado(placas)}\n")
+
+    raise RuntimeError(f"'{texto}' encaja con varias:\n\n{_listado(exactas)}\n\n    Concreta con el id.")
+
+
+def _etiqueta_nodo(nodo: dict) -> str:
+    return f"{nodo['familia']} / {nodo['variante']}" if nodo.get("familia") else (nodo.get("variante") or "?")
+
+
+def _expandir_placa(config: dict, nodos: list, como_anotado: bool) -> tuple:
+    """
+    Expande recursivamente las piezas compuestas de una placa (decisión 11:
+    "compuesta de" es SIEMPRE la suma de sus componentes, sin geometría
+    propia — se expande siempre, sin interruptor) hasta quedarse solo con
+    piezas simples (hojas): las que de verdad tienen un .blend con
+    geometría que exportar.
+
+    Detecta ciclos de composición (decisión 13: A compuesta de B, B
+    compuesta de A — el servidor hoy solo impide componerse de sí misma, no
+    ciclos transitivos) y aborta esa rama en concreto con un aviso, sin
+    tirar el resto de la placa por un dato mal anotado en otro sitio.
+
+    Dedup (decisión 14): una misma variante alcanzada por dos caminos
+    distintos de la misma placa sale una sola vez, con la primera versión
+    con la que se encontró en el recorrido.
+
+    `como_anotado` decide, en cada nivel de la recursión, si un componente
+    se resuelve con su `version_vigente` (por defecto) o su
+    `version_anotada` (--como-anotado, decisión 15: para reproducir una
+    placa vieja bit a bit).
+
+    Devuelve (hojas, avisos).
+    """
+    hojas: list = []
+    vistos: set = set()
+    avisos: list = []
+
+    def visitar(nodo: dict, cadena: list) -> None:
+        vid = nodo["variante_id"]
+        if vid in cadena:
+            ruta = " -> ".join(str(x) for x in cadena + [vid])
+            avisos.append(f"ciclo de composición ({ruta}): se omite esta rama.")
+            return
+
+        try:
+            componentes = api_get(config, f"/variante/{vid}/composicion").get("componentes", [])
+        except RuntimeError as e:
+            avisos.append(f"{_etiqueta_nodo(nodo)}: no se pudo consultar su composición ({e}).")
+            return
+
+        if not componentes:
+            if vid in vistos:
+                return  # dedup: ya se añadió por otro camino de la misma placa
+            vistos.add(vid)
+            hojas.append(nodo)
+            return
+
+        for c in componentes:
+            comp_vid = c.get("variante_id")
+            comp_version = c.get("version_anotada" if como_anotado else "version_vigente")
+            if comp_vid is None or not comp_version:
+                cual = "anotada" if como_anotado else "vigente"
+                avisos.append(f"{_etiqueta_nodo(nodo)}: un componente ya no tiene versión {cual} (¿borrada?) — se omite.")
+                continue
+            visitar({
+                "variante_id": comp_vid,
+                "familia": c.get("familia"),
+                "variante": c.get("variante"),
+                "categoria": c.get("categoria"),
+                "version": comp_version,
+            }, cadena + [vid])
+
+    for nodo in nodos:
+        visitar(nodo, [])
+
+    return hojas, avisos
+
+
+def _asegurar_stl_en_biblioteca(config: dict, blender_exe: str, escala: float, backup_dir: Path, hoja: dict) -> Path:
+    """
+    Reutiliza la caché de `biblioteca` (misma carpeta, mismo manifest.json,
+    mismo salto incremental) en vez de exportar de cero: si esta pieza+
+    versión ya se generó al construir `biblioteca` o al montar otra placa,
+    no se vuelve a invocar Blender — no es solo ahorro de espacio (la
+    motivación original del plan), también de tiempo. El .blend nunca se
+    persiste aquí (`sin_blend=True`): decisión 7, "placa nunca baja .blend".
+    """
+    carpeta = carpeta_version(backup_dir, hoja["categoria"], hoja["familia"], hoja["variante"], hoja["version"]["numero"])
+    _procesar_simple(config, blender_exe, escala, carpeta, hoja["version"], sin_blend=True)
+    return carpeta
+
+
+def cmd_placa(args) -> int:
+    config = cargar_config()
+    stl_cfg = cargar_stl_config()
+    blender_exe = exigir_blender(stl_cfg)
+    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    placas_dir = Path(stl_cfg.get("placas_dir") or DEFAULT_PLACAS_DIR)
+    escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
+
+    placa = resolver_placa(config, args.placa)
+    filas = api_get(config, f"/placa/{placa['id']}").get("versiones", [])
+    if not filas:
+        print(f"\n  · la placa \"{placa['nombre']}\" está vacía, no hay nada que exportar.\n")
+        return 0
+
+    nodos = [{
+        "variante_id": f["variante_id"],
+        "familia": f["familia"],
+        "variante": f["variante"],
+        "categoria": f["categoria"],
+        "version": {"id": f["version_id"], "hash_blend": f["hash_blend"], "numero": f["numero"], "estado": f["estado"]},
+    } for f in filas]
+
+    hojas, avisos = _expandir_placa(config, nodos, args.como_anotado)
+
+    carpeta_salida = placas_dir / _slug(placa["nombre"])
+    carpeta_salida.mkdir(parents=True, exist_ok=True)
+
+    bitacora, faltantes, copiados = [], [], 0
+
+    for hoja in hojas:
+        try:
+            carpeta_cache = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: {e}")
+            continue
+
+        stls = sorted(carpeta_cache.glob("*.stl"))
+        if not stls:
+            faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: sin ninguna STL_* en el .blend.")
+            continue
+
+        for stl in stls:
+            nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
+            shutil.copy2(stl, carpeta_salida / nombre_final)
+            copiados += 1
+            bitacora.append(f"{nombre_final}\n    de: {_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d} ({hoja['version']['estado']})")
+
+    faltantes.extend(avisos)
+
+    (carpeta_salida / "placa.txt").write_text(
+        f"Placa \"{placa['nombre']}\" ({placa['fecha']})\n"
+        f"Generada: {datetime.now().isoformat(timespec='seconds')}\n"
+        f"{'Versión anotada (--como-anotado)' if args.como_anotado else 'Versión vigente'} de cada componente.\n\n"
+        + "\n".join(bitacora) + "\n",
+        encoding="utf-8",
+    )
+    if faltantes:
+        (carpeta_salida / "FALTAN.txt").write_text(
+            "Piezas de esta placa sin STL en la carpeta:\n\n" + "\n".join(faltantes) + "\n",
+            encoding="utf-8",
+        )
+
+    print(f"\n  Placa \"{placa['nombre']}\" en {carpeta_salida}\n")
+    print(f"  ✓ {copiados} STL")
+    if faltantes:
+        print(f"  ⚠ {len(faltantes)} con problema (ver FALTAN.txt):")
+        for f in faltantes:
+            print(f"      - {f.splitlines()[0]}")
+    print()
+
+    return 0 if not faltantes else 1
+
+
+# --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 
@@ -351,6 +544,17 @@ def main(argv: Optional[list] = None) -> int:
     )
     p.add_argument("--sin-blend", action="store_true", dest="sin_blend", help="No guardar copia del .blend, solo los STL.")
     p.set_defaults(func=cmd_biblioteca)
+
+    p = subs.add_parser(
+        "placa",
+        help="STL de una placa (id o nombre) en una carpeta plana, lista para ChituBox.",
+    )
+    p.add_argument("placa", help="Id o nombre (o trozo del nombre) de la placa.")
+    p.add_argument(
+        "--como-anotado", action="store_true", dest="como_anotado",
+        help="Usa la versión anotada de cada componente en vez de la vigente, para reproducir la placa bit a bit.",
+    )
+    p.set_defaults(func=cmd_placa)
 
     args = parser.parse_args(argv)
 
