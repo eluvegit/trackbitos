@@ -47,9 +47,24 @@ VERSION = "0.1.0"
 STL_CONFIG_PATH = CONFIG_DIR / "stl.config.json"
 EXPORT_SCRIPT = Path(__file__).resolve().parent / "export_batch.py"
 
-DEFAULT_BACKUP_DIR = CONFIG_DIR / "biblioteca"
-DEFAULT_PLACAS_DIR = CONFIG_DIR / "placas"
+# Nombres de las subcarpetas de salida bajo el directorio de invocación
+# (--dir, o el actual) — NO rutas fijas por máquina. Cada conjunto de
+# piezas vive donde el usuario ya las organiza (p.ej. "R:\PIEZAS
+# PLAYMOBIL\STL"), igual que trackbitos.py ya hace con `--dir` para las
+# mesas de trabajo. Ver resolver_backup_dir()/resolver_placas_dir().
+NOMBRE_CARPETA_BIBLIOTECA = "biblioteca"
+NOMBRE_CARPETA_PLACAS = "placas"
 DEFAULT_ESCALA = 10.0
+
+# Papelera LOCAL de `generar` (2026-09-02): cuando una pieza sube de
+# versión, la carpeta de entrega vieja de esa misma pieza en el mismo
+# directorio se aparta aquí en vez de quedarse suelta o borrarse — mismo
+# invariante 6 que ya sigue trackbitos.py con sus .blend locales
+# (a_papelera()), pero local al directorio de trabajo, no global a
+# ~/.trackbitos: la salida ya no es fija por máquina (ver más arriba).
+NOMBRE_PAPELERA_ENTREGAS = ".papelera-stl"
+DIAS_PAPELERA_ENTREGAS = 30
+MARCADOR_ENTREGA = ".entrega.json"
 
 BLENDER_TIMEOUT_SEGUNDOS = 600
 
@@ -86,22 +101,29 @@ def cargar_stl_config() -> dict:
     diferencia de eso SÍ se avisa de lo que se puso: una ruta de Blender mal
     detectada rompe cualquier comando que exporte, y aquí no hay margen para
     that "ya se corregirá sola".
+
+    `backup_dir`/`placas_dir` NO se fijan aquí (corregido 2026-09-02): por
+    defecto la salida sigue el directorio desde el que se invoca cada
+    comando (ver resolver_backup_dir()/resolver_placas_dir()), no una ruta
+    única por máquina — cada conjunto de piezas vive donde el usuario ya lo
+    tiene organizado. Solo `blender` y `escala` son de verdad "de esta
+    máquina" y se quedan fijos aquí.
     """
     if STL_CONFIG_PATH.is_file():
         return json.loads(STL_CONFIG_PATH.read_text(encoding=ENCODING_LECTURA))
 
     config = {
         "blender": autodetectar_blender(),
-        "backup_dir": str(DEFAULT_BACKUP_DIR),
-        "placas_dir": str(DEFAULT_PLACAS_DIR),
         "escala": DEFAULT_ESCALA,
     }
     guardar_stl_config(config)
 
     print(f"\n  · creado {STL_CONFIG_PATH} con:")
-    print(f"      blender:    {config['blender'] or '(no detectado — edita el fichero a mano)'}")
-    print(f"      backup_dir: {config['backup_dir']}")
-    print(f"      placas_dir: {config['placas_dir']}\n")
+    print(f"      blender: {config['blender'] or '(no detectado — edita el fichero a mano)'}")
+    print(f"      escala:  {config['escala']}")
+    print("    (la carpeta de salida no se fija aquí: sigue el directorio desde el que")
+    print("     invoques cada comando — usa --dir para cambiarlo, o añade \"backup_dir\"")
+    print("     / \"placas_dir\" a este fichero si de verdad quieres una ruta fija.)\n")
 
     return config
 
@@ -119,6 +141,81 @@ def exigir_blender(config: dict) -> str:
             ' en "blender" (p.ej. "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe").'
         )
     return blender
+
+
+def resolver_backup_dir(stl_cfg: dict, base_dir: Path) -> Path:
+    """
+    Subcarpeta del directorio de invocación (`--dir`, o el actual) — no una
+    ruta fija por máquina. Solo si `stl.config.json` trae "backup_dir" a
+    mano se usa como override fijo, para quien de verdad quiera una única
+    biblioteca centralizada en vez de una por carpeta de trabajo.
+    """
+    configurado = stl_cfg.get("backup_dir")
+    return Path(configurado).resolve() if configurado else base_dir / NOMBRE_CARPETA_BIBLIOTECA
+
+
+def resolver_placas_dir(stl_cfg: dict, base_dir: Path) -> Path:
+    """Igual que resolver_backup_dir() pero para las placas."""
+    configurado = stl_cfg.get("placas_dir")
+    return Path(configurado).resolve() if configurado else base_dir / NOMBRE_CARPETA_PLACAS
+
+
+def apartar_entregas_viejas(base_dir: Path, variante_id: int, numero_actual: int) -> list:
+    """
+    Antes de entregar una versión nueva de `generar` (decisión del usuario
+    2026-09-02), aparta a la papelera local cualquier carpeta de entrega
+    ANTERIOR de esta MISMA pieza que siga suelta en `base_dir`. Identifica
+    "misma pieza" por `variante_id` dentro de MARCADOR_ENTREGA, no por el
+    nombre visible de la carpeta — así no se confunde si la pieza cambia de
+    nombre, y no toca ninguna carpeta que el usuario haya creado él mismo
+    (esas no tienen el marcador, se ignoran sin más).
+
+    Nada se borra (invariante 6, igual que a_papelera() en trackbitos.py):
+    se mueve con marca de tiempo, y purgar_papelera_entregas() la limpia
+    sola a los 30 días. Devuelve los nombres apartados.
+    """
+    if not base_dir.is_dir():
+        return []
+
+    especiales = {NOMBRE_CARPETA_BIBLIOTECA, NOMBRE_CARPETA_PLACAS, NOMBRE_PAPELERA_ENTREGAS}
+    apartadas = []
+
+    for hijo in base_dir.iterdir():
+        if not hijo.is_dir() or hijo.name in especiales:
+            continue
+
+        marcador = _leer_json(hijo / MARCADOR_ENTREGA)
+        if not marcador or marcador.get("variante_id") != variante_id or marcador.get("numero") == numero_actual:
+            continue
+
+        papelera = base_dir / NOMBRE_PAPELERA_ENTREGAS
+        papelera.mkdir(exist_ok=True)
+        destino = papelera / f"{datetime.now():%Y%m%d-%H%M%S}-{hijo.name}"
+        shutil.move(str(hijo), str(destino))
+        apartadas.append(hijo.name)
+
+    return apartadas
+
+
+def purgar_papelera_entregas(base_dir: Path, dias: int = DIAS_PAPELERA_ENTREGAS) -> list:
+    """Lo apartado por apartar_entregas_viejas() caduca a los 30 días — mismo criterio que purgar_papelera() de trackbitos.py, pero con carpetas enteras en vez de ficheros sueltos."""
+    papelera = base_dir / NOMBRE_PAPELERA_ENTREGAS
+    if not papelera.is_dir():
+        return []
+
+    limite = datetime.now().timestamp() - (dias * 86400)
+    purgadas = []
+    for hijo in papelera.iterdir():
+        try:
+            if hijo.is_dir() and hijo.stat().st_mtime < limite:
+                shutil.rmtree(hijo)
+                purgadas.append(hijo.name)
+        except OSError:
+            # Una carpeta bloqueada no debe tumbar el comando que el
+            # usuario venía a ejecutar: ya caducará en la siguiente.
+            pass
+
+    return purgadas
 
 
 # --------------------------------------------------------------------------
@@ -177,6 +274,14 @@ def ejecutar_export(blender_exe: str, ruta_blend: Path, carpeta_salida: Path, es
 # --------------------------------------------------------------------------
 # biblioteca
 # --------------------------------------------------------------------------
+
+_TEXTO_RESULTADO = {
+    "omitida": "sin cambios",
+    "vacia": "vacía (sin collection \"STL\")",
+    "exportada": "exportada",
+    "referencia": "compuesta (solo referencia)",
+}
+
 
 def _procesar_simple(config: dict, blender_exe: str, escala: float, carpeta: Path, version: dict, sin_blend: bool) -> str:
     """
@@ -270,7 +375,7 @@ def cmd_biblioteca(args) -> int:
     config = cargar_config()
     stl_cfg = cargar_stl_config()
     blender_exe = exigir_blender(stl_cfg)
-    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    backup_dir = resolver_backup_dir(stl_cfg, Path(args.dir).resolve())
     escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
 
     catalogo = api_get(config, "/variantes")
@@ -281,11 +386,22 @@ def cmd_biblioteca(args) -> int:
 
     exportadas, omitidas, referencias, sin_version, vacias, errores = [], [], [], [], [], []
 
-    for v in variantes:
+    print(f"\n  {len(variantes)} piezas en el catálogo. Puede tardar varios minutos la primera vez"
+          " (las siguientes, con salto incremental, son mucho más rápidas).\n")
+
+    # Progreso por pieza (2026-09-02): con el catálogo entero cada vuelta
+    # puede tardar bastante — descarga + Blender en background por pieza —
+    # y sin nada impreso mientras tanto la terminal parece colgada. Cada
+    # línea termina en su veredicto en cuanto se sabe, no al final.
+    total = len(variantes)
+    for i, v in enumerate(variantes, 1):
         etiqueta = nombre_completo(v)
+        print(f"  [{i}/{total}] {etiqueta}...", end="", flush=True)
+
         version = v.get("version_para_imprimir")
         if not version:
             sin_version.append(etiqueta)
+            print(" sin versión para imprimir")
             continue
 
         carpeta = carpeta_version(backup_dir, v.get("categoria_nombre"), v.get("familia_nombre"), v["nombre"], version["numero"])
@@ -294,6 +410,7 @@ def cmd_biblioteca(args) -> int:
             componentes = api_get(config, f"/variante/{v['id']}/composicion").get("componentes", [])
         except RuntimeError as e:
             errores.append(f"{etiqueta}: no se pudo consultar su composición ({e})")
+            print(f" ERROR: {e}")
             continue
 
         try:
@@ -303,8 +420,10 @@ def cmd_biblioteca(args) -> int:
                 resultado = _procesar_simple(config, blender_exe, escala, carpeta, version, args.sin_blend)
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             errores.append(f"{etiqueta}: {e}")
+            print(f" ERROR: {e}")
             continue
 
+        print(f" {_TEXTO_RESULTADO[resultado]}")
         {
             "omitida": omitidas,
             "referencia": referencias,
@@ -342,17 +461,28 @@ def _veredicto_biblioteca(backup_dir, exportadas, omitidas, referencias, sin_ver
 
 def cmd_generar(args) -> int:
     """
-    Igual que un paso suelto de `biblioteca`, pero para una sola pieza: para
-    comprobar rápido si el nombrado de collections "STL" de un .blend
-    concreto ya funciona, sin esperar a que pase por las 51 variantes del
-    catálogo.
-    Mismo criterio de versión que el resto del plan (decisión 4: la "para
-    imprimir"; sin --version, ver plan del 2026-09-02).
+    El STL de una sola pieza, entregado en una carpeta simple con su nombre
+    y versión (`<Familia>-<Variante>-vNNN/`) — no la ruta anidada de
+    `biblioteca`. Reutiliza la misma caché por debajo (`_asegurar_stl_en_
+    biblioteca`, igual que `placa`): si ya estaba generada y el hash de la
+    versión no ha cambiado, se copia tal cual, sin volver a invocar Blender
+    ("menos proceso", palabras del usuario 2026-09-02).
+
+    "Al corriente con la web" no es una comprobación aparte: `resolver_
+    variante()` pide `/variantes` fresco en cada ejecución (no hay ningún
+    puntero local que pueda quedarse viejo), así que la versión y su
+    hash_blend son siempre los que el servidor tiene AHORA MISMO — el salto
+    por hash de la caché ya compara contra eso.
+
+    Si la pieza es compuesta, se expande igual que en `placa` (decisión 11:
+    siempre se expande) y la carpeta de salida lleva el STL de cada
+    componente, con el nombre del componente delante para no mezclarlos.
     """
     config = cargar_config()
     stl_cfg = cargar_stl_config()
     blender_exe = exigir_blender(stl_cfg)
-    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    base_dir = Path(args.dir).resolve()
+    backup_dir = resolver_backup_dir(stl_cfg, base_dir)
     escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
 
     variante = resolver_variante(config, args.pieza)
@@ -363,33 +493,82 @@ def cmd_generar(args) -> int:
         print(f"\n  · {etiqueta} todavía no tiene ninguna versión para imprimir.\n")
         return 0
 
-    carpeta = carpeta_version(backup_dir, variante.get("categoria_nombre"), variante.get("familia_nombre"), variante["nombre"], version["numero"])
+    print(f"\n  {etiqueta}: v{version['numero']:03d} ({version['estado']}) es la versión vigente en el servidor ahora mismo.\n")
 
-    componentes = api_get(config, f"/variante/{variante['id']}/composicion").get("componentes", [])
+    nodo = {
+        "variante_id": variante["id"],
+        "familia": variante.get("familia_nombre"),
+        "variante": variante["nombre"],
+        "categoria": variante.get("categoria_nombre"),
+        "version": version,
+    }
+    hojas, avisos = _expandir_placa(config, [nodo], como_anotado=False)
 
-    if componentes:
-        resultado = _procesar_compuesta(config, carpeta, version, componentes, args.sin_blend)
-        print(f"\n  {etiqueta} v{version['numero']:03d} es compuesta ({len(componentes)} componente(s)).")
+    # Purga lo apartado hace 30+ días y aparta ahora cualquier carpeta de
+    # entrega ANTERIOR de esta misma pieza que siga suelta en base_dir —
+    # antes de crear la nueva, para no dejar dos versiones sueltas
+    # confundibles en el mismo sitio (ver conversación 2026-09-02).
+    purgar_papelera_entregas(base_dir)
+    apartadas = apartar_entregas_viejas(base_dir, variante["id"], version["numero"])
+    for nombre in apartadas:
+        print(f"  · versión anterior de esta pieza apartada a {NOMBRE_PAPELERA_ENTREGAS}/: {nombre}")
+
+    carpeta_salida = base_dir / f"{_slug(variante.get('familia_nombre'))}-{_slug(variante['nombre'])}-v{version['numero']:03d}"
+    carpeta_salida.mkdir(parents=True, exist_ok=True)
+
+    varias_hojas = len(hojas) > 1
+    faltantes, copiados, reutilizados = [], 0, 0
+
+    total = len(hojas)
+    for i, hoja in enumerate(hojas, 1):
+        print(f"  [{i}/{total}] {_etiqueta_nodo(hoja)}...", end="", flush=True)
+        try:
+            carpeta_cache, resultado = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja, sin_blend=args.sin_blend)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            faltantes.append(f"{_etiqueta_nodo(hoja)}: {e}")
+            print(f" ERROR: {e}")
+            continue
+
+        stls = sorted(carpeta_cache.glob("*.stl"))
+        if not stls:
+            faltantes.append(f"{_etiqueta_nodo(hoja)}: sin ninguna collection \"STL\" en el .blend.")
+            print(" sin STL")
+            continue
+
         if resultado == "omitida":
-            print(f"  · sin cambios desde la última vez — {carpeta}\n")
+            reutilizados += 1
+            print(f" {len(stls)} STL (ya estaba en la biblioteca, copiado sin reprocesar)")
         else:
-            print(f"  → composicion.json escrito en {carpeta}")
-            print("    (el STL de cada componente vive en su propia carpeta — corre `stl.py generar` sobre cada uno.)\n")
-        return 0
+            print(f" {len(stls)} STL (exportado ahora)")
 
-    resultado = _procesar_simple(config, blender_exe, escala, carpeta, version, args.sin_blend)
+        for stl in stls:
+            nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-{stl.name}" if varias_hojas else stl.name
+            shutil.copy2(stl, carpeta_salida / nombre_final)
+            copiados += 1
 
-    print(f"\n  {etiqueta} v{version['numero']:03d} ({version['estado']}) en {carpeta}\n")
-    if resultado == "omitida":
-        print("  · sin cambios desde la última vez, no se ha tocado nada.\n")
-        return 0
-    if resultado == "vacia":
-        print("  ⚠ el .blend no tiene ninguna collection STL_* dentro — nada que exportar todavía.\n")
-        return 1
+    faltantes.extend(avisos)
 
-    manifest = _leer_json(carpeta / "manifest.json") or {}
-    print(f"  ✓ exportado(s): {', '.join(manifest.get('collections', [])) or '?'}\n")
-    return 0
+    # Marcador oculto para que una futura entrega de esta misma pieza (por
+    # variante_id, no por el nombre visible) sepa apartar ÉSTA cuando ya no
+    # sea la vigente — ver apartar_entregas_viejas().
+    _escribir_json(carpeta_salida / MARCADOR_ENTREGA, {
+        "variante_id": variante["id"],
+        "numero": version["numero"],
+        "hash_blend": version["hash_blend"],
+        "generado_en": datetime.now().isoformat(timespec="seconds"),
+    })
+
+    print(f"\n  {etiqueta} v{version['numero']:03d} en {carpeta_salida}\n")
+    if varias_hojas:
+        print(f"  (pieza compuesta, {total} componente(s) expandido(s))")
+    print(f"  ✓ {copiados} STL" + (f" ({reutilizados} sin reprocesar)" if reutilizados else ""))
+    if faltantes:
+        print(f"  ⚠ {len(faltantes)} con problema:")
+        for f in faltantes:
+            print(f"      - {f}")
+    print()
+
+    return 0 if copiados > 0 and not faltantes else 1
 
 
 # --------------------------------------------------------------------------
@@ -498,26 +677,38 @@ def _expandir_placa(config: dict, nodos: list, como_anotado: bool) -> tuple:
     return hojas, avisos
 
 
-def _asegurar_stl_en_biblioteca(config: dict, blender_exe: str, escala: float, backup_dir: Path, hoja: dict) -> Path:
+def _asegurar_stl_en_biblioteca(config: dict, blender_exe: str, escala: float, backup_dir: Path, hoja: dict, sin_blend: bool = True) -> tuple:
     """
     Reutiliza la caché de `biblioteca` (misma carpeta, mismo manifest.json,
     mismo salto incremental) en vez de exportar de cero: si esta pieza+
-    versión ya se generó al construir `biblioteca` o al montar otra placa,
-    no se vuelve a invocar Blender — no es solo ahorro de espacio (la
-    motivación original del plan), también de tiempo. El .blend nunca se
-    persiste aquí (`sin_blend=True`): decisión 7, "placa nunca baja .blend".
+    versión ya se generó al construir `biblioteca`, al montar otra placa o
+    con un `generar` anterior, no se vuelve a invocar Blender — no es solo
+    ahorro de espacio (la motivación original del plan), también de tiempo.
+    La versión que se compara es la que ACABA de llegar de la API (fresca,
+    no un puntero local viejo), así que el salto por hash ya implica "esto
+    sigue siendo lo que hay ahora mismo en el servidor" — no hace falta
+    ninguna comprobación aparte para saber que está al corriente con la web.
+
+    `sin_blend` decide si se persiste una copia del `.blend` en la caché;
+    por defecto True porque quien más llama a esto es `placa` (decisión 7:
+    "placa nunca baja .blend"), pero `generar` puede pasar False si el
+    usuario no puso `--sin-blend`.
+
+    Devuelve (carpeta, resultado) — resultado como en _procesar_simple():
+    "omitida" (ya estaba, se copia tal cual), "vacia" o "exportada".
     """
     carpeta = carpeta_version(backup_dir, hoja["categoria"], hoja["familia"], hoja["variante"], hoja["version"]["numero"])
-    _procesar_simple(config, blender_exe, escala, carpeta, hoja["version"], sin_blend=True)
-    return carpeta
+    resultado = _procesar_simple(config, blender_exe, escala, carpeta, hoja["version"], sin_blend=sin_blend)
+    return carpeta, resultado
 
 
 def cmd_placa(args) -> int:
     config = cargar_config()
     stl_cfg = cargar_stl_config()
     blender_exe = exigir_blender(stl_cfg)
-    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
-    placas_dir = Path(stl_cfg.get("placas_dir") or DEFAULT_PLACAS_DIR)
+    base_dir = Path(args.dir).resolve()
+    backup_dir = resolver_backup_dir(stl_cfg, base_dir)
+    placas_dir = resolver_placas_dir(stl_cfg, base_dir)
     escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
 
     placa = resolver_placa(config, args.placa)
@@ -541,18 +732,25 @@ def cmd_placa(args) -> int:
 
     bitacora, faltantes, copiados = [], [], 0
 
-    for hoja in hojas:
+    # Mismo progreso por pieza que `biblioteca`/`revisar` (2026-09-02).
+    total = len(hojas)
+    for i, hoja in enumerate(hojas, 1):
+        print(f"  [{i}/{total}] {_etiqueta_nodo(hoja)}...", end="", flush=True)
+
         try:
-            carpeta_cache = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
+            carpeta_cache, _resultado = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: {e}")
+            print(f" ERROR: {e}")
             continue
 
         stls = sorted(carpeta_cache.glob("*.stl"))
         if not stls:
-            faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: sin ninguna STL_* en el .blend.")
+            faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: sin ninguna collection \"STL\" en el .blend.")
+            print(" sin STL")
             continue
 
+        print(f" {len(stls)} STL")
         for stl in stls:
             nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
             shutil.copy2(stl, carpeta_salida / nombre_final)
@@ -607,7 +805,7 @@ def cmd_revisar(args) -> int:
     config = cargar_config()
     stl_cfg = cargar_stl_config()
     blender_exe = exigir_blender(stl_cfg)
-    backup_dir = Path(stl_cfg.get("backup_dir") or DEFAULT_BACKUP_DIR)
+    backup_dir = resolver_backup_dir(stl_cfg, Path(args.dir).resolve())
     escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
 
     variantes = api_get(config, "/variantes").get("variantes", [])
@@ -618,11 +816,19 @@ def cmd_revisar(args) -> int:
     ok, divergencias, solo_local, solo_servidor = [], [], [], []
     guardarrail, vacias, sin_version, errores = [], [], [], []
 
-    for v in variantes:
+    print(f"\n  {len(variantes)} piezas en el catálogo. Puede tardar varios minutos.\n")
+
+    # Mismo progreso por pieza que `biblioteca` (2026-09-02): esto también
+    # recorre el catálogo entero invocando Blender pieza a pieza.
+    total = len(variantes)
+    for i, v in enumerate(variantes, 1):
         etiqueta = nombre_completo(v)
+        print(f"  [{i}/{total}] {etiqueta}...", end="", flush=True)
+
         version = v.get("version_para_imprimir")
         if not version:
             sin_version.append(etiqueta)
+            print(" sin versión para imprimir")
             continue
 
         try:
@@ -630,6 +836,7 @@ def cmd_revisar(args) -> int:
             subidos = {s["nombre"]: s["hash"] for s in api_get(config, f"/variante/{v['id']}/stls").get("stls", [])}
         except RuntimeError as e:
             errores.append(f"{etiqueta}: {e}")
+            print(f" ERROR: {e}")
             continue
 
         if componentes:
@@ -638,6 +845,9 @@ def cmd_revisar(args) -> int:
                     f"{etiqueta} v{version['numero']:03d}: tiene {len(componentes)} componente(s) Y "
                     f"{len(subidos)} STL subido(s) a mano — revisa si de verdad sigue siendo 'caso 2'."
                 )
+                print(" ⚠ componentes Y STL a la vez")
+            else:
+                print(" compuesta, sin STL subido")
             continue
 
         carpeta = carpeta_version(backup_dir, v.get("categoria_nombre"), v.get("familia_nombre"), v["nombre"], version["numero"])
@@ -645,14 +855,17 @@ def cmd_revisar(args) -> int:
             _procesar_simple(config, blender_exe, escala, carpeta, version, sin_blend=True)
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             errores.append(f"{etiqueta}: {e}")
+            print(f" ERROR: {e}")
             continue
 
         generados = {stl.stem: sha256_de(stl) for stl in carpeta.glob("*.stl")}
         if not generados:
             nota = f" (hay {len(subidos)} STL subido(s) sin nada que comparar)" if subidos else ""
-            vacias.append(f"{etiqueta} v{version['numero']:03d}: sin STL_* en el .blend{nota}.")
+            vacias.append(f"{etiqueta} v{version['numero']:03d}: sin collection \"STL\" en el .blend{nota}.")
+            print(" vacía")
             continue
 
+        divergio = False
         for nombre in sorted(set(generados) | set(subidos)):
             local_hash = generados.get(nombre)
             servidor_hash = subidos.get(nombre)
@@ -663,10 +876,12 @@ def cmd_revisar(args) -> int:
                     ok.append(etiqueta_pieza)
                 else:
                     divergencias.append(f"{etiqueta_pieza}: .blend={local_hash[:12]}... servidor={servidor_hash[:12]}...")
+                    divergio = True
             elif local_hash:
                 solo_local.append(f"{etiqueta_pieza}: el .blend lo genera, nunca se subió (o se subió con otro nombre).")
             else:
                 solo_servidor.append(f"{etiqueta_pieza}: subido a mano, el .blend ya no lo genera con ese nombre.")
+        print(" DIVERGE" if divergio else " ok")
 
     _veredicto_revisar(ok, divergencias, solo_local, solo_servidor, guardarrail, vacias, sin_version, errores)
 
@@ -717,25 +932,33 @@ def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(prog="stl", description="Exportación .blend -> STL de piezas-cli (Trackbitos).")
     subs = parser.add_subparsers(dest="comando", required=True)
 
-    p = subs.add_parser(
+    def con_dir(p):
+        # Mismo patrón que trackbitos.py: la salida sigue el directorio
+        # desde el que se invoca (biblioteca/placas como subcarpetas), no
+        # una ruta fija por máquina — cada conjunto de piezas vive donde el
+        # usuario ya las organiza.
+        p.add_argument("--dir", default=".", help="Carpeta base para la salida (biblioteca/placas). Por defecto, la actual.")
+        return p
+
+    p = con_dir(subs.add_parser(
         "biblioteca", aliases=["b"],
         help="Backup local de STL + .blend de todo el catálogo, con salto incremental por hash. (alias: b)",
-    )
+    ))
     p.add_argument("--sin-blend", action="store_true", dest="sin_blend", help="No guardar copia del .blend, solo los STL.")
     p.set_defaults(func=cmd_biblioteca)
 
-    p = subs.add_parser(
+    p = con_dir(subs.add_parser(
         "generar", aliases=["g"],
         help="Exporta solo una pieza (rápido, sin recorrer el catálogo entero) — para probar un .blend recién preparado. (alias: g)",
-    )
+    ))
     p.add_argument("pieza", help="Nombre o id de la pieza (mismo criterio que trackbitos.py).")
     p.add_argument("--sin-blend", action="store_true", dest="sin_blend", help="No guardar copia del .blend, solo los STL.")
     p.set_defaults(func=cmd_generar)
 
-    p = subs.add_parser(
+    p = con_dir(subs.add_parser(
         "placa", aliases=["p"],
         help="STL de una placa (id o nombre) en una carpeta plana, lista para ChituBox. (alias: p)",
-    )
+    ))
     p.add_argument("placa", help="Id o nombre (o trozo del nombre) de la placa.")
     p.add_argument(
         "--como-anotado", action="store_true", dest="como_anotado",
@@ -743,10 +966,10 @@ def main(argv: Optional[list] = None) -> int:
     )
     p.set_defaults(func=cmd_placa)
 
-    p = subs.add_parser(
+    p = con_dir(subs.add_parser(
         "revisar", aliases=["r"],
         help="Compara todo el catálogo: lo que generaría el .blend ahora mismo vs lo ya subido a mano. (alias: r)",
-    )
+    ))
     p.set_defaults(func=cmd_revisar)
 
     args = parser.parse_args(argv)
