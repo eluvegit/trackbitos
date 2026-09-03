@@ -12,6 +12,11 @@
     </a>
 </h5>
 
+<a href="<?= site_url('silo') ?>" class="btn btn-sm btn-outline-secondary mb-3"
+   onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+    <i class="bi bi-arrow-left"></i> Volver
+</a>
+
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
 <?php endif; ?>

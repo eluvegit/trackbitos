@@ -165,6 +165,8 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
     <div class="mt-4" id="piezas">
         <?php
             $totalPiezas = array_sum(array_map(static fn($p) => (int) $p['fila']['cantidad'], $piezas));
+            $totalFallidas = array_sum(array_map(static fn($p) => (int) ($p['fila']['fallidas'] ?? 0), $piezas));
+            $totalServibles = max(0, $totalPiezas - $totalFallidas);
             // Coste medio de una placa (resina + luz + desgaste), a ojo y no
             // por placa real: solo para hacerse una idea de cuánto sale cada
             // pieza suelta, no una cuenta de gastos de verdad.
@@ -175,6 +177,12 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
             <i class="bi bi-box"></i> Qué llevaba
             — <?= count($piezas) ?> pieza<?= count($piezas) === 1 ? '' : 's' ?> distinta<?= count($piezas) === 1 ? '' : 's' ?>,
             <?= $totalPiezas ?> en total
+            <span data-total-servibles-eco>
+                · <strong data-total-servibles><?= $totalServibles ?></strong> servibles
+                <span class="text-muted fw-normal" data-total-fallidas-eco<?= $totalFallidas > 0 ? '' : ' hidden' ?>>
+                    (<strong data-total-fallidas><?= $totalFallidas ?></strong> fallidas)
+                </span>
+            </span>
             <?php if ($precioPorPieza !== null): ?>
                 · <?= esc(number_format($precioPorPieza, 2, ',', '.')) ?> €/pieza
                 <span class="text-muted fw-normal" title="Placa a 3,00 € de media, repartido entre las <?= $totalPiezas ?> piezas">
@@ -192,6 +200,8 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                             <th style="width: 2.5rem;"></th>
                             <th>Pieza</th>
                             <th style="width: 3.5rem;">Copias</th>
+                            <th style="width: 3.5rem;" title="De esas copias, cuántas no valen (roturas, malformaciones, mal diseño)">Fallidas</th>
+                            <th style="width: 3rem;" title="Copias − fallidas">Servib.</th>
                             <th>Soportes y pruebas de esta pieza</th>
                             <th style="width: 3rem;"></th>
                             <th style="width: 2rem;"></th>
@@ -223,8 +233,18 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                                 </td>
                                 <td>
                                     <input type="number" min="1" max="99" inputmode="numeric" form="<?= $idForm ?>"
-                                        name="cantidad[<?= $filaId ?>]" class="form-control form-control-sm text-center px-1"
+                                        name="cantidad[<?= $filaId ?>]" data-fila-copias
+                                        class="form-control form-control-sm text-center px-1"
                                         value="<?= (int) $p['fila']['cantidad'] ?>">
+                                </td>
+                                <td>
+                                    <input type="number" min="0" max="99" inputmode="numeric" form="<?= $idForm ?>"
+                                        name="fallidas[<?= $filaId ?>]" data-fila-fallidas
+                                        class="form-control form-control-sm text-center px-1"
+                                        value="<?= (int) ($p['fila']['fallidas'] ?? 0) ?>">
+                                </td>
+                                <td class="text-center text-body-secondary" data-fila-servibles>
+                                    <?= max(0, (int) $p['fila']['cantidad'] - (int) ($p['fila']['fallidas'] ?? 0)) ?>
                                 </td>
                                 <td>
                                     <?php // Una línea en reposo, varias al pinchar (data-nota-expandible,

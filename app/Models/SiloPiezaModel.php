@@ -38,31 +38,68 @@ class SiloPiezaModel extends Model
      */
     public function buscar(array $filtros = []): array
     {
-        $builder = $this->orderBy('nombre_carpeta', 'ASC');
+        $builder = $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
+            ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
+            ->orderBy('silo_piezas.nombre_carpeta', 'ASC');
 
         if (!empty($filtros['q'])) {
             $q = $filtros['q'];
             $builder->groupStart()
-                ->like('id_negocio', $q)
-                ->orLike('nombre_carpeta', $q)
+                ->like('silo_piezas.id_negocio', $q)
+                ->orLike('silo_piezas.nombre_carpeta', $q)
                 ->groupEnd();
         }
 
         if (!empty($filtros['categoria_id'])) {
-            $builder->where('categoria_id', (int) $filtros['categoria_id']);
+            $builder->where('silo_piezas.categoria_id', (int) $filtros['categoria_id']);
         }
 
-        return $builder->findAll();
+        return $this->adjuntarAtributos($builder->findAll());
     }
 
     /** Piezas que viven en una unidad, estilo "contenido de esta carpeta" (orden alfabético, como un explorador). */
     public function deLaUnidad(int $unidadId): array
     {
-        return $this->select('silo_piezas.*')
-            ->join('silo_ubicaciones', 'silo_ubicaciones.pieza_id = silo_piezas.id')
-            ->where('silo_ubicaciones.unidad_id', $unidadId)
-            ->groupBy('silo_piezas.id')
-            ->orderBy('silo_piezas.nombre_carpeta', 'ASC')
+        return $this->adjuntarAtributos(
+            $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
+                ->join('silo_ubicaciones', 'silo_ubicaciones.pieza_id = silo_piezas.id')
+                ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
+                ->where('silo_ubicaciones.unidad_id', $unidadId)
+                ->groupBy('silo_piezas.id')
+                ->orderBy('silo_piezas.nombre_carpeta', 'ASC')
+                ->findAll()
+        );
+    }
+
+    /**
+     * Adjunta a cada pieza su lista de atributos [{tipo, nombre}] (persona,
+     * lugar, tema, evento) en una sola consulta, para pintar el nombre de
+     * carpeta como badges en los listados.
+     */
+    private function adjuntarAtributos(array $piezas): array
+    {
+        if ($piezas === []) {
+            return $piezas;
+        }
+
+        $ids   = array_column($piezas, 'id');
+        $filas = (new SiloPiezaAtributoModel())
+            ->select('silo_pieza_atributo.pieza_id, silo_vocabulario.tipo, silo_vocabulario.nombre')
+            ->join('silo_vocabulario', 'silo_vocabulario.id = silo_pieza_atributo.vocabulario_id')
+            ->whereIn('silo_pieza_atributo.pieza_id', $ids)
+            ->orderBy('silo_vocabulario.tipo', 'ASC')
+            ->orderBy('silo_vocabulario.nombre', 'ASC')
             ->findAll();
+
+        $porPieza = [];
+        foreach ($filas as $f) {
+            $porPieza[(int) $f['pieza_id']][] = ['tipo' => $f['tipo'], 'nombre' => $f['nombre']];
+        }
+
+        foreach ($piezas as &$p) {
+            $p['atributos'] = $porPieza[(int) $p['id']] ?? [];
+        }
+
+        return $piezas;
     }
 }

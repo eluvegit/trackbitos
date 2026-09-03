@@ -109,7 +109,7 @@ class Web extends BaseController
             $fechaExtraida['resto']
         );
 
-        $idNegocio = $this->silo->siguienteIdNegocio();
+        $idNegocio = $this->silo->siguienteIdNegocio($fechaExtraida['fecha']);
 
         $nombreCarpeta = $this->silo->formatearNombreCarpeta(
             $idNegocio,

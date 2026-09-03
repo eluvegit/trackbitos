@@ -54,10 +54,19 @@ $tiempo = $duracion($placa['minutos_reales']);
     <?php endif; ?>
 
     <?php if ($piezas !== []): ?>
+        <?php
+            $totalCopias = array_sum(array_map(static fn($p) => (int) $p['fila']['cantidad'], $piezas));
+            $totalFallidas = array_sum(array_map(static fn($p) => min((int) $p['fila']['cantidad'], (int) ($p['fila']['fallidas'] ?? 0)), $piezas));
+            $totalServibles = max(0, $totalCopias - $totalFallidas);
+        ?>
         <div>
             <div class="small fw-semibold text-body-secondary mb-2"><i class="bi bi-box"></i> Piezas impresas</div>
             <ul class="list-unstyled small mb-0 d-flex flex-column gap-2">
                 <?php foreach ($piezas as $p): ?>
+                    <?php
+                        $copias = (int) $p['fila']['cantidad'];
+                        $filaFallidas = min($copias, (int) ($p['fila']['fallidas'] ?? 0));
+                    ?>
                     <li class="d-flex align-items-center gap-2">
                         <?php if ($p['miniatura']): ?>
                             <img src="<?= $p['miniatura'] ?>" loading="lazy" alt=""
@@ -69,13 +78,25 @@ $tiempo = $duracion($placa['minutos_reales']);
                             <?php else: ?>
                                 <span class="text-muted">(esa pieza ya no existe)</span>
                             <?php endif; ?>
-                            <?php if ((int) $p['fila']['cantidad'] > 1): ?>
-                                <span class="text-muted">×<?= (int) $p['fila']['cantidad'] ?></span>
+                            <?php if ($copias > 1): ?>
+                                <span class="text-muted">×<?= $copias ?></span>
+                            <?php endif; ?>
+                            <?php if ($filaFallidas > 0): ?>
+                                <span class="text-danger" title="<?= $filaFallidas ?> fallidas · <?= $copias - $filaFallidas ?> servibles">
+                                    −<?= $filaFallidas ?> <i class="bi bi-x-circle"></i>
+                                </span>
                             <?php endif; ?>
                         </span>
                     </li>
                 <?php endforeach; ?>
             </ul>
+            <div class="small text-body-secondary mt-2">
+                <i class="bi bi-check2-circle"></i>
+                <strong><?= $totalServibles ?></strong> servibles
+                <span class="text-muted">
+                    · <?= $totalCopias ?> en la placa<?php if ($totalFallidas > 0): ?> · <?= $totalFallidas ?> fallidas<?php endif; ?>
+                </span>
+            </div>
         </div>
     <?php endif; ?>
 

@@ -9,6 +9,9 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Placas</strong>
 
+    <span class="badge rounded-pill text-bg-primary" title="Placas registradas desde siempre">
+        <i class="bi bi-infinity"></i> <?= (int) $totalPlacasSiempre ?>
+    </span>
 
     <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos

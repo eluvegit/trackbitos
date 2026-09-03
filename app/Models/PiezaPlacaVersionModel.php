@@ -16,5 +16,5 @@ class PiezaPlacaVersionModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
-    protected $allowedFields = ['placa_id', 'version_id', 'cantidad', 'notas'];
+    protected $allowedFields = ['placa_id', 'version_id', 'cantidad', 'fallidas', 'notas'];
 }

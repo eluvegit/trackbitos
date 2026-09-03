@@ -14,9 +14,9 @@ use CodeIgniter\CLI\CLI;
  * (las piezas sí se vuelven a dar de alta con IDs nuevos en cada pasada).
  *
  * El juego de carpetas cubre varias categorías (stock, producto, personal,
- * boda, corporativo, naturaleza, sin clasificar) y varios años + sin fecha,
- * para ver la propagación repartir en cubos distintos de Copia 2 (año) y
- * Copia 3 (categoría).
+ * boda, corporativo, naturaleza, sin clasificar) y varios años, todas con
+ * fecha completa, para ver la propagación repartir en cubos distintos de
+ * Copia 2 (año) y Copia 3 (categoría).
  */
 class SiloSimularIngesta extends BaseCommand
 {
@@ -38,7 +38,11 @@ class SiloSimularIngesta extends BaseCommand
             CLI::write('Reutilizando unidad Maestro #1 (id=' . $unidad['id'] . ')');
         }
 
-        // {ID} se sustituye por el siguiente id de negocio justo antes de ingestar.
+        // {ID} se sustituye por el siguiente id de negocio (AAnnnn, correlativo
+        // por año) justo antes de ingestar; el año sale de la fecha de la
+        // propia carpeta. Fechas repartidas en 2024/2025/2026 a propósito para
+        // ver el correlativo reiniciar por año y la propagación caer en cubos
+        // de Copia 2 (año) y Copia 3 (categoría) distintos.
         $carpetas = [
             [
                 'nombre' => '{ID} 20260714 stock, sesion danza, arte por danza, lucia, marta',
@@ -51,16 +55,16 @@ class SiloSimularIngesta extends BaseCommand
                 ],
             ],
             [
-                'nombre' => '{ID} 20260722 producto, catalogo otono, zapatillas',
+                'nombre' => '{ID} 20260722 producto, catalogo primavera, botas montana',
                 'ficheros' => [
-                    ['nombre' => 'Zapatilla_01.jpg', 'tamano_bytes' => 6_500_000],
-                    ['nombre' => 'Zapatilla_02.jpg', 'tamano_bytes' => 6_700_000],
-                    ['nombre' => 'Zapatilla_03.jpg', 'tamano_bytes' => 6_600_000],
+                    ['nombre' => 'Bota_01.jpg', 'tamano_bytes' => 6_500_000],
+                    ['nombre' => 'Bota_02.jpg', 'tamano_bytes' => 6_700_000],
+                    ['nombre' => 'Bota_03.jpg', 'tamano_bytes' => 6_600_000],
                     ['nombre' => 'Making of.mp4', 'tamano_bytes' => 210_000_000],
                 ],
             ],
             [
-                'nombre' => '{ID} sinfecha personal, cumpleanos papa',
+                'nombre' => '{ID} 20260620 personal, cumpleanos papa, comida familia',
                 'ficheros' => [
                     ['nombre' => 'IMG_0231.jpg', 'tamano_bytes' => 5_100_000],
                     ['nombre' => 'IMG_0232.jpg', 'tamano_bytes' => 5_300_000],
@@ -73,15 +77,14 @@ class SiloSimularIngesta extends BaseCommand
                 ],
             ],
             [
-                // Año distinto a propósito, para ver la propagación por año en unidades separadas.
-                'nombre' => '{ID} 20250310 personal, escapada asturias',
+                'nombre' => '{ID} 20250310 personal, escapada asturias, ruta cares',
                 'ficheros' => [
                     ['nombre' => 'IMG_0010.jpg', 'tamano_bytes' => 5_500_000],
                     ['nombre' => 'IMG_0011.jpg', 'tamano_bytes' => 5_600_000],
                 ],
             ],
             [
-                'nombre' => '{ID} 20260215 boda, laura y diego, finca los olivos',
+                'nombre' => '{ID} 20250215 boda, laura y diego, finca los olivos',
                 'ficheros' => [
                     ['nombre' => 'Ceremonia.mp4', 'tamano_bytes' => 1_240_000_000],
                     ['nombre' => 'Pareja 01.jpg', 'tamano_bytes' => 9_100_000],
@@ -90,8 +93,7 @@ class SiloSimularIngesta extends BaseCommand
                 ],
             ],
             [
-                // Precisión de mes (AAAAMM).
-                'nombre' => '{ID} 202605 corporativo, memoria anual, oficinas madrid',
+                'nombre' => '{ID} 20250512 corporativo, memoria anual, oficinas madrid',
                 'ficheros' => [
                     ['nombre' => 'Hall.jpg', 'tamano_bytes' => 7_200_000],
                     ['nombre' => 'Equipo.jpg', 'tamano_bytes' => 7_500_000],
@@ -99,8 +101,7 @@ class SiloSimularIngesta extends BaseCommand
                 ],
             ],
             [
-                // Precisión de año (AAAA), y un tercer año para Copia 2.
-                'nombre' => '{ID} 2024 naturaleza, fauna pirineos, quebrantahuesos',
+                'nombre' => '{ID} 20240418 naturaleza, fauna pirineos, quebrantahuesos',
                 'ficheros' => [
                     ['nombre' => 'DSC_1001.jpg', 'tamano_bytes' => 11_400_000],
                     ['nombre' => 'DSC_1002.jpg', 'tamano_bytes' => 12_000_000],
@@ -117,7 +118,7 @@ class SiloSimularIngesta extends BaseCommand
                 ],
             ],
             [
-                'nombre' => '{ID} 20250628 boda, marta y javi, playa',
+                'nombre' => '{ID} 20240628 boda, marta y javi, playa',
                 'ficheros' => [
                     ['nombre' => 'Atardecer.jpg', 'tamano_bytes' => 9_600_000],
                     ['nombre' => 'Baile.mp4', 'tamano_bytes' => 780_000_000],
@@ -135,7 +136,8 @@ class SiloSimularIngesta extends BaseCommand
         ];
 
         foreach ($carpetas as $c) {
-            $nombre = str_replace('{ID}', $silo->siguienteIdNegocio(), $c['nombre']);
+            preg_match('/^\{ID\}\s+(\d{4})/', $c['nombre'], $mAnio);
+            $nombre = str_replace('{ID}', $silo->siguienteIdNegocio($mAnio[1] ?? null), $c['nombre']);
 
             foreach ($c['ficheros'] as &$f) {
                 $f['hash'] = hash('sha256', $nombre . '|' . $f['nombre']);

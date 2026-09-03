@@ -29,9 +29,20 @@ class SiloService
         $this->unidadModel      = new SiloUnidadModel();
     }
 
-    public function siguienteIdNegocio(int $ancho = 6): string
+    /**
+     * ID de negocio `AAnnnn`: dos dígitos del año en que se generó el
+     * contenido + 4 correlativos que reinician cada año. `$fecha` es la
+     * fecha del contenido (`AAAA-MM-DD` o `AAAAMMDD`); si falta, año actual.
+     */
+    public function siguienteIdNegocio(?string $fecha = null): string
     {
-        return str_pad((string) $this->contadorModel->siguiente(), $ancho, '0', STR_PAD_LEFT);
+        $anio = $fecha !== null && preg_match('/^(\d{4})/', $fecha, $m)
+            ? (int) $m[1]
+            : (int) date('Y');
+
+        $correlativo = $this->contadorModel->siguiente($anio);
+
+        return substr((string) $anio, 2) . str_pad((string) $correlativo, 4, '0', STR_PAD_LEFT);
     }
 
     /**

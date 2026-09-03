@@ -23,6 +23,7 @@ $veredictos = \App\Models\PiezaPlacaModel::VEREDICTOS;
 $colorVeredicto = ['buena' => 'success', 'regular' => 'warning', 'repetir' => 'danger'];
 
 $totalPiezas = array_sum(array_map(static fn($p) => (int) $p['fila']['cantidad'], $lista));
+$totalFallidas = array_sum(array_map(static fn($p) => min((int) $p['fila']['cantidad'], (int) ($p['fila']['fallidas'] ?? 0)), $lista));
 $duracion = static function ($minutos): ?string {
     if ($minutos === null) {
         return null;
@@ -81,6 +82,13 @@ $resinaEstimada = $pesoFmt($placa['resina_estimada']);
                         <span class="badge bg-body-secondary text-body-secondary border" style="font-size: .65rem;"
                             title="Piezas en total en esta placa">
                             <i class="bi bi-box"></i> <?= $totalPiezas ?>
+                        </span>
+                    <?php endif; ?>
+                    <?php if ($totalFallidas > 0): ?>
+                        <span class="badge bg-body-secondary text-body-secondary border" style="font-size: .65rem;"
+                            title="<?= $totalFallidas ?> fallidas · <?= max(0, $totalPiezas - $totalFallidas) ?> servibles">
+                            <i class="bi bi-x-circle text-danger"></i> <?= $totalFallidas ?>
+                            <i class="bi bi-check2-circle ms-1"></i> <?= max(0, $totalPiezas - $totalFallidas) ?>
                         </span>
                     <?php endif; ?>
                     <?php if ($tiempoReal !== null): ?>

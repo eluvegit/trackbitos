@@ -1662,3 +1662,14 @@ placa) sí cuenta los trozos solo-medidos, que es el objetivo. El `.stl` se aña
 perder las medidas con `POST piezas/stl/(:num)/fichero` (`Web::adjuntarFicheroStl`), sujeto al
 invariante 4: si el trozo ya tiene fichero es inmutable, hay que quitarlo y volver a subirlo.
 Sin migración: las columnas ya existían y eran nulables.
+
+**Fase 56 (2026-09-03): piezas fallidas por línea de la bitácora → servibles.** Nueva columna
+`piezas_placas_versiones.fallidas` (`int unsigned NOT NULL DEFAULT 0`): de las `cantidad` copias
+impresas de esa versión en la placa, cuántas no valen (roturas, malformaciones, mal diseño). El
+descarte es **por línea, no de la placa entera ni global**. `servibles` de la línea =
+`cantidad − fallidas`; el total de la placa es la suma. Se edita en la tabla "Qué llevaba"
+(columna Fallidas junto a Copias) y se recalcula en vivo (JS en `_bitacora_js.php`, de lo que
+hay en pantalla). También en el resumen del modal y en la tarjeta grande de Impresas.
+`bitacoraGuardar` recorta `fallidas` a `min(cantidad, …)` al guardar; las vistas también
+recortan con `min()` por si un reparto dejó la fila descuadrada. Migración
+`2026-09-03-000013_AddFallidasAPiezasPlacasVersiones` (`php spark migrate`).

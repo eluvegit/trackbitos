@@ -20,7 +20,10 @@
 $vista   = $vista ?? 'lista';
 $vistaQs = static fn ($v) => site_url('silo/unidades/' . $unidad['id']) . '?vista=' . $v;
 ?>
-<div class="d-flex justify-content-end mb-2">
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <a href="<?= site_url('silo/mi-pc') ?>" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+    </a>
     <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
         <a href="<?= $vistaQs('lista') ?>"
            class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">

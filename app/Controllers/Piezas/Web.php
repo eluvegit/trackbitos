@@ -1903,6 +1903,13 @@ class Web extends BaseController
         // creado_en por el orderBy de arriba.
         usort($impresas, static fn($a, $b) => strcmp((string) $b['impresa_en'], (string) $a['impresa_en']));
 
+        // Cuántas placas se llevan desde siempre: el mayor id visto, no el
+        // recuento actual, para que borrar una del histórico no baje la cuenta.
+        $totalPlacasSiempre = max(
+            count($placas),
+            (int) ($this->placaModel->selectMax('id', 'maxId')->first()['maxId'] ?? 0)
+        );
+
         return view('piezas/placas', [
             'piezas'             => $piezas,
             'resumenes'          => $resumenes,
@@ -1917,6 +1924,7 @@ class Web extends BaseController
                 'impresa'  => ['titulo' => 'Impresas', 'grupos' => $this->agruparPorPeriodo($impresas, 'impresa_en')],
             ],
             'hayPlacas' => $placas !== [],
+            'totalPlacasSiempre' => $totalPlacasSiempre,
         ]);
     }
 
@@ -2490,14 +2498,20 @@ class Web extends BaseController
         // tocar la fila de otra placa.
         $cantidades = (array) $this->request->getPost('cantidad');
         $notasPieza = (array) $this->request->getPost('nota_pieza');
+        $fallidas   = (array) $this->request->getPost('fallidas');
         foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $fila) {
             $filaId = (int) $fila['id'];
-            if (!array_key_exists($filaId, $cantidades) && !array_key_exists($filaId, $notasPieza)) {
+            if (!array_key_exists($filaId, $cantidades) && !array_key_exists($filaId, $notasPieza)
+                && !array_key_exists($filaId, $fallidas)) {
                 continue;
             }
 
+            $cantidad = max(1, (int) ($cantidades[$filaId] ?? $fila['cantidad']));
+
             $this->placaVersionModel->update($filaId, [
-                'cantidad' => max(1, (int) ($cantidades[$filaId] ?? 1)),
+                'cantidad' => $cantidad,
+                // Descartes de esta línea: nunca más que las copias impresas.
+                'fallidas' => min($cantidad, max(0, (int) ($fallidas[$filaId] ?? $fila['fallidas']))),
                 'notas'    => trim((string) ($notasPieza[$filaId] ?? '')) ?: null,
             ]);
         }

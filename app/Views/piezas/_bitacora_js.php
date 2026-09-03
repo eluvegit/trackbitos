@@ -311,9 +311,36 @@
                 });
         });
 
+        // Fallidas y servibles por línea de "Qué llevaba": cada fila lleva sus
+        // copias y sus descartes; servibles = copias − fallidas, tanto por fila
+        // como en el total de la sección. Se recuenta de lo que hay en pantalla
+        // porque las copias se pueden editar en vivo.
+        function recalcularServibles() {
+            var totalCopias = 0, totalFallidas = 0;
+            raiz.querySelectorAll('tr').forEach(function (fila) {
+                var iCopias = fila.querySelector('[data-fila-copias]');
+                var iFallidas = fila.querySelector('[data-fila-fallidas]');
+                if (!iCopias || !iFallidas) return;
+                var copias = Math.max(0, parseInt(iCopias.value, 10) || 0);
+                var fallidas = Math.min(copias, Math.max(0, parseInt(iFallidas.value, 10) || 0));
+                var celda = fila.querySelector('[data-fila-servibles]');
+                if (celda) celda.textContent = copias - fallidas;
+                totalCopias += copias;
+                totalFallidas += fallidas;
+            });
+            var elServ = raiz.querySelector('[data-total-servibles]');
+            var elFall = raiz.querySelector('[data-total-fallidas]');
+            var ecoFall = raiz.querySelector('[data-total-fallidas-eco]');
+            if (elServ) elServ.textContent = Math.max(0, totalCopias - totalFallidas);
+            if (elFall) elFall.textContent = totalFallidas;
+            if (ecoFall) ecoFall.hidden = totalFallidas === 0;
+        }
+
+        raiz.addEventListener('input', recalcularServibles);
         form.addEventListener('input', function () { recalcular(form); estimarPorCapas(form); });
         recalcular(form);
         estimarPorCapas(form);
+        recalcularServibles();
     };
 
     document.addEventListener('DOMContentLoaded', function () {
