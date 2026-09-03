@@ -874,8 +874,8 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');
-    $routes->POST('unidades/(:num)/sellar', 'Web::sellarUnidad/$1');
     $routes->POST('unidades/(:num)/etiqueta', 'Web::renombrarUnidad/$1');
+    $routes->POST('unidades/(:num)/identificacion-fisica', 'Web::identificacionFisicaUnidad/$1');
     $routes->POST('unidades/(:num)/borrar', 'Web::borrarUnidad/$1');
     $routes->GET('unidades/(:num)/fichero-control', 'Web::ficheroControlUnidad/$1');
     $routes->GET('unidades/(:num)', 'Web::verUnidad/$1');

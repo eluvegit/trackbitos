@@ -73,7 +73,7 @@ if (!function_exists('silo_icono_vocabulario')) {
             'persona'   => 'bi-person-fill',
             'lugar'     => 'bi-geo-alt-fill',
             'evento'    => 'bi-calendar-event',
-            'categoria' => 'bi-folder-fill',
+            'categoria' => 'bi-collection-fill',
             'tema'      => 'bi-folder2',
             default     => 'bi-tag-fill',
         };
@@ -82,45 +82,68 @@ if (!function_exists('silo_icono_vocabulario')) {
 
 if (!function_exists('silo_badges_carpeta')) {
     /**
-     * Nombre de carpeta como badges con icono según el tipo: categoría y
-     * tema con icono de carpeta, personas con perfil, lugares con
-     * dirección. Espera la pieza con `categoria_nombre` y `atributos`
-     * [{tipo, nombre}] ya resueltos (SiloPiezaModel los adjunta).
+     * Nombre de carpeta como badges. Las personas van solo con icono +
+     * nombre (sin fondo); el lugar y el tema con fondo gris claro; la
+     * categoría con fondo ámbar. Con $enBloques la galería saca un tipo de
+     * vocabulario por línea (categoría, tema, lugar, personas); sin él
+     * (listado) va todo en la misma línea, envolviendo. Espera la pieza con
+     * `categoria_nombre` y `atributos` [{tipo, nombre}] ya resueltos
+     * (SiloPiezaModel los adjunta).
      */
-    function silo_badges_carpeta(array $pieza): string
+    function silo_badges_carpeta(array $pieza, bool $enBloques = false): string
     {
-        $items = [];
+        $porTipo = [];
 
         $cat = trim((string) ($pieza['categoria_nombre'] ?? ''));
         if ($cat !== '' && strtolower($cat) !== 'sin_clasificar') {
-            $items[] = ['tipo' => 'categoria', 'nombre' => $cat];
+            $porTipo['categoria'][] = $cat;
         }
         foreach ($pieza['atributos'] ?? [] as $a) {
-            $items[] = ['tipo' => (string) $a['tipo'], 'nombre' => (string) $a['nombre']];
+            $porTipo[(string) $a['tipo']][] = (string) $a['nombre'];
         }
 
-        if ($items === []) {
-            return '<span class="badge text-bg-light border text-muted fw-normal">'
+        if ($porTipo === []) {
+            return '<span class="badge text-bg-secondary fw-normal">'
                 . '<i class="bi bi-folder2 me-1"></i>sin clasificar</span>';
         }
 
+        // Clase del badge por tipo; '' = sin fondo, solo icono + nombre.
         $clasePorTipo = [
             'categoria' => 'text-bg-warning',
-            'tema'      => 'text-bg-light border',
-            'persona'   => 'text-bg-primary',
-            'lugar'     => 'text-bg-success',
             'evento'    => 'text-bg-info',
+            'lugar'     => 'bg-secondary-subtle text-secondary-emphasis border',
+            'persona'   => '',
+            'tema'      => 'text-bg-light border',
         ];
+        // Orden de las líneas; los tipos no listados van al final.
+        $orden = ['categoria', 'evento', 'tema', 'lugar', 'persona'];
+        $tipos = array_merge(
+            array_values(array_intersect($orden, array_keys($porTipo))),
+            array_values(array_diff(array_keys($porTipo), $orden)),
+        );
 
-        $html = '';
-        foreach ($items as $it) {
-            $clase = $clasePorTipo[$it['tipo']] ?? 'text-bg-secondary';
-            $html .= '<span class="badge ' . $clase . ' fw-normal">'
-                . '<i class="bi ' . silo_icono_vocabulario($it['tipo']) . ' me-1"></i>'
-                . esc($it['nombre']) . '</span> ';
+        $salida = '';
+        foreach ($tipos as $tipo) {
+            $icono = silo_icono_vocabulario($tipo);
+            $clase = $clasePorTipo[$tipo] ?? 'text-bg-secondary';
+            $trozos = '';
+            foreach ($porTipo[$tipo] as $nombre) {
+                if ($clase === '') {
+                    // Mismo tamaño que los badges (.badge => font-size .75em),
+                    // pero sin fondo ni relleno: solo icono + nombre.
+                    $trozos .= '<span class="badge fw-normal bg-transparent text-body p-0 me-2 text-nowrap">'
+                        . '<i class="bi ' . $icono . ' me-1"></i>'
+                        . esc($nombre) . '</span>';
+                } else {
+                    $trozos .= '<span class="badge ' . $clase . ' fw-normal me-1">'
+                        . '<i class="bi ' . $icono . ' me-1"></i>'
+                        . esc($nombre) . '</span>';
+                }
+            }
+            $salida .= $enBloques ? '<span class="d-block mt-1">' . $trozos . '</span>' : $trozos;
         }
 
-        return trim($html);
+        return trim($salida);
     }
 }
 

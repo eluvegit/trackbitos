@@ -27,12 +27,7 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
         <h6 class="text-muted mt-4 mb-2">Nivel <?= $nivel ?> — <?= $nivelLabel[$nivel] ?></h6>
         <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
             <?php foreach ($porNivel[$nivel] as $u): ?>
-                <?php
-                $numPiezas = $piezasPorUnidad[$u['id']] ?? 0;
-                $uso       = $usoPorUnidad[$u['id']] ?? 0;
-                $cap       = (int) ($u['capacidad_bytes'] ?? 0);
-                $pct       = $cap > 0 ? min(100, (int) round($uso / $cap * 100)) : null;
-                ?>
+                <?php $cap = (int) ($u['capacidad_bytes'] ?? 0); ?>
                 <div class="col">
                     <a href="<?= site_url('silo/unidades/' . $u['id']) ?>"
                        class="text-decoration-none text-body d-block h-100 border rounded p-3 silo-carpeta">
@@ -41,23 +36,19 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
                             <span class="fw-semibold text-truncate">
                                 <?= esc($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']) ?>
                             </span>
-                            <?php if ((int) $u['sellada']): ?>
-                                <span class="badge text-bg-secondary ms-auto">sellada</span>
+                            <?php if ($cap > 0): ?>
+                                <span class="badge text-bg-light border ms-auto"><?= esc(silo_formatear_tamano($cap)) ?></span>
                             <?php endif; ?>
                         </div>
-                        <?php if ($pct !== null): ?>
-                            <div class="progress mb-1" style="height: 6px;">
-                                <div class="progress-bar <?= $pct >= 90 ? 'bg-danger' : ($pct >= 70 ? 'bg-warning' : '') ?>"
-                                     style="width: <?= $pct ?>%"></div>
-                            </div>
-                            <div class="small text-muted">
-                                <?= esc(silo_formatear_tamano($uso)) ?> de <?= esc(silo_formatear_tamano($cap)) ?>
-                                · <?= $numPiezas ?> carpeta<?= $numPiezas === 1 ? '' : 's' ?>
+                        <?php if (!empty($u['identificacion_fisica'])): ?>
+                            <div class="small d-flex gap-1">
+                                <i class="bi bi-upc-scan flex-shrink-0 mt-1 text-muted"></i>
+                                <span style="white-space: pre-line;"><?= esc($u['identificacion_fisica']) ?></span>
                             </div>
                         <?php else: ?>
-                            <div class="small text-muted">
-                                <?= $numPiezas ?> carpeta<?= $numPiezas === 1 ? '' : 's' ?>
-                                <?php if ($uso): ?> · <?= esc(silo_formatear_tamano($uso)) ?><?php endif; ?>
+                            <div class="small text-warning-emphasis d-flex gap-1">
+                                <i class="bi bi-exclamation-triangle flex-shrink-0 mt-1"></i>
+                                <span>Sin identificar qué disco físico es — <span class="text-decoration-underline">añádelo en Unidades</span></span>
                             </div>
                         <?php endif; ?>
                         <?php if ($nivel !== 1 && $u['agrupador']): ?>

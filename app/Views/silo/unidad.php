@@ -11,19 +11,28 @@
         Nivel <?= (int) $unidad['nivel'] ?> (<?= $nivelLabel[(int) $unidad['nivel']] ?? '' ?>) #<?= (int) $unidad['numero'] ?>
         <?php if ($unidad['etiqueta']): ?> — <?= esc($unidad['etiqueta']) ?><?php endif; ?>
     </strong>
-    <?php if ((int) $unidad['sellada']): ?>
-        <span class="badge text-bg-secondary">sellada</span>
-    <?php endif; ?>
 </h5>
+
+<?php if (!empty($unidad['identificacion_fisica'])): ?>
+    <p class="text-muted small d-flex gap-1 mb-3">
+        <i class="bi bi-upc-scan flex-shrink-0 mt-1"></i>
+        <span style="white-space: pre-line;"><?= esc($unidad['identificacion_fisica']) ?></span>
+    </p>
+<?php endif; ?>
 
 <?php
 $vista   = $vista ?? 'lista';
 $vistaQs = static fn ($v) => site_url('silo/unidades/' . $unidad['id']) . '?vista=' . $v;
 ?>
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <a href="<?= site_url('silo/mi-pc') ?>" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Volver
-    </a>
+    <div class="d-flex align-items-center gap-2">
+        <a href="<?= site_url('silo/mi-pc') ?>" class="btn btn-sm btn-outline-secondary" title="Subir">
+            <i class="bi bi-arrow-90deg-up"></i> Subir
+        </a>
+        <span class="text-muted small d-flex align-items-center gap-1">
+            a <i class="bi bi-pc-display"></i> Mi PC
+        </span>
+    </div>
     <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
         <a href="<?= $vistaQs('lista') ?>"
            class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">

@@ -55,7 +55,7 @@
     <?php else: ?>
         <table class="table table-sm align-middle">
             <thead>
-                <tr><th>Unidad</th><th>Etiqueta</th><?php if ($nivel !== 1): ?><th>Cubo</th><?php endif; ?><th>Contenido</th><th>Estado</th><th></th></tr>
+                <tr><th>Unidad</th><th>Etiqueta / disco físico</th><?php if ($nivel !== 1): ?><th>Cubo</th><?php endif; ?><th>Capacidad</th><th></th></tr>
             </thead>
             <tbody>
                 <?php foreach ($porNivel[$nivel] as $u): ?>
@@ -66,12 +66,20 @@
                                 <i class="bi bi-hdd"></i> #<?= (int) $u['numero'] ?>
                             </a>
                         </td>
-                        <td>
-                            <form method="post" action="<?= site_url('silo/unidades/' . $u['id'] . '/etiqueta') ?>" class="d-flex gap-1">
+                        <td style="min-width: 240px;">
+                            <form method="post" action="<?= site_url('silo/unidades/' . $u['id'] . '/etiqueta') ?>" class="d-flex gap-1 mb-1">
                                 <?= csrf_field() ?>
                                 <input type="text" name="etiqueta" class="form-control form-control-sm"
                                        value="<?= esc($u['etiqueta'] ?? '') ?>" placeholder="sin etiqueta">
                                 <button type="submit" class="btn btn-sm btn-outline-secondary" title="Guardar etiqueta">
+                                    <i class="bi bi-check2"></i>
+                                </button>
+                            </form>
+                            <form method="post" action="<?= site_url('silo/unidades/' . $u['id'] . '/identificacion-fisica') ?>" class="d-flex gap-1">
+                                <?= csrf_field() ?>
+                                <textarea name="identificacion_fisica" rows="1" class="form-control form-control-sm"
+                                          placeholder="qué disco físico es: nº de serie, etiqueta del volumen, marca/modelo, color, dónde está guardado..."><?= esc($u['identificacion_fisica'] ?? '') ?></textarea>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Guardar identificación física">
                                     <i class="bi bi-check2"></i>
                                 </button>
                             </form>
@@ -85,34 +93,14 @@
                                 <?php endif; ?>
                             </td>
                         <?php endif; ?>
-                        <td class="text-muted small">
-                            <?= $numPiezas ?> pieza<?= $numPiezas === 1 ? '' : 's' ?>
-                            <?php if ($u['capacidad_bytes']): ?>
-                                · <?= esc(silo_formatear_tamano($usoPorUnidad[$u['id']] ?? 0)) ?>
-                                / <?= esc(silo_formatear_tamano((int) $u['capacidad_bytes'])) ?>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ((int) $u['sellada']): ?>
-                                <span class="badge text-bg-secondary">sellada</span>
-                            <?php else: ?>
-                                <span class="badge text-bg-success">activa</span>
-                            <?php endif; ?>
+                        <td class="text-muted small text-nowrap">
+                            <?= $u['capacidad_bytes'] ? esc(silo_formatear_tamano((int) $u['capacidad_bytes'])) : '—' ?>
                         </td>
                         <td class="text-nowrap">
                             <a href="<?= site_url('silo/unidades/' . $u['id'] . '/fichero-control') ?>"
                                class="btn btn-sm btn-outline-secondary" title="Descargar .silo_unit.json">
                                 <i class="bi bi-file-earmark-code"></i>
                             </a>
-                            <?php if (!(int) $u['sellada']): ?>
-                                <form method="post" action="<?= site_url('silo/unidades/' . $u['id'] . '/sellar') ?>" class="d-inline"
-                                      onsubmit="return confirm('¿Sellar esta unidad? No debería volver a escribirse (plan Silo §2).')">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Sellar">
-                                        <i class="bi bi-lock"></i>
-                                    </button>
-                                </form>
-                            <?php endif; ?>
                             <form method="post" action="<?= site_url('silo/unidades/' . $u['id'] . '/borrar') ?>" class="d-inline"
                                   onsubmit="return confirm(<?= $numPiezas > 0
                                       ? json_encode("Esta unidad tiene {$numPiezas} pieza(s) registrada(s). ¿Seguro que quieres borrarla?")

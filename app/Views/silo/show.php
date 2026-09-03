@@ -12,10 +12,21 @@
     </a>
 </h5>
 
-<a href="<?= site_url('silo') ?>" class="btn btn-sm btn-outline-secondary mb-3"
-   onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-    <i class="bi bi-arrow-left"></i> Volver
-</a>
+<?php $nivelLabel = [1 => 'Maestro', 2 => 'Año', 3 => 'Temática']; ?>
+<div class="d-flex align-items-center gap-2 mb-3">
+    <a href="<?= $desde ? site_url('silo/unidades/' . $desde['id']) : site_url('silo') ?>"
+       class="btn btn-sm btn-outline-secondary" title="Subir">
+        <i class="bi bi-arrow-90deg-up"></i> Subir
+    </a>
+    <span class="text-muted small d-flex align-items-center gap-1">
+        <?php if ($desde): ?>
+            a <i class="bi bi-hdd"></i>
+            Nivel <?= (int) $desde['nivel'] ?> (<?= $nivelLabel[(int) $desde['nivel']] ?? '' ?>) #<?= (int) $desde['numero'] ?><?php if (!empty($desde['etiqueta'])): ?> — <?= esc($desde['etiqueta']) ?><?php endif; ?>
+        <?php else: ?>
+            a <i class="bi bi-folder2"></i> Silo
+        <?php endif; ?>
+    </span>
+</div>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>

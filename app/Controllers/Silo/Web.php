@@ -71,25 +71,14 @@ class Web extends BaseController
     /** "Mi PC": todas las unidades como discos del explorador, para entrar en cada una. */
     public function miPc()
     {
-        $porNivel = [
-            1 => $this->unidadModel->porNivel(1),
-            2 => $this->unidadModel->porNivel(2),
-            3 => $this->unidadModel->porNivel(3),
-        ];
-
-        $piezasPorUnidad = [];
-        $usoPorUnidad = [];
-        foreach ($porNivel as $unidadesNivel) {
-            foreach ($unidadesNivel as $u) {
-                $piezasPorUnidad[$u['id']] = $this->ubicacionModel->contarPorUnidad($u['id']);
-                $usoPorUnidad[$u['id']]    = $this->ubicacionModel->sumaTamanoPorUnidad($u['id']);
-            }
-        }
-
+        // "Mi PC" es el mapa unidad definida -> disco físico real: solo
+        // interesa poder reconocer cada unidad, no qué contiene.
         return view('silo/mi_pc', [
-            'porNivel'        => $porNivel,
-            'piezasPorUnidad' => $piezasPorUnidad,
-            'usoPorUnidad'    => $usoPorUnidad,
+            'porNivel' => [
+                1 => $this->unidadModel->porNivel(1),
+                2 => $this->unidadModel->porNivel(2),
+                3 => $this->unidadModel->porNivel(3),
+            ],
         ]);
     }
 
@@ -154,6 +143,12 @@ class Web extends BaseController
             throw PageNotFoundException::forPageNotFound('Pieza no encontrada');
         }
 
+        // De qué unidad venías (la vista de esa unidad pasa ?desde=ID en el
+        // enlace): es a donde apunta el botón "Subir". Sin ello se sube al
+        // listado del Silo, no a una unidad concreta.
+        $desdeId = (int) $this->request->getGet('desde');
+        $desde   = $desdeId ? $this->unidadModel->find($desdeId) : null;
+
         return view('silo/show', [
             'pieza'       => $pieza,
             'atributos'   => $this->atributoModel->deLaPieza($id),
@@ -161,6 +156,7 @@ class Web extends BaseController
             'categoria'   => $pieza['categoria_id'] ? $this->vocabularioModel->find($pieza['categoria_id']) : null,
             'ficheros'    => $this->ficheroModel->deLaPieza($id),
             'proxies'     => $this->proxyModel->deLaPieza($id),
+            'desde'       => $desde,
         ]);
     }
 
@@ -261,21 +257,18 @@ class Web extends BaseController
             3 => $this->unidadModel->porNivel(3),
         ];
 
+        // Solo para reforzar la confirmación de borrado si la unidad tiene
+        // contenido registrado.
         $piezasPorUnidad = [];
-        $usoPorUnidad = [];
         foreach ($porNivel as $unidadesNivel) {
             foreach ($unidadesNivel as $u) {
                 $piezasPorUnidad[$u['id']] = $this->ubicacionModel->contarPorUnidad($u['id']);
-                if ($u['capacidad_bytes']) {
-                    $usoPorUnidad[$u['id']] = $this->ubicacionModel->sumaTamanoPorUnidad($u['id']);
-                }
             }
         }
 
         return view('silo/unidades', [
-            'porNivel'         => $porNivel,
-            'piezasPorUnidad'  => $piezasPorUnidad,
-            'usoPorUnidad'     => $usoPorUnidad,
+            'porNivel'        => $porNivel,
+            'piezasPorUnidad' => $piezasPorUnidad,
         ]);
     }
 
@@ -305,6 +298,20 @@ class Web extends BaseController
         $this->unidadModel->update($id, ['etiqueta' => $etiqueta !== '' ? $etiqueta : null]);
 
         return redirect()->to(site_url('silo/unidades'))->with('success', 'Etiqueta actualizada.');
+    }
+
+    /** Texto libre para reconocer el disco/USB físico real de esta unidad. */
+    public function identificacionFisicaUnidad(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        if (!$unidad) {
+            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
+        }
+
+        $texto = trim((string) $this->request->getPost('identificacion_fisica'));
+        $this->unidadModel->update($id, ['identificacion_fisica' => $texto !== '' ? $texto : null]);
+
+        return redirect()->to(site_url('silo/unidades'))->with('success', 'Identificación física actualizada.');
     }
 
     /**
@@ -355,18 +362,6 @@ class Web extends BaseController
         );
 
         return redirect()->to(site_url('silo/unidades'))->with('success', "Unidad creada: nivel {$unidad['nivel']} #{$unidad['numero']}.");
-    }
-
-    public function sellarUnidad(int $id)
-    {
-        $unidad = $this->unidadModel->find($id);
-        if (!$unidad) {
-            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
-        }
-
-        $this->unidadModel->update($id, ['sellada' => 1, 'sellada_en' => date('Y-m-d H:i:s')]);
-
-        return redirect()->to(site_url('silo/unidades'))->with('success', 'Unidad sellada.');
     }
 
     /** Descarga el .silo_unit.json que se copiaría en la raíz de la unidad física (plan Silo §7.1). */

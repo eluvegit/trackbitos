@@ -19,7 +19,7 @@ class SiloUnidadModel extends Model
     protected $updatedField  = '';
 
     protected $allowedFields = [
-        'nivel', 'numero', 'etiqueta', 'agrupador', 'capacidad_bytes', 'sellada', 'sellada_en',
+        'nivel', 'numero', 'etiqueta', 'identificacion_fisica', 'agrupador', 'capacidad_bytes',
         'ultima_sincronizacion', 'fichero_control',
     ];
 
