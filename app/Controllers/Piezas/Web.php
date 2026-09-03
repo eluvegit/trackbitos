@@ -515,45 +515,75 @@ class Web extends BaseController
      */
     public function estadisticas()
     {
-        $filas = [];
+        // "Piezas que más pesan" en dos cortes: por variante (el fichero
+        // concreto que aligerar) y por familia (la pieza entera, sumando
+        // sus variantes). Los dos salen del mismo recorrido de disco.
+        $pesanVariante = [];
+        $pesanFamilia  = [];
         foreach ($this->familiaModel->where('borrado_en', null)->findAll() as $familia) {
             $variantes = $this->varianteModel->where('familia_id', $familia['id'])->findAll();
-            $bytes = 0;
+            $vivas     = array_values(array_filter($variantes, static fn($v) => $v['borrado_en'] === null));
+
+            $bytesFamilia = 0;
             foreach ($variantes as $variante) {
-                $bytes += $this->pesoDeVariante((int) $variante['id'])['total'];
+                $bytesVariante = $this->pesoDeVariante((int) $variante['id'])['total'];
+                $bytesFamilia += $bytesVariante;
+                if ($bytesVariante <= 0) {
+                    continue;
+                }
+                // El nombre de la variante solo se enseña si distingue algo
+                // (misma regla que galería/índice) o si está en la papelera
+                // —ahí conviene verla nombrada, es justo lo que hay que purgar.
+                $mostrar = $variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
+                    || count($vivas) > 1
+                    || $variante['borrado_en'] !== null;
+                $pesanVariante[] = [
+                    'nombre' => $familia['nombre'] . ($mostrar ? ' · ' . $variante['nombre'] : '')
+                        . ($variante['borrado_en'] !== null ? ' (en papelera)' : ''),
+                    'url'    => site_url('piezas/variante/' . (int) $variante['id']),
+                    'bytes'  => $bytesVariante,
+                ];
             }
 
-            if ($bytes > 0) {
+            if ($bytesFamilia > 0) {
                 // Solo las variantes vivas deciden a dónde enlaza el nombre
                 // (a la ficha si hay una, al índice anclado si hay varias);
                 // el peso sí incluye las borradas que aún ocupan disco.
-                $familia['variantes'] = array_values(array_filter(
-                    $variantes,
-                    static fn($v) => $v['borrado_en'] === null
-                ));
-                $filas[] = ['familia' => $familia, 'bytes' => $bytes];
+                $pesanFamilia[] = [
+                    'nombre' => $familia['nombre'],
+                    'url'    => match (count($vivas)) {
+                        0       => site_url('piezas'),
+                        1       => site_url('piezas/variante/' . (int) $vivas[0]['id']),
+                        default => site_url('piezas') . '#familia-' . (int) $familia['id'],
+                    },
+                    'bytes'  => $bytesFamilia,
+                ];
             }
         }
-        usort($filas, static fn($a, $b) => $b['bytes'] <=> $a['bytes']);
+        $porPeso = static fn($a, $b) => $b['bytes'] <=> $a['bytes'];
+        usort($pesanVariante, $porPeso);
+        usort($pesanFamilia, $porPeso);
 
         return view('piezas/estadisticas', [
             'total'         => $this->almacen->tamanoTotal(),
             'totalPapelera' => $this->almacen->tamanoPapelera(),
-            'piezas'        => $filas,
+            'pesanVariante' => array_slice($pesanVariante, 0, 20),
+            'pesanFamilia'  => array_slice($pesanFamilia, 0, 20),
             'topImpresas'   => $this->rankingUnidadesImpresas(),
         ]);
     }
 
     /**
-     * Ranking de piezas por copias físicas impresas: la suma de la
+     * Ranking de variantes por copias físicas impresas: la suma de la
      * `cantidad` de cada versión que ha ido en una placa ya marcada como
-     * impresa (`piezas_placas.impresa_en`). No mira el estado de la versión
+     * impresa (`piezas_placas.impresa_en`), agrupada por variante — cada
+     * acabado es una tirada distinta. No mira el estado de la versión
      * —cuenta lo que se mandó a la impresora de verdad, no lo que se juzgó
      * después—. Una placa nacida de un reparto lleva sus propias filas (al
      * dividir se mueven, no se duplican), así que sumar todas las placas
-     * impresas no cuenta dos veces la misma copia.
+     * impresas no cuenta dos veces la misma copia. Top 20.
      *
-     * @return list<array{familia: array, unidades: int, placas: int, ultima: ?string}>
+     * @return list<array{nombre: string, url: string, unidades: int, placas: int, ultima: ?string}>
      */
     private function rankingUnidadesImpresas(): array
     {
@@ -573,7 +603,7 @@ class Web extends BaseController
             return [];
         }
 
-        // version_id -> variante_id -> familia_id, resueltos de una vez.
+        // version_id -> variante_id -> variante (viva o no) y familia (solo vivas).
         $varianteDeVersion = array_column(
             $this->versionModel
                 ->whereIn('id', array_values(array_unique(array_column($filasVersion, 'version_id'))))
@@ -581,11 +611,11 @@ class Web extends BaseController
             'variante_id',
             'id'
         );
-        $familiaDeVariante = array_column(
+        $variantes = array_column(
             $this->varianteModel
                 ->whereIn('id', array_values(array_unique($varianteDeVersion)) ?: [0])
                 ->findAll(),
-            'familia_id',
+            null,
             'id'
         );
         $familias = array_column(
@@ -594,37 +624,42 @@ class Web extends BaseController
             'id'
         );
 
-        // Variantes vivas por familia, para el enlace del nombre.
-        $variantesVivasPorFamilia = [];
+        // Cuántas variantes vivas tiene cada familia: el nombre de la
+        // variante solo se enseña si distingue algo (misma regla que la
+        // galería y el índice — con una sola "base" no dice nada).
+        $vivasPorFamilia = [];
         foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
-            $variantesVivasPorFamilia[(int) $v['familia_id']][] = $v;
+            $vivasPorFamilia[(int) $v['familia_id']] = ($vivasPorFamilia[(int) $v['familia_id']] ?? 0) + 1;
         }
 
         $acum = [];
         foreach ($filasVersion as $fila) {
             $varianteId = $varianteDeVersion[$fila['version_id']] ?? null;
-            $familiaId  = $varianteId !== null ? ($familiaDeVariante[$varianteId] ?? null) : null;
+            $variante   = $varianteId !== null ? ($variantes[$varianteId] ?? null) : null;
             // Versión huérfana o pieza en la papelera: fuera del ranking.
-            if ($familiaId === null || !isset($familias[$familiaId])) {
+            if ($variante === null || !isset($familias[$variante['familia_id']])) {
                 continue;
             }
 
-            $acum[$familiaId] ??= ['unidades' => 0, 'placas' => [], 'ultima' => null];
-            $acum[$familiaId]['unidades'] += max(1, (int) $fila['cantidad']);
-            $acum[$familiaId]['placas'][(int) $fila['placa_id']] = true;
+            $acum[$varianteId] ??= ['unidades' => 0, 'placas' => [], 'ultima' => null];
+            $acum[$varianteId]['unidades'] += max(1, (int) $fila['cantidad']);
+            $acum[$varianteId]['placas'][(int) $fila['placa_id']] = true;
 
             $fecha = $fechaPlaca[$fila['placa_id']] ?? null;
-            if ($fecha !== null && ($acum[$familiaId]['ultima'] === null || $fecha > $acum[$familiaId]['ultima'])) {
-                $acum[$familiaId]['ultima'] = $fecha;
+            if ($fecha !== null && ($acum[$varianteId]['ultima'] === null || $fecha > $acum[$varianteId]['ultima'])) {
+                $acum[$varianteId]['ultima'] = $fecha;
             }
         }
 
         $ranking = [];
-        foreach ($acum as $familiaId => $datos) {
-            $familia = $familias[$familiaId];
-            $familia['variantes'] = $variantesVivasPorFamilia[$familiaId] ?? [];
+        foreach ($acum as $varianteId => $datos) {
+            $variante  = $variantes[$varianteId];
+            $familiaId = (int) $variante['familia_id'];
+            $mostrar   = $variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
+                || ($vivasPorFamilia[$familiaId] ?? 0) > 1;
             $ranking[] = [
-                'familia'  => $familia,
+                'nombre'   => $familias[$familiaId]['nombre'] . ($mostrar ? ' · ' . $variante['nombre'] : ''),
+                'url'      => site_url('piezas/variante/' . $varianteId),
                 'unidades' => $datos['unidades'],
                 'placas'   => count($datos['placas']),
                 'ultima'   => $datos['ultima'],
@@ -636,7 +671,7 @@ class Web extends BaseController
                 ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
         );
 
-        return $ranking;
+        return array_slice($ranking, 0, 20);
     }
 
     /**
