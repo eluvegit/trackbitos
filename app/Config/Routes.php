@@ -759,6 +759,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('stl/(:num)/descargar', 'Web::descargarStl/$1');
     $routes->POST('stl/(:num)/quitar', 'Web::quitarStl/$1');
     $routes->POST('stl/(:num)/medidas', 'Web::actualizarMedidasStl/$1');
+    // Añadir el .stl a un trozo que se dio de alta solo con medidas (fase 55).
+    $routes->POST('stl/(:num)/fichero', 'Web::adjuntarFicheroStl/$1');
 
     // El .blend de una versión ya promocionada, sin declarar máquina: es
     // inmutable y nadie espera que vuelva, así que no hay asiento que
@@ -867,6 +869,8 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 
     $routes->GET('vocabulario', 'Web::vocabulario');
     $routes->POST('vocabulario/renombrar/(:num)', 'Web::renombrarVocabulario/$1');
+
+    $routes->GET('mi-pc', 'Web::miPc');
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');

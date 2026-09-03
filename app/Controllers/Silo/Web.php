@@ -58,6 +58,38 @@ class Web extends BaseController
             'piezas'     => $this->piezaModel->buscar($filtros),
             'categorias' => $this->vocabularioModel->porTipo('categoria'),
             'filtros'    => $filtros,
+            'vista'      => $this->vistaSolicitada(),
+        ]);
+    }
+
+    /** Modo de presentación de las carpetas: 'galeria' o 'lista' (por defecto). */
+    private function vistaSolicitada(): string
+    {
+        return $this->request->getGet('vista') === 'galeria' ? 'galeria' : 'lista';
+    }
+
+    /** "Mi PC": todas las unidades como discos del explorador, para entrar en cada una. */
+    public function miPc()
+    {
+        $porNivel = [
+            1 => $this->unidadModel->porNivel(1),
+            2 => $this->unidadModel->porNivel(2),
+            3 => $this->unidadModel->porNivel(3),
+        ];
+
+        $piezasPorUnidad = [];
+        $usoPorUnidad = [];
+        foreach ($porNivel as $unidadesNivel) {
+            foreach ($unidadesNivel as $u) {
+                $piezasPorUnidad[$u['id']] = $this->ubicacionModel->contarPorUnidad($u['id']);
+                $usoPorUnidad[$u['id']]    = $this->ubicacionModel->sumaTamanoPorUnidad($u['id']);
+            }
+        }
+
+        return view('silo/mi_pc', [
+            'porNivel'        => $porNivel,
+            'piezasPorUnidad' => $piezasPorUnidad,
+            'usoPorUnidad'    => $usoPorUnidad,
         ]);
     }
 
@@ -82,7 +114,6 @@ class Web extends BaseController
         $nombreCarpeta = $this->silo->formatearNombreCarpeta(
             $idNegocio,
             $fechaExtraida['fecha'],
-            $fechaExtraida['precision'],
             $resuelto['categoria']['nombre'] ?? null,
             array_column($resuelto['atributos'], 'nombre')
         );
@@ -90,7 +121,6 @@ class Web extends BaseController
         $piezaId = $this->piezaModel->insert([
             'id_negocio'       => $idNegocio,
             'fecha'            => $fechaExtraida['fecha'],
-            'fecha_precision'  => $fechaExtraida['precision'],
             'tipo'             => $this->request->getPost('tipo') ?: null,
             'fuente'           => $this->request->getPost('fuente') ?: null,
             'categoria_id'     => $resuelto['categoria']['id'] ?? null,
@@ -260,6 +290,7 @@ class Web extends BaseController
         return view('silo/unidad', [
             'unidad' => $unidad,
             'piezas' => $this->piezaModel->deLaUnidad($id),
+            'vista'  => $this->vistaSolicitada(),
         ]);
     }
 
@@ -311,8 +342,10 @@ class Web extends BaseController
             $agrupador = $this->silo->slugify($agrupador);
         }
 
-        $capacidadMb = $this->request->getPost('capacidad_mb');
-        $capacidadBytes = ($capacidadMb !== null && $capacidadMb !== '') ? (int) $capacidadMb * 1_000_000 : null;
+        $capacidadTb = $this->request->getPost('capacidad_tb');
+        $capacidadBytes = ($capacidadTb !== null && $capacidadTb !== '')
+            ? (int) round((float) str_replace(',', '.', $capacidadTb) * 1_000_000_000_000)
+            : null;
 
         $unidad = $this->silo->crearUnidad(
             $nivel,

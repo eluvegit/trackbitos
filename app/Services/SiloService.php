@@ -128,53 +128,46 @@ class SiloService
 
     /**
      * Extrae la fecha del principio de una entrada de una sola línea, en el
-     * mismo formato compacto que ya lleva el nombre de carpeta (AAAAMMDD,
+     * mismo formato compacto que lleva el nombre de carpeta (AAAAMMDD,
      * AAAAMM, AAAA o literal "sinfecha", plan Silo §3) — así una carpeta ya
-     * creada a mano se puede pegar tal cual, sin reescribirla. La precisión
-     * se deduce del propio formato, nunca se pide aparte (plan Silo §4
-     * "Fecha"). Si no hay token de fecha reconocible al principio, se
-     * asume sin_fecha y el texto completo pasa intacto a `resto` — nunca
-     * bloquea el alta (regla de "bloqueo cero").
-     *
-     * Como la columna `fecha` es DATE (necesita día y mes), una fecha
-     * parcial se guarda con el resto relleno a 01 — formatearFecha() solo
-     * usa la parte que corresponde a la precisión real al construir el
-     * nombre de carpeta, así que el relleno no se ve nunca.
+     * creada a mano se puede pegar tal cual. Si no hay token de fecha
+     * reconocible al principio, se asume sin fecha y el texto completo pasa
+     * intacto a `resto` (regla de "bloqueo cero"). Una fecha parcial se
+     * completa con 01 en lo que falte: se espera fecha completa.
      */
     public function extraerFecha(string $texto): array
     {
         $texto = ltrim($texto);
 
         if (!preg_match('/^(\d{8}|\d{6}|\d{4}|sinfecha)\b[\s,]*/i', $texto, $m)) {
-            return ['fecha' => null, 'precision' => 'sin_fecha', 'resto' => $texto];
+            return ['fecha' => null, 'resto' => $texto];
         }
 
         $token = strtolower($m[1]);
         $resto = substr($texto, strlen($m[0]));
 
         if ($token === 'sinfecha') {
-            return ['fecha' => null, 'precision' => 'sin_fecha', 'resto' => $resto];
+            return ['fecha' => null, 'resto' => $resto];
         }
 
         if (strlen($token) === 8 && checkdate((int) substr($token, 4, 2), (int) substr($token, 6, 2), (int) substr($token, 0, 4))) {
             return [
-                'fecha'     => substr($token, 0, 4) . '-' . substr($token, 4, 2) . '-' . substr($token, 6, 2),
-                'precision' => 'dia',
-                'resto'     => $resto,
+                'fecha' => substr($token, 0, 4) . '-' . substr($token, 4, 2) . '-' . substr($token, 6, 2),
+                'resto' => $resto,
             ];
         }
 
         if (strlen($token) === 6 && (int) substr($token, 4, 2) >= 1 && (int) substr($token, 4, 2) <= 12) {
-            return ['fecha' => substr($token, 0, 4) . '-' . substr($token, 4, 2) . '-01', 'precision' => 'mes', 'resto' => $resto];
+            return ['fecha' => substr($token, 0, 4) . '-' . substr($token, 4, 2) . '-01', 'resto' => $resto];
         }
 
         if (strlen($token) === 4) {
-            return ['fecha' => $token . '-01-01', 'precision' => 'anio', 'resto' => $resto];
+            return ['fecha' => $token . '-01-01', 'resto' => $resto];
         }
 
         // 8 dígitos pero fecha inválida (p.ej. 20260230): no se consume nada,
         // el texto completo (incluidos esos dígitos) pasa intacto a resto.
-        return ['fecha' => null, 'precision' => 'sin_fecha', 'resto' => $texto];
+        return ['fecha' => null, 'resto' => $texto];
     }
 
     /**
@@ -215,11 +208,10 @@ class SiloService
     public function formatearNombreCarpeta(
         string $idNegocio,
         ?string $fecha,
-        string $precision,
         ?string $categoriaNombre,
         array $elementos
     ): string {
-        $fechaTexto = $this->formatearFecha($fecha, $precision);
+        $fechaTexto = $this->formatearFecha($fecha);
         $categoria  = $categoriaNombre !== null && $categoriaNombre !== '' ? $categoriaNombre : 'sin_clasificar';
 
         $nombre = "{$idNegocio} {$fechaTexto} {$categoria}";
@@ -230,23 +222,15 @@ class SiloService
         return $nombre;
     }
 
-    private function formatearFecha(?string $fecha, string $precision): string
+    private function formatearFecha(?string $fecha): string
     {
-        if ($precision === 'sin_fecha' || !$fecha) {
+        if (!$fecha) {
             return 'sinfecha';
         }
 
-        $partes = explode('-', $fecha); // YYYY-MM-DD desde un <input type="date"> o similar
-        $anio   = $partes[0] ?? '';
-        $mes    = $partes[1] ?? '';
-        $dia    = $partes[2] ?? '';
+        $partes = explode('-', $fecha); // YYYY-MM-DD
 
-        return match ($precision) {
-            'dia'  => $anio . $mes . $dia,
-            'mes'  => $anio . $mes,
-            'anio' => $anio,
-            default => 'sinfecha',
-        };
+        return ($partes[0] ?? '') . ($partes[1] ?? '') . ($partes[2] ?? '');
     }
 
     /**
@@ -262,7 +246,7 @@ class SiloService
         $nombreCarpeta = trim($nombreCarpeta);
 
         if (!preg_match('/^(\S+)\s+(.*)$/', $nombreCarpeta, $m)) {
-            return ['id_negocio' => $nombreCarpeta, 'fecha' => null, 'precision' => 'sin_fecha', 'categoria_texto' => null, 'elementos' => []];
+            return ['id_negocio' => $nombreCarpeta, 'fecha' => null, 'categoria_texto' => null, 'elementos' => []];
         }
 
         $idNegocio     = $m[1];
@@ -277,7 +261,6 @@ class SiloService
         return [
             'id_negocio'      => $idNegocio,
             'fecha'           => $fechaExtraida['fecha'],
-            'precision'       => $fechaExtraida['precision'],
             'categoria_texto' => $categoriaTexto,
             'elementos'       => array_slice($trozos, 1),
         ];

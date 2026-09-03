@@ -738,14 +738,23 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                             : ' ' . $stl['nombre'];
                                     ?>
                                     <div class="btn-group" role="group">
-                                        <a href="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/descargar') ?>"
-                                            class="btn btn-sm btn-primary btn-texto-negro py-0 px-2">
-                                            <i class="bi bi-file-earmark-arrow-down"></i>
-                                            Descargar<?= esc($queTrozo) ?> .STL
-                                            <?php if ($stl['tamano'] !== null): ?>
-                                                <span class="opacity-75">(<?= $tamanoLegible($stl['tamano']) ?>)</span>
-                                            <?php endif; ?>
-                                        </a>
+                                        <?php if (!empty($stl['ruta_stl'])): ?>
+                                            <a href="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/descargar') ?>"
+                                                class="btn btn-sm btn-primary btn-texto-negro py-0 px-2">
+                                                <i class="bi bi-file-earmark-arrow-down"></i>
+                                                Descargar<?= esc($queTrozo) ?> .STL
+                                                <?php if ($stl['tamano'] !== null): ?>
+                                                    <span class="opacity-75">(<?= $tamanoLegible($stl['tamano']) ?>)</span>
+                                                <?php endif; ?>
+                                            </a>
+                                        <?php else: ?>
+                                            <?php // Trozo apuntado solo con medidas (fase 55): el .stl llega
+                                                  // después. En gris y sin enlace — no hay nada que descargar. ?>
+                                            <span class="btn btn-sm btn-outline-secondary py-0 px-2 disabled">
+                                                <i class="bi bi-rulers"></i>
+                                                <?= esc(trim($queTrozo) !== '' ? trim($queTrozo) : 'completo') ?> · sin .stl
+                                            </span>
+                                        <?php endif; ?>
                                         <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/quitar') ?>">
                                             <?= csrf_field() ?>
                                             <button class="btn btn-sm btn-outline-secondary py-0 px-1 h-100"
@@ -754,6 +763,19 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                             </button>
                                         </form>
                                     </div>
+                                    <?php if (empty($stl['ruta_stl'])): ?>
+                                        <?php // Añadirle el fichero cuando se genere, sin perder las medidas. ?>
+                                        <form method="post" enctype="multipart/form-data"
+                                            action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/fichero') ?>"
+                                            class="d-inline-flex align-items-center gap-1">
+                                            <?= csrf_field() ?>
+                                            <input type="file" name="stl" accept=".stl" required
+                                                class="form-control form-control-sm py-0 px-1" style="width: 12em;">
+                                            <button class="btn btn-sm btn-outline-primary py-0 px-1" title="Añadir el .stl a este trozo">
+                                                <i class="bi bi-file-earmark-arrow-up"></i>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                     <?php // Cuánto ocupa en la placa (spec: reparto de piezas en placas),
                                           // en mm — la caja de ocupación que da Chitubox con la pieza ya
                                           // orientada como se va a imprimir. Vacío = "sin medir": esa
@@ -1191,6 +1213,8 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                     Una vez adjuntado no se puede reemplazar: si el modelo cambia, promociona
                                     una versión nueva y sube el STL ahí. Puedes adjuntar <strong>varios</strong>:
                                     los brazos por separado, o una pieza alta partida en trozos que luego se montan.
+                                    El fichero es <strong>opcional</strong>: apunta ahora las medidas del trozo para
+                                    el reparto en placa y añádele el .stl cuando lo generes.
                                 </p>
                                 <label class="form-label small">Qué trozo es</label>
                                 <input type="text" name="nombre" maxlength="150" class="form-control form-control-sm mb-2"
@@ -1202,8 +1226,20 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                     </div>
                                 <?php endif; ?>
 
-                                <label class="form-label small">Fichero .stl</label>
-                                <input type="file" name="stl" accept=".stl" class="form-control form-control-sm" required>
+                                <label class="form-label small">Medidas en la placa (mm, opcional)</label>
+                                <div class="d-flex align-items-center gap-1 mb-2">
+                                    <input type="text" inputmode="decimal" name="ancho" placeholder="ancho"
+                                        max="<?= \App\Services\PiezaEmpaquetadoService::PLACA_ANCHO_MM ?>"
+                                        class="form-control form-control-sm" style="width: 6em;">
+                                    <span class="text-muted small">×</span>
+                                    <input type="text" inputmode="decimal" name="fondo" placeholder="fondo"
+                                        max="<?= \App\Services\PiezaEmpaquetadoService::PLACA_FONDO_MM ?>"
+                                        class="form-control form-control-sm" style="width: 6em;">
+                                    <span class="text-muted small">mm — caja de ocupación de Chitubox</span>
+                                </div>
+
+                                <label class="form-label small">Fichero .stl (opcional)</label>
+                                <input type="file" name="stl" accept=".stl" class="form-control form-control-sm">
                                 <?php // Los STL suelen pesar bastante más que las fotos — sin esto no había
                                       // ninguna pista de que la subida estuviera avanzando. ?>
                                 <div class="progress d-none mt-2" style="height: 18px;" data-progreso>

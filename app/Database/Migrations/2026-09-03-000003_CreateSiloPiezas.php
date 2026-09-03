@@ -25,7 +25,6 @@ class CreateSiloPiezas extends Migration
             'id'               => ['type' => 'INT', 'unsigned' => true, 'auto_increment' => true],
             'id_negocio'       => ['type' => 'VARCHAR', 'constraint' => 20],
             'fecha'            => ['type' => 'DATE', 'null' => true],
-            'fecha_precision'  => ['type' => 'ENUM', 'constraint' => ['dia', 'mes', 'anio', 'sin_fecha'], 'default' => 'sin_fecha'],
             'tipo'             => ['type' => 'VARCHAR', 'constraint' => 30, 'null' => true],
             'fuente'           => ['type' => 'VARCHAR', 'constraint' => 100, 'null' => true],
             'categoria_id'     => ['type' => 'INT', 'unsigned' => true, 'null' => true],

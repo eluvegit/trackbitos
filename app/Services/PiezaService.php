@@ -1050,6 +1050,20 @@ class PiezaService
         return $this->stlModel->porVersiones($versionIds);
     }
 
+    /**
+     * Los STL de una versión que ya llevan fichero. Un trozo puede existir
+     * solo para apuntar su caja de ocupación en la placa (fase 55): el STL
+     * llega después, o lo genera stl.py desde el .blend. Para "¿hay algo que
+     * descargar/imprimir?" cuentan solo estos.
+     */
+    public function stlsConFicheroDe(int $versionId): array
+    {
+        return array_values(array_filter(
+            $this->stlsDe($versionId),
+            static fn(array $stl) => !empty($stl['ruta_stl'])
+        ));
+    }
+
     public function stl(int $stlId): ?array
     {
         return $this->stlModel->find($stlId);

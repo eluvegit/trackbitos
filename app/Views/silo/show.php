@@ -39,7 +39,7 @@
         <dd class="col-sm-9"><?= esc($pieza['id_negocio']) ?></dd>
 
         <dt class="col-sm-3">Fecha</dt>
-        <dd class="col-sm-9"><?= esc($pieza['fecha'] ?? 'sin fecha') ?> (<?= esc($pieza['fecha_precision']) ?>)</dd>
+        <dd class="col-sm-9"><?= esc($pieza['fecha'] ?? 'sin fecha') ?></dd>
 
         <dt class="col-sm-3">Categoría</dt>
         <dd class="col-sm-9"><?= $categoria ? esc($categoria['nombre']) : 'sin_clasificar' ?></dd>

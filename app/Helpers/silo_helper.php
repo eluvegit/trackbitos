@@ -12,6 +12,9 @@ if (!function_exists('silo_formatear_tamano')) {
         if (!$bytes) {
             return '—';
         }
+        if ($bytes >= 1_000_000_000_000) {
+            return number_format($bytes / 1_000_000_000_000, 2) . ' TB';
+        }
         if ($bytes >= 1_000_000_000) {
             return number_format($bytes / 1_000_000_000, 2) . ' GB';
         }

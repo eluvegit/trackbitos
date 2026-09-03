@@ -13,6 +13,9 @@
     <a href="<?= site_url('silo/unidades') ?>" class="text-decoration-none ms-1 text-muted" title="Unidades">
         <i class="bi bi-hdd-stack"></i>
     </a>
+    <a href="<?= site_url('silo/mi-pc') ?>" class="text-decoration-none ms-1 text-muted" title="Mi PC">
+        <i class="bi bi-pc-display"></i>
+    </a>
     <a href="<?= site_url('silo/crear') ?>" class="text-decoration-none ms-1 text-success" title="Nueva pieza">
         <i class="bi bi-plus-circle fs-5"></i>
     </a>
@@ -42,6 +45,28 @@
     </div>
 </form>
 
-<?= $this->include('silo/_listado_piezas') ?>
+<?php
+$vista   = $vista ?? 'lista';
+$vistaQs = static fn ($v) => site_url('silo') . '?' . http_build_query(
+    array_filter([
+        'q'            => $filtros['q'] ?? null,
+        'categoria_id' => $filtros['categoria_id'] ?? null,
+    ]) + ['vista' => $v]
+);
+?>
+<div class="d-flex justify-content-end mb-2">
+    <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
+        <a href="<?= esc($vistaQs('lista'), 'attr') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">
+            <i class="bi bi-list-ul"></i>
+        </a>
+        <a href="<?= esc($vistaQs('galeria'), 'attr') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'galeria' ? 'active' : '' ?>" title="Galería de carpetas">
+            <i class="bi bi-grid-3x3-gap"></i>
+        </a>
+    </div>
+</div>
+
+<?= $this->include($vista === 'galeria' ? 'silo/_galeria_piezas' : 'silo/_listado_piezas') ?>
 
 <?= $this->endSection() ?>

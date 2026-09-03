@@ -924,7 +924,7 @@ class Web extends BaseController
         // qué se dejó fuera sin tener que adivinarlo.
         $nReferencias = count($this->referenciaModel->deVariante((int) $familia['id'], (int) $variante['id']));
         $nRenders     = $this->renderModel->where('variante_id', $variante['id'])->countAllResults();
-        $nStl         = array_sum(array_map(fn(array $v) => count($this->servicio->stlsDe((int) $v['id'])), $incluidas));
+        $nStl         = array_sum(array_map(fn(array $v) => count($this->servicio->stlsConFicheroDe((int) $v['id'])), $incluidas));
         $l[] = '## No incluido en esta copia';
         $l[] = '';
         $l[] = sprintf(
@@ -1390,8 +1390,10 @@ class Web extends BaseController
                 // hay, si no la más reciente "para imprimir"/"sin validar".
                 'version'         => $version,
                 // Cuántos trozos hay que imprimir (fase 21): la galería solo
-                // necesita saber si hay alguno y cuántos, no cuáles.
-                'stls'            => count($this->servicio->stlsDe((int) $version['id'])),
+                // necesita saber si hay alguno y cuántos, no cuáles. Solo los
+                // que ya tienen fichero — un trozo apuntado solo con medidas
+                // (fase 55) todavía no se puede imprimir.
+                'stls'            => count($this->servicio->stlsConFicheroDe((int) $version['id'])),
                 'miniatura'       => $fotos['miniatura'],
                 // La misma foto en grande, para el ojo que la abre aparte.
                 'foto'            => $fotos['vista'],
@@ -1730,7 +1732,9 @@ class Web extends BaseController
                     $variante['nombre'] ?? ('variante ' . $version['variante_id']),
                     (int) $version['numero'],
                     $version['estado'],
-                    $stlsVersion === [] ? 'sin ningún STL subido nunca' : 'STL subido pero ya no está en el almacén'
+                    array_filter($stlsVersion, static fn($s) => !empty($s['ruta_stl'])) === []
+                        ? 'sin ningún STL con fichero (trozos apuntados solo con medidas)'
+                        : 'STL subido pero ya no está en el almacén'
                 );
             }
         }
@@ -2059,7 +2063,7 @@ class Web extends BaseController
                 $sinVersion++;
                 continue;
             }
-            if ($this->servicio->stlsDe((int) $version['id']) === []) {
+            if ($this->servicio->stlsConFicheroDe((int) $version['id']) === []) {
                 $sinStl++;
             }
             $versionIds[] = (int) $version['id'];
@@ -2774,7 +2778,7 @@ class Web extends BaseController
                 'version'    => $version,
                 'variante'   => $variante,
                 'familia'    => $variante ? $this->familiaModel->find($variante['familia_id']) : null,
-                'disponible' => $this->servicio->stlsDe((int) $version['id']) !== [],
+                'disponible' => $this->servicio->stlsConFicheroDe((int) $version['id']) !== [],
                 'miniatura'  => $variante ? $this->fotosDe($version, $variante)['miniatura'] : null,
                 'imagenes'   => $this->placaVersionImagenModel->where('placa_version_id', $fila['id'])
                     ->orderBy('orden')->orderBy('id')->findAll(),
@@ -3790,27 +3794,30 @@ class Web extends BaseController
     }
 
     /**
-     * Adjunta el STL para imprimir esta versión. Separado de "Marcar
-     * impresa" a propósito: no siempre se exporta en el mismo momento en
-     * que se sube el .blend, y así se puede adjuntar en cuanto esté listo,
-     * antes o después de imprimir.
+     * Da de alta un trozo de esta versión. Separado de "Marcar impresa" a
+     * propósito: no siempre se exporta en el mismo momento en que se sube el
+     * .blend, y así se puede adjuntar en cuanto esté listo, antes o después
+     * de imprimir.
+     *
+     * El fichero es opcional (fase 55): el método de generación cambió y a
+     * menudo se sabe cuánto ocupa un trozo en la placa antes de tener su
+     * .stl (lo genera stl.py desde el .blend más tarde). Un trozo sin
+     * fichero pero con medidas ya cuenta para el reparto en placas; el .stl
+     * se le añade luego con `adjuntarFicheroStl`.
      */
     public function subirStl(int $versionId)
     {
+        $conFichero = false;
+
         return $this->verboDeVersion(
             $versionId,
-            function () use ($versionId) {
+            function () use ($versionId, &$conFichero) {
                 $version = $this->versionModel->find($versionId);
 
-                $file = $this->request->getFile('stl');
-                if (!$file || !$file->isValid() || $file->hasMoved()) {
-                    throw new RuntimeException('No ha llegado ningún fichero STL válido.');
-                }
-                if ($file->getSize() > self::TAMANO_MAX_STL) {
-                    throw new RuntimeException('El STL pesa más de 50 MB.');
-                }
-                if (strtolower(pathinfo($file->getClientName(), PATHINFO_EXTENSION)) !== 'stl') {
-                    throw new RuntimeException('Solo se admiten ficheros .stl.');
+                $file       = $this->request->getFile('stl');
+                $conFichero = $file && $file->getError() !== UPLOAD_ERR_NO_FILE;
+                if ($conFichero) {
+                    $file = $this->exigirFicheroStl();
                 }
 
                 // Sin nombre no se distinguiría un trozo de otro. Si solo hay
@@ -3823,7 +3830,17 @@ class Web extends BaseController
                 // Alta en dos pasos: la fila primero, porque la ruta del
                 // fichero lleva dentro el id del STL (varios por versión,
                 // fase 21). Así el segundo no puede pisar al primero.
-                $stl  = $this->servicio->reservarStl($versionId, $nombre);
+                $stl = $this->servicio->reservarStl($versionId, $nombre);
+
+                $medidas = $this->medidasStlDePost();
+                if ($medidas['ancho_mm'] !== null || $medidas['fondo_mm'] !== null) {
+                    (new \App\Models\PiezaVersionStlModel())->update((int) $stl['id'], $medidas);
+                }
+
+                if (!$conFichero) {
+                    return $version;
+                }
+
                 $ruta = $this->almacen->rutaStl(
                     (int) $version['variante_id'],
                     (int) $version['numero'],
@@ -3844,8 +3861,97 @@ class Web extends BaseController
 
                 return $version;
             },
-            fn($version) => sprintf('STL adjuntado a v%03d. Ya se puede descargar para imprimir.', (int) $version['numero'])
+            fn($version) => $conFichero
+                ? sprintf('STL adjuntado a v%03d. Ya se puede descargar para imprimir.', (int) $version['numero'])
+                : sprintf('Trozo apuntado en v%03d. Añádele el .stl cuando lo tengas; las medidas ya cuentan para el reparto en placa.', (int) $version['numero'])
         );
+    }
+
+    /**
+     * Añade el .stl a un trozo que se dio de alta solo con medidas (fase
+     * 60). No es reemplazar: si el trozo ya tiene fichero, es inmutable
+     * (invariante 4) y hay que quitarlo y volver a subirlo.
+     */
+    public function adjuntarFicheroStl(int $stlId)
+    {
+        $stl = $this->servicio->stl($stlId);
+        if (!$stl) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Ese STL no existe.');
+        }
+
+        return $this->verboDeVersion(
+            (int) $stl['version_id'],
+            function () use ($stl) {
+                if (!empty($stl['ruta_stl'])) {
+                    throw new RuntimeException('Ese trozo ya tiene fichero: quítalo y súbelo otra vez si cambió.');
+                }
+
+                $version = $this->versionModel->find($stl['version_id']);
+                $file    = $this->exigirFicheroStl();
+
+                $ruta = $this->almacen->rutaStl(
+                    (int) $version['variante_id'],
+                    (int) $version['numero'],
+                    (int) $stl['id']
+                );
+                $this->almacen->guardar($file->getTempName(), $ruta);
+
+                $this->servicio->adjuntarStl(
+                    (int) $stl['id'],
+                    $ruta,
+                    $this->almacen->hash($ruta),
+                    (int) $file->getSize()
+                );
+
+                return $version;
+            },
+            fn($version) => sprintf('.stl añadido al trozo "%s" de v%03d.', $stl['nombre'], (int) $version['numero'])
+        );
+    }
+
+    /**
+     * Un .stl que llega por formulario, validado. Lanza si no hay fichero,
+     * si pesa de más o si no es .stl.
+     */
+    private function exigirFicheroStl(): \CodeIgniter\HTTP\Files\UploadedFile
+    {
+        $file = $this->request->getFile('stl');
+        if (!$file || !$file->isValid() || $file->hasMoved()) {
+            throw new RuntimeException('No ha llegado ningún fichero STL válido.');
+        }
+        if ($file->getSize() > self::TAMANO_MAX_STL) {
+            throw new RuntimeException('El STL pesa más de 50 MB.');
+        }
+        if (strtolower(pathinfo($file->getClientName(), PATHINFO_EXTENSION)) !== 'stl') {
+            throw new RuntimeException('Solo se admiten ficheros .stl.');
+        }
+
+        return $file;
+    }
+
+    /**
+     * ancho_mm / fondo_mm tal y como llegan del formulario del trozo: la
+     * caja de ocupación de Chitubox, acotada a la placa. `null` en un campo
+     * = "sin medir" (estado válido: ese trozo se queda fuera del cálculo de
+     * placas hasta que alguien lo mida).
+     *
+     * @return array{ancho_mm: string|null, fondo_mm: string|null}
+     */
+    private function medidasStlDePost(): array
+    {
+        $aMm = function ($valor, float $max): ?string {
+            $valor = $this->aPeso($valor);
+            if ($valor === null) {
+                return null;
+            }
+
+            return (string) max(0.1, min($max, (float) $valor));
+        };
+
+        return [
+            'ancho_mm' => $aMm($this->request->getPost('ancho'), PiezaEmpaquetadoService::PLACA_ANCHO_MM),
+            'fondo_mm' => $aMm($this->request->getPost('fondo'), PiezaEmpaquetadoService::PLACA_FONDO_MM),
+        ];
     }
 
     /**
@@ -3890,19 +3996,7 @@ class Web extends BaseController
 
         return $this->ejecutar(
             function () use ($stlId) {
-                $aMm = function ($valor, float $max): ?string {
-                    $valor = $this->aPeso($valor);
-                    if ($valor === null) {
-                        return null;
-                    }
-
-                    return (string) max(0.1, min($max, (float) $valor));
-                };
-
-                $datos = [
-                    'ancho_mm' => $aMm($this->request->getPost('ancho'), PiezaEmpaquetadoService::PLACA_ANCHO_MM),
-                    'fondo_mm' => $aMm($this->request->getPost('fondo'), PiezaEmpaquetadoService::PLACA_FONDO_MM),
-                ];
+                $datos = $this->medidasStlDePost();
                 (new \App\Models\PiezaVersionStlModel())->update($stlId, $datos);
 
                 return $datos;
@@ -4374,6 +4468,8 @@ class Web extends BaseController
      *         índice. stl_id solo se rellena cuando hay exactamente un STL
      *         (descarga directa desde el índice); con varios trozos hay que
      *         elegir cuál, así que el índice manda a la ficha en su lugar.
+     *         Solo cuentan los trozos con fichero: uno apuntado solo con
+     *         medidas (fase 55) no tiene nada que descargar todavía.
      */
     private function estadoStl(?array $version, ?array $stls = null): array
     {
@@ -4382,6 +4478,7 @@ class Web extends BaseController
         }
 
         $stls ??= $this->servicio->stlsDe((int) $version['id']);
+        $stls = array_values(array_filter($stls, static fn(array $s) => !empty($s['ruta_stl'])));
 
         return [
             'aplica'     => true,

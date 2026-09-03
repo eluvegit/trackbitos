@@ -6,6 +6,9 @@
     <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Unidades</strong>
+    <a href="<?= site_url('silo/mi-pc') ?>" class="text-decoration-none ms-1 text-muted" title="Mi PC">
+        <i class="bi bi-pc-display"></i>
+    </a>
 </h5>
 
 <?php if (session('success')): ?>
@@ -38,8 +41,8 @@
         <div class="form-text">Regístrala así si ya tienes el disco antes de que la propagación le toque el turno — si no, se crea sola cuando haga falta.</div>
     </div>
     <div class="col-sm-6">
-        <label class="form-label small">Capacidad en MB (opcional)</label>
-        <input type="number" name="capacidad_mb" min="1" class="form-control form-control-sm" placeholder="sin límite conocido si se deja vacío">
+        <label class="form-label small">Capacidad en TB (opcional)</label>
+        <input type="number" name="capacidad_tb" min="0.5" step="0.5" class="form-control form-control-sm" placeholder="ej. 1, 2, 1.5, 3, 0.5 — vacío si no se conoce">
     </div>
 </form>
 

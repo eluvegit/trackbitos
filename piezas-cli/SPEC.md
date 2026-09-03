@@ -1649,3 +1649,16 @@ purgar una sesión (validar, `descartarFicheroSesion`, o borrar pieza/variante) 
 también a la papelera, no se borran — `PiezaService::purgarSubidasDe()`. **Pendiente en el
 servidor**: correr `php spark migrate`. El plazo de la papelera (`piezas:purgar`) sube de 30 a
 90 días de gracia para que este histórico no desaparezca a las pocas semanas.
+
+**Fase 55 (2026-09-03): un trozo puede existir sin fichero, solo con medidas.** El método de
+generación de STL cambió y a menudo se conoce la caja de ocupación de un trozo (`ancho_mm` ×
+`fondo_mm`) antes de tener su `.stl` — lo genera `stl.py` desde el `.blend` más tarde. Ahora
+`Web::subirStl` acepta el fichero como opcional: si no llega, crea la fila en
+`piezas_version_stls` con nombre y medidas y `ruta_stl`/`hash_stl` en `NULL`. **Invariante nuevo
+implícito: no todas las filas de `piezas_version_stls` tienen `ruta_stl`.** Quien pregunte "¿hay
+algo que imprimir/descargar?" debe filtrar por `ruta_stl` no vacío —
+`PiezaService::stlsConFicheroDe()`; el reparto en placa (`itemsParaEmpaquetar`, medidas de
+placa) sí cuenta los trozos solo-medidos, que es el objetivo. El `.stl` se añade luego sin
+perder las medidas con `POST piezas/stl/(:num)/fichero` (`Web::adjuntarFicheroStl`), sujeto al
+invariante 4: si el trozo ya tiene fichero es inmutable, hay que quitarlo y volver a subirlo.
+Sin migración: las columnas ya existían y eran nulables.

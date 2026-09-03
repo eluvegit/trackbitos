@@ -20,15 +20,14 @@ class SiloPiezaModel extends Model
     protected $updatedField  = 'actualizado_en';
 
     protected $allowedFields = [
-        'id_negocio', 'fecha', 'fecha_precision', 'tipo', 'fuente',
+        'id_negocio', 'fecha', 'tipo', 'fuente',
         'categoria_id', 'subido', 'subido_en', 'fecha_generacion',
         'tamano_bytes', 'bloque_semantico', 'nombre_carpeta', 'notas',
     ];
 
     protected $validationRules = [
-        'id_negocio'      => 'required|max_length[20]|is_unique[silo_piezas.id_negocio,id,{id}]',
-        'fecha_precision' => 'required|in_list[dia,mes,anio,sin_fecha]',
-        'nombre_carpeta'  => 'required|max_length[500]',
+        'id_negocio'     => 'required|max_length[20]|is_unique[silo_piezas.id_negocio,id,{id}]',
+        'nombre_carpeta' => 'required|max_length[500]',
     ];
 
     /**

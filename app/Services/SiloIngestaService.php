@@ -63,11 +63,10 @@ class SiloIngestaService
             $piezaId = (int) $existente['id'];
         } else {
             $piezaId = $this->piezaModel->insert([
-                'id_negocio'      => $parseado['id_negocio'],
-                'fecha'           => $parseado['fecha'],
-                'fecha_precision' => $parseado['precision'],
-                'categoria_id'    => $categoriaId,
-                'nombre_carpeta'  => $nombreCarpeta,
+                'id_negocio'     => $parseado['id_negocio'],
+                'fecha'          => $parseado['fecha'],
+                'categoria_id'   => $categoriaId,
+                'nombre_carpeta' => $nombreCarpeta,
             ], true);
 
             if (!empty($parseado['elementos'])) {

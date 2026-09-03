@@ -16,6 +16,23 @@
     <?php endif; ?>
 </h5>
 
-<?= $this->include('silo/_listado_piezas') ?>
+<?php
+$vista   = $vista ?? 'lista';
+$vistaQs = static fn ($v) => site_url('silo/unidades/' . $unidad['id']) . '?vista=' . $v;
+?>
+<div class="d-flex justify-content-end mb-2">
+    <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
+        <a href="<?= $vistaQs('lista') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">
+            <i class="bi bi-list-ul"></i>
+        </a>
+        <a href="<?= $vistaQs('galeria') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'galeria' ? 'active' : '' ?>" title="Galería de carpetas">
+            <i class="bi bi-grid-3x3-gap"></i>
+        </a>
+    </div>
+</div>
+
+<?= $this->include($vista === 'galeria' ? 'silo/_galeria_piezas' : 'silo/_listado_piezas') ?>
 
 <?= $this->endSection() ?>
