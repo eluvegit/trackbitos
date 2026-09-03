@@ -10,6 +10,13 @@
         background-color: rgba(0, 0, 0, .18);
     }
 
+    /* Cuando se llega desde un enlace con ancla (#familia-N, p. ej. desde
+       Estadísticas) se resalta la fila un momento para no perderla. */
+    #tablaPiezas tr.pieza:target > td {
+        background-color: rgba(255, 193, 7, .35);
+        transition: background-color 2s ease-out;
+    }
+
     /* Todas las filas de piezas a la misma altura y con más aire arriba y
        abajo que el que trae table-sm: `height` en una celda actúa como
        mínimo, así que la fila mide igual haya foto (34px) o no. Solo los
@@ -939,7 +946,7 @@ foreach ($grupos as $grupo) {
             <?php foreach ($grupo['piezas'] as $familia): ?>
                 <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
                 <?php $filaAlterna = !$filaAlterna; $claseAlterna = $filaAlterna ? '' : ' pieza-alt'; ?>
-                <tr class="pieza<?= $claseAlterna ?>" data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
+                <tr id="familia-<?= (int) $familia['id'] ?>" class="pieza<?= $claseAlterna ?>" data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
                     <?php // Misma regla que el resto de columnas: la fila de la pieza solo
                           // habla de una variante cuando hay una sola. Con varias, cada una
                           // trae su foto en su propia subfila. ?>

@@ -44,11 +44,11 @@
 
 <p class="text-muted small">
     Piezas validadas, y también las que ya tienen una versión "para imprimir" o "impresa, sin
-    validar" — esta pantalla es para meter STL en placas, y esas dos ya pueden tener uno adjunto
-    aunque el resultado físico no esté juzgado todavía. Añade a la placa las que quieras imprimir
-    juntas y descarga todos los STL de golpe en un .zip para el laminador. Si a alguna pieza le
-    falta el STL, el zip trae igualmente un <code>FALTAN.txt</code> con la lista de qué falta y
-    por qué.
+    validar". Añade a la placa las que quieras imprimir juntas y descarga todos los STL de golpe
+    en un .zip para el laminador. Puedes añadir piezas que <strong>todavía no tienen STL</strong>:
+    monta la placa ahora y genera los STL en local después. El zip trae un <code>FALTAN.txt</code>
+    con lo que falte; si no hay ningún STL aún, usa "Guardar para después" y baja el zip cuando los
+    generes.
 </p>
 
 <?php
@@ -161,8 +161,8 @@ foreach ($piezasTodas as $p) {
             <hr class="my-2">
 
             <?php // Añade a la placa todo lo que quede visible tras cruzar los filtros de arriba
-                  // (o todo, con "Todas") — sin tener que ir tarjeta a tarjeta. Las que no tienen
-                  // STL se saltan solas: nunca llevan botón de añadir. ?>
+                  // (o todo, con "Todas") — sin tener que ir tarjeta a tarjeta. Incluye las que
+                  // aún no tienen STL; si no las quieres, filtra antes por "Con STL". ?>
             <button type="button" class="btn btn-sm btn-outline-primary" id="botonSeleccionarTodas">
                 <i class="bi bi-check2-square"></i> Añadir todas las visibles a la placa
             </button>
@@ -283,21 +283,23 @@ foreach ($piezasTodas as $p) {
                                     </div>
 
                                     <?php if (!$tieneStl): ?>
-                                        <div class="small text-muted mt-1">
-                                            <i class="bi bi-exclamation-circle"></i> sin STL — adjúntalo desde la ficha
+                                        <?php // Ya no bloquea: se puede montar la placa ahora y generar el
+                                              // STL en local después (script generador). El aviso queda como
+                                              // recordatorio de que a esta pieza le falta el fichero. ?>
+                                        <div class="small text-warning mt-1">
+                                            <i class="bi bi-exclamation-circle"></i> sin STL todavía — se genera en local
                                         </div>
-                                    <?php else: ?>
-                                        <?php // Botón único con estado, movido por fetch() (fase 32): un
-                                              // <form> con recarga completa perdía el filtro en el que
-                                              // estabas trabajando cada vez que añadías una pieza. ?>
-                                        <button type="button" class="btn btn-sm w-100 py-0 mt-1
-                                            <?= $enCarrito ? 'btn-success' : 'btn-outline-primary' ?>"
-                                            data-carrito-boton data-version-id="<?= (int) $version['id'] ?>"
-                                            data-en-carrito="<?= $enCarrito ? '1' : '0' ?>">
-                                            <i class="bi <?= $enCarrito ? 'bi-check-lg' : 'bi-plus-lg' ?>"></i>
-                                            <?= $enCarrito ? 'En la placa' : 'Añadir a la placa' ?>
-                                        </button>
                                     <?php endif; ?>
+                                    <?php // Botón único con estado, movido por fetch() (fase 32): un
+                                          // <form> con recarga completa perdía el filtro en el que
+                                          // estabas trabajando cada vez que añadías una pieza. ?>
+                                    <button type="button" class="btn btn-sm w-100 py-0 mt-1
+                                        <?= $enCarrito ? 'btn-success' : ($tieneStl ? 'btn-outline-primary' : 'btn-outline-warning') ?>"
+                                        data-carrito-boton data-version-id="<?= (int) $version['id'] ?>"
+                                        data-en-carrito="<?= $enCarrito ? '1' : '0' ?>">
+                                        <i class="bi <?= $enCarrito ? 'bi-check-lg' : 'bi-plus-lg' ?>"></i>
+                                        <?= $enCarrito ? 'En la placa' : 'Añadir a la placa' ?>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -664,8 +666,8 @@ foreach ($piezasTodas as $p) {
         var textoSeleccionarTodas = botonSeleccionarTodas.textContent;
 
         botonSeleccionarTodas.addEventListener('click', function () {
-            // Solo las que llevan botón de añadir (sin STL nunca lo llevan)
-            // y todavía no están en la placa.
+            // Todas las tarjetas visibles que no estén ya en la placa —
+            // incluidas las que aún no tienen STL (se generan en local luego).
             var pendientes = [];
             document.querySelectorAll('[data-tarjeta]:not(.d-none) [data-carrito-boton]').forEach(function (b) {
                 if (b.getAttribute('data-en-carrito') !== '1') pendientes.push(b);

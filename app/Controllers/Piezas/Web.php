@@ -517,12 +517,20 @@ class Web extends BaseController
     {
         $filas = [];
         foreach ($this->familiaModel->where('borrado_en', null)->findAll() as $familia) {
+            $variantes = $this->varianteModel->where('familia_id', $familia['id'])->findAll();
             $bytes = 0;
-            foreach ($this->varianteModel->where('familia_id', $familia['id'])->findAll() as $variante) {
+            foreach ($variantes as $variante) {
                 $bytes += $this->pesoDeVariante((int) $variante['id'])['total'];
             }
 
             if ($bytes > 0) {
+                // Solo las variantes vivas deciden a dónde enlaza el nombre
+                // (a la ficha si hay una, al índice anclado si hay varias);
+                // el peso sí incluye las borradas que aún ocupan disco.
+                $familia['variantes'] = array_values(array_filter(
+                    $variantes,
+                    static fn($v) => $v['borrado_en'] === null
+                ));
                 $filas[] = ['familia' => $familia, 'bytes' => $bytes];
             }
         }
@@ -532,7 +540,103 @@ class Web extends BaseController
             'total'         => $this->almacen->tamanoTotal(),
             'totalPapelera' => $this->almacen->tamanoPapelera(),
             'piezas'        => $filas,
+            'topImpresas'   => $this->rankingUnidadesImpresas(),
         ]);
+    }
+
+    /**
+     * Ranking de piezas por copias físicas impresas: la suma de la
+     * `cantidad` de cada versión que ha ido en una placa ya marcada como
+     * impresa (`piezas_placas.impresa_en`). No mira el estado de la versión
+     * —cuenta lo que se mandó a la impresora de verdad, no lo que se juzgó
+     * después—. Una placa nacida de un reparto lleva sus propias filas (al
+     * dividir se mueven, no se duplican), así que sumar todas las placas
+     * impresas no cuenta dos veces la misma copia.
+     *
+     * @return list<array{familia: array, unidades: int, placas: int, ultima: ?string}>
+     */
+    private function rankingUnidadesImpresas(): array
+    {
+        $fechaPlaca = array_column(
+            $this->placaModel->where('impresa_en IS NOT NULL')->findAll(),
+            'impresa_en',
+            'id'
+        );
+        if ($fechaPlaca === []) {
+            return [];
+        }
+
+        $filasVersion = $this->placaVersionModel
+            ->whereIn('placa_id', array_keys($fechaPlaca))
+            ->findAll();
+        if ($filasVersion === []) {
+            return [];
+        }
+
+        // version_id -> variante_id -> familia_id, resueltos de una vez.
+        $varianteDeVersion = array_column(
+            $this->versionModel
+                ->whereIn('id', array_values(array_unique(array_column($filasVersion, 'version_id'))))
+                ->findAll(),
+            'variante_id',
+            'id'
+        );
+        $familiaDeVariante = array_column(
+            $this->varianteModel
+                ->whereIn('id', array_values(array_unique($varianteDeVersion)) ?: [0])
+                ->findAll(),
+            'familia_id',
+            'id'
+        );
+        $familias = array_column(
+            $this->familiaModel->where('borrado_en', null)->findAll(),
+            null,
+            'id'
+        );
+
+        // Variantes vivas por familia, para el enlace del nombre.
+        $variantesVivasPorFamilia = [];
+        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
+            $variantesVivasPorFamilia[(int) $v['familia_id']][] = $v;
+        }
+
+        $acum = [];
+        foreach ($filasVersion as $fila) {
+            $varianteId = $varianteDeVersion[$fila['version_id']] ?? null;
+            $familiaId  = $varianteId !== null ? ($familiaDeVariante[$varianteId] ?? null) : null;
+            // Versión huérfana o pieza en la papelera: fuera del ranking.
+            if ($familiaId === null || !isset($familias[$familiaId])) {
+                continue;
+            }
+
+            $acum[$familiaId] ??= ['unidades' => 0, 'placas' => [], 'ultima' => null];
+            $acum[$familiaId]['unidades'] += max(1, (int) $fila['cantidad']);
+            $acum[$familiaId]['placas'][(int) $fila['placa_id']] = true;
+
+            $fecha = $fechaPlaca[$fila['placa_id']] ?? null;
+            if ($fecha !== null && ($acum[$familiaId]['ultima'] === null || $fecha > $acum[$familiaId]['ultima'])) {
+                $acum[$familiaId]['ultima'] = $fecha;
+            }
+        }
+
+        $ranking = [];
+        foreach ($acum as $familiaId => $datos) {
+            $familia = $familias[$familiaId];
+            $familia['variantes'] = $variantesVivasPorFamilia[$familiaId] ?? [];
+            $ranking[] = [
+                'familia'  => $familia,
+                'unidades' => $datos['unidades'],
+                'placas'   => count($datos['placas']),
+                'ultima'   => $datos['ultima'],
+            ];
+        }
+        usort(
+            $ranking,
+            static fn($a, $b) => ($b['unidades'] <=> $a['unidades'])
+                ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
+        );
+
+        return $ranking;
     }
 
     /**
@@ -1331,9 +1435,13 @@ class Web extends BaseController
      */
     public function carritoAgregar(int $versionId)
     {
+        // Una pieza sin STL todavía SÍ se puede meter en la placa: el flujo
+        // ahora es montar la placa aquí y generar los STL en local después
+        // (script generador). El zip de descarga ya avisa con FALTAN.txt de
+        // lo que falte, y "Guardar para después" no necesita ninguno.
         $version = $this->versionModel->find($versionId);
-        if (!$version || $this->servicio->stlsDe($versionId) === []) {
-            $mensaje = 'Esa versión no tiene ningún STL adjunto: no se puede añadir a la placa.';
+        if (!$version) {
+            $mensaje = 'Esa versión ya no existe.';
             if ($this->request->isAJAX()) {
                 return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
             }
@@ -1396,7 +1504,8 @@ class Web extends BaseController
         $rutaZip = $this->construirZipDePlaca($carrito);
         if (!$rutaZip) {
             return redirect()->to(site_url('piezas/galeria'))
-                ->with('error', 'Ninguno de los STL de la placa está ya disponible en el almacén.');
+                ->with('error', 'Ninguna pieza de la placa tiene STL todavía: no hay nada que descargar. '
+                    . 'Usa «Guardar para después» y baja el zip cuando los generes en local.');
         }
 
         // Guardar en el histórico dejó de ser automático (fase 38): la galería
@@ -1891,10 +2000,11 @@ class Web extends BaseController
      * Vuelca en la placa actual las piezas de un pedido de sterclicks: por
      * cada línea con variante viva busca la versión que se ofrece para
      * imprimir (validada; si no, la más reciente en borrador/impresa —
-     * misma cascada que galeria()) y, si tiene STL adjunto, la añade.
-     * Sustituye la placa actual en vez de sumarse a ella, igual que
-     * placaCargar(), para no mezclar sin darse cuenta con lo que hubiera
-     * antes.
+     * misma cascada que galeria()) y la añade, tenga STL o no: el flujo es
+     * montar la placa y generar los STL que falten en local después. Se
+     * cuentan aparte las que van sin STL para avisar. Sustituye la placa
+     * actual en vez de sumarse a ella, igual que placaCargar(), para no
+     * mezclar sin darse cuenta con lo que hubiera antes.
      */
     public function pedidoCargarACarrito(int $pedidoId)
     {
@@ -1916,7 +2026,6 @@ class Web extends BaseController
             }
             if ($this->servicio->stlsDe((int) $version['id']) === []) {
                 $sinStl++;
-                continue;
             }
             $versionIds[] = (int) $version['id'];
         }
@@ -1930,12 +2039,12 @@ class Web extends BaseController
 
         if ($versionIds === []) {
             return redirect()->to(site_url('piezas/pedido/' . $pedidoId))
-                ->with('error', 'Ninguna línea de este pedido tiene una versión con STL para cargar.');
+                ->with('error', 'Ninguna línea de este pedido tiene una versión para imprimir.');
         }
 
-        $aviso = count($versionIds) . ' pieza(s) cargada(s) en la placa actual.';
+        $aviso = count(array_unique($versionIds)) . ' pieza(s) cargada(s) en la placa actual.';
         if ($sinStl > 0) {
-            $aviso .= ' ' . $sinStl . ' sin STL todavía.';
+            $aviso .= ' ' . $sinStl . ' sin STL todavía (genéralos en local).';
         }
         if ($sinVersion > 0) {
             $aviso .= ' ' . $sinVersion . ' sin versión para imprimir.';

@@ -857,6 +857,32 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('placa-version-imagen/(:num)/imagen', 'Web::imagenPlacaVersion/$1');
 });
 
+// ---- Silo: archivo de material fotográfico/vídeo resultante (fase 1: solo
+// base de datos + clasificación web, sin API .py ni tocar disco) ----
+$routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
+    $routes->GET('/', 'Web::index');
+    $routes->GET('crear', 'Web::create');
+    $routes->POST('crear', 'Web::store');
+    $routes->POST('parsear-bloque', 'Web::parsearBloque');
+
+    $routes->GET('vocabulario', 'Web::vocabulario');
+    $routes->POST('vocabulario/renombrar/(:num)', 'Web::renombrarVocabulario/$1');
+
+    $routes->GET('unidades', 'Web::unidades');
+    $routes->POST('unidades/crear', 'Web::crearUnidad');
+    $routes->POST('unidades/(:num)/sellar', 'Web::sellarUnidad/$1');
+    $routes->POST('unidades/(:num)/etiqueta', 'Web::renombrarUnidad/$1');
+    $routes->POST('unidades/(:num)/borrar', 'Web::borrarUnidad/$1');
+    $routes->GET('unidades/(:num)/fichero-control', 'Web::ficheroControlUnidad/$1');
+    $routes->GET('unidades/(:num)', 'Web::verUnidad/$1');
+
+    $routes->GET('(:num)', 'Web::show/$1');
+    $routes->GET('(:num)/editar', 'Web::edit/$1');
+    $routes->POST('(:num)/actualizar', 'Web::update/$1');
+    $routes->POST('(:num)/borrar', 'Web::delete/$1');
+    $routes->POST('ubicacion/(:num)/borrar', 'Web::borrarUbicacion/$1');
+});
+
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----
 $routes->group('cuenta', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'AuthController::account', ['as' => 'account']);
