@@ -800,6 +800,15 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('pendientes/enlazar', 'PendientesController::enlazar');
     $routes->POST('pendientes/desenlazar', 'PendientesController::desenlazar');
     $routes->POST('pendientes/subtarea/(:num)/copiar-referencias', 'PendientesController::copiarReferencias/$1');
+
+    // Revisar impresiones: todas las versiones sin juzgar (borrador + impresa)
+    // de cualquier pieza en un solo listado, para marcarlas impresa / validar
+    // / descartar por lotes tras una tanda de impresión, sin entrar pieza por
+    // pieza. No tiene verbos propios: la vista llama por fetch() a
+    // version/(:num)/impresa, /validar y /descartar, que ya responden JSON en
+    // AJAX.
+    $routes->GET('revisar', 'Web::revisarImpresiones');
+
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');

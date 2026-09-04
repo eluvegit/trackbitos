@@ -55,15 +55,79 @@ contenido — nada de "tiene N piezas".
 
 ### Fase 1 — Ingesta del Maestro
 
-El `.py` recorre el/los disco(s) Maestro, calcula `hash` + `tamaño` + `mtime` por
-fichero, **agrupa por carpeta de primer nivel** (= la carpeta/pieza) y sube lotes
-`{ nombre_carpeta, ficheros: [{ ruta_relativa, tamano, hash, mtime }] }`.
+El `.py` escanea **solo el primer nivel** del root del Maestro (las carpetas-pieza
+cuelgan directas de la raíz, no hay contenedores de año/temática por encima), calcula
+`hash` + `tamaño` + `mtime` + **timestamp de captura** (EXIF `DateTimeOriginal` en
+fotos, fecha del contenedor en vídeos) por fichero, y sube un lote por carpeta:
+`{ nombre_carpeta, ficheros: [{ ruta_relativa, tamano, hash, mtime, capturado_en }] }`.
 
 La web mete cada lote por `SiloIngestaService::ingestarCarpeta()` (ya existe): parsea el
-nombre de carpeta → pieza + atributos + ubicación. Agrupar por carpeta es trivial para
-el `.py` (primer segmento de la ruta) y ahorra a la web tragarse una lista plana gigante.
+nombre de carpeta → pieza + atributos + ubicación.
 
 Resultado: el catálogo en BD refleja lo que hay en el Maestro.
+
+#### Contrato de entrada — cómo es el Maestro
+
+No hay modo de migración: el contenido entra **ya bien puesto**, el `.py` solo lee. En el
+root del Maestro hay carpetas-pieza consecutivas ya organizadas; **lo demás puede ser
+material no trackeable** y se ignora.
+
+**Qué se ingesta**: una entrada del root es carpeta-pieza si su nombre casa el patrón
+`<id> <YYYYMMDD|sinfecha> <categoría>[, elems…]` (primer token = ID de negocio, segundo =
+fecha o `sinfecha`).
+
+**El ID lo pone el usuario a mano** al crear la carpeta — formato `AAnnnn` (2 dígitos del
+año del contenido + 4 correlativos que reinician cada año, ej. `260001`). El `.py` lo lee
+del nombre tal cual (`SiloService::parsearNombreCarpeta()`): **no acuña IDs ni renombra
+carpetas**.
+
+- `silo_contador` pasa a ser **espejo**: en cada ingesta se ajusta al ID más alto visto
+  por año, para que el alta manual de la web (que sí usa el contador) nunca reparta un
+  número ya usado en disco.
+- La ingesta **avisa si dos carpetas comparten ID** (va al informe de eventos).
+- El ID en el nombre es el ancla carpeta↔pieza; mientras no se cambie, se puede editar el
+  resto del nombre (reclasificar) sin que se cree una pieza duplicada.
+- El correlativo por año da, de propina, **el orden de alta** visible en cualquier
+  explorador (las carpetas de un año ordenan por el número).
+
+**Qué se salta** (por cualquiera de estos motivos):
+
+- **Prefijo de ignorar**: el nombre empieza por `_`, `.` o `~` (carpetas de trabajo,
+  borradores, RAW sin editar; `.` ya es oculto).
+- **Lista negra**: nombres exactos en el `config.json` del `.py` (`"Descartes"`,
+  `"Sin revisar"`, …).
+- **No parece pieza**: el nombre no casa el patrón (sin ID / sin token de fecha), o la
+  entrada del root es un fichero suelto en vez de una carpeta.
+
+**Nada silencioso**: el resultado de la ingesta trae un **informe de lo no trackeado**
+(nombre + motivo: prefijo / lista negra / no-parece-pieza), y la web lo muestra como
+referencia para que el usuario lo revise. No bloquea la ingesta, es informativo.
+
+#### Contrato de entrada — cómo son las carpetas
+
+- Dentro de una carpeta-pieza: **ficheros sueltos, sin subcarpetas**. Fotos y vídeos
+  mezclados, con sus nombres de cámara.
+- **Los vídeos llevan el prefijo `+`** en el nombre (`+MVI_0042.mp4`); las fotos no se
+  tocan. `+` ordena antes que dígitos y letras, así que en cualquier visor externo
+  (explorador, tele por USB) **los vídeos salen primero** y luego las fotos, cada grupo
+  en orden de nombre de cámara (≈ orden de disparo). Es el objetivo real: que el Maestro
+  se disfrute fuera de la web sin nada especial.
+  - Si en una carpeta se mezclan varias cámaras/móviles, el nombre de cámara deja de ser
+    cronológico → se antepone una marca de tiempo compacta tras el `+` /
+    (`+20230715-141230 MVI_0042.mp4`). Con una sola fuente no hace falta.
+- El `.py` quita el marcador `+` inicial para obtener el nombre real; el tipo (foto/vídeo)
+  lo saca de la extensión igual.
+- **Ediciones**: no hay convención de nombres para esto. Una foto editada convive con su
+  original como dos ficheros normales; si algún día molesta, es un filtro del visor web,
+  no una regla de disco.
+
+#### Orden de visualización
+
+- **Fuera de la web** (el fin último): orden alfabético del nombre — por eso el `+`.
+- **En el visor web**: mismo criterio para ser consistente — **vídeos primero, luego
+  fotos**; dentro de cada grupo, orden por `capturado_en`. Rejilla con carga perezosa,
+  pantalla completa secuencial con flechas, vídeos reproducibles en línea, separadores
+  por día si la carpeta abarca varios.
 
 ### Fase 2 — Propagación lógica (en BD)
 
@@ -127,6 +191,40 @@ Por qué funciona barato: como el `.py` es **el único que escribe**, tras cada 
 actualiza manifiesto + rollup de forma atómica. En operación normal N1 no encuentra
 candidatos y N2/N3 no se ejecutan nunca. N2/N3 existen solo para interferencia externa y
 corrupción silenciosa.
+
+## Proxies / capturas para visualizar carpetas
+
+`silo_proxies` ya existe: hasta **3 fotos + 3 vídeos por carpeta**, para hacerse una idea
+de qué hay dentro sin abrir el original. Hoy están simulados (URL de placeholder); los
+reales los genera el agente `.py`.
+
+Decisiones acordadas:
+
+- **Quién y cuándo**: el `.py` los genera durante la ingesta del Maestro, y los
+  **regenera** cuando cambian los ficheros de una pieza (lo detecta el diff de
+  manifiesto). El `.py` tiene los ficheros y la CPU — es el único sitio donde se pueden
+  hacer.
+- **Selección**: hasta 3 fotos y 3 vídeos, **repartidos a lo largo de la línea de tiempo
+  de la carpeta** (`capturado_en`: p.ej. primer / medio / último tercio) para que las 3
+  den idea del conjunto. Elección con **semilla estable** (derivada de `pieza_id` o del
+  `hash_indice` de la carpeta) para que no bailen en cada reescaneo.
+- **Formato**: foto → redimensionada (lado largo ~800 px, WebP/JPEG). Vídeo → un frame
+  póster + opcionalmente un WebP animado corto y mudo. Tamaños/códecs exactos, más
+  adelante.
+- **Dónde viven**: son **derivados regenerables**, no van en el disco de la unidad como
+  dato de backup. Se sirven desde el servidor web como assets
+  (`public/assets/silo/proxies/<pieza_id>/<orden>.webp`), y `silo_proxies.url` apunta
+  ahí.
+- **Transporte**: el `.py` sube el binario por la API
+  (`POST /api/silo/agente/piezas/{id}/proxies`, multipart); la web lo coloca en assets y
+  crea/actualiza las filas de `silo_proxies`.
+
+Pendiente de decidir: ¿guardar también una copia de los proxies en el Maestro
+(`.silo_proxies/` junto a cada carpeta) para poder reconstruir la parte visual de la web
+sin re-escanear todo el disco, o aceptar que reconstruir la web = re-generar proxies?
+
+Esto **no bloquea** el núcleo (esquema, cola, detección de cambios): es un hito posterior
+de la Fase 1.
 
 ## Réplica de la base de datos en cada unidad
 
@@ -210,6 +308,8 @@ Todos ocultos (con punto delante) — molestan visualmente si no.
   local.
 - `POST /api/silo/agente/tareas/{id}/resultado` — delta de manifiesto, hashes, progreso,
   fin, error.
+- `POST /api/silo/agente/piezas/{id}/proxies` — sube (multipart) los proxies generados;
+  la web los coloca en assets y actualiza `silo_proxies`.
 - Auth: token estático en el `config.json` del `.py` (single-user, sobra).
 
 Modelo de ejecución: el `.py` se lanza cuando el usuario conecta discos (o corre como
@@ -220,13 +320,19 @@ websockets.
 
 - `silo_unidades`: `hash_indice` (promover de `.silo_unit.json` a columna),
   `bd_version_en_disco`, `ultima_verificacion` (además de `ultima_sincronizacion`).
+- `silo_ficheros`: `capturado_en` (timestamp de captura EXIF/contenedor, para ordenar la
+  visualización), `es_video` derivado o `orden_grupo` (`+` → vídeo primero).
 - Manifiesto: ampliar `silo_ficheros` con `mtime` (y `ruta_relativa` por unidad si no
   está), o una tabla `silo_manifiesto (unidad_id, ruta_relativa, tamano, mtime, hash)`.
 - `silo_tareas`: cola del `.py` — `tipo`
   (`ingesta_maestro` / `escaneo_rapido` / `verificar_hashes` / `propagar` / `volcar_bd` /
-  `restaurar`), `payload`, `unidades_requeridas`, `estado`, `aprobada`, `resultado`,
-  `error`, timestamps.
-- `silo_eventos`: log de drifts detectados y su resolución, para el panel de alertas.
+  `generar_proxies` / `restaurar`), `payload`, `unidades_requeridas`, `estado`,
+  `aprobada`, `resultado`, `error`, timestamps.
+- `silo_eventos`: log para el panel de alertas — drifts detectados y su resolución, el
+  informe de carpetas no trackeadas de cada ingesta (nombre + motivo), y los IDs
+  duplicados encontrados.
+- `silo_contador`: sin cambios de esquema, pero cambia de rol — ahora es **espejo** del
+  ID más alto por año que hay en disco (lo ajusta la ingesta), no la única fuente.
 
 ## Estado actual del código
 
@@ -238,9 +344,11 @@ websockets.
   — propagación **lógica** en BD (Fase 2). No hay Fase 3.
 - `Silo\Web` + vistas — coordinación y presentación: Mi PC, Unidades, listado/galería de
   carpetas, alta y reclasificación de piezas.
+- `silo_proxies` existe y la web ya pinta los proxies (galería y `show`), pero se
+  insertan **simulados** (URL de placeholder) desde `SiloIngestaService`.
 - **No existe todavía**: el agente `.py`, la API del agente, el escaneo real de disco, la
-  detección de cambios (N0–N3), la réplica de BD en disco y su restauración, la cola
-  `silo_tareas` y el panel de alertas.
+  detección de cambios (N0–N3), la generación real de proxies, la réplica de BD en disco
+  y su restauración, la cola `silo_tareas` y el panel de alertas.
 
 ## Cosas que NO son features (no reintroducir)
 

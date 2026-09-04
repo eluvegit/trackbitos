@@ -1336,6 +1336,164 @@ class Web extends BaseController
     }
 
     /**
+     * Revisar impresiones: un solo listado con todas las versiones sin
+     * juzgar —borrador (para imprimir) e impresa (impresa y pendiente de
+     * validar o descartar)— de cualquier pieza. Después de una tanda de
+     * impresión hay que juzgar diez piezas de golpe, y entrar a la ficha de
+     * cada una para pulsar un botón es un coñazo; aquí se hace la ronda
+     * entera de un tirón.
+     *
+     * No tiene verbos propios (mismo criterio que "Pendientes de crear"): la
+     * vista llama por fetch() a version/(:num)/impresa, /validar y
+     * /descartar —los mismos que la ficha—, que ya devuelven JSON cuando la
+     * petición es AJAX. Lo único propio es esta lectura.
+     */
+    public function revisarImpresiones()
+    {
+        $versiones = $this->versionModel
+            ->whereIn('estado', ['borrador', 'impresa'])
+            ->orderBy('promocionada_en', 'DESC')
+            ->findAll();
+
+        // Variantes y familias vivas: una versión de una pieza en la papelera
+        // (invariante 6) no se juzga desde aquí — se cae de la lista, igual
+        // que en el resto del módulo.
+        $variantes = [];
+        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
+            $variantes[(int) $v['id']] = $v;
+        }
+        $familias = [];
+        foreach ($this->familiaModel->where('borrado_en', null)->findAll() as $f) {
+            $familias[(int) $f['id']] = $f;
+        }
+
+        $versiones = array_values(array_filter(
+            $versiones,
+            static fn(array $v) => isset($variantes[(int) $v['variante_id']])
+                && isset($familias[(int) ($variantes[(int) $v['variante_id']]['familia_id'] ?? 0)])
+        ));
+
+        $ids = array_map(static fn(array $v) => (int) $v['id'], $versiones);
+
+        // STL por versión: para un borrador, saber si de verdad hay algo que
+        // imprimir antes de marcarlo impreso.
+        $stlsPorVersion = (new \App\Models\PiezaVersionStlModel())->porVersiones($ids);
+
+        // Un render con el que reconocer la pieza en su fila: el de esta
+        // versión concreta si lo hay, si no cualquiera de la variante.
+        $rendersPorVariante = [];
+        $varianteIds = array_values(array_unique(array_map(
+            static fn(array $v) => (int) $v['variante_id'],
+            $versiones
+        )));
+        if ($varianteIds !== []) {
+            foreach ($this->renderModel->whereIn('variante_id', $varianteIds)
+                ->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $rendersPorVariante[(int) $r['variante_id']][] = $r;
+            }
+        }
+
+        // En qué placa(s) del histórico iba cada versión: el contexto de
+        // "esto salió de la placa del martes".
+        $placasPorVersion = [];
+        if ($ids !== []) {
+            $enlaces  = $this->placaVersionModel->whereIn('version_id', $ids)->findAll();
+            $placaIds = array_values(array_unique(array_map(static fn($e) => (int) $e['placa_id'], $enlaces)));
+            $placas   = [];
+            if ($placaIds !== []) {
+                foreach ($this->placaModel->select('id, nombre, creado_en')->whereIn('id', $placaIds)->findAll() as $p) {
+                    $placas[(int) $p['id']] = $p;
+                }
+            }
+            foreach ($enlaces as $e) {
+                $p = $placas[(int) $e['placa_id']] ?? null;
+                if ($p !== null) {
+                    $placasPorVersion[(int) $e['version_id']][] = $p;
+                }
+            }
+        }
+
+        // La versión validada de cada variante, si la hay (invariante 1: como
+        // mucho una). Sirve para avisar de una impresa que se quedó
+        // descolgada: se siguió trabajando, otra iteración por encima ya es
+        // la buena, y esta nunca se llegó a juzgar. El aviso deja
+        // descartarla directa — la decisión sigue siendo del usuario.
+        $validadaPorVariante = [];
+        if ($varianteIds !== []) {
+            foreach ($this->versionModel->select('variante_id, numero')
+                ->whereIn('variante_id', $varianteIds)->where('estado', 'validada')->findAll() as $val) {
+                $validadaPorVariante[(int) $val['variante_id']] = (int) $val['numero'];
+            }
+        }
+
+        $ahora = time();
+        $filas = array_map(function (array $v) use ($variantes, $familias, $stlsPorVersion, $rendersPorVariante, $placasPorVersion, $validadaPorVariante, $ahora) {
+            $variante = $variantes[(int) $v['variante_id']];
+            $familia  = $familias[(int) $variante['familia_id']];
+
+            // Solo tiene sentido para una impresa sin juzgar: un borrador que
+            // aún no se ha impreso no está "descolgado", está por hacer.
+            $numeroValidada = $validadaPorVariante[(int) $v['variante_id']] ?? null;
+            $superadaPorValidada = ($v['estado'] === 'impresa' && $numeroValidada !== null && $numeroValidada > (int) $v['numero'])
+                ? $numeroValidada
+                : null;
+
+            $renders = $rendersPorVariante[(int) $v['variante_id']] ?? [];
+            $render  = null;
+            foreach ($renders as $r) {
+                if ((int) ($r['version_id'] ?? 0) === (int) $v['id']) {
+                    $render = $r;
+                    break;
+                }
+            }
+            $render ??= $renders[0] ?? null;
+
+            $dias = (int) floor(($ahora - strtotime($v['promocionada_en'])) / 86400);
+
+            return [
+                'id'               => (int) $v['id'],
+                'variante_id'      => (int) $v['variante_id'],
+                'numero'           => (int) $v['numero'],
+                'estado'           => $v['estado'],
+                'cambio'           => $v['cambio'],
+                'medidas'          => $v['medidas'],
+                'params_impresion' => $v['params_impresion'],
+                'resultado'        => $v['resultado'],
+                'promocionada_en'  => $v['promocionada_en'],
+                'dias'             => $dias,
+                'olvidada'         => $dias >= self::DIAS_PENDIENTE_DE_JUICIO,
+                'familia'          => $familia['nombre'],
+                'variante'         => $variante['nombre'],
+                'stls'             => count($stlsPorVersion[(int) $v['id']] ?? []),
+                'render'           => $render,
+                'placas'           => $placasPorVersion[(int) $v['id']] ?? [],
+                // Número de la versión validada que la deja atrás (o null).
+                'superada_por_validada' => $superadaPorValidada,
+            ];
+        }, $versiones);
+
+        // impresa primero (bloquea el trabajo nuevo, invariante 9), luego
+        // borrador; dentro de impresa, las que ya tienen una validada por
+        // encima van arriba del todo (es justo lo que se cuela sin ver),
+        // y a igualdad, por fecha desc.
+        usort($filas, static function (array $a, array $b) {
+            $orden = ['impresa' => 0, 'borrador' => 1];
+
+            return ($orden[$a['estado']] <=> $orden[$b['estado']])
+                ?: ((int) !empty($b['superada_por_validada']) <=> (int) !empty($a['superada_por_validada']))
+                ?: (strtotime($b['promocionada_en']) <=> strtotime($a['promocionada_en']));
+        });
+
+        return view('piezas/revisar', [
+            'filas' => $filas,
+            // variante_id => número de su versión validada. La vista lo lleva
+            // a JS para volver a pintar el aviso de "ya hay una validada por
+            // encima" en las filas hermanas cuando se valida una sin recargar.
+            'validadasPorVariante' => $validadaPorVariante,
+        ]);
+    }
+
+    /**
      * Galería: solo las piezas con versión validada — es la vista de "qué
      * tengo listo para imprimir", no el catálogo de trabajo en curso (para
      * eso está el índice). Miniatura: el render más reciente de la versión

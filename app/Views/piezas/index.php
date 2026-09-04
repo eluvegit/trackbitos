@@ -189,6 +189,9 @@ $filaSesionActiva = static function (array $s): string {
             <i class="bi bi-eye"></i>
         </button>
     </div>
+    <a href="<?= site_url('piezas/revisar') ?>" class="btn btn-sm btn-outline-secondary" title="Revisar impresiones: marcar impresa / validar / descartar por lotes">
+        <i class="bi bi-clipboard-check"></i>
+    </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Placas">
         <i class="bi bi-printer"></i>
     </a>
