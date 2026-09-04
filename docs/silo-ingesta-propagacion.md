@@ -337,18 +337,39 @@ websockets.
 ## Estado actual del código
 
 - `SiloService::crearUnidad()` genera el `.silo_unit.json` con `hash_indice` /
-  `ultima_sincronizacion` a `null`.
-- `SiloIngestaService::ingestarCarpeta()` + `php spark silo:simular-ingesta` — ingesta
-  **simulada**: recibe una lista de ficheros ya montada, no escanea disco real.
+  `ultima_sincronizacion` a `null`; admite `ruta_montaje` (dónde aparece el disco en la
+  máquina donde corre el agente, columna añadida 2026-09-04).
+- `SiloIngestaService::ingestarCarpeta()` — get-or-create por `id_negocio`: en una
+  reingesta de una pieza ya conocida **sustituye** su lista de ficheros/proxies entera
+  (sin manifiesto/hash todavía no hay diff barato posible) en vez de acumular duplicados
+  — necesario para que el escaneo real, que reingesta el mismo Maestro en cada pasada,
+  sea idempotente. `php spark silo:simular-ingesta` la sigue usando con datos de mentira.
 - `SiloPropagacionService::propagarTodo()` / `propagarPieza()` + `php spark silo:propagar`
   — propagación **lógica** en BD (Fase 2). No hay Fase 3.
-- `Silo\Web` + vistas — coordinación y presentación: Mi PC, Unidades, listado/galería de
-  carpetas, alta y reclasificación de piezas.
+- `Silo\Web` + vistas — coordinación y presentación: Mi PC, Unidades (alta con
+  `ruta_montaje` opcional), listado/galería de carpetas, alta y reclasificación de piezas.
+- **Escaneo real, primer esbozo (2026-09-04)**: `silo-agente/agente.py` — sin
+  dependencias fuera de la librería estándar, hace `os.scandir` real del primer nivel del
+  root de una unidad Maestro (sin hash todavía) y habla con `App\Controllers\Silo\Agente`
+  (`POST /silo/agente/handshake` resuelve unidad por `unidad_id` o `ruta_montaje` y
+  devuelve tareas pendientes; `POST /silo/agente/escaneo` clasifica cada entrada con
+  `SiloService::clasificarEntradaRoot()` — candidata/saltada + motivo — ingesta las
+  candidatas y registra en `silo_eventos` cada carpeta saltada y cada ID de negocio
+  repetido dentro del mismo escaneo). Auth por token Bearer propio (`silo.apiToken` en
+  `.env`, filtro `SiloApiAuth`), sin Myth\Auth (no hay sesión de navegador ahí). Probado
+  de punta a punta contra la copia de desarrollo: handshake, clasificación de las 4
+  categorías de salto, ingesta, propagación automática a Copia 2/3, y reingesta repetida
+  sin duplicar ficheros.
+- `silo_tareas` (cola) y `silo_eventos` (log de alertas) existen como tablas desde
+  2026-09-04, pero **sin cola de verdad todavía**: el agente hace handshake → escanea →
+  reporta en el momento, sin esperar aprobación humana ni encolar nada él mismo — el único
+  escritor de `silo_tareas` hoy es `Agente::escaneo()` marcando el resultado si se le pasa
+  un `tarea_id` ya existente. No hay panel web para `silo_eventos` todavía (solo la BD).
 - `silo_proxies` existe y la web ya pinta los proxies (galería y `show`), pero se
   insertan **simulados** (URL de placeholder) desde `SiloIngestaService`.
-- **No existe todavía**: el agente `.py`, la API del agente, el escaneo real de disco, la
-  detección de cambios (N0–N3), la generación real de proxies, la réplica de BD en disco
-  y su restauración, la cola `silo_tareas` y el panel de alertas.
+- **No existe todavía**: disparar tareas desde la web con aprobación humana, hashing y
+  detección de cambios real (N0–N3), generación real de proxies, réplica de BD en disco
+  y su restauración, propagación física (Fase 3), panel de `silo_eventos`.
 
 ## Cosas que NO son features (no reintroducir)
 

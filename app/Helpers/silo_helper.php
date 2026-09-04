@@ -23,6 +23,30 @@ if (!function_exists('silo_formatear_tamano')) {
     }
 }
 
+if (!function_exists('silo_capacidad_partes')) {
+    /**
+     * Igual que silo_formatear_tamano() pero separado en {valor, unidad}
+     * para pintar el número grande y la unidad pequeña en la tarjeta de
+     * unidad (`/silo/unidades`). Sin capacidad conocida, valor = '—'.
+     *
+     * @return array{valor: string, unidad: string}
+     */
+    function silo_capacidad_partes(?int $bytes): array
+    {
+        if (!$bytes) {
+            return ['valor' => '—', 'unidad' => ''];
+        }
+        if ($bytes >= 1_000_000_000_000) {
+            return ['valor' => number_format($bytes / 1_000_000_000_000, 2), 'unidad' => 'TB'];
+        }
+        if ($bytes >= 1_000_000_000) {
+            return ['valor' => number_format($bytes / 1_000_000_000, 2), 'unidad' => 'GB'];
+        }
+
+        return ['valor' => number_format($bytes / 1_000_000, 1), 'unidad' => 'MB'];
+    }
+}
+
 if (!function_exists('silo_fecha_humana')) {
     function silo_fecha_humana(?string $fecha): string
     {
@@ -144,6 +168,63 @@ if (!function_exists('silo_badges_carpeta')) {
         }
 
         return trim($salida);
+    }
+}
+
+if (!function_exists('silo_icono_unidad')) {
+    /**
+     * Dibujo (SVG inline, trazo `currentColor`) del tipo físico de una
+     * unidad para las tarjetas de `/silo/unidades`: USB, disco interno,
+     * disco externo. Sin tipo conocido, icono genérico de Bootstrap Icons.
+     * Devuelve HTML crudo — el llamador lo echa sin escapar.
+     */
+    function silo_icono_unidad(?string $tipo, ?int $tam = null): string
+    {
+        // Sin $tam: sin width/height/font-size propios, para que el CSS de
+        // la página lo ajuste al hueco disponible (tarjetas de
+        // /silo/unidades). Con $tam: tamaño fijo en píxeles (selector del
+        // modal). `silo-hdd` es la clase compartida de _estilos_nivel.php
+        // que tiñe el icono con el acento del nivel que lo envuelve.
+        $tamanoAttr = $tam !== null ? ' width="' . $tam . '" height="' . $tam . '"' : '';
+        $atributos = $tamanoAttr . ' viewBox="0 0 64 64" fill="none" '
+            . 'stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" '
+            . 'class="silo-icono-unidad silo-hdd" aria-hidden="true"';
+
+        return match ($tipo) {
+            // Pendrive: cuerpo redondeado arriba, conector metálico estrecho
+            // abajo con su línea de contacto, piloto como puntito.
+            'usb' => "<svg {$atributos}>"
+                . '<rect x="20" y="6" width="24" height="34" rx="7"/>'
+                . '<rect x="26" y="40" width="12" height="16" rx="2"/>'
+                . '<line x1="26" y1="46" x2="38" y2="46"/>'
+                . '<circle cx="32" cy="18" r="2.2" fill="currentColor" stroke="none"/>'
+                . '</svg>',
+            // Disco interno: carcasa plana vista desde arriba, tornillos en
+            // las esquinas, etiqueta rectangular y pines de conexión abajo.
+            'hdd_interno' => "<svg {$atributos}>"
+                . '<rect x="8" y="12" width="48" height="34" rx="4"/>'
+                . '<rect x="14" y="18" width="24" height="10" rx="2"/>'
+                . '<circle cx="12" cy="16" r="1.6" fill="currentColor" stroke="none"/>'
+                . '<circle cx="52" cy="16" r="1.6" fill="currentColor" stroke="none"/>'
+                . '<circle cx="12" cy="42" r="1.6" fill="currentColor" stroke="none"/>'
+                . '<circle cx="52" cy="42" r="1.6" fill="currentColor" stroke="none"/>'
+                . '<line x1="8" y1="50" x2="20" y2="50"/>'
+                . '<line x1="24" y1="50" x2="40" y2="50"/>'
+                . '</svg>',
+            // Disco externo: carcasa redondeada con piloto circular y un
+            // cable que sale hacia un conector — lo que lo distingue del
+            // interno es justamente el cable.
+            'hdd_externo' => "<svg {$atributos}>"
+                . '<rect x="10" y="10" width="34" height="34" rx="6"/>'
+                . '<circle cx="27" cy="27" r="8"/>'
+                . '<circle cx="27" cy="27" r="2" fill="currentColor" stroke="none"/>'
+                . '<path d="M44 34 C 50 34, 50 44, 56 44"/>'
+                . '<rect x="54" y="40" width="8" height="8" rx="1.5"/>'
+                . '</svg>',
+            default => '<i class="bi bi-hdd silo-icono-unidad silo-hdd"'
+                . ($tam !== null ? ' style="font-size:' . $tam . 'px"' : '')
+                . ' aria-hidden="true"></i>',
+        };
     }
 }
 

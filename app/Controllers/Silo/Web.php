@@ -243,7 +243,11 @@ class Web extends BaseController
     {
         $nombre = trim((string) $this->request->getPost('nombre'));
         if ($nombre !== '') {
-            $this->vocabularioModel->update($id, ['nombre' => $nombre]);
+            $descripcion = trim((string) $this->request->getPost('descripcion'));
+            $this->vocabularioModel->update($id, [
+                'nombre'      => $nombre,
+                'descripcion' => $descripcion !== '' ? $descripcion : null,
+            ]);
         }
 
         return redirect()->to(site_url('silo/vocabulario'))->with('success', 'Vocabulario actualizado.');
@@ -287,33 +291,6 @@ class Web extends BaseController
         ]);
     }
 
-    public function renombrarUnidad(int $id)
-    {
-        $unidad = $this->unidadModel->find($id);
-        if (!$unidad) {
-            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
-        }
-
-        $etiqueta = trim((string) $this->request->getPost('etiqueta'));
-        $this->unidadModel->update($id, ['etiqueta' => $etiqueta !== '' ? $etiqueta : null]);
-
-        return redirect()->to(site_url('silo/unidades'))->with('success', 'Etiqueta actualizada.');
-    }
-
-    /** Texto libre para reconocer el disco/USB físico real de esta unidad. */
-    public function identificacionFisicaUnidad(int $id)
-    {
-        $unidad = $this->unidadModel->find($id);
-        if (!$unidad) {
-            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
-        }
-
-        $texto = trim((string) $this->request->getPost('identificacion_fisica'));
-        $this->unidadModel->update($id, ['identificacion_fisica' => $texto !== '' ? $texto : null]);
-
-        return redirect()->to(site_url('silo/unidades'))->with('success', 'Identificación física actualizada.');
-    }
-
     /**
      * Borra la unidad. Sin contenido es una baja directa; con contenido la
      * confirmación reforzada la hace la vista (JS) antes de enviar — al
@@ -339,7 +316,57 @@ class Web extends BaseController
             return redirect()->to(site_url('silo/unidades'))->with('error', 'Nivel inválido.');
         }
 
+        $datos = $this->datosUnidadDesdePost($nivel);
+
+        $unidad = $this->silo->crearUnidad(
+            $nivel,
+            $datos['etiqueta'],
+            $datos['agrupador'],
+            $datos['capacidad_bytes'],
+            $datos['ruta_montaje'],
+            $datos['tipo_fisico']
+        );
+
+        return redirect()->to(site_url('silo/unidades'))->with('success', "Unidad creada: nivel {$unidad['nivel']} #{$unidad['numero']}.");
+    }
+
+    /**
+     * Guarda de una sola vez todos los campos editables de la tarjeta
+     * (etiqueta, identificación física, tipo físico, ruta de montaje,
+     * capacidad, agrupador) — un único endpoint para el modal de edición
+     * en vez de un POST suelto por campo.
+     */
+    public function actualizarUnidad(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        if (!$unidad) {
+            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
+        }
+
+        $datos = $this->datosUnidadDesdePost((int) $unidad['nivel']);
+        $datos['identificacion_fisica'] = trim((string) $this->request->getPost('identificacion_fisica')) ?: null;
+
+        $this->unidadModel->update($id, $datos);
+
+        return redirect()->to(site_url('silo/unidades'))->with('success', 'Unidad actualizada.');
+    }
+
+    /**
+     * Campos comunes a alta y edición, leídos del POST.
+     * `identificacion_fisica` no vive aquí: crearUnidad() no la usa (unidad
+     * recién nacida) y actualizarUnidad() la sobrescribe después de
+     * llamar a este método.
+     *
+     * @return array{etiqueta: ?string, identificacion_fisica: null, tipo_fisico: ?string, agrupador: ?string, capacidad_bytes: ?int, ruta_montaje: ?string}
+     */
+    private function datosUnidadDesdePost(int $nivel): array
+    {
         $etiqueta = trim((string) $this->request->getPost('etiqueta'));
+
+        $tipoFisico = (string) $this->request->getPost('tipo_fisico');
+        if (!in_array($tipoFisico, ['usb', 'hdd_interno', 'hdd_externo'], true)) {
+            $tipoFisico = null;
+        }
 
         // Agrupador: solo tiene sentido en nivel 2/3 (año o categoría),
         // para que la propagación reutilice esta unidad si la das de alta
@@ -354,14 +381,16 @@ class Web extends BaseController
             ? (int) round((float) str_replace(',', '.', $capacidadTb) * 1_000_000_000_000)
             : null;
 
-        $unidad = $this->silo->crearUnidad(
-            $nivel,
-            $etiqueta !== '' ? $etiqueta : null,
-            $nivel !== 1 && $agrupador !== '' ? $agrupador : null,
-            $capacidadBytes
-        );
+        $rutaMontaje = trim((string) $this->request->getPost('ruta_montaje'));
 
-        return redirect()->to(site_url('silo/unidades'))->with('success', "Unidad creada: nivel {$unidad['nivel']} #{$unidad['numero']}.");
+        return [
+            'etiqueta'               => $etiqueta !== '' ? $etiqueta : null,
+            'identificacion_fisica'  => null, // lo rellena actualizarUnidad(); crearUnidad() no lo usa (unidad recién nacida, sin datos aún)
+            'tipo_fisico'            => $tipoFisico,
+            'agrupador'              => $nivel !== 1 && $agrupador !== '' ? $agrupador : null,
+            'capacidad_bytes'        => $capacidadBytes,
+            'ruta_montaje'           => $rutaMontaje !== '' ? $rutaMontaje : null,
+        ];
     }
 
     /** Descarga el .silo_unit.json que se copiaría en la raíz de la unidad física (plan Silo §7.1). */

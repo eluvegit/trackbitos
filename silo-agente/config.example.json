@@ -1,0 +1,9 @@
+{
+  "api_base": "https://trackbitos.host",
+  "token": "<silo.apiToken del .env del servidor>",
+  "verificar_tls": true,
+  "lista_negra": ["Descartes", "Sin revisar"],
+  "unidades": [
+    { "unidad_id": 1, "ruta": "D:\\Maestro" }
+  ]
+}

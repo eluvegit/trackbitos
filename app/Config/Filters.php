@@ -14,6 +14,7 @@ use CodeIgniter\Filters\PerformanceMetrics;
 use CodeIgniter\Filters\SecureHeaders;
 use App\Filters\BuscappApiAuth;
 use App\Filters\PiezasApiAuth;
+use App\Filters\SiloApiAuth;
 use App\Filters\SterclicksApiAuth;
 
 class Filters extends BaseFilters
@@ -41,6 +42,7 @@ class Filters extends BaseFilters
         'buscappApi'    => BuscappApiAuth::class,
         'piezasApi'     => PiezasApiAuth::class,
         'sterclicksApi' => SterclicksApiAuth::class,
+        'siloApi'       => SiloApiAuth::class,
     ];
 
     /**

@@ -23,14 +23,17 @@
             <?php else: ?>
                 <ul class="list-group list-group-flush">
                     <?php foreach ($items as $item): ?>
-                        <li class="list-group-item d-flex align-items-center gap-2 px-0">
-                            <form method="post" action="<?= site_url('silo/vocabulario/renombrar/' . $item['id']) ?>"
-                                  class="d-flex gap-1 flex-grow-1">
+                        <li class="list-group-item px-0">
+                            <form method="post" action="<?= site_url('silo/vocabulario/renombrar/' . $item['id']) ?>" class="d-flex flex-column gap-1">
                                 <?= csrf_field() ?>
-                                <input type="text" name="nombre" class="form-control form-control-sm" value="<?= esc($item['nombre']) ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-check2"></i>
-                                </button>
+                                <div class="d-flex gap-1">
+                                    <input type="text" name="nombre" class="form-control form-control-sm" value="<?= esc($item['nombre']) ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-check2"></i>
+                                    </button>
+                                </div>
+                                <textarea name="descripcion" rows="1" class="form-control form-control-sm text-muted"
+                                          placeholder="descripción (opcional)"><?= esc($item['descripcion'] ?? '') ?></textarea>
                             </form>
                         </li>
                     <?php endforeach; ?>

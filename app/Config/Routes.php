@@ -872,8 +872,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('placa-version-imagen/(:num)/imagen', 'Web::imagenPlacaVersion/$1');
 });
 
-// ---- Silo: archivo de material fotográfico/vídeo resultante (fase 1: solo
-// base de datos + clasificación web, sin API .py ni tocar disco) ----
+// ---- Silo: archivo de material fotográfico/vídeo resultante. Cara web
+// (sesión de navegador, filtro 'auth'); la API del agente .py va aparte
+// más abajo (silo/agente, sin sesión, token propio). ----
 $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
     $routes->GET('/', 'Web::index');
     $routes->GET('crear', 'Web::create');
@@ -887,8 +888,7 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');
-    $routes->POST('unidades/(:num)/etiqueta', 'Web::renombrarUnidad/$1');
-    $routes->POST('unidades/(:num)/identificacion-fisica', 'Web::identificacionFisicaUnidad/$1');
+    $routes->POST('unidades/(:num)/actualizar', 'Web::actualizarUnidad/$1');
     $routes->POST('unidades/(:num)/borrar', 'Web::borrarUnidad/$1');
     $routes->GET('unidades/(:num)/fichero-control', 'Web::ficheroControlUnidad/$1');
     $routes->GET('unidades/(:num)', 'Web::verUnidad/$1');
@@ -898,6 +898,15 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
     $routes->POST('(:num)/actualizar', 'Web::update/$1');
     $routes->POST('(:num)/borrar', 'Web::delete/$1');
     $routes->POST('ubicacion/(:num)/borrar', 'Web::borrarUbicacion/$1');
+});
+
+// ---- Silo: API del agente .py (escaneo real de disco). Sin filtro 'auth'
+// (no hay sesión de navegador aquí) — token Bearer propio, silo.apiToken
+// en .env, ver App\Filters\SiloApiAuth y silo-agente/agente.py. ----
+$routes->group('silo/agente', ['filter' => 'siloApi', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
+    $routes->POST('handshake', 'Agente::handshake');
+    $routes->POST('escaneo', 'Agente::escaneo');
+    $routes->POST('tareas/(:num)/resultado', 'Agente::tareaResultado/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

@@ -19,7 +19,7 @@ class SiloUnidadModel extends Model
     protected $updatedField  = '';
 
     protected $allowedFields = [
-        'nivel', 'numero', 'etiqueta', 'identificacion_fisica', 'agrupador', 'capacidad_bytes',
+        'nivel', 'numero', 'etiqueta', 'identificacion_fisica', 'tipo_fisico', 'ruta_montaje', 'agrupador', 'capacidad_bytes',
         'ultima_sincronizacion', 'fichero_control',
     ];
 
@@ -40,5 +40,11 @@ class SiloUnidadModel extends Model
     public function buscarPorAgrupador(int $nivel, string $agrupador): array
     {
         return $this->where('nivel', $nivel)->where('agrupador', $agrupador)->orderBy('numero', 'ASC')->findAll();
+    }
+
+    /** Resuelve una unidad por la ruta de montaje que reporta el agente `.py` en el handshake. */
+    public function porRutaMontaje(string $rutaMontaje): ?array
+    {
+        return $this->where('ruta_montaje', $rutaMontaje)->first();
     }
 }

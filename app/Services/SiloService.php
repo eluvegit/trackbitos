@@ -51,7 +51,7 @@ class SiloService
      * Silo §7.1) — aquí solo se genera y queda descargable, no se escribe
      * a ningún disco todavía.
      */
-    public function crearUnidad(int $nivel, ?string $etiqueta = null, ?string $agrupador = null, ?int $capacidadBytes = null): array
+    public function crearUnidad(int $nivel, ?string $etiqueta = null, ?string $agrupador = null, ?int $capacidadBytes = null, ?string $rutaMontaje = null, ?string $tipoFisico = null): array
     {
         $numero = $this->unidadModel->siguienteNumero($nivel);
 
@@ -59,6 +59,8 @@ class SiloService
             'nivel'           => $nivel,
             'numero'          => $numero,
             'etiqueta'        => $etiqueta,
+            'tipo_fisico'     => $tipoFisico,
+            'ruta_montaje'    => $rutaMontaje,
             'agrupador'       => $agrupador,
             'capacidad_bytes' => $capacidadBytes,
             'fichero_control' => '{}',
@@ -179,6 +181,40 @@ class SiloService
         // 8 dígitos pero fecha inválida (p.ej. 20260230): no se consume nada,
         // el texto completo (incluidos esos dígitos) pasa intacto a resto.
         return ['fecha' => null, 'resto' => $texto];
+    }
+
+    /**
+     * Clasifica una entrada del primer nivel del root de un Maestro tal
+     * como la reporta el agente `.py`: ¿es una carpeta-pieza que hay que
+     * ingestar, o se salta (y por qué)? La decisión es de la web, no del
+     * agente (doc "Contrato de entrada" — nada silencioso, todo salto se
+     * reporta con motivo). Reutiliza el mismo patrón que
+     * parsearNombreCarpeta() para "no_es_pieza" sin duplicar la regex.
+     *
+     * @return array{estado: 'candidata'|'saltada', motivo: ?string}
+     */
+    public function clasificarEntradaRoot(string $nombre, bool $esCarpeta, array $listaNegra = []): array
+    {
+        if (!$esCarpeta) {
+            return ['estado' => 'saltada', 'motivo' => 'no_es_carpeta'];
+        }
+
+        if (preg_match('/^[_.~]/', $nombre)) {
+            return ['estado' => 'saltada', 'motivo' => 'prefijo'];
+        }
+
+        $listaNegraNormalizada = array_map(fn ($n) => mb_strtolower(trim($n), 'UTF-8'), $listaNegra);
+        if (in_array(mb_strtolower(trim($nombre), 'UTF-8'), $listaNegraNormalizada, true)) {
+            return ['estado' => 'saltada', 'motivo' => 'lista_negra'];
+        }
+
+        // <id> <fecha|sinfecha> ...: mismo patrón que documenta el plan de
+        // ingesta, el ID de negocio es AAnnnn (6 dígitos).
+        if (!preg_match('/^\d{5,6}\s+(\d{4}|\d{6}|\d{8}|sinfecha)\b/i', trim($nombre))) {
+            return ['estado' => 'saltada', 'motivo' => 'no_es_pieza'];
+        }
+
+        return ['estado' => 'candidata', 'motivo' => null];
     }
 
     /**

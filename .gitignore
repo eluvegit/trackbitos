@@ -34,9 +34,13 @@ coverage/
 .env
 .env
 
-# Python (piezas-cli/trackbitos.py)
+# Python (piezas-cli/trackbitos.py, silo-agente/agente.py)
 __pycache__/
 *.pyc
+
+# silo-agente: config.json trae el token real de silo.apiToken, igual que
+# .env — solo config.example.json va al repo.
+silo-agente/config.json
 
 # Claude Code: worktrees son checkouts git aparte (repos anidados), nunca deben
 # trackearse desde el repo principal

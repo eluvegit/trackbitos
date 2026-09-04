@@ -61,6 +61,15 @@ class SiloIngestaService
         $existente = $this->piezaModel->where('id_negocio', $parseado['id_negocio'])->first();
         if ($existente) {
             $piezaId = (int) $existente['id'];
+
+            // Reingesta de una pieza ya conocida (rescaneo normal del
+            // Maestro): sin manifiesto/hash todavía (N1-N3, pendiente) no
+            // hay forma barata de saber qué cambió, así que se sustituye la
+            // lista de ficheros entera en vez de acumular duplicados en
+            // cada pasada. Los proxies simulados quedan huérfanos
+            // (fichero_id -> SET NULL) y se regeneran también.
+            $this->ficheroModel->where('pieza_id', $piezaId)->delete();
+            $this->proxyModel->where('pieza_id', $piezaId)->delete();
         } else {
             $piezaId = $this->piezaModel->insert([
                 'id_negocio'     => $parseado['id_negocio'],
@@ -95,9 +104,11 @@ class SiloIngestaService
 
         $this->generarProxiesSimulados($piezaId, $ficherosInsertados);
 
-        if (!empty($ficheros)) {
-            $this->piezaModel->update($piezaId, ['tamano_bytes' => $this->ficheroModel->sumaTamano($piezaId)]);
-        }
+        // Siempre (no solo "si hay ficheros"): en un reingesta ya se
+        // borraron los anteriores arriba, así que una carpeta que se quedó
+        // vacía también tiene que reflejarse a 0, no quedarse con el
+        // tamaño de la pasada previa.
+        $this->piezaModel->update($piezaId, ['tamano_bytes' => $this->ficheroModel->sumaTamano($piezaId)]);
 
         if (!$existente) {
             $this->ubicacionModel->insert([

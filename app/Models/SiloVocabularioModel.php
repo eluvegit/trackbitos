@@ -19,7 +19,7 @@ class SiloVocabularioModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['tipo', 'nombre', 'slug'];
+    protected $allowedFields = ['tipo', 'nombre', 'descripcion', 'slug'];
 
     protected $validationRules = [
         'tipo'   => 'required|in_list[categoria,evento,lugar,persona,tema]',
