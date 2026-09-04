@@ -1,10 +1,14 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_nivel') ?>
+
 <?php $nivelLabel = [1 => 'Maestro', 2 => 'Año', 3 => 'Temática']; ?>
 
+<div class="silo-nivel silo-n<?= (int) $unidad['nivel'] ?>">
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-hdd text-primary"></i>
+    <i class="bi bi-hdd silo-hdd"></i>
     <a href="<?= site_url('silo/unidades') ?>" class="text-decoration-none text-muted fw-normal">Unidades</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">
@@ -46,5 +50,7 @@ $vistaQs = static fn ($v) => site_url('silo/unidades/' . $unidad['id']) . '?vist
 </div>
 
 <?= $this->include($vista === 'galeria' ? 'silo/_galeria_piezas' : 'silo/_listado_piezas') ?>
+
+</div>
 
 <?= $this->endSection() ?>

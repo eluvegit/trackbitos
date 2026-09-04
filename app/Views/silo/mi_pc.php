@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_nivel') ?>
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-pc-display text-primary"></i>
     <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
@@ -24,15 +26,17 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
 <?php else: ?>
     <?php foreach ([1, 2, 3] as $nivel): ?>
         <?php if (empty($porNivel[$nivel])) { continue; } ?>
-        <h6 class="text-muted mt-4 mb-2">Nivel <?= $nivel ?> — <?= $nivelLabel[$nivel] ?></h6>
-        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+        <h6 class="text-muted mt-4 mb-2 silo-nivel silo-n<?= $nivel ?>">
+            <span class="silo-nivel-titulo">Nivel <?= $nivel ?> — <?= $nivelLabel[$nivel] ?></span>
+        </h6>
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 silo-nivel silo-n<?= $nivel ?>">
             <?php foreach ($porNivel[$nivel] as $u): ?>
                 <?php $cap = (int) ($u['capacidad_bytes'] ?? 0); ?>
                 <div class="col">
                     <a href="<?= site_url('silo/unidades/' . $u['id']) ?>"
                        class="text-decoration-none text-body d-block h-100 border rounded p-3 silo-carpeta">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="bi bi-hdd-fill text-secondary fs-4"></i>
+                            <i class="bi bi-hdd-fill silo-hdd fs-4"></i>
                             <span class="fw-semibold text-truncate">
                                 <?= esc($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']) ?>
                             </span>
@@ -59,11 +63,6 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
             <?php endforeach; ?>
         </div>
     <?php endforeach; ?>
-
-    <style>
-        .silo-carpeta { transition: background-color .12s ease, border-color .12s ease; }
-        .silo-carpeta:hover { background-color: var(--bs-tertiary-bg); border-color: var(--bs-secondary); }
-    </style>
 <?php endif; ?>
 
 <?= $this->endSection() ?>

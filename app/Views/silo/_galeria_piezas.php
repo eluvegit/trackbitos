@@ -28,15 +28,4 @@ $qsDesde = isset($unidad['id']) ? '?desde=' . (int) $unidad['id'] : '';
             </a>
         <?php endforeach; ?>
     </div>
-    <style>
-        .silo-carpeta { transition: background-color .12s ease, border-color .12s ease; }
-        .silo-carpeta:hover { background-color: var(--bs-tertiary-bg); border-color: var(--bs-secondary); }
-        .silo-carpeta-badges {
-            overflow: hidden;
-            max-height: 9rem;
-            font-size: .62rem;
-            line-height: 1.5;
-        }
-        .silo-carpeta-badges .badge { font-size: .62rem; }
-    </style>
 <?php endif; ?>

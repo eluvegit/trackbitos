@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_nivel') ?>
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-archive text-primary"></i>
     <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>

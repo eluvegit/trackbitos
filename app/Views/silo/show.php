@@ -1,6 +1,10 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_nivel') ?>
+
+<div class="<?= $desde ? 'silo-nivel silo-n' . (int) $desde['nivel'] : '' ?>">
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-folder2 text-warning"></i>
     <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
@@ -160,5 +164,7 @@
         </table>
     </div>
 <?php endif; ?>
+
+</div>
 
 <?= $this->endSection() ?>
