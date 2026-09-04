@@ -94,6 +94,9 @@ function time_ago(?string $datetime): string
         <a href="<?= site_url('journal/que-hacer') ?>" class="btn btn-outline-primary" title="¿Qué hago ahora?">
             <i class="bi bi-shuffle"></i>
         </a>
+        <a href="<?= site_url('journal/focalizar') ?>" class="btn btn-outline-primary" title="Focalizar">
+            <i class="bi bi-bullseye"></i>
+        </a>
         <button id="toggleAllBtn" class="btn btn-outline-secondary" type="button" title="Mostrar todo">
             <i class="bi bi-arrows-expand"></i>
         </button>

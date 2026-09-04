@@ -223,6 +223,72 @@ class Journal extends BaseController
     }
 
     /**
+     * "Focalizar": la selección de la selección. Muestra todas las tareas con
+     * estrella (is_current) en una lista minimalista "Categoría - Tarea", una
+     * por línea y en el mismo orden que el Journal, con un checkbox para
+     * marcar las que se quedan en el foco de los próximos días/semanas.
+     *
+     * El index del Journal es la fuente de la verdad: si allí se quita la
+     * estrella de una tarea, deja de aparecer aquí y su marca de foco se
+     * limpia (ver toggleCurrent y edit).
+     */
+    public function focalizar()
+    {
+        $categories = $this->categoryModel->getAll();
+        $tasksByCategory = $this->taskModel->getAllGroupedByCategory();
+
+        // Solo tareas con estrella, ordenadas dentro de cada categoría por
+        // prioridad descendente igual que el listado del Journal.
+        $starredByCategory = [];
+        foreach ($categories as $cat) {
+            $catName = $cat['name'];
+            // Solo tareas con estrella (is_current) y que no estén terminadas
+            // (mismo criterio de "hecha" que el listado del Journal).
+            $tasks = array_values(array_filter(
+                $tasksByCategory[$catName] ?? [],
+                function ($t) {
+                    $hecha = !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00';
+                    return !empty($t['is_current']) && !$hecha;
+                }
+            ));
+            if (empty($tasks)) {
+                continue;
+            }
+            usort($tasks, fn($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
+            $starredByCategory[$catName] = $tasks;
+        }
+
+        return view('journal/focalizar', [
+            'starredByCategory' => $starredByCategory,
+        ]);
+    }
+
+    /**
+     * Alterna la marca "en foco" de una tarea (AJAX). Solo se permite sobre
+     * tareas que tengan estrella; si no la tienen, no deberían estar en la
+     * lista de focalizar.
+     */
+    public function toggleFocalizar(int $taskId)
+    {
+        $task = $this->taskModel->find($taskId);
+        if (!$task) {
+            return $this->response->setStatusCode(404)->setJSON(['success' => false]);
+        }
+
+        if (empty($task['is_current'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'La tarea no tiene estrella.',
+            ]);
+        }
+
+        $enFoco = empty($task['en_foco']) ? 1 : 0;
+        $this->taskModel->update($taskId, ['en_foco' => $enFoco]);
+
+        return $this->response->setJSON(['success' => true, 'en_foco' => $enFoco]);
+    }
+
+    /**
      * Ajusta el peso de una categoría en el reparto de "¿Qué hago ahora?"
      * (0 = excluida, 1-5 = cuánto peso tiene).
      */
@@ -302,6 +368,11 @@ class Journal extends BaseController
                 'note'       => $this->request->getPost('note'),
                 'is_current' => $this->request->getPost('is_current') ? 1 : 0,
             ];
+
+            // Al quitar la estrella, la tarea sale también del foco (ver focalizar).
+            if (!$data['is_current']) {
+                $data['en_foco'] = 0;
+            }
 
             $file = $this->request->getFile('image');
             if ($file && $file->isValid() && !$file->hasMoved()) {
@@ -587,7 +658,12 @@ class Journal extends BaseController
         if (!$task) return $this->response->setJSON(['success' => false, 'error' => 'Tarea no encontrada']);
 
         $isCurrent = $task['is_current'] ? 0 : 1;
-        $this->taskModel->update($taskId, ['is_current' => $isCurrent]);
+        $update = ['is_current' => $isCurrent];
+        // Al quitar la estrella, la tarea sale también del foco (ver focalizar).
+        if ($isCurrent === 0) {
+            $update['en_foco'] = 0;
+        }
+        $this->taskModel->update($taskId, $update);
         $this->readingSync->pushTaskToBook($taskId);
 
         return $this->response->setJSON(['success' => true, 'is_current' => $isCurrent]);

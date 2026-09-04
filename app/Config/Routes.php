@@ -475,6 +475,10 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     // ---- ¿Qué hago ahora? ----
     $routes->GET('que-hacer', 'Journal::queHacer');
     $routes->POST('categorias/(:num)/peso', 'Journal::actualizarPeso/$1');
+
+    // ---- Focalizar: selección de la selección (subconjunto de las estrellas) ----
+    $routes->GET('focalizar', 'Journal::focalizar');
+    $routes->POST('focalizar/toggle/(:num)', 'Journal::toggleFocalizar/$1');
 });
 
 // ---- Hogar: checklist rutinario de tareas por habitación ----

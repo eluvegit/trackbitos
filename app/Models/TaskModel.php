@@ -27,7 +27,8 @@ class TaskModel extends Model
         'completed',
         'note',
         'image',
-        'is_current'
+        'is_current',
+        'en_foco'
     ];
 
     protected $useTimestamps = true;
