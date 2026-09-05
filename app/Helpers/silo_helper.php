@@ -47,6 +47,38 @@ if (!function_exists('silo_capacidad_partes')) {
     }
 }
 
+if (!function_exists('silo_capacidad_formulario')) {
+    /**
+     * Igual dato que silo_capacidad_partes() pero en bruto para prellenar
+     * el formulario de alta/edición de unidad: valor sin separador de
+     * miles ni ceros sobrantes, y unidad en minúscula ('gb'/'tb') para que
+     * cuadre con el <select> de capacidad_unidad. TB solo a partir de 1TB
+     * (discos grandes); todo lo demás en GB — un USB de 64GB nunca debería
+     * forzarse a "0.064 TB".
+     *
+     * @return array{valor: string, unidad: string}
+     */
+    function silo_capacidad_formulario(?int $bytes): array
+    {
+        if (!$bytes) {
+            return ['valor' => '', 'unidad' => 'gb'];
+        }
+
+        if ($bytes >= 1_000_000_000_000) {
+            $valor  = $bytes / 1_000_000_000_000;
+            $unidad = 'tb';
+        } else {
+            $valor  = $bytes / 1_000_000_000;
+            $unidad = 'gb';
+        }
+
+        return [
+            'valor'  => rtrim(rtrim(number_format($valor, 3, '.', ''), '0'), '.'),
+            'unidad' => $unidad,
+        ];
+    }
+}
+
 if (!function_exists('silo_fecha_humana')) {
     function silo_fecha_humana(?string $fecha): string
     {

@@ -45,6 +45,19 @@
         color: #888;
         padding: .3rem 0;
     }
+
+    #focoView .focalizar-row {
+        cursor: grab;
+    }
+
+    #focoView .focalizar-row .drag-handle {
+        color: #666;
+        flex: 0 0 auto;
+    }
+
+    #focoView .focalizar-row.dragging {
+        opacity: .4;
+    }
 </style>
 
 <div class="focalizar-wrap">
@@ -61,7 +74,7 @@
     </div>
 
     <?php
-    // Todas las tareas con estrella, en orden del Journal.
+    // Todas las tareas con estrella, en orden del Journal (para pantalla 2).
     $filas = [];
     foreach ($starredByCategory as $catName => $tareas) {
         foreach ($tareas as $t) {
@@ -73,16 +86,16 @@
             ];
         }
     }
-    $enFoco = array_values(array_filter($filas, fn($f) => $f['en_foco']));
     ?>
 
-    <!-- Pantalla 1: la lista del foco (solo lectura) -->
+    <!-- Pantalla 1: la lista del foco, en orden manual (drag & drop) -->
     <div id="focoView">
-        <?php if (empty($enFoco)): ?>
+        <?php if (empty($enFocoOrdered)): ?>
             <p class="focalizar-empty" id="focoEmpty">Aún no has elegido ninguna tarea para el foco. Pulsa «Editar».</p>
         <?php endif; ?>
-        <?php foreach ($enFoco as $f): ?>
-            <div class="focalizar-row" data-task-id="<?= $f['id'] ?>">
+        <?php foreach ($enFocoOrdered as $f): ?>
+            <div class="focalizar-row" data-task-id="<?= (int) $f['id'] ?>" draggable="true">
+                <i class="bi bi-grip-vertical drag-handle"></i>
                 <span>
                     <span class="cat"><?= esc($f['cat']) ?></span> &mdash;
                     <a href="<?= site_url('journal/edit/' . $f['id']) ?>"><?= esc($f['title']) ?></a>
@@ -119,16 +132,16 @@
         var focoView  = document.getElementById('focoView');
         var editView  = document.getElementById('editView');
         var toggleUrl = '<?= site_url('journal/focalizar/toggle') ?>';
+        var ordenUrl  = '<?= site_url('journal/focalizar/orden') ?>';
 
         toggleBtn.addEventListener('click', function () {
             var editing = editView.hidden === false;
             if (editing) {
-                rebuildFocoView();
-                editView.hidden = true;
-                focoView.hidden = false;
-                toggleBtn.innerHTML = '<i class="bi bi-pencil"></i> Editar';
-                toggleBtn.classList.remove('btn-primary');
-                toggleBtn.classList.add('btn-outline-primary');
+                // La selección puede haber cambiado; recargamos para que la
+                // lista del foco refleje el orden real guardado en servidor
+                // (altas nuevas al final, bajas fuera) en vez de duplicar esa
+                // lógica en JS.
+                window.location.reload();
             } else {
                 focoView.hidden = true;
                 editView.hidden = false;
@@ -166,36 +179,47 @@
             });
         });
 
-        function rebuildFocoView() {
-            focoView.innerHTML = '';
-            var checked = editView.querySelectorAll('.focalizar-check:checked');
-            if (checked.length === 0) {
-                var p = document.createElement('p');
-                p.className = 'focalizar-empty';
-                p.textContent = 'Aún no has elegido ninguna tarea para el foco. Pulsa «Editar».';
-                focoView.appendChild(p);
-                return;
-            }
-            checked.forEach(function (chk) {
-                var row = chk.closest('.focalizar-row');
-                var div = document.createElement('div');
-                div.className = 'focalizar-row';
-                div.dataset.taskId = row.dataset.taskId;
+        // Drag & drop para reordenar la lista del foco a criterio del
+        // usuario. Al soltar, se guarda el orden completo en el servidor
+        // (foco_orden = posición en la lista).
+        var dragEl = null;
 
-                var span = document.createElement('span');
-                var cat = document.createElement('span');
-                cat.className = 'cat';
-                cat.textContent = row.dataset.cat;
+        focoView.addEventListener('dragstart', function (e) {
+            var row = e.target.closest('.focalizar-row');
+            if (!row) return;
+            dragEl = row;
+            row.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
 
-                var a = document.createElement('a');
-                a.href = row.dataset.url;
-                a.textContent = row.dataset.title;
+        focoView.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            var row = e.target.closest('.focalizar-row');
+            if (!row || row === dragEl || !dragEl) return;
+            var rect = row.getBoundingClientRect();
+            var before = (e.clientY - rect.top) < rect.height / 2;
+            focoView.insertBefore(dragEl, before ? row : row.nextSibling);
+        });
 
-                span.appendChild(cat);
-                span.appendChild(document.createTextNode(' — '));
-                span.appendChild(a);
-                div.appendChild(span);
-                focoView.appendChild(div);
+        focoView.addEventListener('dragend', function () {
+            if (!dragEl) return;
+            dragEl.classList.remove('dragging');
+            dragEl = null;
+            guardarOrden();
+        });
+
+        function guardarOrden() {
+            var ids = Array.prototype.map.call(
+                focoView.querySelectorAll('.focalizar-row'),
+                function (row) { return parseInt(row.dataset.taskId, 10); }
+            );
+            fetch(ordenUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ order: ids })
             });
         }
     })();

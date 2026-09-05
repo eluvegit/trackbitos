@@ -58,6 +58,22 @@ class SiloIngestaService
             $categoriaId = $this->silo->getOrCreateVocabulario('categoria', $parseado['categoria_texto'])['id'];
         }
 
+        // Contrato de "campos fijos" (docs/silo-ingesta-propagacion.md):
+        // posición 1 tras la categoría = tema, posición 2 = lugar, el resto
+        // = personas — así se clasifica sola sin que nadie etiquete nada a
+        // mano (plan Silo, petición 2026-09-05).
+        $clasificacion = $this->silo->clasificarElementosPorPosicion($parseado['elementos']);
+        $atributoIds   = [];
+        if ($clasificacion['tema'] !== null) {
+            $atributoIds[] = $this->silo->getOrCreateVocabulario('tema', $clasificacion['tema'])['id'];
+        }
+        if ($clasificacion['lugar'] !== null) {
+            $atributoIds[] = $this->silo->getOrCreateVocabulario('lugar', $clasificacion['lugar'])['id'];
+        }
+        foreach ($clasificacion['personas'] as $persona) {
+            $atributoIds[] = $this->silo->getOrCreateVocabulario('persona', $persona)['id'];
+        }
+
         $existente = $this->piezaModel->where('id_negocio', $parseado['id_negocio'])->first();
         if ($existente) {
             $piezaId = (int) $existente['id'];
@@ -70,6 +86,12 @@ class SiloIngestaService
             // (fichero_id -> SET NULL) y se regeneran también.
             $this->ficheroModel->where('pieza_id', $piezaId)->delete();
             $this->proxyModel->where('pieza_id', $piezaId)->delete();
+
+            // El nombre de carpeta es la fuente de verdad: si se renombró
+            // para corregir la clasificación (o para adoptar el contrato de
+            // campos fijos), la categoría también se recalcula aquí, igual
+            // criterio que los ficheros.
+            $this->piezaModel->update($piezaId, ['categoria_id' => $categoriaId]);
         } else {
             $piezaId = $this->piezaModel->insert([
                 'id_negocio'     => $parseado['id_negocio'],
@@ -77,15 +99,9 @@ class SiloIngestaService
                 'categoria_id'   => $categoriaId,
                 'nombre_carpeta' => $nombreCarpeta,
             ], true);
-
-            if (!empty($parseado['elementos'])) {
-                $atributoIds = array_map(
-                    fn ($texto) => $this->silo->getOrCreateVocabulario('tema', $texto)['id'],
-                    $parseado['elementos']
-                );
-                $this->atributoModel->reemplazarDeLaPieza($piezaId, $atributoIds);
-            }
         }
+
+        $this->atributoModel->reemplazarDeLaPieza($piezaId, $atributoIds);
 
         $ficherosInsertados = [];
         foreach ($ficheros as $f) {

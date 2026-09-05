@@ -81,6 +81,29 @@ año del contenido + 4 correlativos que reinician cada año, ej. `260001`). El `
 del nombre tal cual (`SiloService::parsearNombreCarpeta()`): **no acuña IDs ni renombra
 carpetas**.
 
+**Campos fijos por posición (2026-09-05)**: tras la categoría (posición 1, antes de la
+primera coma), el resto de la lista de comas tiene un orden fijo — posición 1 = tema,
+posición 2 = lugar, de la 3 en adelante = personas (todas las que haga falta). Así el
+escáner clasifica solo, sin que nadie etiquete nada a mano. Un campo que no aplica se
+salta dejando el hueco vacío entre comas (coma doble) para no desplazar los siguientes:
+
+```
+260099 20070101 Recuerdos, , Sevilla, Ana, Luis
+                           ^ tema vacío   ^lugar  ^personas
+```
+
+`SiloService::clasificarElementosPorPosicion()` aplica esta regla;
+`SiloIngestaService::ingestarCarpeta()` la usa para dar de alta tema/lugar/personas como
+atributos reales (antes: todo entraba como `tema` sin distinción). El nombre de carpeta es
+la fuente de verdad también en la reingesta: si se renombra para corregir la
+clasificación, la próxima pasada del agente actualiza categoría y atributos (antes solo se
+tocaban al crear la pieza la primera vez).
+
+Esta regla es nueva: los nombres ya existentes en disco no se escribieron pensando en
+posiciones fijas, así que al reingestarlos muchos elementos quedan mal clasificados
+(nombres de persona leídos como tema/lugar) hasta que se renombren las carpetas en disco
+siguiendo el orden de arriba.
+
 - `silo_contador` pasa a ser **espejo**: en cada ingesta se ajusta al ID más alto visto
   por año, para que el alta manual de la web (que sí usa el contador) nunca reparta un
   número ya usado en disco.
@@ -136,11 +159,81 @@ Con el catálogo ya en BD, se calcula el reparto de cada "cubo" en unidades de n
 nuevas cuando no caben por capacidad. Todo esto primero **en la base de datos**, sin
 tocar discos. Lo hace `SiloPropagacionService` (ya existe una primera versión).
 
+**Planificación de Nivel 2 con las unidades ya dadas de alta (2026-09-05)**: a diferencia
+de Nivel 3 (una unidad = una categoría, fragmentando con "(2)", "(3)"... si no cabe),
+Nivel 2 se planifica aparte porque los USB reales son mucho más pequeños que un año de
+contenido completo y conviene **combinar años pequeños en el mismo USB para no
+desperdiciar espacio** — pero **nunca fragmentar un año** entre dos unidades. Solo se
+combinan años **consecutivos** — nunca 2003 con 2019 en el mismo USB aunque numéricamente
+cupieran juntos — para que cada unidad física corresponda a un tramo de tiempo contiguo y
+fácil de razonar/buscar.
+
+**No se inventa una capacidad uniforme**: el reparto usa únicamente las unidades de
+Nivel 2 que el usuario ya dio de alta a mano en `/silo/unidades` (con su capacidad real,
+que puede ser distinta en cada una), en el orden en que se registraron (`numero` ASC).
+Corrección de rumbo 2026-09-05 sobre el primer intento (que sí asumía una capacidad
+uniforme pedida por formulario): eso no reflejaba los USB que el usuario realmente tiene.
+
+- `SiloPropagacionService::calcularPlanNivel2()` — cálculo puro (no toca BD): suma bytes
+  por año (`silo_piezas`, agrupado por `YEAR(fecha)`, "sin fecha" entra en el mismo
+  recorrido como año `0`, sin trato especial) y va rellenando las unidades registradas en
+  orden mientras quepan años consecutivos; en cuanto uno no cabe, cierra la unidad actual
+  (aunque le sobre sitio) y pasa a la siguiente. Tres estados por tramo: `ok`, `excede` (la
+  unidad que tocaba existe pero el año no cabe entero en ella — hace falta una de más
+  capacidad solo para eso) y `sin_unidad` (se acabaron las unidades registradas — hace
+  falta dar de alta más).
+- `SiloPropagacionService::aplicarPlanNivel2()` — materializa el cálculo **sobre las
+  unidades ya existentes**: no borra ni crea ninguna (a diferencia del primer intento), así
+  que identificación física/ruta de montaje/etiqueta puestas a mano se conservan siempre.
+  Solo reconstruye `silo_unidad_buckets` y las ubicaciones de copia 2. Los años en
+  `sin_unidad` se quedan sin ubicación de copia 2 hasta que haya sitio. Nota: la `etiqueta`
+  de una unidad NO se toca ni se sugiere — si el usuario le puso un nombre por años (como
+  hicieron las pruebas iniciales de esta función) y el reparto cambia, la etiqueta puede
+  quedar desactualizada respecto al contenido real; el detalle fiable de qué años tiene de
+  verdad es siempre `silo_unidad_buckets` (lo que pinta la web), no la etiqueta.
+- `php spark silo:planificar-nivel2 [--aplicar]` — sin `--aplicar` es solo un informe; con
+  `--aplicar` reconstruye Nivel 2 de verdad. Ya no recibe una capacidad por parámetro.
+- Botón "Recalcular reparto" en `/silo/unidades` (junto al título de Nivel 2) — mismo
+  `aplicarPlanNivel2()`, con confirmación explícita antes de enviarlo.
+- `silo_unidad_buckets` (unidad_id, bucket) — una unidad de Nivel 2 ya no es 1:1 con un
+  único año (`silo_unidades.agrupador`, que se queda vacío/legado en las unidades
+  combinadas): puede agrupar varios. Nivel 3 sigue usando `agrupador` sin cambios. La web
+  (`/silo/unidades`, `/silo/mi-pc`) muestra los buckets de la tabla nueva en vez de
+  `agrupador` cuando los hay.
+- Cuando exista Fase 3, un recálculo que reasigne piezas a otra unidad implicará mover
+  ficheros de verdad, así que a partir de ahí debería pasar por el flujo de reorganización
+  con aprobación humana (más abajo), no ser una reconstrucción libre como ahora.
+
 ### Fase 3 — Propagación física
 
 La web pide **conectar cada unidad estipulada** y, unidad a unidad, el `.py` vuelca a
 disco lo que la BD dice que le toca. Al terminar con una unidad, el `.py` reescribe sus
 ficheros de control y su volcado de BD.
+
+**El nombre de carpeta en Nivel 2/3 puede diferir del Maestro** (petición 2026-09-05): la
+conexión con la pieza se mantiene por el **ID de negocio**, no por igualdad de nombre
+completo — mismo criterio que ya usa `parsearNombreCarpeta()` en Fase 1, pero aquí el ID no
+va primero. Pendiente de aplicar: hoy `SiloPropagacionService::asignarACopia()` solo guarda
+`ruta_relativa` como una **propuesta inicial** (`{bucket}/{nombre_carpeta}`, igual que el
+Maestro) y no la vuelve a tocar — lo de abajo es la convención que usará Fase 3 cuando se
+construya, todavía sin implementar.
+
+**Convención de nombre en Nivel 2/3 — fecha primero, ID al final entre corchetes**:
+
+```
+Maestro:    260015 20030603 Recuerdos, University Day, yo, de la universidad
+Copia año:  20030603 Recuerdos, University Day, yo, de la universidad [260015]
+```
+
+Con la fecha en primera posición, el propio explorador de archivos (Windows/Finder, orden
+alfabético normal) ordena las carpetas de una unidad Año/Temática cronológicamente sin que
+el usuario tenga que reordenar nada a mano ni pasar por la web — al contrario que el
+Maestro, donde el ID va primero a propósito porque ahí sí importa el orden de alta (plan
+Silo, sección "Contrato de entrada"). El ID se mueve al final entre corchetes (no una coma
+más, para no parecer un campo de personas) — sirve solo para que Fase 3 reconcilie por ID
+al escanear esa unidad, nunca para ordenar. Requiere su propio parseo en Fase 3 (buscar el
+`[AAnnnn]` final con una regexp), independiente de `parsearNombreCarpeta()` (que asume el
+ID en primera posición y es específico del Maestro).
 
 ## Detección de cambios
 
@@ -343,7 +436,10 @@ websockets.
   reingesta de una pieza ya conocida **sustituye** su lista de ficheros/proxies entera
   (sin manifiesto/hash todavía no hay diff barato posible) en vez de acumular duplicados
   — necesario para que el escaneo real, que reingesta el mismo Maestro en cada pasada,
-  sea idempotente. `php spark silo:simular-ingesta` la sigue usando con datos de mentira.
+  sea idempotente. Desde 2026-09-05 la reingesta también recalcula categoría y atributos
+  (tema/lugar/personas por posición, ver "Campos fijos por posición" arriba) — antes solo
+  se calculaban al crear la pieza la primera vez. `php spark silo:simular-ingesta` la sigue
+  usando con datos de mentira (sin el contrato de campos fijos todavía).
 - `SiloPropagacionService::propagarTodo()` / `propagarPieza()` + `php spark silo:propagar`
   — propagación **lógica** en BD (Fase 2). No hay Fase 3.
 - `Silo\Web` + vistas — coordinación y presentación: Mi PC, Unidades (alta con
@@ -361,10 +457,17 @@ websockets.
   categorías de salto, ingesta, propagación automática a Copia 2/3, y reingesta repetida
   sin duplicar ficheros.
 - `silo_tareas` (cola) y `silo_eventos` (log de alertas) existen como tablas desde
-  2026-09-04, pero **sin cola de verdad todavía**: el agente hace handshake → escanea →
-  reporta en el momento, sin esperar aprobación humana ni encolar nada él mismo — el único
-  escritor de `silo_tareas` hoy es `Agente::escaneo()` marcando el resultado si se le pasa
-  un `tarea_id` ya existente. No hay panel web para `silo_eventos` todavía (solo la BD).
+  2026-09-04. **Primer uso real de la cola (2026-09-05)**: `/silo/unidades` tiene un botón
+  "Solicitar escaneo" por unidad Maestro (`Web::solicitarEscaneo`) que crea una tarea
+  `escaneo_maestro` auto-aprobada (la pide el dueño de la unidad); el agente `.py` la ve en
+  el `handshake` y la cierra — en una pasada manual (`silo`, oportunista: escanea siempre y
+  cierra la tarea si la encuentra) o en modo `silo --daemon` (sondeo periódico, solo
+  escanea cuando hay tarea pendiente). La tarjeta de la unidad en `/silo/unidades` refleja
+  el estado (esperando agente / escaneado hace X / error). Sigue sin aprobación humana para
+  tareas más sensibles (mover piezas, propagación física) ni cola para otros tipos de
+  tarea. No hay panel web para `silo_eventos` todavía (solo la BD).
+- **Comando de terminal**: función `silo` en ambos perfiles de PowerShell (mismo patrón que
+  `trackbitos`/`stl`), llama a `silo-agente/agente.py` sin `cd` ni ruta completa.
 - `silo_proxies` existe y la web ya pinta los proxies (galería y `show`), pero se
   insertan **simulados** (URL de placeholder) desde `SiloIngestaService`.
 - **No existe todavía**: disparar tareas desde la web con aprobación humana, hashing y

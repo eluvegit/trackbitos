@@ -102,6 +102,18 @@
         text-overflow: ellipsis;
     }
 
+    .silo-tarjeta-escaneo {
+        font-size: .68rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .silo-tarjeta-escaneo.text-warning,
+    .silo-tarjeta-escaneo.text-danger {
+        font-weight: 600;
+    }
+
     .silo-tarjeta-anadir {
         border-radius: 50%;
         border: 2px dashed var(--bs-border-color);
@@ -167,17 +179,37 @@
 <?php $nivelLabel = [1 => 'Nivel 1 — Maestro', 2 => 'Nivel 2 — Año', 3 => 'Nivel 3 — Temática']; ?>
 
 <?php foreach ([1, 2, 3] as $nivel): ?>
-    <h6 class="mb-3 silo-nivel silo-n<?= $nivel ?>"><?= $nivelLabel[$nivel] ?></h6>
+    <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+        <h6 class="mb-0 silo-nivel silo-n<?= $nivel ?>"><?= $nivelLabel[$nivel] ?></h6>
+        <?php if ($nivel === 2): ?>
+            <!-- "Recalcular reparto" agrupa años consecutivos entre las
+                 unidades de Nivel 2 YA dadas de alta, cada una con su
+                 capacidad real (SiloPropagacionService::aplicarPlanNivel2())
+                 — no borra ni crea unidades, así que no toca identificación
+                 física/ruta de montaje/etiqueta puestas a mano; solo
+                 reconstruye qué años tiene cada una. -->
+            <form method="post" action="<?= site_url('silo/unidades/nivel2/recalcular') ?>" class="ms-auto"
+                  onsubmit="return confirm('Esto reparte de nuevo los años entre las unidades de Nivel 2 ya dadas de alta (agrupa consecutivos según la capacidad de cada una, sin fragmentar ninguno). No borra unidades ni sus datos, solo qué años tiene cada una. ¿Continuar?');">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-arrow-repeat"></i> Recalcular reparto
+                </button>
+            </form>
+        <?php endif; ?>
+    </div>
     <div class="silo-fila-unidades silo-nivel silo-n<?= $nivel ?>">
         <?php foreach ($porNivel[$nivel] as $u): ?>
             <?php
                 $cap = silo_capacidad_partes($u['capacidad_bytes'] ? (int) $u['capacidad_bytes'] : null);
-                $capacidadTbValor = $u['capacidad_bytes']
-                    ? rtrim(rtrim(number_format(((int) $u['capacidad_bytes']) / 1_000_000_000_000, 3, '.', ''), '0'), '.')
-                    : '';
+                $capForm = silo_capacidad_formulario($u['capacidad_bytes'] ? (int) $u['capacidad_bytes'] : null);
+                // Una unidad de Nivel 2 puede agrupar varios años
+                // consecutivos (planificación por capacidad de USB) — ya
+                // vienen comprimidos en rango ("2010-2018"), no uno a uno.
+                $bucketsTexto = $bucketsPorUnidad[$u['id']] ?? '';
                 $detalle = $nivel !== 1
-                    ? ($u['agrupador'] ?? '')
+                    ? ($bucketsTexto !== '' ? $bucketsTexto : ($u['agrupador'] ?? ''))
                     : trim((string) ($u['identificacion_fisica'] ?? ''));
+                $excede = $excedePorUnidad[$u['id']] ?? false;
             ?>
             <div class="silo-tarjeta silo-tarjeta-unidad"
                  data-id="<?= (int) $u['id'] ?>"
@@ -188,10 +220,16 @@
                  data-identificacion-fisica="<?= esc($u['identificacion_fisica'] ?? '', 'attr') ?>"
                  data-ruta-montaje="<?= esc($u['ruta_montaje'] ?? '', 'attr') ?>"
                  data-agrupador="<?= esc($u['agrupador'] ?? '', 'attr') ?>"
-                 data-capacidad-tb="<?= esc($capacidadTbValor, 'attr') ?>"
+                 data-capacidad-valor="<?= esc($capForm['valor'], 'attr') ?>"
+                 data-capacidad-unidad="<?= esc($capForm['unidad'], 'attr') ?>"
                  data-piezas="<?= (int) ($piezasPorUnidad[$u['id']] ?? 0) ?>"
                  onclick="siloAbrirEdicion(this)">
-                <div class="silo-tarjeta-capacidad"><?= esc($cap['valor']) ?><small><?= esc($cap['unidad']) ?></small></div>
+                <div class="silo-tarjeta-capacidad<?= $excede ? ' text-danger' : '' ?>">
+                    <?php if ($excede): ?>
+                        <i class="bi bi-exclamation-triangle-fill" title="Excede la capacidad declarada de la unidad"></i>
+                    <?php endif; ?>
+                    <?= esc($cap['valor']) ?><small><?= esc($cap['unidad']) ?></small>
+                </div>
                 <div class="silo-tarjeta-icono"><?= silo_icono_unidad($u['tipo_fisico'] ?? null) ?></div>
                 <div class="silo-tarjeta-info">
                     <div class="silo-tarjeta-nombre"><?= esc($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']) ?></div>
@@ -200,6 +238,26 @@
                     <?php endif; ?>
                     <?php if ($detalle !== ''): ?>
                         <div class="silo-tarjeta-detalle"><?= esc($detalle) ?></div>
+                    <?php endif; ?>
+                    <?php if ($excede): ?>
+                        <div class="silo-tarjeta-escaneo text-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i> excede su capacidad
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($nivel === 1): $tarea = $tareasPorUnidad[$u['id']] ?? null; ?>
+                        <?php if ($tarea && in_array($tarea['estado'], ['pendiente', 'en_curso'], true)): ?>
+                            <div class="silo-tarjeta-escaneo text-warning">
+                                <i class="bi bi-hourglass-split"></i> esperando agente
+                            </div>
+                        <?php elseif ($tarea && $tarea['estado'] === 'error'): ?>
+                            <div class="silo-tarjeta-escaneo text-danger">
+                                <i class="bi bi-exclamation-triangle"></i> error en el escaneo
+                            </div>
+                        <?php elseif ($tarea && $tarea['estado'] === 'hecha'): ?>
+                            <div class="silo-tarjeta-escaneo text-success">
+                                <i class="bi bi-check-circle"></i> escaneado <?= esc(silo_fecha_humana($tarea['actualizado_en'] ?? $tarea['creado_en'])) ?>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -243,9 +301,15 @@
 
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label small text-muted mb-1">Capacidad (TB)</label>
-                            <input type="number" name="capacidad_tb" id="mu-capacidad" min="0.5" step="0.5"
-                                   class="form-control" placeholder="ej. 2">
+                            <label class="form-label small text-muted mb-1">Capacidad</label>
+                            <div class="input-group">
+                                <input type="number" name="capacidad_valor" id="mu-capacidad" min="0.01" step="0.01"
+                                       class="form-control" placeholder="ej. 64">
+                                <select name="capacidad_unidad" id="mu-capacidad-unidad" class="form-select" style="max-width: 5.5rem;">
+                                    <option value="gb">GB</option>
+                                    <option value="tb">TB</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col-6" id="mu-grupo-agrupador">
                             <label class="form-label small text-muted mb-1">Año o categoría</label>
@@ -267,6 +331,11 @@
 
                 <div class="modal-footer border-0 pt-0 flex-column align-items-stretch gap-2">
                     <button type="submit" class="btn btn-primary rounded-pill">Guardar</button>
+                    <div id="mu-grupo-escaneo" style="display:none;">
+                        <button type="button" id="mu-escanear" class="btn btn-outline-primary btn-sm rounded-pill w-100">
+                            <i class="bi bi-arrow-repeat"></i> Solicitar escaneo
+                        </button>
+                    </div>
                     <div class="d-flex justify-content-between align-items-center" id="mu-acciones-secundarias">
                         <a href="#" id="mu-descargar" class="btn btn-sm btn-link text-muted text-decoration-none px-0">
                             <i class="bi bi-file-earmark-code"></i> .silo_unit.json
@@ -281,8 +350,11 @@
     </div>
 </div>
 
-<!-- Formulario aparte solo para el borrado: el modal no puede anidar dos <form>. -->
+<!-- Formularios aparte para borrado y solicitud de escaneo: el modal no puede anidar dos <form>. -->
 <form method="post" id="formBorrarUnidad" action="" class="d-none">
+    <?= csrf_field() ?>
+</form>
+<form method="post" id="formSolicitarEscaneo" action="" class="d-none">
     <?= csrf_field() ?>
 </form>
 
@@ -298,6 +370,7 @@
         const campos = {
             etiqueta: document.getElementById('mu-etiqueta'),
             capacidad: document.getElementById('mu-capacidad'),
+            capacidadUnidad: document.getElementById('mu-capacidad-unidad'),
             agrupador: document.getElementById('mu-agrupador'),
             ruta: document.getElementById('mu-ruta'),
             identificacion: document.getElementById('mu-identificacion'),
@@ -305,11 +378,14 @@
         };
         const grupoAgrupador = document.getElementById('mu-grupo-agrupador');
         const grupoIdentificacion = document.getElementById('mu-grupo-identificacion');
+        const grupoEscaneo = document.getElementById('mu-grupo-escaneo');
         const accionesSecundarias = document.getElementById('mu-acciones-secundarias');
         const titulo = document.getElementById('mu-titulo');
         const btnDescargar = document.getElementById('mu-descargar');
         const btnBorrar = document.getElementById('mu-borrar');
+        const btnEscanear = document.getElementById('mu-escanear');
         const formBorrar = document.getElementById('formBorrarUnidad');
+        const formEscanear = document.getElementById('formSolicitarEscaneo');
 
         function limpiarFormulario() {
             form.reset();
@@ -323,6 +399,7 @@
             campos.nivel.value = nivel;
             grupoAgrupador.style.display = nivel === 1 ? 'none' : '';
             grupoIdentificacion.style.display = 'none'; // sin disco delante todavía, no tiene sentido pedirla al alta
+            grupoEscaneo.style.display = 'none'; // unidad todavía sin crear, nada que escanear
             accionesSecundarias.style.display = 'none';
             modal.show();
         };
@@ -334,7 +411,8 @@
             form.action = "<?= site_url('silo/unidades') ?>/" + d.id + "/actualizar";
             campos.nivel.value = d.nivel;
             campos.etiqueta.value = d.etiqueta || '';
-            campos.capacidad.value = d.capacidadTb || '';
+            campos.capacidad.value = d.capacidadValor || '';
+            campos.capacidadUnidad.value = d.capacidadUnidad || 'gb';
             campos.agrupador.value = d.agrupador || '';
             campos.ruta.value = d.rutaMontaje || '';
             campos.identificacion.value = d.identificacionFisica || '';
@@ -345,9 +423,15 @@
 
             grupoAgrupador.style.display = d.nivel === '1' ? 'none' : '';
             grupoIdentificacion.style.display = '';
+            grupoEscaneo.style.display = d.nivel === '1' ? '' : 'none'; // solo el Maestro se escanea (plan Silo §2)
             accionesSecundarias.style.display = '';
 
             btnDescargar.href = "<?= site_url('silo/unidades') ?>/" + d.id + "/fichero-control";
+
+            btnEscanear.onclick = function () {
+                formEscanear.action = "<?= site_url('silo/unidades') ?>/" + d.id + "/solicitar-escaneo";
+                formEscanear.submit();
+            };
 
             btnBorrar.onclick = function () {
                 const piezas = parseInt(d.piezas || '0', 10);

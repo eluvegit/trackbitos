@@ -28,7 +28,8 @@ class TaskModel extends Model
         'note',
         'image',
         'is_current',
-        'en_foco'
+        'en_foco',
+        'foco_orden'
     ];
 
     protected $useTimestamps = true;

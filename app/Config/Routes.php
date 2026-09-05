@@ -479,6 +479,7 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     // ---- Focalizar: selección de la selección (subconjunto de las estrellas) ----
     $routes->GET('focalizar', 'Journal::focalizar');
     $routes->POST('focalizar/toggle/(:num)', 'Journal::toggleFocalizar/$1');
+    $routes->POST('focalizar/orden', 'Journal::ordenarFocalizar');
 });
 
 // ---- Hogar: checklist rutinario de tareas por habitación ----
@@ -888,9 +889,11 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');
+    $routes->POST('unidades/nivel2/recalcular', 'Web::recalcularNivel2');
     $routes->POST('unidades/(:num)/actualizar', 'Web::actualizarUnidad/$1');
     $routes->POST('unidades/(:num)/borrar', 'Web::borrarUnidad/$1');
     $routes->GET('unidades/(:num)/fichero-control', 'Web::ficheroControlUnidad/$1');
+    $routes->POST('unidades/(:num)/solicitar-escaneo', 'Web::solicitarEscaneo/$1');
     $routes->GET('unidades/(:num)', 'Web::verUnidad/$1');
 
     $routes->GET('(:num)', 'Web::show/$1');

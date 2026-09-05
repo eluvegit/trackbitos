@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SiloContadorModel;
+use App\Models\SiloUnidadBucketModel;
 use App\Models\SiloUnidadModel;
 use App\Models\SiloVocabularioModel;
 
@@ -21,12 +22,14 @@ class SiloService
     private SiloContadorModel $contadorModel;
     private SiloVocabularioModel $vocabularioModel;
     private SiloUnidadModel $unidadModel;
+    private SiloUnidadBucketModel $unidadBucketModel;
 
     public function __construct()
     {
-        $this->contadorModel    = new SiloContadorModel();
-        $this->vocabularioModel = new SiloVocabularioModel();
-        $this->unidadModel      = new SiloUnidadModel();
+        $this->contadorModel     = new SiloContadorModel();
+        $this->vocabularioModel  = new SiloVocabularioModel();
+        $this->unidadModel       = new SiloUnidadModel();
+        $this->unidadBucketModel = new SiloUnidadBucketModel();
     }
 
     /**
@@ -77,6 +80,16 @@ class SiloService
 
         $this->unidadModel->update($id, ['fichero_control' => $ficheroControl]);
 
+        // `agrupador` sigue siendo el campo legado de un único bucket (alta
+        // manual, "Año o categoría"); se refleja también en
+        // silo_unidad_buckets porque esa es la fuente de verdad que usa
+        // SiloUnidadModel::buscarPorAgrupador() — así una unidad
+        // pre-creada a mano para un año/categoría concretos se sigue
+        // encontrando cuando llegue la primera pieza real de ese cubo.
+        if ($agrupador !== null && $agrupador !== '') {
+            $this->unidadBucketModel->asignarBucket($id, $agrupador);
+        }
+
         return $this->unidadModel->find($id);
     }
 
@@ -123,6 +136,44 @@ class SiloService
         }
 
         return $this->vocabularioModel->find($id);
+    }
+
+    /**
+     * Comprime una lista de años consecutivos en notación de rango
+     * ("2010-2018" en vez de "2010, 2011, ..., 2018") para que quepa en la
+     * tarjeta de la unidad (petición 2026-09-05). Los buckets que no son un
+     * año (p.ej. "sin_fecha") pasan tal cual, sin participar en ningún
+     * rango — van siempre al final porque `SiloUnidadBucketModel::bucketsDe()`
+     * ya los devuelve ordenados así (alfabético: los dígitos ordenan antes
+     * que las letras).
+     *
+     * @param array<int, string> $anios
+     */
+    public function comprimirAnios(array $anios): string
+    {
+        $numericos = array_values(array_filter($anios, fn ($a) => ctype_digit((string) $a)));
+        $otros     = array_values(array_diff($anios, $numericos));
+
+        sort($numericos, SORT_NUMERIC);
+
+        $grupos = [];
+        $inicio = $fin = null;
+        foreach ($numericos as $anio) {
+            $anio = (int) $anio;
+            if ($inicio === null) {
+                $inicio = $fin = $anio;
+            } elseif ($anio === $fin + 1) {
+                $fin = $anio;
+            } else {
+                $grupos[] = $inicio === $fin ? (string) $inicio : "{$inicio}-{$fin}";
+                $inicio   = $fin = $anio;
+            }
+        }
+        if ($inicio !== null) {
+            $grupos[] = $inicio === $fin ? (string) $inicio : "{$inicio}-{$fin}";
+        }
+
+        return implode(', ', array_merge($grupos, $otros));
     }
 
     /** Público: SiloPropagacionService lo reutiliza para el agrupador de nivel 3 (slug de categoría). */
@@ -299,9 +350,22 @@ class SiloService
         $idNegocio     = $m[1];
         $fechaExtraida = $this->extraerFecha($m[2]);
 
-        $trozos = array_values(array_filter(array_map('trim', explode(',', $fechaExtraida['resto'])), fn ($t) => $t !== ''));
+        // A diferencia de antes, NO se filtran los trozos vacíos: un hueco
+        // intermedio (coma doble, "Recuerdos, , Sevilla") es un campo
+        // saltado a propósito y hay que conservar su posición para que
+        // clasificarElementosPorPosicion() no desplace lugar/personas.
+        // Solo se recortan las comas colgantes del final (nada después de
+        // la última coma), que no son un hueco intencionado.
+        $trozos = array_map('trim', explode(',', $fechaExtraida['resto']));
+        while (count($trozos) > 1 && end($trozos) === '') {
+            array_pop($trozos);
+        }
+        if ($trozos === ['']) {
+            $trozos = [];
+        }
+
         $categoriaTexto = $trozos[0] ?? null;
-        if ($categoriaTexto !== null && strtolower($categoriaTexto) === 'sin_clasificar') {
+        if ($categoriaTexto !== null && ($categoriaTexto === '' || strtolower($categoriaTexto) === 'sin_clasificar')) {
             $categoriaTexto = null;
         }
 
@@ -310,6 +374,36 @@ class SiloService
             'fecha'           => $fechaExtraida['fecha'],
             'categoria_texto' => $categoriaTexto,
             'elementos'       => array_slice($trozos, 1),
+        ];
+    }
+
+    /**
+     * Contrato de "campos fijos" del nombre de carpeta (plan Silo, contrato
+     * de entrada): dado el resto de la lista de comas tras la categoría
+     * (`elementos` de parsearNombreCarpeta(), posiciones ya conservadas
+     * huecos incluidos), posición 1 = tema, posición 2 = lugar, de la 3 en
+     * adelante = personas (todas las que haya). Así el escáner clasifica
+     * solo, sin que nadie etiquete nada a mano — un campo que no aplica se
+     * salta dejando el hueco vacío entre comas para no desplazar los
+     * siguientes.
+     *
+     * @param array<int, string> $elementos
+     * @return array{tema: ?string, lugar: ?string, personas: string[]}
+     */
+    public function clasificarElementosPorPosicion(array $elementos): array
+    {
+        $tema  = trim((string) ($elementos[0] ?? ''));
+        $lugar = trim((string) ($elementos[1] ?? ''));
+
+        $personas = array_values(array_filter(
+            array_map('trim', array_slice($elementos, 2)),
+            fn ($texto) => $texto !== ''
+        ));
+
+        return [
+            'tema'     => $tema !== '' ? $tema : null,
+            'lugar'    => $lugar !== '' ? $lugar : null,
+            'personas' => $personas,
         ];
     }
 }

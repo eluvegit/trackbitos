@@ -55,8 +55,9 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
                                 <span>Sin identificar qué disco físico es — <span class="text-decoration-underline">añádelo en Unidades</span></span>
                             </div>
                         <?php endif; ?>
-                        <?php if ($nivel !== 1 && $u['agrupador']): ?>
-                            <span class="badge text-bg-light border mt-2"><?= esc($u['agrupador']) ?></span>
+                        <?php $bucketsTexto = $bucketsPorUnidad[$u['id']] ?? ''; ?>
+                        <?php if ($nivel !== 1 && ($bucketsTexto !== '' || $u['agrupador'])): ?>
+                            <span class="badge text-bg-light border mt-2"><?= esc($bucketsTexto !== '' ? $bucketsTexto : $u['agrupador']) ?></span>
                         <?php endif; ?>
                     </a>
                 </div>

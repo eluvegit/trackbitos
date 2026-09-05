@@ -9,6 +9,13 @@ Maestro), sin hashing todavía (los `ficheros` van sin `hash`, la web los
 acepta igual) ni detección de cambios N0-N3 ni propagación física — ver
 README.md de este directorio para el alcance exacto.
 
+Se lanza a mano (`silo` en la terminal, ver perfil de PowerShell) o se deja
+corriendo con `--daemon`: en ambos casos, si la web dejó un escaneo
+pendiente para una unidad (botón "Solicitar escaneo" en /silo/unidades,
+tabla `silo_tareas`), este script lo detecta en el handshake y lo cierra
+solo — la web nunca ejecuta nada en esta máquina, solo dejar la petición
+esperando a que este script pase por aquí.
+
 Sin dependencias fuera de la librería estándar (mismo criterio que
 piezas-cli/trackbitos.py): tiene que arrancar en cualquier máquina sin
 instalar nada.
@@ -20,6 +27,7 @@ import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -104,7 +112,15 @@ def handshake(config: dict) -> dict:
     return api_post(config, "/silo/agente/handshake", {"unidades": unidades})
 
 
-def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool) -> None:
+def tarea_pendiente(unidad: dict, tipo: str) -> dict | None:
+    """Primera tarea de `tipo` que la web dejó pendiente/en_curso para esta unidad (ver Agente::handshake)."""
+    for t in unidad.get("tareas", []):
+        if t.get("tipo") == tipo and t.get("estado") in ("pendiente", "en_curso"):
+            return t
+    return None
+
+
+def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool, tarea_id: int | None = None) -> None:
     ruta_path = Path(ruta)
     if not ruta_path.is_dir():
         print(f"  ! {ruta}: no existe o no está montada ahora mismo, se salta.")
@@ -121,11 +137,18 @@ def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool) -> N
         print("  (--dry-run: no se ha mandado nada a la web)")
         return
 
-    resultado = api_post(config, "/silo/agente/escaneo", {
+    cuerpo = {
         "unidad_id": unidad_id,
         "lista_negra": config.get("lista_negra", []),
         "entradas": entradas,
-    })
+    }
+    if tarea_id:
+        # Cierra la tarea que la web dejó pendiente (botón "Solicitar
+        # escaneo" en /silo/unidades) — Agente::escaneo() la marca
+        # hecha/error con este resumen como resultado.
+        cuerpo["tarea_id"] = tarea_id
+
+    resultado = api_post(config, "/silo/agente/escaneo", cuerpo)
 
     print(f"    ingestadas: {len(resultado.get('ingestadas', []))}")
     for s in resultado.get("saltadas", []):
@@ -134,13 +157,55 @@ def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool) -> N
         print(f"    ERROR:      {err['nombre']}  -> {err['error']}")
 
 
+def modo_daemon(config: dict, intervalo: int) -> int:
+    """
+    Sondeo periódico para el botón "Solicitar escaneo" de /silo/unidades: a
+    diferencia de una pasada manual (que siempre escanea), aquí solo se
+    escanea una unidad cuando la web dejó de verdad una tarea
+    `escaneo_maestro` pendiente — si no, sería martirizar el disco cada
+    `intervalo` segundos sin motivo. Pensado para dejarlo corriendo en una
+    terminal (o de fondo) mientras el disco está conectado.
+    """
+    print(f"Daemon: sondeando cada {intervalo}s (Ctrl+C para parar). Solo escanea cuando la web lo pide.")
+    while True:
+        try:
+            resultado = handshake(config)
+            for u in resultado.get("desconocidas", []):
+                print(f"  ! unidad no reconocida por la web: {u}")
+
+            for cfg_unidad in config["unidades"]:
+                u = next(
+                    (x for x in resultado.get("unidades", [])
+                     if x["unidad_id"] == cfg_unidad.get("unidad_id") or x.get("ruta_montaje") == cfg_unidad["ruta"]),
+                    None,
+                )
+                if not u:
+                    continue
+
+                tarea = tarea_pendiente(u, "escaneo_maestro")
+                if not tarea:
+                    continue
+
+                print(f"  tarea #{tarea['id']}: escaneo solicitado desde la web para unidad #{u['numero']} <- {cfg_unidad['ruta']}")
+                escanear_unidad(config, u["unidad_id"], cfg_unidad["ruta"], dry_run=False, tarea_id=tarea["id"])
+        except RuntimeError as e:
+            print(f"  ! {e}")
+
+        time.sleep(intervalo)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true", help="escanea y muestra el resultado, no llama a la API de escaneo")
     parser.add_argument("--solo-handshake", action="store_true", help="solo resuelve unidades + tareas pendientes, no escanea disco")
+    parser.add_argument("--daemon", action="store_true", help="se queda corriendo, sondeando cada --intervalo segundos; solo escanea cuando la web pide un escaneo (botón en /silo/unidades)")
+    parser.add_argument("--intervalo", type=int, default=20, help="segundos entre sondeos en modo --daemon (por defecto 20)")
     args = parser.parse_args()
 
     config = cargar_config()
+
+    if args.daemon:
+        return modo_daemon(config, args.intervalo)
 
     print("Handshake...")
     resultado = handshake(config)
@@ -168,7 +233,11 @@ def main() -> int:
         if not u:
             print(f"  ! {cfg_unidad['ruta']}: la web no la reconoce (¿falta dar de alta la unidad o su ruta de montaje?), se salta.")
             continue
-        escanear_unidad(config, u["unidad_id"], cfg_unidad["ruta"], args.dry_run)
+        # Pasada manual: escanea siempre, y si de paso hay un escaneo
+        # pedido desde la web para esta unidad, lo cierra con este mismo
+        # resultado en vez de dejarlo esperando al agente en --daemon.
+        tarea = tarea_pendiente(u, "escaneo_maestro")
+        escanear_unidad(config, u["unidad_id"], cfg_unidad["ruta"], args.dry_run, tarea_id=tarea["id"] if tarea else None)
 
     return 0
 

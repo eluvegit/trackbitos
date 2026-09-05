@@ -258,8 +258,36 @@ class Journal extends BaseController
             $starredByCategory[$catName] = $tasks;
         }
 
+        // Lista de "en foco" en orden manual (foco_orden): las tareas sin
+        // orden asignado todavía (NULL) van al final, en el mismo orden por
+        // categoría/prioridad de arriba (sort estable desde PHP 8).
+        $enFocoOrdered = [];
+        foreach ($starredByCategory as $catName => $tasks) {
+            foreach ($tasks as $t) {
+                if (!empty($t['en_foco'])) {
+                    $t['cat'] = $catName;
+                    $enFocoOrdered[] = $t;
+                }
+            }
+        }
+        usort($enFocoOrdered, function ($a, $b) {
+            $ordenA = $a['foco_orden'] ?? null;
+            $ordenB = $b['foco_orden'] ?? null;
+            if ($ordenA === null && $ordenB === null) {
+                return 0;
+            }
+            if ($ordenA === null) {
+                return 1;
+            }
+            if ($ordenB === null) {
+                return -1;
+            }
+            return $ordenA <=> $ordenB;
+        });
+
         return view('journal/focalizar', [
             'starredByCategory' => $starredByCategory,
+            'enFocoOrdered'     => $enFocoOrdered,
         ]);
     }
 
@@ -283,9 +311,42 @@ class Journal extends BaseController
         }
 
         $enFoco = empty($task['en_foco']) ? 1 : 0;
-        $this->taskModel->update($taskId, ['en_foco' => $enFoco]);
+        $update = ['en_foco' => $enFoco];
+
+        if ($enFoco === 1) {
+            // Nueva en el foco: va al final del orden manual.
+            $maxOrden = $this->taskModel->where('en_foco', 1)->selectMax('foco_orden')->first();
+            $update['foco_orden'] = (int) ($maxOrden['foco_orden'] ?? 0) + 1;
+        } else {
+            $update['foco_orden'] = null;
+        }
+
+        $this->taskModel->update($taskId, $update);
 
         return $this->response->setJSON(['success' => true, 'en_foco' => $enFoco]);
+    }
+
+    /**
+     * Guarda el orden manual (drag & drop) de la lista "en foco" (AJAX).
+     * Recibe {order: [taskId, ...]} y asigna foco_orden = posición en el
+     * array, ignorando cualquier id que no esté realmente en foco.
+     */
+    public function ordenarFocalizar()
+    {
+        $order = $this->request->getJSON(true)['order'] ?? null;
+        if (!is_array($order) || empty($order)) {
+            return $this->response->setStatusCode(400)->setJSON(['success' => false]);
+        }
+
+        foreach (array_values($order) as $i => $taskId) {
+            $taskId = (int) $taskId;
+            $task = $this->taskModel->find($taskId);
+            if ($task && !empty($task['en_foco'])) {
+                $this->taskModel->update($taskId, ['foco_orden' => $i]);
+            }
+        }
+
+        return $this->response->setJSON(['success' => true]);
     }
 
     /**

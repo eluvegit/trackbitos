@@ -7,9 +7,12 @@ use App\Models\SiloFicheroModel;
 use App\Models\SiloPiezaAtributoModel;
 use App\Models\SiloPiezaModel;
 use App\Models\SiloProxyModel;
+use App\Models\SiloTareaModel;
 use App\Models\SiloUbicacionModel;
+use App\Models\SiloUnidadBucketModel;
 use App\Models\SiloUnidadModel;
 use App\Models\SiloVocabularioModel;
+use App\Services\SiloPropagacionService;
 use App\Services\SiloService;
 use CodeIgniter\Exceptions\PageNotFoundException;
 
@@ -31,20 +34,26 @@ class Web extends BaseController
     protected SiloUnidadModel $unidadModel;
     protected SiloFicheroModel $ficheroModel;
     protected SiloProxyModel $proxyModel;
+    protected SiloTareaModel $tareaModel;
+    protected SiloUnidadBucketModel $unidadBucketModel;
     protected SiloService $silo;
+    protected SiloPropagacionService $propagacion;
 
     public function __construct()
     {
         helper('silo');
 
-        $this->piezaModel       = new SiloPiezaModel();
-        $this->atributoModel    = new SiloPiezaAtributoModel();
-        $this->ubicacionModel   = new SiloUbicacionModel();
-        $this->vocabularioModel = new SiloVocabularioModel();
-        $this->unidadModel      = new SiloUnidadModel();
-        $this->ficheroModel     = new SiloFicheroModel();
-        $this->proxyModel       = new SiloProxyModel();
-        $this->silo             = new SiloService();
+        $this->piezaModel        = new SiloPiezaModel();
+        $this->atributoModel     = new SiloPiezaAtributoModel();
+        $this->ubicacionModel    = new SiloUbicacionModel();
+        $this->vocabularioModel  = new SiloVocabularioModel();
+        $this->unidadModel       = new SiloUnidadModel();
+        $this->ficheroModel      = new SiloFicheroModel();
+        $this->proxyModel        = new SiloProxyModel();
+        $this->tareaModel        = new SiloTareaModel();
+        $this->unidadBucketModel = new SiloUnidadBucketModel();
+        $this->silo              = new SiloService();
+        $this->propagacion       = new SiloPropagacionService();
     }
 
     public function index()
@@ -71,15 +80,66 @@ class Web extends BaseController
     /** "Mi PC": todas las unidades como discos del explorador, para entrar en cada una. */
     public function miPc()
     {
+        $porNivel = [
+            1 => $this->unidadModel->porNivel(1),
+            2 => $this->unidadModel->porNivel(2),
+            3 => $this->unidadModel->porNivel(3),
+        ];
+
         // "Mi PC" es el mapa unidad definida -> disco físico real: solo
         // interesa poder reconocer cada unidad, no qué contiene.
         return view('silo/mi_pc', [
-            'porNivel' => [
-                1 => $this->unidadModel->porNivel(1),
-                2 => $this->unidadModel->porNivel(2),
-                3 => $this->unidadModel->porNivel(3),
-            ],
+            'porNivel'        => $porNivel,
+            'bucketsPorUnidad' => $this->bucketsPorNivel($porNivel),
         ]);
+    }
+
+    /**
+     * Recalcula el reparto de Nivel 2 entre las unidades **ya dadas de
+     * alta** (SiloPropagacionService::aplicarPlanNivel2()) — botón
+     * "Recalcular reparto" en /silo/unidades. No borra ni crea unidades
+     * (conserva identificación física/ruta de montaje/etiqueta puestas a
+     * mano); solo reconstruye qué años tiene cada una y las ubicaciones de
+     * copia 2. Vuelve a llamarse cuando das de alta una unidad nueva o
+     * cuánto ha crecido el contenido.
+     */
+    public function recalcularNivel2()
+    {
+        $plan = $this->propagacion->aplicarPlanNivel2();
+
+        if ($plan === []) {
+            return redirect()->to(site_url('silo/unidades'))->with('error', 'No hay unidades de Nivel 2 con capacidad dada de alta todavía.');
+        }
+
+        $problemas = count(array_filter($plan, fn ($run) => $run['estado'] !== 'ok'));
+        $aviso = $problemas > 0
+            ? " ({$problemas} tramo(s) sin sitio — ver el aviso en la tarjeta o dar de alta más unidades)"
+            : '';
+
+        return redirect()->to(site_url('silo/unidades'))->with('success', count($plan) . ' tramo(s) de Nivel 2 recalculados.' . $aviso);
+    }
+
+    /**
+     * Años/categorías de cada unidad de Nivel 2/3 ya comprimidos en
+     * notación de rango ("2010-2018"), para mostrar en vez de `agrupador`
+     * (que queda vacío en las unidades combinadas por
+     * SiloPropagacionService::aplicarPlanNivel2() — una unidad ya puede
+     * agrupar varios años consecutivos, ver docs/silo-ingesta-propagacion.md).
+     *
+     * @param array<int, array> $porNivel
+     * @return array<int, string>
+     */
+    private function bucketsPorNivel(array $porNivel): array
+    {
+        $buckets = [];
+        foreach ([2, 3] as $nivel) {
+            foreach ($porNivel[$nivel] ?? [] as $u) {
+                $lista               = $this->unidadBucketModel->bucketsDe((int) $u['id']);
+                $buckets[$u['id']] = $lista !== [] ? $this->silo->comprimirAnios($lista) : '';
+            }
+        }
+
+        return $buckets;
     }
 
     public function create()
@@ -262,18 +322,63 @@ class Web extends BaseController
         ];
 
         // Solo para reforzar la confirmación de borrado si la unidad tiene
-        // contenido registrado.
+        // contenido registrado; `excedePorUnidad` avisa cuando lo que ya
+        // pesa la unidad supera su capacidad declarada — con años que no
+        // se pueden fragmentar (SiloPropagacionService::calcularPlanNivel2()),
+        // "cabe un año entero o no cabe" es una posibilidad real que hay que
+        // ver en la propia tarjeta, no solo en la salida del comando.
         $piezasPorUnidad = [];
+        $excedePorUnidad = [];
         foreach ($porNivel as $unidadesNivel) {
             foreach ($unidadesNivel as $u) {
                 $piezasPorUnidad[$u['id']] = $this->ubicacionModel->contarPorUnidad($u['id']);
+
+                $usado = $this->ubicacionModel->sumaTamanoPorUnidad($u['id']);
+                $excedePorUnidad[$u['id']] = $u['capacidad_bytes'] !== null && $usado > (int) $u['capacidad_bytes'];
             }
         }
 
+        // Estado del último escaneo pedido a cada unidad Maestro (nivel 1):
+        // el resto de niveles no se escanean (no son Maestro, plan Silo §2).
+        $tareasPorUnidad = [];
+        foreach ($porNivel[1] as $u) {
+            $tareasPorUnidad[$u['id']] = $this->tareaModel->ultimaDeUnidad((int) $u['id'], 'escaneo_maestro');
+        }
+
         return view('silo/unidades', [
-            'porNivel'        => $porNivel,
-            'piezasPorUnidad' => $piezasPorUnidad,
+            'porNivel'         => $porNivel,
+            'piezasPorUnidad'  => $piezasPorUnidad,
+            'excedePorUnidad'  => $excedePorUnidad,
+            'tareasPorUnidad'  => $tareasPorUnidad,
+            'bucketsPorUnidad' => $this->bucketsPorNivel($porNivel),
         ]);
+    }
+
+    /**
+     * Encola un escaneo_maestro para que el agente `.py` de esa máquina lo
+     * recoja (modo `--daemon`, sondeo periódico, o la próxima vez que se
+     * lance a mano — ver silo-agente/agente.py). La web nunca toca disco:
+     * solo dejar la petición en `silo_tareas`, aprobada porque quien la pide
+     * es el dueño de la unidad, no un tercero.
+     */
+    public function solicitarEscaneo(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        if (!$unidad) {
+            throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
+        }
+
+        if ((int) $unidad['nivel'] !== 1) {
+            return redirect()->to(site_url('silo/unidades'))->with('error', 'Solo las unidades Maestro (nivel 1) se escanean.');
+        }
+
+        if ($this->tareaModel->pendienteDeUnidad($id, 'escaneo_maestro')) {
+            return redirect()->to(site_url('silo/unidades'))->with('success', 'Ya había un escaneo pendiente para esta unidad: se ejecutará en cuanto el agente de esa máquina conecte.');
+        }
+
+        $this->tareaModel->crear($id, 'escaneo_maestro');
+
+        return redirect()->to(site_url('silo/unidades'))->with('success', 'Escaneo solicitado: se ejecutará en cuanto el agente de esa máquina conecte.');
     }
 
     /** Contenido de una unidad, estilo "abrir esta carpeta en el explorador". */
@@ -284,10 +389,13 @@ class Web extends BaseController
             throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
         }
 
+        $orden = $this->request->getGet('orden') === 'fecha' ? 'fecha' : 'nombre';
+
         return view('silo/unidad', [
             'unidad' => $unidad,
-            'piezas' => $this->piezaModel->deLaUnidad($id),
+            'piezas' => $this->piezaModel->deLaUnidad($id, $orden),
             'vista'  => $this->vistaSolicitada(),
+            'orden'  => $orden,
         ]);
     }
 
@@ -376,9 +484,13 @@ class Web extends BaseController
             $agrupador = $this->silo->slugify($agrupador);
         }
 
-        $capacidadTb = $this->request->getPost('capacidad_tb');
-        $capacidadBytes = ($capacidadTb !== null && $capacidadTb !== '')
-            ? (int) round((float) str_replace(',', '.', $capacidadTb) * 1_000_000_000_000)
+        // GB o TB (no solo TB, plan Silo §7: un USB de 64GB en TB sería
+        // 0.064 — inutilizable con el mínimo de 0.5 que tenía el campo
+        // antes de la corrección 2026-09-05).
+        $capacidadValor  = $this->request->getPost('capacidad_valor');
+        $capacidadUnidad = $this->request->getPost('capacidad_unidad') === 'tb' ? 'tb' : 'gb';
+        $capacidadBytes  = ($capacidadValor !== null && $capacidadValor !== '')
+            ? (int) round((float) str_replace(',', '.', $capacidadValor) * ($capacidadUnidad === 'tb' ? 1_000_000_000_000 : 1_000_000_000))
             : null;
 
         $rutaMontaje = trim((string) $this->request->getPost('ruta_montaje'));

@@ -13,8 +13,11 @@ script no clasifica nada, solo lista disco y reporta.
 - Ficheros sin hash todavía (`tamano_bytes` sí, `hash` no) — la web los
   acepta igual; simplemente no hay detección de cambios real todavía
   (eso es N0–N3 del doc, pendiente).
-- Sin cola de tareas real: cada ejecución hace handshake + escanea + reporta
-  en el momento, no espera aprobación humana desde la web.
+- Cola de tareas real solo para `escaneo_maestro`: la web puede pedir un
+  escaneo (botón "Solicitar escaneo" en `/silo/unidades`) y este script lo
+  detecta en el `handshake` y lo cierra — ver "Lanzarlo desde la web" más
+  abajo. Otros tipos de tarea (mover piezas, propagación física) siguen sin
+  aprobación humana ni cola real.
 - Sin generación de proxies (fotos/vídeo de muestra) ni réplica de BD en el
   disco — siguen simulados/pendientes en la web.
 
@@ -39,9 +42,35 @@ script no clasifica nada, solo lista disco y reporta.
    reconoce cada unidad configurada (útil para verificar `config.json`
    antes de escanear de verdad).
 5. `python agente.py` — escanea e ingesta de verdad.
+6. `python agente.py --daemon [--intervalo N]` — se queda corriendo,
+   sondeando cada `N` segundos (por defecto 20); a diferencia del modo de
+   una pasada, aquí **no escanea solo** — espera a que la web pida un
+   escaneo (ver siguiente sección).
 
 Sin dependencias fuera de la librería estándar de Python 3 (mismo criterio
 que `../piezas-cli/trackbitos.py`): no hace falta `pip install` nada.
+
+## Comando de terminal (`silo`)
+
+Igual que `trackbitos`/`stl` (ver perfil de PowerShell): la función `silo`
+llama a este script sin tener que hacer `cd` ni recordar la ruta —
+`silo`, `silo --daemon`, `silo --dry-run`, etc. desde cualquier carpeta.
+
+## Lanzarlo desde la web
+
+`/silo/unidades` tiene un botón "Solicitar escaneo" en cada unidad Maestro
+(nivel 1) que deja una tarea `escaneo_maestro` pendiente en `silo_tareas` —
+la web nunca toca disco, solo anota la petición. Este script la recoge de
+dos formas:
+
+- **Pasada manual** (`silo`): escanea siempre igual, y si de paso hay una
+  tarea pendiente para esa unidad, la cierra con el mismo resultado.
+- **`silo --daemon`**: pensado para dejarlo corriendo en una terminal (o de
+  fondo) mientras el disco está conectado — no escanea solo, solo cuando
+  detecta la tarea en el sondeo.
+
+En ambos casos la tarjeta de la unidad en `/silo/unidades` refleja el
+estado (esperando agente / escaneado hace X / error).
 
 ## Siguiente paso, cuando esto funcione
 

@@ -57,18 +57,30 @@ class SiloPiezaModel extends Model
         return $this->adjuntarAtributos($builder->findAll());
     }
 
-    /** Piezas que viven en una unidad, estilo "contenido de esta carpeta" (orden alfabético, como un explorador). */
-    public function deLaUnidad(int $unidadId): array
+    /**
+     * Piezas que viven en una unidad, estilo "contenido de esta carpeta".
+     * `$orden`: 'nombre' (por defecto, alfabético = orden de alta dentro
+     * del año gracias al correlativo del ID, como un explorador) o 'fecha'
+     * (cronológico de verdad — útil sobre todo en una unidad de Nivel 2
+     * "Año", donde el ID de alta no coincide con el orden real de las
+     * fechas; petición 2026-09-05). Sin fecha va al final, no al principio.
+     */
+    public function deLaUnidad(int $unidadId, string $orden = 'nombre'): array
     {
-        return $this->adjuntarAtributos(
-            $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
-                ->join('silo_ubicaciones', 'silo_ubicaciones.pieza_id = silo_piezas.id')
-                ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
-                ->where('silo_ubicaciones.unidad_id', $unidadId)
-                ->groupBy('silo_piezas.id')
-                ->orderBy('silo_piezas.nombre_carpeta', 'ASC')
-                ->findAll()
-        );
+        $query = $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
+            ->join('silo_ubicaciones', 'silo_ubicaciones.pieza_id = silo_piezas.id')
+            ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
+            ->where('silo_ubicaciones.unidad_id', $unidadId)
+            ->groupBy('silo_piezas.id');
+
+        if ($orden === 'fecha') {
+            $query->orderBy('silo_piezas.fecha IS NULL', 'ASC', false)
+                  ->orderBy('silo_piezas.fecha', 'ASC');
+        } else {
+            $query->orderBy('silo_piezas.nombre_carpeta', 'ASC');
+        }
+
+        return $this->adjuntarAtributos($query->findAll());
     }
 
     /**

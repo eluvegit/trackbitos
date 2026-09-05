@@ -36,10 +36,22 @@ class SiloUnidadModel extends Model
         return $ultimo ? ((int) $ultimo['numero'] + 1) : 1;
     }
 
-    /** Unidades ya destinadas a un mismo "cubo" de propagación (mismo año o misma categoría), en orden de creación. */
+    /**
+     * Unidades ya destinadas a un mismo "cubo" de propagación (mismo año o
+     * misma categoría), en orden de creación. Busca en `silo_unidad_buckets`
+     * (no en la columna `agrupador`, que queda vacía en las unidades de
+     * Nivel 2 combinadas por SiloPropagacionService::aplicarPlanNivel2() —
+     * el backfill de esa tabla cubre también las unidades antiguas de
+     * bucket único, así que esta es ya la única fuente de verdad).
+     */
     public function buscarPorAgrupador(int $nivel, string $agrupador): array
     {
-        return $this->where('nivel', $nivel)->where('agrupador', $agrupador)->orderBy('numero', 'ASC')->findAll();
+        return $this->select('silo_unidades.*')
+            ->join('silo_unidad_buckets', 'silo_unidad_buckets.unidad_id = silo_unidades.id')
+            ->where('silo_unidades.nivel', $nivel)
+            ->where('silo_unidad_buckets.bucket', $agrupador)
+            ->orderBy('silo_unidades.numero', 'ASC')
+            ->findAll();
     }
 
     /** Resuelve una unidad por la ruta de montaje que reporta el agente `.py` en el handshake. */
