@@ -781,7 +781,7 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                           // orientada como se va a imprimir. Vacío = "sin medir": esa
                                           // pieza se queda fuera del cálculo hasta que alguien la mida. ?>
                                     <form method="post" action="<?= site_url('piezas/stl/' . (int) $stl['id'] . '/medidas') ?>"
-                                        class="d-inline-flex align-items-center gap-1">
+                                        class="d-flex flex-wrap align-items-center gap-1">
                                         <?= csrf_field() ?>
                                         <input type="text" inputmode="decimal" name="ancho"
                                             max="<?= \App\Services\PiezaEmpaquetadoService::PLACA_ANCHO_MM ?>"
@@ -795,11 +795,48 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                                             class="form-control form-control-sm py-0 px-1" style="width: 3.6em;"
                                             title="Fondo en mm (caja de ocupación de Chitubox)" placeholder="fon">
                                         <span class="text-muted small">mm</span>
+                                        <?php // Volumen y peso CON SOPORTES del laminador (Chitubox), para
+                                              // el coste de resina — en su propia línea, que si no la fila
+                                              // se sale del sitio. Vacío = "sin apuntar": ese trozo se queda
+                                              // fuera del coste hasta que alguien lo mida. ?>
+                                        <div class="w-100"></div>
+                                        <input type="text" inputmode="decimal" name="volumen_soportes"
+                                            value="<?= esc(($stl['volumen_soportes_ml'] ?? null) !== null ? rtrim(rtrim($stl['volumen_soportes_ml'], '0'), '.') : '', 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 4em;"
+                                            title="Volumen con soportes en mL (Chitubox)" placeholder="vol">
+                                        <span class="text-muted small">mL</span>
+                                        <input type="text" inputmode="decimal" name="peso_soportes"
+                                            value="<?= esc(($stl['peso_soportes_g'] ?? null) !== null ? rtrim(rtrim($stl['peso_soportes_g'], '0'), '.') : '', 'attr') ?>"
+                                            class="form-control form-control-sm py-0 px-1" style="width: 4em;"
+                                            title="Peso con soportes en g (Chitubox)" placeholder="peso">
+                                        <span class="text-muted small">g</span>
                                         <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Guardar medida">
                                             <i class="bi bi-check-lg"></i>
                                         </button>
                                     </form>
                                 <?php endforeach; ?>
+
+                                <?php // Resina de la versión: suma del volumen/peso con soportes de sus
+                                      // trozos y, si hay precio puesto y están todos apuntados, el coste. ?>
+                                <?php if (!empty($v['resina']['aplica'])): ?>
+                                    <?php $r = $v['resina']; ?>
+                                    <div class="w-100 small text-muted mt-1">
+                                        <i class="bi bi-droplet"></i>
+                                        <?php if ($r['completos'] === 0): ?>
+                                            Sin volumen con soportes apuntado — apúntalo en cada trozo para el coste de resina.
+                                        <?php else: ?>
+                                            <?= esc(rtrim(rtrim(number_format($r['volumen_ml'], 2, ',', '.'), '0'), ',')) ?> mL
+                                            · <?= esc(rtrim(rtrim(number_format($r['peso_g'], 2, ',', '.'), '0'), ',')) ?> g con soportes
+                                            <?php if ($r['coste_eur'] !== null): ?>
+                                                · <strong><?= esc(number_format($r['coste_eur'], 2, ',', '.')) ?> €</strong> de resina
+                                            <?php elseif ($r['completos'] < $r['total']): ?>
+                                                · faltan <?= (int) ($r['total'] - $r['completos']) ?> de <?= (int) $r['total'] ?> trozos por apuntar
+                                            <?php else: ?>
+                                                · pon el precio de la resina (menú «Resina» del índice) para ver el coste
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
 
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
                                     data-bs-toggle="modal" data-bs-target="#modalStl<?= $v['id'] ?>">

@@ -54,40 +54,6 @@
     }
 </style>
 
-<?php
-function time_ago(?string $datetime): string
-{
-    if (!$datetime) {
-        return 'sin actividad';
-    }
-
-    $time = strtotime($datetime);
-    $diff = time() - $time;
-
-    $days = floor($diff / 86400); // segundos en un día
-    if ($days < 1) {
-        return 'hoy';
-    }
-
-    if ($days < 7) {
-        return "hace {$days} días";
-    }
-
-    $weeks = floor($days / 7);
-    if ($weeks < 5) {
-        return "hace {$weeks} sem";
-    }
-
-    $months = floor($days / 30);
-    if ($months < 12) {
-        return "hace {$months} meses";
-    }
-
-    $years = floor($days / 365);
-    return "hace {$years} años";
-}
-?>
-
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
     <h3 class="mb-0" style="line-height: 1;">Journal</h3>
     <div class="btn-group btn-group-sm journal-toolbar">
@@ -100,106 +66,17 @@ function time_ago(?string $datetime): string
         <button id="toggleAllBtn" class="btn btn-outline-secondary" type="button" title="Mostrar todo">
             <i class="bi bi-arrows-expand"></i>
         </button>
-        <?php
-        // Prioridad
-        $priorityNext = $filterPriority ? 0 : 1; // Esto está bien, sigue funcionando
-        $priorityClass = $filterPriority ? 'btn-primary' : 'btn-outline-primary';
-
-        // Focus
-        $focusNext = $filterFocus === 'focus' ? 'todas' : 'focus';
-        $focusClass = $filterFocus === 'focus' ? 'btn-primary' : 'btn-outline-primary';
-
-        // Vista
-        $portadasNext = $view_mode === 'portadas' ? 'listado' : 'portadas';
-        $portadasClass = $view_mode === 'portadas' ? 'btn-primary' : 'btn-outline-primary';
-
-        // Hechos
-        $hechosNext = $filterHechos === 'ocultar' ? 'mostrar' : 'ocultar';
-        $hechosClass = $filterHechos === 'ocultar' ? 'btn-primary' : 'btn-outline-primary';
-
-        // Cada enlace envía solo la clave que cambia; las demás se quedan
-        // como estén guardadas en su propia cookie (stickyFilter), para que
-        // un valor "congelado" en esta renderización no pise a otro filtro
-        // que se haya cambiado después en otra pestaña/carga.
-        $qs = fn($overrides) => http_build_query($overrides);
-        ?>
-
-            <!-- Prioridad -->
-            <a href="<?= site_url('journal') . '?' . $qs(['priority' => $priorityNext]) ?>"
-                class="btn <?= $priorityClass ?>" title="Prioridad">
-                <!-- Icono de exclamación -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-circle" viewBox="0 0 16 16">
-                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0-1A6 6 0 1 1 8 2a6 6 0 0 1 0 12z" />
-                    <path d="M7.002 11a1 1 0 1 0 2 0 1 1 0 0 0-2 0zm.93-6.481a.5.5 0 0 1 .538.497v3.967a.5.5 0 0 1-1 0V5.016a.5.5 0 0 1 .462-.497z" />
-                </svg>
-            </a>
-
-            <!-- Focus -->
-            <a href="<?= site_url('journal') . '?' . $qs(['filterFocus' => $focusNext]) ?>"
-                class="btn <?= $focusClass ?>" title="Focus">
-                <?php if ($filterFocus === 'focus'): ?>
-                    <!-- Estrella rellena -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ffc107" class="bi bi-star-fill" viewBox="0 0 16 16">
-                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                    </svg>
-                <?php else: ?>
-                    <!-- Estrella vacía -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#adb5bd" class="bi bi-star" viewBox="0 0 16 16">
-                        <path d="M2.866 14.85c-.078.444.36.791.746.593L8 13.187l4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.523-3.356c.329-.314.158-.888-.283-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.495 4.935l-4.898.696c-.441.062-.612.636-.282.95l3.523 3.356-.83 4.73zM8 12.027l-3.763 1.933.717-4.088-2.97-2.829 4.102-.583L8 2.223l1.914 3.237 4.102.583-2.97 2.828.717 4.089L8 12.027z" />
-                    </svg>
-                <?php endif; ?>
-            </a>
-
-            <!-- Hechos -->
-            <a href="<?= site_url('journal') . '?' . $qs(['hechos' => $hechosNext]) ?>"
-                class="btn <?= $hechosClass ?>" title="<?= $filterHechos === 'ocultar' ? 'Mostrar hechos' : 'Ocultar hechos' ?>">
-                <?php if ($filterHechos === 'ocultar'): ?>
-                    <!-- Ojo tachado: los hechos están ocultos -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye-slash" viewBox="0 0 16 16">
-                        <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A6 6 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z" />
-                        <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z" />
-                        <path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.879 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z" />
-                    </svg>
-                <?php else: ?>
-                    <!-- Ojo abierto: los hechos están visibles -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
-                        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.133 13.133 0 0 1 1.172 8z" />
-                        <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
-                    </svg>
-                <?php endif; ?>
-            </a>
-
-            <!-- Vista -->
-            <a href="<?= site_url('journal') . '?' . $qs(['view' => $portadasNext]) ?>"
-                class="btn <?= $portadasClass ?>" title="Vista">
-                <?php if ($view_mode === 'portadas'): ?>
-                    <!-- Icono de cuadrícula -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-grid" viewBox="0 0 16 16">
-                        <path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-2z" />
-                    </svg>
-                <?php else: ?>
-                    <!-- Icono de lista -->
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
-                    </svg>
-                <?php endif; ?>
-            </a>
+        <span id="journalToolbarFilters" style="display:contents">
+            <?= view('journal/_toolbar_filters', [
+                'filterPriority' => $filterPriority,
+                'filterFocus'    => $filterFocus,
+                'filterHechos'   => $filterHechos,
+                'view_mode'      => $view_mode,
+            ]) ?>
+        </span>
     </div>
 </div>
 
-<?php
-$taskCounts = [];
-foreach ($categories as $category) {
-    $catName = $category['name'];
-    $catTasksAll = $allTasksByCategory[$catName] ?? [];
-
-    $taskCounts[$catName] = [
-        'total'     => count($catTasksAll),
-        'current'   => count(array_filter($catTasksAll, fn($t) => !empty($t['is_current']))),
-        'completed' => count(array_filter($catTasksAll, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')),
-    ];
-}
-?>
 
 <style>
     .journal-grid {
@@ -375,340 +252,17 @@ foreach ($categories as $category) {
     }
 </style>
 
-<div class="journal-grid">
-<?php foreach ($categories as $category): ?>
-    <?php
-    $catId = $category['id'];
-    $catName = $category['name'];
-    $catColor = $category['color'] ?? '#000000';
-    $catTasks = $tasksByCategory[$catName] ?? [];
-
-    // Tiempo total de tareas actuales no completadas
-    $totalHours = number_format(($totalTimeByCategory[$catName] ?? 0) / 60, 2);
-
-
-    // Contar tareas completadas
-    $completedCount = 0;
-    foreach ($catTasks as $task) {
-        if (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') {
-            $completedCount++;
-        }
-    }
-    ?>
-
-    <?php
-    $totalTasks = count($catTasks); // total de tareas en la categoría
-    $currentTasks = count(array_filter($catTasks, fn($t) => !empty($t['is_current']))); // actuales
-    $completedTasks = count(array_filter($catTasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00')); // completadas
-    ?>
-    <?php
-    $counts = $taskCounts[$catName] ?? ['total' => 0, 'current' => 0, 'completed' => 0];
-    ?>
-    <div class="card h-100">
-        <div class="card-header d-flex justify-content-between align-items-center p-0" data-bs-toggle="collapse" href="#cat-<?= $catId ?>">
-            <?php
-            $current = $counts['current'];
-            $completed = $counts['completed'];
-            $total = max(1, $counts['total']); // evitar división por 0
-
-            $currentPerc = round(($current / $total) * 100);
-            $completedPerc = round(($completed / $total) * 100);
-            $remainingPerc = 100 - $currentPerc - $completedPerc;
-            ?>
-            <!-- Fondo título -->
-            <div style="background-color: <?= esc($catColor) ?>; padding: 0.25rem 0.5rem; flex-grow:1; display:flex; align-items:center; gap:0.5rem;">
-
-                <!-- Izquierda -->
-                <div class="d-flex align-items-center gap-2">
-                    <span style="display:inline-block; width:35px; text-align:right;">
-                        <?= $progressByCategory[$catName]['completed'] ?>/<?= max(1, $progressByCategory[$catName]['total']) ?>
-                    </span>
-
-                    <strong><?= esc($catName) ?></strong>
-                    <?php
-                    $lastCategoryDate = $lastCategoryActivity[$catName] ?? null;
-                    ?>
-                    <span class="small text-muted">
-                        <strong><?= time_ago($lastCategoryDate) ?></strong>
-                    </span>
-
-                </div>
-
-                <!-- Derecha -->
-                <span class="small ms-auto"><?= $totalHours ?> h</span>
-            </div>
-
-            <div style="position: relative; display:flex; width:50px; height:16px; margin-left:0.5rem; border-radius:4px; overflow:hidden; border:1px solid #ccc; cursor:pointer;"
-                title="Actuales: <?= $progressByCategory[$category['name']]['current'] ?>, Completadas: <?= $progressByCategory[$category['name']]['completed'] ?>, Total: <?= $progressByCategory[$category['name']]['total'] ?>">
-
-                <div style="width:<?= $progressByCategory[$category['name']]['currentPerc'] ?>%; background-color:#ffc107;"></div>
-                <div style="width:<?= $progressByCategory[$category['name']]['completedPerc'] ?>%; background-color:#198754;"></div>
-                <div style="width:<?= $progressByCategory[$category['name']]['remainingPerc'] ?>%; background-color:#e9ecef;"></div>
-            </div>
-        </div>
-
-        <div class="collapse" id="cat-<?= $catId ?>">
-            <div class="card-body">
-                <?php
-                usort($catTasks, function ($a, $b) {
-                    // 1. Estados booleanos
-                    $aDone = (!empty($a['end_time']) && $a['end_time'] !== '0000-00-00 00:00:00');
-                    $bDone = (!empty($b['end_time']) && $b['end_time'] !== '0000-00-00 00:00:00');
-                    $aCurrent = !empty($a['is_current']);
-                    $bCurrent = !empty($b['is_current']);
-
-                    // --- PRIORIDAD 1: GRUPOS (Actuales > Pendientes > Completadas) ---
-                    if ($aDone !== $bDone) return $aDone ? 1 : -1;
-                    if ($aCurrent !== $bCurrent) return $aCurrent ? -1 : 1;
-
-                    // --- PRIORIDAD 2: PROGRESO (Mayor a Menor) ---
-                    // Calculamos el ratio de progreso (completado / amplitud)
-                    $aAmp = (int)($a['amplitude'] ?? 0);
-                    $bAmp = (int)($b['amplitude'] ?? 0);
-                    $aProg = $aAmp > 0 ? (int)($a['completed'] ?? 0) / $aAmp : 0;
-                    $bProg = $bAmp > 0 ? (int)($b['completed'] ?? 0) / $bAmp : 0;
-
-                    if ($aProg !== $bProg) {
-                        return ($aProg > $bProg) ? -1 : 1;
-                    }
-
-                    // --- PRIORIDAD 3: TIEMPO INVERTIDO (Mayor a Menor) ---
-                    $aTime = (int)($a['time_spent'] ?? 0);
-                    $bTime = (int)($b['time_spent'] ?? 0);
-
-                    if ($aTime === $bTime) return 0;
-                    return ($aTime > $bTime) ? -1 : 1;
-                });
-                ?>
-                <?php if ($view_mode === 'listado'): ?>
-                    <!-- MODO LISTA -->
-                    <ul class="list-group mb-2" id="task-list-<?= $catId ?>">
-                        <?php if (empty($catTasks)): ?>
-                            <li class="list-group-item text-muted">No hay tareas aún.</li>
-                        <?php else: ?>
-                            <?php foreach ($catTasks as $task): ?>
-                                <?php
-                                $amplitude = (int)($task['amplitude'] ?? 0);
-                                $completed = (int)($task['completed'] ?? 0);
-                                $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
-                                $filled = (int)floor($percentage / 10);
-                                ?>
-
-                                <?php
-                                // Detectar si está completada
-                                $isDone = (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00');
-                                ?>
-                                <li class="list-group-item p-1 <?= $isDone ? 'opacity-50' : '' ?>">
-
-                                    <?php
-                                    $subs = $subtasksByTask[$task['id']] ?? [];
-                                    $subsTotal = count($subs);
-                                    $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
-                                    ?>
-
-                                    <!-- Fila principal. El orden visual de los cinco hijos se controla con
-                                         clases order-*: en móvil se queda como estaba (estrella, título,
-                                         subtareas, terminar, tiempo); en escritorio (>=lg) las subtareas se
-                                         adelantan a justo después de la estrella, para no tener que saltar de
-                                         un extremo a otro de la fila al abrirlas. -->
-                                    <div class="d-flex align-items-center gap-2">
-
-                                        <!-- Estrella -->
-                                        <span class="current-star btn-toggle-current order-1"
-                                            data-task-id="<?= $task['id'] ?>">
-                                            <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
-                                                <svg xmlns="http://www.w3.org/2000/svg"
-                                                    width="16"
-                                                    height="16"
-                                                    fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>"
-                                                    class="bi bi-star-fill"
-                                                    viewBox="0 0 16 16">
-                                                    <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                                                </svg>
-                                            </button>
-                                        </span>
-
-                                        <!-- Subtareas -->
-                                        <button type="button" class="jt-subtask-toggle order-3 order-lg-2 <?= $subsTotal > 0 ? 'has-subtasks' : '' ?>"
-                                            data-bs-toggle="collapse" data-bs-target="#subtasks-<?= $task['id'] ?>"
-                                            title="Subtareas">
-                                            <i class="bi bi-list-check"></i>
-                                            <?php if ($subsTotal > 0): ?>
-                                                <span class="jt-subtask-count"><?= $subsDone ?>/<?= $subsTotal ?></span>
-                                            <?php endif; ?>
-                                        </button>
-
-                                        <!-- Título + fecha -->
-                                        <div class="d-flex align-items-center gap-1 flex-grow-1 order-2 order-lg-3">
-                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>"
-                                                class="text-decoration-none task-title-link <?= (!empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00') ? 'text-decoration-line-through' : '' ?>">
-                                                <?= esc($task['title']) ?>
-                                            </a>
-
-                                            <!-- Fecha -->
-                                            <span class="small text-muted">
-                                                <?= time_ago($lastTaskActivity[$task['id']] ?? null) ?>
-                                            </span>
-                                        </div>
-
-                                        <!-- Terminar / resumen -->
-                                        <button type="button" class="jt-task-complete-btn js-task-complete order-4 <?= $isDone ? 'is-done' : '' ?>"
-                                            data-task-id="<?= $task['id'] ?>"
-                                            data-title="<?= esc($task['title'], 'attr') ?>"
-                                            data-start="<?= !empty($task['start_time']) && $task['start_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['start_time'])) : '' ?>"
-                                            data-end="<?= !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['end_time'])) : '' ?>"
-                                            data-time="<?= (int)($task['time_spent'] ?? 0) ?>"
-                                            data-note="<?= esc($task['note'] ?? '', 'attr') ?>"
-                                            data-done="<?= $isDone ? '1' : '0' ?>"
-                                            title="<?= $isDone ? 'Ver resumen / reabrir' : 'Marcar como terminada' ?>">
-                                            <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-check2-circle' ?>"></i>
-                                        </button>
-
-                                        <!-- Tiempo -->
-                                        <span class="text-muted small ms-auto order-5 task-time-trigger"
-                                            data-task-id="<?= $task['id'] ?>">
-                                            <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
-                                        </span>
-                                    </div>
-
-                                    <!-- Barra de progreso -->
-                                    <div class="task-progress mt-1" data-task-id="<?= $task['id'] ?>">
-                                        <?php for ($i = 1; $i <= 10; $i++): ?>
-                                            <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>"></div>
-                                        <?php endfor; ?>
-                                    </div>
-
-                                    <!-- Subtareas (inline, plegable) -->
-                                    <div class="collapse jt-inline-subtasks" id="subtasks-<?= $task['id'] ?>">
-                                        <div class="jt-subtask-filters">
-                                            <button type="button" class="jt-subtask-filter-btn js-hide-done" title="Ocultar/mostrar subtareas hechas">
-                                                <i class="bi bi-eye-slash"></i>
-                                            </button>
-                                            <button type="button" class="jt-subtask-filter-btn js-push-done" title="Empujar las hechas al final">
-                                                <i class="bi bi-arrow-down-square"></i>
-                                            </button>
-                                        </div>
-                                        <div class="jt-subtask-list" data-task-id="<?= $task['id'] ?>">
-                                            <?php foreach ($subs as $s): ?>
-                                                <?php $sDone = !empty($s['is_done']); ?>
-                                                <div class="jt-subtask-item <?= $sDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
-                                                    <span class="jt-subtask-handle" title="Arrastrar para reordenar">
-                                                        <i class="bi bi-grip-vertical"></i>
-                                                    </span>
-                                                    <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
-                                                        <i class="bi <?= $sDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
-                                                    </button>
-                                                    <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
-                                                    <div class="jt-subtask-actions">
-                                                        <span class="jt-subtask-time subtask-time-trigger"
-                                                            data-subtask-id="<?= (int)$s['id'] ?>"
-                                                            data-task-id="<?= $task['id'] ?>">
-                                                            <?= number_format(($s['time_spent'] ?? 0) / 60, 2) ?> h
-                                                        </span>
-                                                        <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
-                                                            <i class="bi bi-arrow-bar-up"></i>
-                                                        </button>
-                                                        <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
-                                                            <i class="bi bi-arrow-bar-down"></i>
-                                                        </button>
-                                                        <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
-                                                            <i class="bi bi-pencil"></i>
-                                                        </button>
-                                                        <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
-                                                            <i class="bi bi-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                        <p class="text-muted small mb-2 jt-subtask-empty <?= $subsTotal > 0 ? 'd-none' : '' ?>">Sin subtareas todavía.</p>
-                                        <div class="jt-subtask-add">
-                                            <input type="text" class="form-control form-control-sm jt-subtask-input" placeholder="Nueva subtarea..." maxlength="255">
-                                            <button type="button" class="btn btn-sm btn-primary jt-subtask-add-btn">
-                                                <i class="bi bi-plus-lg"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-primary jt-subtask-suggest-btn" title="Sugerir subtareas">
-                                                <i class="bi bi-stars"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                </li>
-
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </ul>
-                    <input type="text" class="form-control new-task-input" placeholder="Nueva tarea..." data-category-id="<?= $catId ?>">
-                <?php else: ?>
-                    <!-- MODO PORTADAS -->
-                    <div class="d-flex flex-column gap-2 mx-auto" style="max-width: 480px;">
-                        <?php foreach ($catTasks as $task): ?>
-                            <?php
-                            $amplitude = (int)($task['amplitude'] ?? 0);
-                            $completed = (int)($task['completed'] ?? 0);
-                            $percentage = $amplitude > 0 ? min(100, round(($completed / $amplitude) * 100)) : 0;
-                            $filled = (int)floor($percentage / 10);
-                            ?>
-                            <div class="card">
-
-                                    <?php if (!empty($task['image'])): ?>
-                                        <img src="<?= base_url($task['image']) ?>" class="card-img-top" alt="<?= esc($task['title']) ?>" style="height:150px; object-fit:cover;">
-                                    <?php else: ?>
-                                        <div style="height:150px; background-color:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#6c757d;">
-                                            Sin imagen
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <div class="card-body p-2 d-flex flex-column">
-                                        <div class="d-flex align-items-center justify-content-between mb-1">
-                                            <a href="<?= site_url('journal/edit/' . $task['id']) ?>" class="text-decoration-none flex-grow-1 task-title-link">
-                                                <h6 class="card-title mb-0"><?= esc($task['title']) ?></h6>
-                                            </a>
-
-                                            <!-- Estrella -->
-                                            <span class="current-star btn-toggle-current ms-1" data-task-id="<?= $task['id'] ?>" title="Marcar como actual">
-                                                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:24px; height:24px;">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="<?= !empty($task['is_current']) ? '#ffc107' : '#adb5bd' ?>" class="bi bi-star-fill" viewBox="0 0 16 16">
-                                                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z" />
-                                                    </svg>
-                                                </button>
-                                            </span>
-                                        </div>
-
-                                        <?php
-                                        $lastTaskDate = $lastTaskActivity[$task['id']] ?? null;
-                                        ?>
-
-                                        <span class="small text-muted">
-                                            <?= time_ago($lastTaskDate) ?>
-                                        </span>
-
-                                        <!-- Tiempo (clicable para abrir modal) -->
-                                        <span class="text-muted small task-time-trigger mb-1"
-                                            data-task-id="<?= $task['id'] ?>"
-                                            style="cursor:pointer;">
-                                            <?= number_format(($task['time_spent'] ?? 0) / 60, 2) ?> h
-                                        </span>
-
-                                        <!-- Barra de progreso -->
-                                        <?php if ($amplitude > 0): ?>
-                                            <div class="task-progress mt-auto" style="height:6px; display:grid; grid-template-columns:repeat(10,1fr); gap:2px;">
-                                                <?php for ($i = 1; $i <= 10; $i++): ?>
-                                                    <div class="task-progress-segment <?= $i <= $filled ? 'filled' : '' ?>" style="border-radius:2px; background-color: <?= $i <= $filled ? '#198754' : '#e9ecef' ?>;"></div>
-                                                <?php endfor; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-
-            </div>
-        </div>
-    </div>
-<?php endforeach; ?>
+<div class="journal-grid" id="journalGrid">
+<?= view('journal/_grid', [
+    'categories'           => $categories,
+    'tasksByCategory'      => $tasksByCategory,
+    'totalTimeByCategory'  => $totalTimeByCategory,
+    'lastCategoryActivity' => $lastCategoryActivity,
+    'lastTaskActivity'     => $lastTaskActivity,
+    'progressByCategory'   => $progressByCategory,
+    'subtasksByTask'       => $subtasksByTask,
+    'view_mode'            => $view_mode,
+]) ?>
 </div>
 
 <!-- MODAL COMPLETAR TAREA -->
@@ -823,88 +377,152 @@ foreach ($categories as $category) {
 <script>
     document.addEventListener('DOMContentLoaded', function() {
 
-        // Crear tarea
-        document.querySelectorAll('.new-task-input').forEach(input => {
-            input.addEventListener('keypress', function(e) {
-                if (e.key !== 'Enter') return;
-                const title = this.value.trim();
-                const categoryId = this.dataset.categoryId;
-                if (!title || !categoryId) return;
+        // ---------------------------------------------------------------
+        // Filtros / vista: refrescan solo #journalGrid (+ la barra de
+        // filtros) por AJAX, sin recargar la página. journalAllExpanded se
+        // declara aquí (no dentro de un solo bloque) porque tanto el botón
+        // "mostrar todo" como el refresco de filtros necesitan leerla y
+        // tocarla desde closures distintas de este mismo <script>.
+        // ---------------------------------------------------------------
+        const journalGrid = document.getElementById('journalGrid');
+        const journalToolbarFilters = document.getElementById('journalToolbarFilters');
+        window.journalAllExpanded = false;
 
-                fetch('<?= site_url('journal/create') ?>', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: JSON.stringify({
-                            title,
-                            category_id: categoryId
-                        })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (!data.success) {
-                            alert('No se pudo crear la tarea');
-                            return;
-                        }
+        function refreshJournalGrid(params) {
+            // El HTML nuevo siempre nace con las categorías (y cualquier
+            // panel de subtareas) cerradas, así que hay que anotar qué
+            // estaba abierto antes de sustituir el HTML y reabrirlo después,
+            // o el usuario pierde el sitio donde estaba en cada filtro.
+            const expandedIds = [...journalGrid.querySelectorAll('.collapse.show')]
+                .map(el => el.id)
+                .filter(Boolean);
 
-                        const task = data.task;
-                        const list = document.getElementById('task-list-' + categoryId);
+            const url = '<?= site_url('journal/grid') ?>?' + new URLSearchParams(params).toString();
+            return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+                    journalGrid.innerHTML = data.html;
+                    journalToolbarFilters.innerHTML = data.toolbar;
 
-                        // Eliminar mensaje "No hay tareas"
-                        const empty = list.querySelector('.text-muted');
-                        if (empty) empty.remove();
-
-                        // Crear nodo de tarea
-                        const li = document.createElement('li');
-                        li.className = 'list-group-item p-1';
-
-                        li.innerHTML = `
-    <div class="d-flex align-items-center gap-2">
-
-        <div class="d-flex align-items-center gap-1 flex-grow-1">
-
-            <span class="current-star btn-toggle-current" data-task-id="${task.id}">
-                <button style="all:unset; display:flex; align-items:center; justify-content:center; width:28px; height:28px;">
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         width="16"
-                         height="16"
-                         fill="#adb5bd"
-                         class="bi bi-star-fill"
-                         viewBox="0 0 16 16">
-                        <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73-3.523-3.356c-.329-.314-.158-.888.283-.95l4.898-.696 2.043-4.143c.197-.4.73-.4.927 0l2.043 4.143 4.898.696c.441.062.612.636.282.95l-3.523 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"/>
-                    </svg>
-                </button>
-            </span>
-
-            <a href="<?= site_url('journal/edit') ?>/${task.id}"
-               class="text-decoration-none task-title-link">
-                ${task.title}
-            </a>
-
-            <span class="small text-muted">hoy</span>
-        </div>
-
-        <span class="text-muted small ms-auto task-time-trigger"
-              data-task-id="${task.id}">
-            0.00 h
-        </span>
-    </div>
-`;
-
-                        list.appendChild(li);
-
-                        // Limpiar input
-                        input.value = '';
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        alert('Error al crear la tarea');
+                    let anyExpanded = false;
+                    expandedIds.forEach(id => {
+                        const el = document.getElementById(id);
+                        // Puede no existir ya (p. ej. la tarea se filtró al
+                        // ocultar hechos): se ignora sin más.
+                        if (!el) return;
+                        el.classList.add('show');
+                        if (id.startsWith('cat-')) anyExpanded = true;
                     });
 
-            });
+                    // El botón "mostrar todo" refleja si queda alguna
+                    // categoría abierta tras restaurar el estado anterior.
+                    window.journalAllExpanded = anyExpanded;
+                    const toggleAllBtn = document.getElementById('toggleAllBtn');
+                    toggleAllBtn.querySelector('i').className = window.journalAllExpanded ? 'bi bi-arrows-collapse' : 'bi bi-arrows-expand';
+                    toggleAllBtn.title = window.journalAllExpanded ? 'Cerrar todo' : 'Mostrar todo';
+
+                    window.initJournalNewTaskInputs();
+                    window.initJournalSubtaskPanels();
+                    window.applyJournalSubtaskFilters();
+                })
+                .catch(err => console.error(err));
+        }
+
+        document.querySelector('.journal-toolbar').addEventListener('click', function(e) {
+            const link = e.target.closest('.js-journal-filter');
+            if (!link) return;
+            e.preventDefault();
+
+            const url = new URL(link.href, window.location.origin);
+            refreshJournalGrid(Object.fromEntries(url.searchParams.entries()));
         });
+
+        // Repinta la cabecera de una categoría (horas totales, contador
+        // completadas/total y la barra actuales/completadas/resto) con el
+        // "category_summary" que devuelven las acciones que pueden cambiar
+        // esos números (crear tarea, sumar tiempo, completar, marcar
+        // estrella...), sin recargar ni pedir la rejilla entera.
+        function applyCategorySummary(summary) {
+            if (!summary) return;
+            const header = document.querySelector(`.card-header[data-cat-id="${summary.cat_id}"]`);
+            if (!header) return;
+
+            const hours = header.querySelector('.cat-total-hours');
+            if (hours) hours.textContent = summary.totalHours + ' h';
+
+            const counts = header.querySelector('.cat-progress-counts');
+            if (counts) counts.textContent = `${summary.completed}/${Math.max(1, summary.total)}`;
+
+            const bar = header.querySelector('.cat-progress-bar');
+            if (bar) {
+                bar.title = `Actuales: ${summary.current}, Completadas: ${summary.completed}, Total: ${summary.total}`;
+            }
+
+            const current = header.querySelector('.cat-progress-current');
+            if (current) current.style.width = summary.currentPerc + '%';
+
+            const completed = header.querySelector('.cat-progress-completed');
+            if (completed) completed.style.width = summary.completedPerc + '%';
+
+            const remaining = header.querySelector('.cat-progress-remaining');
+            if (remaining) remaining.style.width = summary.remainingPerc + '%';
+        }
+
+        // Crear tarea: el HTML de la fila lo genera el servidor (mismo
+        // partial que usa el listado), así que sale con estrella, botón de
+        // completar, subtareas y barra de progreso funcionales desde el
+        // primer momento (antes se montaba un <li> a mano aquí y se
+        // quedaba corto). Se puede llamar varias veces: cada input se marca
+        // con data-jt-init para no duplicar el listener tras un refresco de
+        // filtros (todos los inputs son nuevos) o una creación (el resto de
+        // inputs ya estaban cableados).
+        window.initJournalNewTaskInputs = function() {
+            document.querySelectorAll('.new-task-input:not([data-jt-init])').forEach(input => {
+                input.dataset.jtInit = '1';
+
+                input.addEventListener('keypress', function(e) {
+                    if (e.key !== 'Enter') return;
+                    const title = this.value.trim();
+                    const categoryId = this.dataset.categoryId;
+                    if (!title || !categoryId) return;
+
+                    fetch('<?= site_url('journal/create') ?>', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ title, category_id: categoryId })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.success) {
+                                alert('No se pudo crear la tarea');
+                                return;
+                            }
+
+                            const list = document.getElementById('task-list-' + categoryId);
+
+                            // Eliminar mensaje "No hay tareas"
+                            const empty = list.querySelector('.text-muted');
+                            if (empty) empty.remove();
+
+                            list.insertAdjacentHTML('beforeend', data.html);
+                            window.initJournalSubtaskPanels();
+                            window.applyJournalSubtaskFilters();
+                            applyCategorySummary(data.category_summary);
+
+                            input.value = '';
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            alert('Error al crear la tarea');
+                        });
+                });
+            });
+        };
+        window.initJournalNewTaskInputs();
 
         // Toggle current
         document.querySelector('.container').addEventListener('click', function(e) {
@@ -920,6 +538,7 @@ foreach ($categories as $category) {
                 .then(res => res.json())
                 .then(data => {
                     btn.querySelector('svg').setAttribute('fill', data.is_current ? '#ffc107' : '#adb5bd');
+                    applyCategorySummary(data.category_summary);
                 });
         });
 
@@ -988,6 +607,8 @@ foreach ($categories as $category) {
 
                     const taskSpan = document.querySelector(`.task-time-trigger[data-task-id="${data.task_id}"]`);
                     if (taskSpan) taskSpan.textContent = (data.task_minutes / 60).toFixed(2) + ' h';
+
+                    applyCategorySummary(data.category_summary);
                 } else {
                     let totalMinutes = 0;
 
@@ -1010,6 +631,8 @@ foreach ($categories as $category) {
                         // Actualizar UI
                         const span = document.querySelector(`.task-time-trigger[data-task-id="${id}"]`);
                         if (span) span.textContent = (totalMinutes / 60).toFixed(2) + ' h';
+
+                        applyCategorySummary(timeData.category_summary);
                     }
 
                     // 2️⃣ Guardar log de fecha si hay
@@ -1125,6 +748,8 @@ foreach ($categories as $category) {
                     const timeSpan = document.querySelector(`.task-time-trigger[data-task-id="${id}"]`);
                     if (timeSpan) timeSpan.textContent = (data.time_spent / 60).toFixed(2) + ' h';
                 }
+
+                applyCategorySummary(data.category_summary);
 
                 taskCompleteModal.hide();
             } catch (err) {
@@ -1337,13 +962,17 @@ foreach ($categories as $category) {
         }
 
         // Filtros visuales de subtareas hechas (ocultar / empujar abajo).
-        // Solo afectan a la presentación: el orden real en el DOM/BD no cambia.
+        // Solo afectan a la presentación: el orden real en el DOM/BD no
+        // cambia. Los botones .js-hide-done/.js-push-done se recrean en
+        // cada refresco de la rejilla, así que se delega el click en
+        // #journalGrid (que sobrevive a los refrescos) en vez de engancharlo
+        // botón a botón.
         const subtaskFilterPrefs = {
             hide: localStorage.getItem('journalSubtaskHideDone') === '1',
             push: localStorage.getItem('journalSubtaskPushDone') === '1',
         };
 
-        function applySubtaskFilters() {
+        window.applyJournalSubtaskFilters = function() {
             document.querySelectorAll('.jt-subtask-list').forEach(list => {
                 list.classList.toggle('hide-done', subtaskFilterPrefs.hide);
                 list.classList.toggle('push-done', subtaskFilterPrefs.push);
@@ -1354,148 +983,154 @@ foreach ($categories as $category) {
             document.querySelectorAll('.js-push-done').forEach(btn => {
                 btn.classList.toggle('active', subtaskFilterPrefs.push);
             });
-        }
+        };
 
-        document.querySelectorAll('.js-hide-done').forEach(btn => {
-            btn.addEventListener('click', () => {
+        document.getElementById('journalGrid').addEventListener('click', (e) => {
+            if (e.target.closest('.js-hide-done')) {
                 subtaskFilterPrefs.hide = !subtaskFilterPrefs.hide;
                 localStorage.setItem('journalSubtaskHideDone', subtaskFilterPrefs.hide ? '1' : '0');
-                applySubtaskFilters();
-            });
-        });
-        document.querySelectorAll('.js-push-done').forEach(btn => {
-            btn.addEventListener('click', () => {
+                window.applyJournalSubtaskFilters();
+            } else if (e.target.closest('.js-push-done')) {
                 subtaskFilterPrefs.push = !subtaskFilterPrefs.push;
                 localStorage.setItem('journalSubtaskPushDone', subtaskFilterPrefs.push ? '1' : '0');
-                applySubtaskFilters();
-            });
-        });
-        applySubtaskFilters();
-
-        document.querySelectorAll('.jt-inline-subtasks').forEach(panel => {
-            const list = panel.querySelector('.jt-subtask-list');
-            const taskId = list.dataset.taskId;
-            const input = panel.querySelector('.jt-subtask-input');
-            const addBtn = panel.querySelector('.jt-subtask-add-btn');
-            const suggestBtn = panel.querySelector('.jt-subtask-suggest-btn');
-            const emptyMsg = panel.querySelector('.jt-subtask-empty');
-
-            suggestBtn.addEventListener('click', () => {
-                requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge);
-            });
-
-            async function addSubtask() {
-                const title = input.value.trim();
-                if (!title) return;
-
-                addBtn.disabled = true;
-                try {
-                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
-                    if (!data.success) throw new Error();
-
-                    list.appendChild(buildSubtaskItem(data.subtask, taskId));
-                    input.value = '';
-                    emptyMsg.classList.add('d-none');
-                    updateToggleBadge(taskId);
-                    updateTaskProgressSegments(taskId, data.progress);
-                } catch (err) {
-                    alert('No se pudo añadir la subtarea.');
-                } finally {
-                    addBtn.disabled = false;
-                    input.focus();
-                }
+                window.applyJournalSubtaskFilters();
             }
-
-            addBtn.addEventListener('click', addSubtask);
-            input.addEventListener('keydown', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addSubtask();
-                }
-            });
-
-            list.addEventListener('click', async e => {
-                const toggleBtn = e.target.closest('.js-toggle-subtask');
-                if (toggleBtn) {
-                    const item = toggleBtn.closest('.jt-subtask-item');
-                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/toggle');
-                    if (!data.success) return;
-
-                    const isDone = !!data.is_done;
-                    item.classList.toggle('is-done', isDone);
-                    toggleBtn.querySelector('i').className = 'bi ' + (isDone ? 'bi-check-circle-fill' : 'bi-circle');
-                    updateToggleBadge(taskId);
-                    updateTaskProgressSegments(taskId, data.progress);
-                    return;
-                }
-
-                const moveTopBtn = e.target.closest('.js-move-top-subtask');
-                if (moveTopBtn) {
-                    const item = moveTopBtn.closest('.jt-subtask-item');
-                    list.prepend(item);
-                    persistSubtaskOrder(list);
-                    return;
-                }
-
-                const moveBottomBtn = e.target.closest('.js-move-bottom-subtask');
-                if (moveBottomBtn) {
-                    const item = moveBottomBtn.closest('.jt-subtask-item');
-                    list.appendChild(item);
-                    persistSubtaskOrder(list);
-                    return;
-                }
-
-                const editBtn = e.target.closest('.js-edit-subtask');
-                if (editBtn) {
-                    subtaskEditItem = editBtn.closest('.jt-subtask-item');
-                    subtaskEditInput.value = subtaskEditItem.querySelector('.jt-subtask-title').textContent;
-                    subtaskEditModal.show();
-                    return;
-                }
-
-                const deleteBtn = e.target.closest('.js-delete-subtask');
-                if (deleteBtn) {
-                    if (!confirm('¿Eliminar esta subtarea?')) return;
-
-                    const item = deleteBtn.closest('.jt-subtask-item');
-                    const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
-                    if (!data.success) return;
-
-                    item.remove();
-                    if (!list.querySelector('.jt-subtask-item')) {
-                        emptyMsg.classList.remove('d-none');
-                    }
-                    updateToggleBadge(taskId);
-                    updateTaskProgressSegments(taskId, data.progress);
-                }
-            });
-
-            Sortable.create(list, {
-                handle: '.jt-subtask-handle',
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                chosenClass: 'sortable-chosen',
-                onEnd: () => persistSubtaskOrder(list),
-            });
         });
+        window.applyJournalSubtaskFilters();
+
+        // Cablea cada panel de subtareas (input, botón añadir, sugerir IA,
+        // lista con sus acciones y el drag&drop). Se puede llamar varias
+        // veces: cada panel se marca con data-jt-init para no duplicar los
+        // listeners al crear una tarea nueva (solo su panel es nuevo; tras
+        // un refresco completo de la rejilla todos lo son).
+        window.initJournalSubtaskPanels = function() {
+            document.querySelectorAll('.jt-inline-subtasks:not([data-jt-init])').forEach(panel => {
+                panel.dataset.jtInit = '1';
+
+                const list = panel.querySelector('.jt-subtask-list');
+                const taskId = list.dataset.taskId;
+                const input = panel.querySelector('.jt-subtask-input');
+                const addBtn = panel.querySelector('.jt-subtask-add-btn');
+                const suggestBtn = panel.querySelector('.jt-subtask-suggest-btn');
+                const emptyMsg = panel.querySelector('.jt-subtask-empty');
+
+                suggestBtn.addEventListener('click', () => {
+                    requestSubtaskSuggestions(taskId, list, emptyMsg, updateToggleBadge);
+                });
+
+                async function addSubtask() {
+                    const title = input.value.trim();
+                    if (!title) return;
+
+                    addBtn.disabled = true;
+                    try {
+                        const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
+                        if (!data.success) throw new Error();
+
+                        list.appendChild(buildSubtaskItem(data.subtask, taskId));
+                        input.value = '';
+                        emptyMsg.classList.add('d-none');
+                        updateToggleBadge(taskId);
+                        updateTaskProgressSegments(taskId, data.progress);
+                    } catch (err) {
+                        alert('No se pudo añadir la subtarea.');
+                    } finally {
+                        addBtn.disabled = false;
+                        input.focus();
+                    }
+                }
+
+                addBtn.addEventListener('click', addSubtask);
+                input.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSubtask();
+                    }
+                });
+
+                list.addEventListener('click', async e => {
+                    const toggleBtn = e.target.closest('.js-toggle-subtask');
+                    if (toggleBtn) {
+                        const item = toggleBtn.closest('.jt-subtask-item');
+                        const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/toggle');
+                        if (!data.success) return;
+
+                        const isDone = !!data.is_done;
+                        item.classList.toggle('is-done', isDone);
+                        toggleBtn.querySelector('i').className = 'bi ' + (isDone ? 'bi-check-circle-fill' : 'bi-circle');
+                        updateToggleBadge(taskId);
+                        updateTaskProgressSegments(taskId, data.progress);
+                        return;
+                    }
+
+                    const moveTopBtn = e.target.closest('.js-move-top-subtask');
+                    if (moveTopBtn) {
+                        const item = moveTopBtn.closest('.jt-subtask-item');
+                        list.prepend(item);
+                        persistSubtaskOrder(list);
+                        return;
+                    }
+
+                    const moveBottomBtn = e.target.closest('.js-move-bottom-subtask');
+                    if (moveBottomBtn) {
+                        const item = moveBottomBtn.closest('.jt-subtask-item');
+                        list.appendChild(item);
+                        persistSubtaskOrder(list);
+                        return;
+                    }
+
+                    const editBtn = e.target.closest('.js-edit-subtask');
+                    if (editBtn) {
+                        subtaskEditItem = editBtn.closest('.jt-subtask-item');
+                        subtaskEditInput.value = subtaskEditItem.querySelector('.jt-subtask-title').textContent;
+                        subtaskEditModal.show();
+                        return;
+                    }
+
+                    const deleteBtn = e.target.closest('.js-delete-subtask');
+                    if (deleteBtn) {
+                        if (!confirm('¿Eliminar esta subtarea?')) return;
+
+                        const item = deleteBtn.closest('.jt-subtask-item');
+                        const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + item.dataset.id + '/borrar');
+                        if (!data.success) return;
+
+                        item.remove();
+                        if (!list.querySelector('.jt-subtask-item')) {
+                            emptyMsg.classList.remove('d-none');
+                        }
+                        updateToggleBadge(taskId);
+                        updateTaskProgressSegments(taskId, data.progress);
+                    }
+                });
+
+                Sortable.create(list, {
+                    handle: '.jt-subtask-handle',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    onEnd: () => persistSubtaskOrder(list),
+                });
+            });
+        };
+        window.initJournalSubtaskPanels();
     });
 
     document.addEventListener('DOMContentLoaded', function() {
         const toggleAllBtn = document.getElementById('toggleAllBtn');
-        let allExpanded = false;
 
         toggleAllBtn.addEventListener('click', function() {
             document.querySelectorAll('.card > .collapse').forEach(collapseEl => {
                 const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
-                if (allExpanded) {
+                if (window.journalAllExpanded) {
                     bsCollapse.hide();
                 } else {
                     bsCollapse.show();
                 }
             });
-            allExpanded = !allExpanded;
-            toggleAllBtn.querySelector('i').className = allExpanded ? 'bi bi-arrows-collapse' : 'bi bi-arrows-expand';
-            toggleAllBtn.title = allExpanded ? 'Cerrar todo' : 'Mostrar todo';
+            window.journalAllExpanded = !window.journalAllExpanded;
+            toggleAllBtn.querySelector('i').className = window.journalAllExpanded ? 'bi bi-arrows-collapse' : 'bi bi-arrows-expand';
+            toggleAllBtn.title = window.journalAllExpanded ? 'Cerrar todo' : 'Mostrar todo';
         });
     });
 </script>

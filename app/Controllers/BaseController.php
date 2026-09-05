@@ -35,7 +35,7 @@ abstract class BaseController extends Controller
      *
      * @var list<string>
      */
-    protected $helpers = ['url', 'form', 'auth', 'comidas_parse'];
+    protected $helpers = ['url', 'form', 'auth', 'comidas_parse', 'journal'];
 
 
     /**

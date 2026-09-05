@@ -160,6 +160,12 @@ $filaSesionActiva = static function (array $s): string {
                     <i class="bi bi-check2-square"></i> Pautas
                 </button>
             </li>
+            <?php // Precio por litro y densidad de la resina: con eso y el volumen con soportes de cada trozo sale el coste por pieza. ?>
+            <li>
+                <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalResina">
+                    <i class="bi bi-droplet"></i> Resina
+                </button>
+            </li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
             <?php if (!empty($papeleraCount)): ?>
                 <li>
@@ -1177,6 +1183,41 @@ foreach ($grupos as $grupo) {
                 </p>
                 <textarea name="texto" class="form-control form-control-sm" rows="6"
                     placeholder="Has metido los objetos importantes en una colección exclusiva&#10;Has cambiado los nombres de los objetos y shapekeys a mayúsculas"><?= esc($pautasTexto) ?></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Ajustes de resina: precio por litro y densidad, para el coste de resina por pieza -->
+<div class="modal fade" id="modalResina" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/ajustes-resina') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-droplet"></i> Resina</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    El coste de resina de cada pieza sale de su <strong>volumen con soportes</strong>
+                    (el que da Chitubox, apuntado en cada trozo) por este precio. La densidad solo
+                    se usa para convertir entre volumen y peso cuando de un trozo falta uno de los dos.
+                    Déjalo en blanco y solo se enseñará el volumen y el peso, sin coste.
+                </p>
+                <label class="form-label small" for="cfgPrecioResina">Precio por litro (€)</label>
+                <input type="text" inputmode="decimal" name="precio_resina_eur_litro" id="cfgPrecioResina"
+                    class="form-control form-control-sm mb-2" autocomplete="off"
+                    value="<?= $resinaConfig['precioLitro'] !== null ? esc(rtrim(rtrim(number_format($resinaConfig['precioLitro'], 2, ',', ''), '0'), ','), 'attr') : '' ?>"
+                    placeholder="p. ej. 35">
+                <label class="form-label small" for="cfgDensidadResina">Densidad (g/mL)</label>
+                <input type="text" inputmode="decimal" name="densidad_resina_g_ml" id="cfgDensidadResina"
+                    class="form-control form-control-sm" autocomplete="off"
+                    value="<?= esc(rtrim(rtrim(number_format($resinaConfig['densidad'], 3, ',', ''), '0'), ','), 'attr') ?>"
+                    placeholder="1,1">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>

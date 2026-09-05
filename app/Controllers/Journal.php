@@ -38,20 +38,65 @@ class Journal extends BaseController
      */
     public function index()
     {
-        // 1. Traer todas las categorías
-        $categories = $this->categoryModel->getAll();
-
-        // 2. Leer parámetros de la URL; si no vienen (recarga o entrada directa),
+        // Leer parámetros de la URL; si no vienen (recarga o entrada directa),
         // se recuperan de la cookie del último filtro elegido.
         $viewMode = $this->stickyFilter('view', 'listado');
         $filterFocus = $this->stickyFilter('filterFocus', 'focus');
         $filterPriority = $this->stickyFilter('priority', '1');
         $filterHechos = $this->stickyFilter('hechos', 'mostrar'); // 'mostrar' | 'ocultar'
 
-        // 3. Traer todas las tareas agrupadas por categoría
+        $data = $this->buildGridData($viewMode, $filterFocus, $filterPriority, $filterHechos);
+
+        return view('journal/index', array_merge($data, [
+            'filterFocus'    => $filterFocus,
+            'filterPriority' => $filterPriority,
+            'filterHechos'   => $filterHechos,
+        ]));
+    }
+
+    /**
+     * Igual que index(), pero devuelve en JSON el HTML de la rejilla de
+     * categorías y el de la barra de filtros (sin layout). Lo usan los
+     * botones de filtro/vista del Journal para refrescar el listado por
+     * AJAX sin recargar la página; se manda también la barra de filtros
+     * para que su estado activo (qué botón está en azul, qué icono toca)
+     * salga siempre del mismo render PHP y no se tenga que duplicar esa
+     * lógica en JS.
+     */
+    public function grid()
+    {
+        $viewMode = $this->stickyFilter('view', 'listado');
+        $filterFocus = $this->stickyFilter('filterFocus', 'focus');
+        $filterPriority = $this->stickyFilter('priority', '1');
+        $filterHechos = $this->stickyFilter('hechos', 'mostrar');
+
+        $data = $this->buildGridData($viewMode, $filterFocus, $filterPriority, $filterHechos);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'html'    => view('journal/_grid', $data),
+            'toolbar' => view('journal/_toolbar_filters', [
+                'filterPriority' => $filterPriority,
+                'filterFocus'    => $filterFocus,
+                'filterHechos'   => $filterHechos,
+                'view_mode'      => $viewMode,
+            ]),
+        ]);
+    }
+
+    /**
+     * Construye todos los datos de la rejilla de categorías/tareas del
+     * Journal (compartido entre index() y grid()) a partir de los filtros ya
+     * resueltos.
+     */
+    private function buildGridData(string $viewMode, string $filterFocus, string $filterPriority, string $filterHechos): array
+    {
+        $categories = $this->categoryModel->getAll();
+
+        // Traer todas las tareas agrupadas por categoría
         $allTasksByCategory = $this->taskModel->getAllGroupedByCategory();
 
-        // 4. CALCULAR TIEMPO TOTAL POR CATEGORÍA (todas las tareas, sin filtrar)
+        // Tiempo total por categoría (todas las tareas, sin filtrar)
         $totalTimeByCategory = [];
         foreach ($categories as $cat) {
             $catName = $cat['name'];
@@ -59,7 +104,7 @@ class Journal extends BaseController
             $totalTimeByCategory[$catName] = array_sum(array_map(fn($t) => (int)($t['time_spent'] ?? 0), $tasks));
         }
 
-        // 5. CREAR CÓPIA PARA LA VISTA Y APLICAR FILTROS
+        // Copia para la vista y aplicar filtros
         $tasksByCategory = $allTasksByCategory;
 
         // Filtrar por focus
@@ -67,6 +112,7 @@ class Journal extends BaseController
             foreach ($tasksByCategory as $cat => &$tasks) {
                 $tasks = array_filter($tasks, fn($t) => !empty($t['is_current']));
             }
+            unset($tasks);
         }
 
         // Ocultar tareas ya hechas (con end_time)
@@ -77,6 +123,7 @@ class Journal extends BaseController
                     return !$isDone;
                 });
             }
+            unset($tasks);
         }
 
         // Ordenar tareas dentro de cada categoría por prioridad
@@ -84,16 +131,13 @@ class Journal extends BaseController
             foreach ($tasksByCategory as $cat => &$tasks) {
                 usort($tasks, fn($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
             }
+            unset($tasks);
         }
 
-        $taskLogModel = new TaskLogModel();
+        $lastTaskActivity = $this->taskLogModel->getLastActivityPerTask();
+        $lastCategoryActivity = $this->taskLogModel->getLastActivityPerCategory();
 
-        $lastTaskActivity = $taskLogModel->getLastActivityPerTask();
-        $lastCategoryActivity = $taskLogModel->getLastActivityPerCategory();
-
-
-
-        // 6. Ordenar categorías por tiempo total si prioridad activada
+        // Ordenar categorías por tiempo total si prioridad activada
         if (!empty($filterPriority)) {
             usort($categories, function ($a, $b) use ($totalTimeByCategory) {
                 $timeA = $totalTimeByCategory[$a['name']] ?? 0;
@@ -124,9 +168,7 @@ class Journal extends BaseController
             ];
         }
 
-
-
-        // 8. Subtareas de todas las tareas visibles, agrupadas por task_id
+        // Subtareas de todas las tareas visibles, agrupadas por task_id
         // (para poder desplegarlas inline en el listado sin ir tarea a tarea)
         $visibleTaskIds = [];
         foreach ($tasksByCategory as $tasks) {
@@ -136,20 +178,54 @@ class Journal extends BaseController
         }
         $subtasksByTask = $this->subtaskModel->getGroupedByTaskIds($visibleTaskIds);
 
-        // 7. Enviar todo a la vista
-        return view('journal/index', [
-            'view_mode'           => $viewMode,
-            'filterFocus'         => $filterFocus,
-            'filterPriority'      => $filterPriority,
-            'filterHechos'        => $filterHechos,
-            'categories'          => $categories,
-            'tasksByCategory'     => $tasksByCategory,
-            'totalTimeByCategory' => $totalTimeByCategory, // array con tiempo total
-            'lastTaskActivity'    => $lastTaskActivity,
+        return [
+            'view_mode'            => $viewMode,
+            'categories'           => $categories,
+            'tasksByCategory'      => $tasksByCategory,
+            'totalTimeByCategory'  => $totalTimeByCategory,
+            'lastTaskActivity'     => $lastTaskActivity,
             'lastCategoryActivity' => $lastCategoryActivity,
-            'progressByCategory'   => $progressByCategory, // <--- aquí lo pasamos
-            'subtasksByTask'      => $subtasksByTask,
-        ]);
+            'progressByCategory'   => $progressByCategory,
+            'subtasksByTask'       => $subtasksByTask,
+        ];
+    }
+
+    /**
+     * Resumen (horas totales, contadores actuales/completadas/total y sus
+     * porcentajes para la barra) de una categoría, identificada por su
+     * nombre (las tasks no guardan category_id, solo el nombre). Se manda
+     * en la respuesta JSON de cualquier acción que pueda cambiar esos
+     * números (crear tarea, sumar tiempo, completar, marcar estrella...)
+     * para que el JS pueda repintar la cabecera de la categoría sin recargar.
+     */
+    private function categorySummary(string $categoryName): ?array
+    {
+        $category = $this->categoryModel->where('name', $categoryName)->first();
+        if (!$category) {
+            return null;
+        }
+
+        $tasks = $this->taskModel->where('category', $categoryName)->findAll();
+
+        $total = count($tasks);
+        $current = count(array_filter($tasks, fn($t) => !empty($t['is_current'])));
+        $completed = count(array_filter($tasks, fn($t) => !empty($t['end_time']) && $t['end_time'] !== '0000-00-00 00:00:00'));
+        $totalMinutes = array_sum(array_map(fn($t) => (int)($t['time_spent'] ?? 0), $tasks));
+
+        $totalSafe = max($total, 1);
+        $currentPerc = round(($current / $totalSafe) * 100);
+        $completedPerc = round(($completed / $totalSafe) * 100);
+
+        return [
+            'cat_id'        => (int) $category['id'],
+            'total'         => $total,
+            'current'       => $current,
+            'completed'     => $completed,
+            'currentPerc'   => $currentPerc,
+            'completedPerc' => $completedPerc,
+            'remainingPerc' => round(100 - $currentPerc - $completedPerc),
+            'totalHours'    => number_format($totalMinutes / 60, 2),
+        ];
     }
 
     /**
@@ -395,8 +471,23 @@ class Journal extends BaseController
             'created_at' => date('Y-m-d H:i:s')
         ], true);
 
+        $task = $this->taskModel->find($taskId);
+
+        // El HTML de la fila la genera el servidor con el mismo partial que
+        // usa el listado, para que una tarea recién creada tenga desde el
+        // primer momento estrella, botón de completar, subtareas y barra de
+        // progreso funcionales (antes se montaba un <li> a mano en JS que se
+        // quedaba corto).
+        $html = view('journal/_task_item', [
+            'task'         => $task,
+            'subs'         => [],
+            'lastActivity' => null,
+        ]);
+
         return $this->response->setJSON([
-            'success' => true,
+            'success'          => true,
+            'html'             => $html,
+            'category_summary' => $this->categorySummary($category['name']),
             'task' => [
                 'id'         => $taskId,
                 'title'      => $title,
@@ -727,7 +818,11 @@ class Journal extends BaseController
         $this->taskModel->update($taskId, $update);
         $this->readingSync->pushTaskToBook($taskId);
 
-        return $this->response->setJSON(['success' => true, 'is_current' => $isCurrent]);
+        return $this->response->setJSON([
+            'success'          => true,
+            'is_current'       => $isCurrent,
+            'category_summary' => $this->categorySummary($task['category']),
+        ]);
     }
 
     /**
@@ -750,9 +845,10 @@ class Journal extends BaseController
         $this->taskModel->update($taskId, ['time_spent' => $newTime]);
 
         return $this->response->setJSON([
-            'success' => true,
-            'minutes' => $newTime,
-            'hours'   => number_format($newTime / 60, 2)
+            'success'          => true,
+            'minutes'          => $newTime,
+            'hours'            => number_format($newTime / 60, 2),
+            'category_summary' => $this->categorySummary($task['category']),
         ]);
     }
 
@@ -1029,10 +1125,11 @@ class Journal extends BaseController
         $this->taskModel->update($subtask['task_id'], ['time_spent' => $newTaskTime]);
 
         return $this->response->setJSON([
-            'success'         => true,
-            'subtask_minutes' => $newSubtaskTime,
-            'task_minutes'    => $newTaskTime,
-            'task_id'         => (int) $subtask['task_id'],
+            'success'          => true,
+            'subtask_minutes'  => $newSubtaskTime,
+            'task_minutes'     => $newTaskTime,
+            'task_id'          => (int) $subtask['task_id'],
+            'category_summary' => $this->categorySummary($task['category']),
         ]);
     }
 
@@ -1101,12 +1198,13 @@ class Journal extends BaseController
         $task = $this->taskModel->find($taskId);
 
         return $this->response->setJSON([
-            'success'    => true,
-            'is_done'    => !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00',
-            'start_time' => $task['start_time'],
-            'end_time'   => $task['end_time'],
-            'time_spent' => (int) $task['time_spent'],
-            'note'       => $task['note'],
+            'success'          => true,
+            'is_done'          => !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00',
+            'start_time'       => $task['start_time'],
+            'end_time'         => $task['end_time'],
+            'time_spent'       => (int) $task['time_spent'],
+            'note'             => $task['note'],
+            'category_summary' => $this->categorySummary($task['category']),
         ]);
     }
 

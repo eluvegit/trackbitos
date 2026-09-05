@@ -23,10 +23,19 @@ class PiezaConfigModel extends Model
         'calc_capas_referencia',
         'calc_minutos_referencia',
         'calc_minutos_preparacion',
+        'precio_resina_eur_litro',
+        'densidad_resina_g_ml',
         'actualizado_en',
     ];
 
     private const FILA = 1;
+
+    /**
+     * Densidad de una resina de fotopolímero típica (g/mL). Solo entra en
+     * juego para convertir entre volumen y peso con soportes cuando de un
+     * trozo se apuntó uno pero no el otro.
+     */
+    private const DENSIDAD_RESINA_DEFECTO = 1.1;
 
     /**
      * Punto de partida de la calculadora de tiempo mientras no se haya
@@ -126,6 +135,45 @@ class PiezaConfigModel extends Model
             'calc_minutos_referencia'  => max(0, $minutosReferencia),
             'calc_minutos_preparacion' => max(0, $minutosPreparacion),
             'actualizado_en'           => date('Y-m-d H:i:s'),
+        ];
+
+        if ($this->find(self::FILA)) {
+            $this->update(self::FILA, $datos);
+        } else {
+            $this->insert(['id' => self::FILA] + $datos);
+        }
+    }
+
+    /**
+     * Ajuste global de resina para el coste por pieza: precio por litro (o
+     * null si aún no se ha puesto, y entonces no hay coste que calcular) y
+     * densidad g/mL, con el valor típico ya aplicado si no se ha tocado.
+     */
+    public function resina(): array
+    {
+        $fila = $this->find(self::FILA) ?: [];
+
+        $precioLitro = isset($fila['precio_resina_eur_litro']) && $fila['precio_resina_eur_litro'] !== null
+            ? (float) $fila['precio_resina_eur_litro']
+            : null;
+        $densidad = isset($fila['densidad_resina_g_ml']) && $fila['densidad_resina_g_ml'] !== null
+            && (float) $fila['densidad_resina_g_ml'] > 0
+            ? (float) $fila['densidad_resina_g_ml']
+            : self::DENSIDAD_RESINA_DEFECTO;
+
+        return [
+            'precioLitro' => $precioLitro,
+            'densidad'    => $densidad,
+        ];
+    }
+
+    /** Mismo motivo que enlazarTarea(): save() no crea la fila si aún no existe. */
+    public function guardarResina(?float $precioLitro, ?float $densidad): void
+    {
+        $datos = [
+            'precio_resina_eur_litro' => $precioLitro !== null && $precioLitro > 0 ? $precioLitro : null,
+            'densidad_resina_g_ml'    => $densidad !== null && $densidad > 0 ? $densidad : null,
+            'actualizado_en'          => date('Y-m-d H:i:s'),
         ];
 
         if ($this->find(self::FILA)) {

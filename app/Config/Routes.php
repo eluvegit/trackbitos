@@ -441,6 +441,7 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
 
 $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('', 'Journal::index');
+    $routes->GET('grid', 'Journal::grid');
     $routes->GET('edit/(:num)', 'Journal::edit/$1');
     $routes->POST('edit/(:num)', 'Journal::edit/$1');
     $routes->POST('create', 'Journal::create');
@@ -700,6 +701,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // Ajustes de la calculadora de tiempo estimado del índice (referencia
     // capas/minutos + minutos de preparación), editables desde su modal.
     $routes->POST('calculadora-tiempo', 'Web::guardarCalculadoraTiempo');
+
+    // Ajuste global de resina (precio por litro + densidad) para el coste
+    // de resina por pieza, editable desde el desplegable del índice.
+    $routes->POST('ajustes-resina', 'Web::guardarPrecioResina');
 
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.

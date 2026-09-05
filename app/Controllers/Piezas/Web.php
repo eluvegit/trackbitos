@@ -223,6 +223,9 @@ class Web extends BaseController
             // calculadora de tiempo del modal; el minuto/capa ya viene
             // derivado.
             'calcTiempo'       => (new PiezaConfigModel())->calculadoraTiempo(),
+            // Precio por litro y densidad de la resina, para el modal de
+            // ajustes de resina del desplegable.
+            'resinaConfig'     => (new PiezaConfigModel())->resina(),
         ]);
     }
 
@@ -1013,6 +1016,30 @@ class Web extends BaseController
         );
     }
 
+    /**
+     * Ajuste global de resina (precio por litro + densidad g/mL), editable
+     * desde el desplegable del índice. Con esto y el volumen con soportes de
+     * cada trozo sale el coste de resina por pieza. Ambos campos en blanco
+     * = sin precio: entonces solo se enseñan volumen y peso, sin coste.
+     */
+    public function guardarPrecioResina()
+    {
+        return $this->ejecutar(
+            function () {
+                $precio   = $this->aPeso($this->request->getPost('precio_resina_eur_litro'));
+                $densidad = $this->aPeso($this->request->getPost('densidad_resina_g_ml'));
+                (new PiezaConfigModel())->guardarResina(
+                    $precio !== null ? (float) $precio : null,
+                    $densidad !== null ? (float) $densidad : null
+                );
+
+                return true;
+            },
+            fn() => site_url('piezas'),
+            fn() => 'Ajustes de resina guardados.'
+        );
+    }
+
     public function crearCategoria()
     {
         return $this->ejecutar(
@@ -1176,6 +1203,10 @@ class Web extends BaseController
             }
         }
 
+        // Precio/densidad de resina una sola vez: el coste por versión sale
+        // del volumen con soportes de sus trozos por este precio.
+        $cfgResina = (new PiezaConfigModel())->resina();
+
         foreach ($versiones as &$version) {
             $version['pendiente_de_juicio'] = $this->llevaDemasiadoPendiente($version);
             $version['sesiones']            = $this->sesionesQueLlevaronA((int) $version['id']);
@@ -1193,6 +1224,9 @@ class Web extends BaseController
 
                 return $stl;
             }, $this->servicio->stlsDe((int) $version['id']));
+            // Volumen, peso y coste de resina de la versión (suma de sus
+            // trozos): se enseña junto a los STL en la ficha.
+            $version['resina'] = $this->resinaDeStls($version['stls'], $cfgResina);
         }
         unset($version);
 
@@ -1266,6 +1300,9 @@ class Web extends BaseController
             // comparar posiciones (fase 44).
             'placasDeLaPieza'    => $historialPlacas['placas'],
             'capturasDeLaPieza'  => $historialPlacas['capturas'],
+            // Precio/densidad de resina, para rotular el coste de cada
+            // versión y enlazar a los ajustes si falta el precio.
+            'resinaConfig'       => $cfgResina,
         ]);
     }
 
@@ -4004,8 +4041,8 @@ class Web extends BaseController
                 // fase 21). Así el segundo no puede pisar al primero.
                 $stl = $this->servicio->reservarStl($versionId, $nombre);
 
-                $medidas = $this->medidasStlDePost();
-                if ($medidas['ancho_mm'] !== null || $medidas['fondo_mm'] !== null) {
+                $medidas = array_filter($this->medidasStlDePost(), static fn($v) => $v !== null);
+                if ($medidas !== []) {
                     (new \App\Models\PiezaVersionStlModel())->update((int) $stl['id'], $medidas);
                 }
 
@@ -4102,12 +4139,14 @@ class Web extends BaseController
     }
 
     /**
-     * ancho_mm / fondo_mm tal y como llegan del formulario del trozo: la
-     * caja de ocupación de Chitubox, acotada a la placa. `null` en un campo
-     * = "sin medir" (estado válido: ese trozo se queda fuera del cálculo de
-     * placas hasta que alguien lo mida).
+     * Lo que llega del formulario del trozo, tal cual: la caja de ocupación
+     * de Chitubox acotada a la placa (ancho_mm / fondo_mm) y el volumen y
+     * peso CON SOPORTES que da el laminador al preparar la pieza
+     * (volumen_soportes_ml / peso_soportes_g), para el coste de resina.
+     * `null` en un campo = "sin apuntar" (estado válido: ese trozo se queda
+     * fuera del cálculo hasta que alguien lo mida).
      *
-     * @return array{ancho_mm: string|null, fondo_mm: string|null}
+     * @return array{ancho_mm: string|null, fondo_mm: string|null, volumen_soportes_ml: string|null, peso_soportes_g: string|null}
      */
     private function medidasStlDePost(): array
     {
@@ -4120,9 +4159,20 @@ class Web extends BaseController
             return (string) max(0.1, min($max, (float) $valor));
         };
 
+        $aPositivo = function ($valor): ?string {
+            $valor = $this->aPeso($valor);
+            if ($valor === null || !is_numeric($valor)) {
+                return null;
+            }
+
+            return (string) max(0, (float) $valor);
+        };
+
         return [
             'ancho_mm' => $aMm($this->request->getPost('ancho'), PiezaEmpaquetadoService::PLACA_ANCHO_MM),
             'fondo_mm' => $aMm($this->request->getPost('fondo'), PiezaEmpaquetadoService::PLACA_FONDO_MM),
+            'volumen_soportes_ml' => $aPositivo($this->request->getPost('volumen_soportes')),
+            'peso_soportes_g'     => $aPositivo($this->request->getPost('peso_soportes')),
         ];
     }
 
@@ -4694,6 +4744,65 @@ class Web extends BaseController
             'medidos'   => $medidos,
             'total'     => $total,
             'area_mm2'  => $areaMm2,
+        ];
+    }
+
+    /**
+     * Coste de resina de una versión a partir del volumen/peso con soportes
+     * de sus trozos (lo que da Chitubox). El coste sale del VOLUMEN: cada mL
+     * cuesta precioLitro/1000 €. Si de un trozo solo se apuntó el peso se
+     * pasa a volumen con la densidad configurada, y al revés, para poder
+     * enseñar siempre los dos totales. El coste solo se da cuando hay precio
+     * y TODOS los trozos están apuntados: media pieza no cuesta media resina.
+     *
+     * `aplica=false` si no hay ningún STL todavía.
+     *
+     * @param list<array> $stls filas de piezas_version_stls
+     * @param array{precioLitro: float|null, densidad: float} $cfg
+     * @return array{aplica: bool, completos: int, total: int, volumen_ml: float, peso_g: float, coste_eur: float|null}
+     */
+    private function resinaDeStls(array $stls, array $cfg): array
+    {
+        $total = count($stls);
+        if ($total === 0) {
+            return ['aplica' => false, 'completos' => 0, 'total' => 0, 'volumen_ml' => 0.0, 'peso_g' => 0.0, 'coste_eur' => null];
+        }
+
+        $densidad  = $cfg['densidad'] > 0 ? $cfg['densidad'] : 1.1;
+        $completos = 0;
+        $volumenMl = 0.0;
+        $pesoG     = 0.0;
+        foreach ($stls as $stl) {
+            $vol  = isset($stl['volumen_soportes_ml']) && $stl['volumen_soportes_ml'] !== null ? (float) $stl['volumen_soportes_ml'] : null;
+            $peso = isset($stl['peso_soportes_g']) && $stl['peso_soportes_g'] !== null ? (float) $stl['peso_soportes_g'] : null;
+
+            if ($vol === null && $peso !== null) {
+                $vol = $peso / $densidad;
+            }
+            if ($peso === null && $vol !== null) {
+                $peso = $vol * $densidad;
+            }
+            if ($vol === null) {
+                continue;
+            }
+
+            $completos++;
+            $volumenMl += $vol;
+            $pesoG     += $peso;
+        }
+
+        $coste = null;
+        if ($cfg['precioLitro'] !== null && $completos === $total) {
+            $coste = $volumenMl / 1000 * $cfg['precioLitro'];
+        }
+
+        return [
+            'aplica'     => true,
+            'completos'  => $completos,
+            'total'      => $total,
+            'volumen_ml' => $volumenMl,
+            'peso_g'     => $pesoG,
+            'coste_eur'  => $coste,
         ];
     }
 
