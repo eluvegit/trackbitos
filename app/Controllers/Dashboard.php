@@ -78,6 +78,7 @@ class Dashboard extends BaseController
     {
         return [
             ['ruta' => 'journal', 'icono' => 'bi-list-check', 'titulo' => 'Journal'],
+            ['ruta' => 'journal/focalizar', 'icono' => 'bi-bullseye', 'titulo' => 'Focalizar'],
             ['ruta' => 'comidas/diario/hoy', 'icono' => 'bi-egg-fried', 'titulo' => 'Comida de hoy'],
         ];
     }

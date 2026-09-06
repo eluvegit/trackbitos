@@ -15,6 +15,10 @@ class TaskModel extends Model
     // vinculado mínimo. Ver ReadingJournalSyncService::createBookForTask.
     protected $afterInsert = ['syncReadingBookOnInsert'];
 
+    // Al terminar cualquier tarea (se le pone end_time) se le quita la
+    // estrella y sale del foco, sea cual sea su categoría.
+    protected $beforeUpdate = ['clearStarWhenDone'];
+
     protected $allowedFields = [
         'category',
         'title',
@@ -91,6 +95,31 @@ class TaskModel extends Model
                 (new ReadingJournalSyncService())->createBookForTask((int) $eventData['id'], $data);
             } catch (\Throwable $e) {
                 log_message('error', 'ReadingJournalSyncService::createBookForTask failed: ' . $e->getMessage());
+            }
+        }
+
+        return $eventData;
+    }
+
+    /**
+     * Callback beforeUpdate: si el update pone end_time a una fecha real
+     * (la tarea se marca como terminada), fuerza is_current=0 y en_foco=0
+     * aunque el caller no los mande — "terminada" y "con estrella" son
+     * mutuamente excluyentes para cualquier categoría, no solo Lectura
+     * (que ya tenía esta misma regla, pero solo para sí misma, en
+     * ReadingJournalSyncService::pushTaskToBook).
+     */
+    protected function clearStarWhenDone(array $eventData): array
+    {
+        $data = $eventData['data'] ?? [];
+
+        if (array_key_exists('end_time', $data)) {
+            $endTime = $data['end_time'];
+            $isDone = !empty($endTime) && $endTime !== '0000-00-00 00:00:00';
+
+            if ($isDone) {
+                $eventData['data']['is_current'] = 0;
+                $eventData['data']['en_foco'] = 0;
             }
         }
 

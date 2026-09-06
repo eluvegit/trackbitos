@@ -1200,6 +1200,7 @@ class Journal extends BaseController
         return $this->response->setJSON([
             'success'          => true,
             'is_done'          => !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00',
+            'is_current'       => (int) ($task['is_current'] ?? 0),
             'start_time'       => $task['start_time'],
             'end_time'         => $task['end_time'],
             'time_spent'       => (int) $task['time_spent'],

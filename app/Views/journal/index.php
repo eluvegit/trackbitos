@@ -747,6 +747,10 @@
 
                     const timeSpan = document.querySelector(`.task-time-trigger[data-task-id="${id}"]`);
                     if (timeSpan) timeSpan.textContent = (data.time_spent / 60).toFixed(2) + ' h';
+
+                    // Al terminar se quita la estrella (ver TaskModel::clearStarWhenDone).
+                    const starEl = document.querySelector(`.current-star[data-task-id="${id}"]`);
+                    if (starEl) starEl.querySelector('svg').setAttribute('fill', data.is_current ? '#ffc107' : '#adb5bd');
                 }
 
                 applyCategorySummary(data.category_summary);
