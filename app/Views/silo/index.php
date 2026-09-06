@@ -29,7 +29,7 @@
 
 <form method="get" action="<?= site_url('silo') ?>" class="row g-2 mb-3">
     <div class="col-sm-6 col-md-4">
-        <input type="text" name="q" class="form-control" placeholder="Buscar por ID o nombre de carpeta..."
+        <input type="text" name="q" class="form-control" placeholder="Buscar por ID, nombre de carpeta o de fichero..."
                value="<?= esc($filtros['q'] ?? '') ?>">
     </div>
     <div class="col-sm-6 col-md-3">

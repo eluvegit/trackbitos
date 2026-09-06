@@ -32,9 +32,11 @@ class SiloPiezaModel extends Model
 
     /**
      * Búsqueda de listado: texto libre sobre id_negocio/nombre_carpeta +
-     * filtro opcional por categoría. No usa FULLTEXT (como
-     * enlaces_items) porque el volumen esperado en esta fase es bajo;
-     * revisar si hace falta cuando el catálogo crezca.
+     * nombre de los ficheros de dentro de la carpeta (silo_ficheros) +
+     * filtro opcional por categoría. El match por fichero va como subconsulta
+     * de IDs (no JOIN) para no multiplicar filas ni necesitar GROUP BY. No usa
+     * FULLTEXT (como enlaces_items) porque el volumen esperado en esta fase es
+     * bajo; revisar si hace falta cuando el catálogo crezca.
      */
     public function buscar(array $filtros = []): array
     {
@@ -44,9 +46,14 @@ class SiloPiezaModel extends Model
 
         if (!empty($filtros['q'])) {
             $q = $filtros['q'];
+            $piezasConFichero = $this->db->table('silo_ficheros')
+                ->select('pieza_id')
+                ->like('nombre', $q);
+
             $builder->groupStart()
                 ->like('silo_piezas.id_negocio', $q)
                 ->orLike('silo_piezas.nombre_carpeta', $q)
+                ->orWhereIn('silo_piezas.id', $piezasConFichero)
                 ->groupEnd();
         }
 
@@ -54,7 +61,47 @@ class SiloPiezaModel extends Model
             $builder->where('silo_piezas.categoria_id', (int) $filtros['categoria_id']);
         }
 
-        return $this->adjuntarAtributos($builder->findAll());
+        $piezas = $this->adjuntarAtributos($builder->findAll());
+
+        if (!empty($filtros['q'])) {
+            $piezas = $this->adjuntarFicherosCoincidentes($piezas, $filtros['q']);
+        }
+
+        return $piezas;
+    }
+
+    /**
+     * Adjunta en `ficheros_coincidentes` los ficheros de cada pieza cuyo
+     * nombre casa con el texto buscado, para que el listado pueda enseñar el
+     * fichero concreto que hizo salir la carpeta y no solo la carpeta. Vacío
+     * cuando la coincidencia fue por ID/nombre de carpeta.
+     *
+     * @param array<int, array> $piezas
+     * @return array<int, array>
+     */
+    private function adjuntarFicherosCoincidentes(array $piezas, string $q): array
+    {
+        if ($piezas === []) {
+            return $piezas;
+        }
+
+        $filas = (new SiloFicheroModel())
+            ->select('pieza_id, nombre, tipo')
+            ->whereIn('pieza_id', array_column($piezas, 'id'))
+            ->like('nombre', $q)
+            ->orderBy('nombre', 'ASC')
+            ->findAll();
+
+        $porPieza = [];
+        foreach ($filas as $f) {
+            $porPieza[(int) $f['pieza_id']][] = ['nombre' => $f['nombre'], 'tipo' => $f['tipo']];
+        }
+
+        foreach ($piezas as &$p) {
+            $p['ficheros_coincidentes'] = $porPieza[(int) $p['id']] ?? [];
+        }
+
+        return $piezas;
     }
 
     /**

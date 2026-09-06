@@ -24,6 +24,13 @@ $qsDesde = isset($unidad['id']) ? '?desde=' . (int) $unidad['id'] : '';
                     #<?= esc($p['id_negocio']) ?> · <?= esc(silo_fecha_humana($p['fecha'] ?? null)) ?>
                 </span>
                 <span class="d-block text-center mt-1 silo-carpeta-badges" title="<?= esc($p['nombre_carpeta']) ?>"><?= silo_badges_carpeta($p, true) ?></span>
+                <?php $coincidencias = $p['ficheros_coincidentes'] ?? []; ?>
+                <?php if ($coincidencias): ?>
+                    <span class="badge bg-info-subtle text-info-emphasis mt-1" style="font-size: .6rem;"
+                          title="<?= esc(implode("\n", array_column($coincidencias, 'nombre')), 'attr') ?>">
+                        <i class="bi bi-search"></i> <?= count($coincidencias) ?> fichero<?= count($coincidencias) === 1 ? '' : 's' ?>
+                    </span>
+                <?php endif; ?>
                 <span class="text-muted mt-auto pt-1" style="font-size: .7rem;"><?= esc(silo_formatear_tamano($p['tamano_bytes'] ?? null)) ?></span>
             </a>
         <?php endforeach; ?>
