@@ -3363,17 +3363,22 @@ class Web extends BaseController
     /**
      * Advertencia y tareas pendientes de la pieza, las dos juntas: es el
      * modal del índice ("un icono para escribir tareas y mostrarlas"), así
-     * que se vuelve al índice, no a la ficha.
+     * que por defecto se vuelve al índice. Desde la ficha de la variante
+     * (volver=ficha) se vuelve a ella.
      */
     public function editarTareasVariante(int $varianteId)
     {
+        $volverAFicha = $this->request->getPost('volver') === 'ficha';
+
         return $this->ejecutar(
             fn() => $this->servicio->actualizarTareasVariante(
                 $varianteId,
                 $this->request->getPost('tareas'),
                 $this->request->getPost('advertencia')
             ),
-            fn($variante) => site_url('piezas'),
+            fn($variante) => $volverAFicha
+                ? site_url('piezas/variante/' . $variante['id'])
+                : site_url('piezas'),
             fn($variante) => 'Tareas de la pieza guardadas.'
         );
     }

@@ -329,6 +329,27 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 
                 <hr>
 
+                <label class="form-label small mb-1">
+                    <i class="bi bi-card-checklist"></i> Tareas y advertencia
+                </label>
+                <p class="small text-muted mb-2">
+                    Lo que queda por hacerle a la pieza (una tarea por línea) y, si la pieza vale
+                    pero tiene alguna pega, un aviso corto. Es lo mismo que se edita desde el
+                    icono de tareas del índice.
+                </p>
+                <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/tareas') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="volver" value="ficha">
+                    <input type="text" name="advertencia" class="form-control form-control-sm mb-1" maxlength="255"
+                        value="<?= esc($variante['advertencia'] ?? '', 'attr') ?>"
+                        placeholder="Advertencia (opcional)">
+                    <textarea name="tareas" class="form-control form-control-sm mb-1" rows="4"
+                        placeholder="Una tarea por línea"><?= esc($variante['tareas'] ?? '') ?></textarea>
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+
+                <hr>
+
                 <label class="form-label small mb-1">SKU</label>
                 <p class="small text-muted mb-2">
                     <code><?= esc($variante['sku'] ?? '—') ?></code> — asignado solo al crear la
@@ -545,6 +566,27 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                 <?php endif; ?>
                 <?php if (!empty($variante['notas'])): ?>
                     <div class="small text-muted mt-2"><i class="bi bi-sticky"></i> <?= esc($variante['notas']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($variante['advertencia'])): ?>
+                    <div class="small text-warning-emphasis mt-2">
+                        <i class="bi bi-exclamation-triangle-fill text-warning"></i> <?= esc($variante['advertencia']) ?>
+                    </div>
+                <?php endif; ?>
+                <?php
+                    $tareasPendientes = array_values(array_filter(array_map(
+                        'trim',
+                        preg_split('/\r\n|\r|\n/', (string) ($variante['tareas'] ?? ''))
+                    ), static fn($t) => $t !== ''));
+                ?>
+                <?php if ($tareasPendientes !== []): ?>
+                    <div class="small mt-2">
+                        <div class="text-muted"><i class="bi bi-card-checklist"></i> Tareas pendientes</div>
+                        <ul class="mb-0 ps-4">
+                            <?php foreach ($tareasPendientes as $tarea): ?>
+                                <li><?= esc($tarea) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -1963,6 +2005,37 @@ trackbitos cerrar</code></pre>
 
             xhr.send(datos);
         });
+    });
+
+    // ---- Intro para aceptar el modal abierto ------------------------------
+    // Bootstrap ya cierra con Escape; lo que falta es el simétrico: en los
+    // modales de solo confirmar (validar, descartar, forzar cierre…) el foco
+    // cae en el contenedor y no hay campo donde el Intro nativo dispare el
+    // envío. Aquí, con un modal abierto, Intro pulsa su botón de acción —
+    // salvo dentro de un textarea (donde es salto de línea; Ctrl/Cmd+Intro
+    // sí lo fuerza) o si el modal tiene varios botones y no está claro cuál.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented || e.shiftKey || e.altKey) return;
+
+        var modal = e.target.closest && e.target.closest('.modal.show');
+        if (!modal) return;
+
+        var t = e.target;
+        if (t.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
+        if (t.tagName === 'BUTTON' || t.tagName === 'A' || t.tagName === 'SELECT') return;
+
+        var candidatos = modal.querySelectorAll(
+            '.modal-footer button:not([data-bs-dismiss]):not([type="button"]), .modal-footer a.btn:not([data-bs-dismiss])'
+        );
+        if (candidatos.length === 0) {
+            candidatos = modal.querySelectorAll('form button:not([data-bs-dismiss]):not([type="button"])');
+        }
+        if (candidatos.length !== 1) return;
+
+        var boton = candidatos[0];
+        if (boton.disabled) return;
+        e.preventDefault();
+        boton.click();
     });
 })();
 </script>
