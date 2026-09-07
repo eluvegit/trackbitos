@@ -282,14 +282,6 @@ foreach ($piezasTodas as $p) {
                                         <?php endif; ?>
                                     </div>
 
-                                    <?php if (!$tieneStl): ?>
-                                        <?php // Ya no bloquea: se puede montar la placa ahora y generar el
-                                              // STL en local después (script generador). El aviso queda como
-                                              // recordatorio de que a esta pieza le falta el fichero. ?>
-                                        <div class="small text-warning mt-1">
-                                            <i class="bi bi-exclamation-circle"></i> sin STL todavía — se genera en local
-                                        </div>
-                                    <?php endif; ?>
                                     <?php // Botón único con estado, movido por fetch() (fase 32): un
                                           // <form> con recarga completa perdía el filtro en el que
                                           // estabas trabajando cada vez que añadías una pieza. ?>

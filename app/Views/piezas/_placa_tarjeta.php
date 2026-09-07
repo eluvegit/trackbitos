@@ -18,11 +18,18 @@ $cuadros = $cuadrosPorPlaca[$idPlaca] ?? ['usados' => 0, 'sinMedir' => 0];
 $grupo = $gruposReparto[$idPlaca] ?? null;
 // Portada en tira baja (no cuadrada): la tarjeta es un lomo de archivador, no
 // una foto de catálogo — con reconocerla basta. Hasta 4 miniaturas en fila;
-// el detalle se ve en el modal.
+// el detalle se ve al entrar a editar.
 $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
+// El lomo de color: veredicto puesto pinta su color de siempre; sin
+// veredicto pero con algo ya anotado ("sin juzgar") pinta gris — para que
+// las pendientes de evaluar también se distingan de un vistazo, no solo
+// las tres ya resueltas.
+$claseLomo = $resumen['veredicto']
+    ? 'lomo-' . esc($resumen['veredicto'], 'attr')
+    : ($resumen['anotada'] ? 'lomo-sin-juzgar' : '');
 ?>
 <div class="col" data-tarjeta-placa="<?= $idPlaca ?>">
-    <div class="card shadow-sm h-100 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
+    <div class="card shadow-sm h-100 user-select-none lomo-placa <?= $claseLomo ?>"
         style="cursor: pointer" data-abrir-placa data-placa="<?= $idPlaca ?>"
         title="Editar la bitácora de esta placa">
         <?php if ($fotos): ?>
@@ -35,7 +42,11 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
             </div>
         <?php endif; ?>
         <div class="card-body p-2">
-            <div class="small fw-semibold text-truncate" data-nombre-tarjeta
+            <?php // El id en grande es el dato que se usa fuera de la web (con
+                  // otra herramienta, por su id); el nombre se queda debajo,
+                  // más pequeño, de apoyo para reconocer la placa a simple vista. ?>
+            <div class="fw-bold lh-1" style="font-size: 1.3rem;">#<?= $idPlaca ?></div>
+            <div class="small text-muted text-truncate" data-nombre-tarjeta
                 title="<?= esc($placa['nombre'], 'attr') ?>"><?= esc($placa['nombre']) ?></div>
             <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
                 <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>

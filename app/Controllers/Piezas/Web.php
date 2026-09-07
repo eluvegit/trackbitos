@@ -1721,53 +1721,31 @@ class Web extends BaseController
     }
 
     /**
-     * Empaqueta los STL de la placa en un .zip para importar de golpe en
-     * el laminador. El carrito NO se vacía solo: si la descarga falla a
-     * mitad (conexión, lo que sea) el usuario no quiere volver a marcar
-     * todo desde cero — "Vaciar placa" es una acción aparte y explícita.
+     * Crea la placa desde el carrito con el nombre que se le dé en el modal
+     * (fase 57): antes esto empaquetaba los STL en un .zip para el
+     * laminador, pero los STL se generan aparte (en local, con otra
+     * herramienta), así que ya no hay ningún fichero que bajar aquí — es
+     * "Guardar para después" con un nombre pensado en vez de la fecha por
+     * defecto.
      */
-    public function carritoDescargar()
+    public function carritoCrearPlaca()
     {
         $carrito = $this->carritoActual();
         if (empty($carrito)) {
             return redirect()->to(site_url('piezas/galeria'))->with('error', 'La placa está vacía.');
         }
 
-        $rutaZip = $this->construirZipDePlaca($carrito);
-        if (!$rutaZip) {
-            return redirect()->to(site_url('piezas/galeria'))
-                ->with('error', 'Ninguna pieza de la placa tiene STL todavía: no hay nada que descargar. '
-                    . 'Usa «Guardar para después» y baja el zip cuando los generes en local.');
-        }
+        $placa = $this->registrarPlacaDesdeCarrito($carrito, $this->request->getPost('nombre'));
 
-        // Guardar en el histórico dejó de ser automático (fase 38): la galería
-        // también sirve para bajar STL sueltos de golpe, sin que eso sea una
-        // placa que vaya a la impresora ni tenga bitácora que llevar. El modal
-        // pregunta las dos cosas —nombre y si se guarda— y solo se anota si el
-        // usuario dijo que sí. Por GET (el enlace de siempre, sin modal) se
-        // guarda: es como se comportaba antes y nadie espera perder el registro.
-        $esPost  = strtoupper($this->request->getMethod()) === 'POST';
-        $guardar = !$esPost || $this->request->getPost('guardar') !== null;
-
-        if ($guardar) {
-            $this->registrarPlacaDesdeCarrito($carrito, $this->request->getPost('nombre'), true);
-        }
-
-        // El fichero tiene que seguir existiendo cuando DownloadResponse lo
-        // lea durante send(), que ocurre después de que este método
-        // retorne — por eso el borrado va en un shutdown function, no aquí.
-        register_shutdown_function(static function () use ($rutaZip) {
-            @unlink($rutaZip);
-        });
-
-        return $this->response->download($rutaZip, null, true);
+        return redirect()->to(site_url('piezas/galeria'))
+            ->with('success', 'Creada como "' . $placa['nombre'] . '". La puedes ver en Placas.');
     }
 
     /**
-     * "Guardar para después", sin descargar nada — como una lista de la
-     * compra: no siempre se elige para bajar el zip en el momento, a veces
-     * es solo apuntar qué se quiere imprimir más adelante. Mismo registro
-     * que deja `carritoDescargar()`, solo que sin generar el zip.
+     * "Guardar para después" — como una lista de la compra: no siempre se
+     * elige pensar un nombre en el momento, a veces es solo apuntar qué se
+     * quiere imprimir más adelante. Mismo registro que deja
+     * `carritoCrearPlaca()`, solo que con el nombre por defecto (la fecha).
      */
     public function carritoGuardarPlaca()
     {
@@ -2001,17 +1979,15 @@ class Web extends BaseController
 
         $piezas = [];
         $resumenes = [];
-        // Tres cajones, en el mismo orden en que avanza una placa por la
-        // vida real: guardada (idea suelta) -> lista (ya tienes el zip) ->
-        // impresa (ya se montó). Que veredicto/impresa_en se vean fuera
-        // significa que ya pasó por la bitácora; que descargada_en esté
-        // puesto significa que el zip salió de verdad (spec: "volver a
-        // descargar" desde el histórico no cuenta, solo la descarga que
-        // registra la placa).
-        $guardadas = [];
-        $listas    = [];
-        $impresas  = [];
-        $sugerenciasReparto = [];
+        // Dos cajones, en el mismo orden en que avanza una placa por la vida
+        // real: por imprimir (todavía no se ha montado) -> impresa (ya se
+        // montó, con o sin veredicto). Antes "guardada" y "lista para
+        // imprimir" eran cajones distintos según si ya se había bajado el
+        // zip (descargada_en); con los STL generándose fuera de la web esa
+        // distinción ya no significaba nada real, así que se fusionaron
+        // (fase 56).
+        $porImprimir = [];
+        $impresas    = [];
         $cuadrosPorPlaca    = [];
         foreach ($placas as $placa) {
             $idPlaca = (int) $placa['id'];
@@ -2024,11 +2000,6 @@ class Web extends BaseController
                 $pruebasPorPlaca[$idPlaca] ?? [],
                 $enlacesPorPlaca[$idPlaca] ?? 0
             );
-            // Qué piezas sobran de la primera placa según el reparto
-            // calculado (spec: empaquetado) — para preseleccionarlas en el
-            // desplegable "Repartir en otra placa" y ahorrar el marcado a
-            // mano. Sigue siendo editable: es una sugerencia, no una orden.
-            $sugerenciasReparto[$idPlaca] = $this->filasFueraDeLaPrimeraPlaca($piezas[$idPlaca]);
 
             // Cuánto ocupa lo que YA lleva esta placa concreta (no un
             // reparto hipotético): para no perder de vista, sobre todo en
@@ -2046,10 +2017,8 @@ class Web extends BaseController
 
             if ($placa['impresa_en']) {
                 $impresas[] = $placa;
-            } elseif ($placa['descargada_en']) {
-                $listas[] = $placa;
             } else {
-                $guardadas[] = $placa;
+                $porImprimir[] = $placa;
             }
         }
 
@@ -2109,14 +2078,12 @@ class Web extends BaseController
             'piezas'             => $piezas,
             'resumenes'          => $resumenes,
             'origenNombres'      => $origenNombres,
-            'sugerenciasReparto' => $sugerenciasReparto,
             'cuadrosPorPlaca'    => $cuadrosPorPlaca,
             'gruposReparto'      => $gruposReparto,
             'nombresPlacas'      => $nombresPlacas,
             'bloques'       => [
-                'guardada' => ['titulo' => 'Guardadas para después', 'grupos' => $this->agruparPorPeriodo($guardadas, 'creado_en')],
-                'lista'    => ['titulo' => 'Listas para imprimir', 'grupos' => $this->agruparPorPeriodo($listas, 'creado_en')],
-                'impresa'  => ['titulo' => 'Impresas', 'grupos' => $this->agruparPorPeriodo($impresas, 'impresa_en')],
+                'porImprimir' => ['titulo' => 'Por imprimir', 'grupos' => $this->agruparPorPeriodo($porImprimir, 'creado_en')],
+                'impresa'     => ['titulo' => 'Impresas', 'grupos' => $this->agruparPorPeriodo($impresas, 'impresa_en')],
             ],
             'hayPlacas' => $placas !== [],
             'totalPlacasSiempre' => $totalPlacasSiempre,

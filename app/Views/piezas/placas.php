@@ -22,11 +22,10 @@
 </h5>
 
 <p class="text-muted small">
-    Tres cajones, el mismo camino que sigue una placa de verdad: <strong>Guardada</strong> es solo una
-    idea apuntada sin bajar nada todavía; <strong>Lista para imprimir</strong> es que ya tienes el zip
-    de los STL; <strong>Impresa</strong> es que ya se montó, con o sin veredicto todavía. Dentro de cada
-    cajón, agrupadas por cuándo — así se ve de un vistazo por dónde vas. Pulsa una tarjeta para entrar
-    directo a su bitácora y anotar cómo salió.
+    Dos cajones, el mismo camino que sigue una placa de verdad: <strong>Por imprimir</strong> es que
+    todavía no se ha montado; <strong>Impresa</strong> es que ya se montó, con o sin veredicto todavía.
+    Dentro de cada cajón, agrupadas por cuándo — así se ve de un vistazo por dónde vas. Pulsa una
+    tarjeta para entrar directo a su bitácora y anotar cómo salió.
 </p>
 
 <?php /**
@@ -46,9 +45,10 @@
     .lomo-placa {
         border-left: 4px solid transparent;
     }
-    .lomo-buena   { border-left-color: var(--bs-success); }
-    .lomo-regular { border-left-color: var(--bs-warning); }
-    .lomo-repetir { border-left-color: var(--bs-danger); }
+    .lomo-buena      { border-left-color: var(--bs-success); }
+    .lomo-regular    { border-left-color: var(--bs-warning); }
+    .lomo-repetir    { border-left-color: var(--bs-danger); }
+    .lomo-sin-juzgar { border-left-color: var(--bs-secondary); }
 
     /* Riel del timeline de Impresas (fase 52): una raya vertical con un
        punto por grupo de fecha, que se resalta con la sección que está
@@ -118,31 +118,20 @@
         // "Organizar" en el índice de Piezas — lo que se mira a diario no debe
         // obligar a desplegar nada, lo antiguo sí puede empezar escondido.
         $abiertosPorDefecto = ['Hoy', 'Ayer', 'Esta semana'];
-        $iconoBloque = ['guardada' => 'bi-bookmark', 'lista' => 'bi-file-earmark-zip'];
-        // A la derecha primero Lista, debajo Guardada: es el orden en que
-        // avanza una placa hacia Impresas, la columna grande de al lado.
-        $bloquesLaterales = ['lista' => $bloques['lista'], 'guardada' => $bloques['guardada']];
         $totalImpresas = array_sum(array_map('count', $bloques['impresa']['grupos']));
     ?>
 
-    <?php // Pestañas solo en móvil (fase 53): en escritorio las tres secciones
-          // se ven en paralelo (columna grande + sidebar), pero apiladas en
-          // móvil "Guardada" acababa al final del todo, obligando a un scroll
-          // larguísimo para llegar a lo recién guardado. Con pestañas se
-          // cambia de sección tocando un botón, sin bajar nada — en escritorio
-          // ni se muestran, las tres secciones se ven todas a la vez como
-          // siempre (ver [data-panel-placas] más abajo y su regla d-lg-block). ?>
-    <?php // Etiquetas cortas a propósito, distintas del título largo de cada
-          // sección más abajo ("Guardadas para después", etc.): en una pestaña
-          // de móvil no cabían las tres sin apretarse ni cortarse. Sin
-          // contador tampoco — aquí solo hace falta saber a qué sección se
-          // salta, el número ya se ve en el título de la sección. ?>
+    <?php // Pestañas solo en móvil (fase 53, a dos desde la fase 56 al
+          // fusionarse Guardada+Lista): en escritorio las dos secciones se
+          // ven en paralelo (columna grande + sidebar), pero apiladas en
+          // móvil "Por imprimir" acababa al final del todo, obligando a un
+          // scroll larguísimo. Con pestañas se cambia de sección tocando un
+          // botón, sin bajar nada — en escritorio ni se muestran, las dos
+          // secciones se ven a la vez como siempre (ver [data-panel-placas]
+          // más abajo y su regla d-lg-block). ?>
     <ul class="nav nav-pills nav-fill mb-3 d-lg-none" data-tabs-placas>
         <li class="nav-item">
-            <button type="button" class="nav-link" data-tab-placas="guardada">Guardadas</button>
-        </li>
-        <li class="nav-item">
-            <button type="button" class="nav-link" data-tab-placas="lista">Listas</button>
+            <button type="button" class="nav-link" data-tab-placas="porImprimir">Por imprimir</button>
         </li>
         <li class="nav-item">
             <button type="button" class="nav-link active" data-tab-placas="impresa">Impresas</button>
@@ -198,30 +187,32 @@
             <?php endif; ?>
         </div>
 
-        <?php // El tercio de la derecha, fijo en pantalla: Lista para imprimir
-              // y Guardadas, accesibles mientras se baja repasando Impresas —
-              // no dos secciones que haya que ir a buscar más abajo. ?>
+        <?php // El tercio de la derecha, fijo en pantalla: Por imprimir,
+              // accesible mientras se baja repasando Impresas — no una
+              // sección que haya que ir a buscar más abajo. ?>
         <div class="col-12 col-lg-4">
-            <?php // max-height + scroll propio: si Lista y Guardadas juntas no
-                  // caben en la pantalla, un sticky a secas dejaría lo que
-                  // sobra por debajo fuera de la vista sin forma de llegar a
-                  // ello (un sticky no se desplaza por dentro solo). Con esto,
-                  // en cuanto no cabe, este bloque hace su propio scroll. ?>
+            <?php
+                $bloquePorImprimir = $bloques['porImprimir'];
+                $totalPorImprimir  = array_sum(array_map('count', $bloquePorImprimir['grupos']));
+            ?>
+            <?php // max-height + scroll propio: si no cabe en la pantalla, un
+                  // sticky a secas dejaría lo que sobra por debajo fuera de la
+                  // vista sin forma de llegar a ello (un sticky no se
+                  // desplaza por dentro solo). Con esto, en cuanto no cabe,
+                  // este bloque hace su propio scroll. ?>
             <div class="position-sticky" style="top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto;">
-                <?php foreach ($bloquesLaterales as $claveBloque => $bloque): ?>
-                    <?php $totalBloque = array_sum(array_map('count', $bloque['grupos'])); ?>
-                    <div class="d-none d-lg-block" data-panel-placas="<?= $claveBloque ?>">
+                <div class="d-none d-lg-block" data-panel-placas="porImprimir">
                     <h6 class="d-flex align-items-center gap-2 mb-2">
-                        <i class="bi <?= $iconoBloque[$claveBloque] ?? 'bi-inbox' ?>"></i>
-                        <?= esc($bloque['titulo']) ?>
-                        <span class="badge text-bg-secondary"><?= $totalBloque ?></span>
+                        <i class="bi bi-hourglass-split"></i>
+                        <?= esc($bloquePorImprimir['titulo']) ?>
+                        <span class="badge text-bg-secondary"><?= $totalPorImprimir ?></span>
                     </h6>
 
-                    <?php if ($totalBloque === 0): ?>
+                    <?php if ($totalPorImprimir === 0): ?>
                         <p class="text-muted small fst-italic">Nada por aquí.</p>
                     <?php else: ?>
-                        <?php foreach ($bloque['grupos'] as $etiqueta => $placasDelGrupo): ?>
-                            <?php $idGrupo = 'grupo-' . $claveBloque . '-' . preg_replace('/[^a-z0-9]+/i', '-', $etiqueta); ?>
+                        <?php foreach ($bloquePorImprimir['grupos'] as $etiqueta => $placasDelGrupo): ?>
+                            <?php $idGrupo = 'grupo-porImprimir-' . preg_replace('/[^a-z0-9]+/i', '-', $etiqueta); ?>
                             <div class="d-flex align-items-center gap-2 user-select-none mb-1" style="cursor: pointer"
                                 data-plegar="<?= $idGrupo ?>">
                                 <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-body">
@@ -247,8 +238,7 @@
                             </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
+                </div>
             </div>
         </div>
     </div>
@@ -261,9 +251,8 @@
     // Antes esto abría un modal de solo lectura con un botón "Ver completa"
     // dentro; ese paso intermedio se quita, la tarjeta entera navega ya a la
     // pantalla de edición. Se deja pasar el click cuando cae dentro de un
-    // enlace, botón o formulario propio de la tarjeta (borrar, descargar,
-    // cargar, repartir, deshacer reparto, el enlace al pedido…), para no
-    // robarles el suyo.
+    // enlace, botón o formulario propio de la tarjeta (deshacer reparto,
+    // el enlace al pedido…), para no robarles el suyo.
     document.querySelectorAll('[data-abrir-placa]').forEach(function (tarjeta) {
         tarjeta.addEventListener('click', function (e) {
             if (e.target.closest('form, a, button')) return;
@@ -272,11 +261,11 @@
         });
     });
 
-    // ---- Pestañas Guardada/Lista/Impresas, solo en móvil ---------------------
+    // ---- Pestañas Por imprimir/Impresas, solo en móvil ------------------------
     // En escritorio [data-panel-placas] lleva también la clase d-lg-block,
     // que gana siempre a partir de lg (mismo idioma que Bootstrap para
     // "oculto en móvil, visible en escritorio"), así que estos botones no
-    // hacen nada ahí — ni falta que hace, las tres secciones ya se ven a
+    // hacen nada ahí — ni falta que hace, las dos secciones ya se ven a
     // la vez. Se recuerda la última pestaña igual que el resto de
     // interruptores de esta pantalla.
     var TAB_PLACAS = 'piezas_placas_pestana_movil';

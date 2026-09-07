@@ -822,18 +822,15 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
-    // Por POST desde el modal que pregunta el nombre de la placa; el GET se
-    // mantiene para el enlace directo de siempre (sin nombre: se apunta con
-    // la fecha).
-    $routes->GET('carrito/descargar', 'Web::carritoDescargar');
-    $routes->POST('carrito/descargar', 'Web::carritoDescargar');
+    // Desde el modal que pregunta el nombre de la placa (fase 57: ya no
+    // genera ningún zip, los STL se generan aparte).
+    $routes->POST('carrito/crear-placa', 'Web::carritoCrearPlaca');
     $routes->POST('carrito/guardar', 'Web::carritoGuardarPlaca');
 
-    // Histórico de placas (fase 36): cada descarga queda anotada sola, con
+    // Histórico de placas (fase 36): cada creación queda anotada sola, con
     // qué llevaba, para poder reimprimir la misma combinación o solo mirar
     // qué se ha ido mandando a la impresora.
     $routes->GET('placas', 'Web::placas');
-    $routes->GET('placa/(:num)/descargar', 'Web::placaDescargar/$1');
     $routes->POST('placa/(:num)/cargar', 'Web::placaCargar/$1');
     $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
     $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
@@ -846,13 +843,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
 
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
-    //
-    // El modal del histórico (fase 48) solo enseña: `resumen` devuelve el
-    // vistazo rápido de solo lectura que se mete ahí. Editar de verdad es
-    // "Ver completa", que lleva a `editar` — la única pantalla de la
-    // bitácora desde la fase 50 (se quitó la versión imprimible: solo la
-    // editable). Las rutas más específicas van primero, como en el resto
-    // del fichero.
+    // Desde el histórico se llega aquí pulsando la tarjeta directamente (sin
+    // modal intermedio, fase 55) — es la única pantalla de la bitácora desde
+    // la fase 50 (se quitó la versión imprimible: solo la editable).
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
 

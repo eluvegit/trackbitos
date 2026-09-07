@@ -8,7 +8,7 @@
  *
  * Espera las mismas variables que _placa_tarjeta.php: $placa, $lista,
  * $resumen, $origenNombres, $cuadrosPorPlaca, $gruposReparto,
- * $nombresPlacas, $sugerenciasReparto.
+ * $nombresPlacas.
  */
 $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
@@ -35,8 +35,15 @@ $duracion = static function ($minutos): ?string {
 $pesoFmt = static fn($v) => $v === null ? null : rtrim(rtrim(number_format((float) $v, 2, ',', ''), '0'), ',');
 $tiempoReal = $duracion($placa['minutos_reales']);
 $resinaEstimada = $pesoFmt($placa['resina_estimada']);
+// El lomo de color: veredicto puesto pinta su color de siempre; sin
+// veredicto pero con algo ya anotado ("sin juzgar") pinta gris — para que
+// las pendientes de evaluar también se distingan de un vistazo, no solo
+// las tres ya resueltas.
+$claseLomo = $resumen['veredicto']
+    ? 'lomo-' . esc($resumen['veredicto'], 'attr')
+    : ($resumen['anotada'] ? 'lomo-sin-juzgar' : '');
 ?>
-<div class="card shadow-sm mb-3 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
+<div class="card shadow-sm mb-3 user-select-none lomo-placa <?= $claseLomo ?>"
     style="cursor: pointer" data-abrir-placa data-placa="<?= $idPlaca ?>"
     data-tarjeta-placa="<?= $idPlaca ?>" title="Editar la bitácora de esta placa">
     <?php if ($fotos): ?>
@@ -57,7 +64,11 @@ $resinaEstimada = $pesoFmt($placa['resina_estimada']);
     <div class="card-body">
         <div class="d-flex align-items-start gap-2">
             <div class="flex-grow-1">
-                <div class="fw-semibold" data-nombre-tarjeta title="<?= esc($placa['nombre'], 'attr') ?>">
+                <?php // El id en grande es el dato que se usa fuera de la web
+                      // (con otra herramienta, por su id); el nombre se queda
+                      // debajo, de apoyo para reconocer la placa. ?>
+                <div class="fw-bold lh-1" style="font-size: 1.5rem;">#<?= $idPlaca ?></div>
+                <div class="text-muted small" data-nombre-tarjeta title="<?= esc($placa['nombre'], 'attr') ?>">
                     <?= esc($placa['nombre']) ?>
                 </div>
                 <div class="text-muted small">

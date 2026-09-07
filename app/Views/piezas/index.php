@@ -892,7 +892,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="11" class="py-1 bg-body-secondary">
+                <td colspan="10" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -948,7 +948,7 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="11" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="10" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php $filaAlterna = false; ?>
@@ -993,7 +993,6 @@ foreach ($grupos as $grupo) {
                     </td>
                     <td class="col-sku"><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td class="col-estado"><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
-                    <td><?= count($variantes) === 1 ? $colStl($variantes[0]) : '' ?></td>
                     <td class="col-medidas"><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
                     <td class="text-center col-malla"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
                     <td class="col-aviso"><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
@@ -1041,7 +1040,6 @@ foreach ($grupos as $grupo) {
                             </td>
                             <td class="col-sku"><?= $colSku($v) ?></td>
                             <td class="col-estado"><?= $colEstado($v) ?></td>
-                            <td><?= $colStl($v) ?></td>
                             <td class="col-medidas"><?= $colMedidas($v) ?></td>
                             <td class="text-center col-malla"><?= $colMalla($v) ?></td>
                             <td class="col-aviso"><?= $colAviso($v) ?></td>

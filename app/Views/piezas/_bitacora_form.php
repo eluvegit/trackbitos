@@ -373,14 +373,19 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
         </button>
     </div>
 
-    <?php // Barra fija abajo: volver al histórico, guardar sin salir de aquí
-          // (fase 49 — guardar ya no lleva a ninguna otra pantalla), o mandar
-          // el zip otra vez a la impresora sin tener que ir a buscarlo al
-          // histórico. ?>
+    <?php // Barra fija abajo: borrar del histórico, volver, o guardar sin
+          // salir de aquí (fase 49 — guardar ya no lleva a ninguna otra
+          // pantalla). "Descargar STL" se quitó de aquí (fase 54: los STL se
+          // generan en local con otra herramienta) y en su sitio va borrar,
+          // que antes vivía como icono suelto en cada tarjeta del histórico. ?>
     <div class="d-flex gap-2 py-2 mt-3 mb-1 position-sticky bottom-0 bg-body border-top">
-        <a href="<?= site_url('piezas/placa/' . $idPlaca . '/descargar') ?>" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-download"></i> Descargar STL
-        </a>
+        <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
+            onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
+            <?= csrf_field() ?>
+            <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i> Borrar
+            </button>
+        </form>
         <div class="d-flex gap-2 ms-auto">
             <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Volver
