@@ -25,8 +25,8 @@
     Tres cajones, el mismo camino que sigue una placa de verdad: <strong>Guardada</strong> es solo una
     idea apuntada sin bajar nada todavía; <strong>Lista para imprimir</strong> es que ya tienes el zip
     de los STL; <strong>Impresa</strong> es que ya se montó, con o sin veredicto todavía. Dentro de cada
-    cajón, agrupadas por cuándo — así se ve de un vistazo por dónde vas. Pulsa una tarjeta para abrir su
-    bitácora y anotar cómo salió sin salir de esta pantalla.
+    cajón, agrupadas por cuándo — así se ve de un vistazo por dónde vas. Pulsa una tarjeta para entrar
+    directo a su bitácora y anotar cómo salió.
 </p>
 
 <?php /**
@@ -93,9 +93,7 @@
     }
 </style>
 
-<?php // Dos interruptores, no uno: en las tarjetas la foto es para reconocer la placa
-      // de un vistazo y en el listado del modal es solo un apoyo al texto, así que cada
-      // sitio se apaga por su cuenta. Cada uno recuerda su estado. ?>
+<?php // Apaga las portadas de las tarjetas; recuerda su estado entre visitas. ?>
 <div class="btn-group btn-group-sm mb-2" role="group">
     <button type="button" class="btn btn-outline-secondary" data-fotos="tarjetas">
         <i class="bi bi-image"></i> Ocultar portadas
@@ -126,13 +124,38 @@
         $bloquesLaterales = ['lista' => $bloques['lista'], 'guardada' => $bloques['guardada']];
         $totalImpresas = array_sum(array_map('count', $bloques['impresa']['grupos']));
     ?>
+
+    <?php // Pestañas solo en móvil (fase 53): en escritorio las tres secciones
+          // se ven en paralelo (columna grande + sidebar), pero apiladas en
+          // móvil "Guardada" acababa al final del todo, obligando a un scroll
+          // larguísimo para llegar a lo recién guardado. Con pestañas se
+          // cambia de sección tocando un botón, sin bajar nada — en escritorio
+          // ni se muestran, las tres secciones se ven todas a la vez como
+          // siempre (ver [data-panel-placas] más abajo y su regla d-lg-block). ?>
+    <?php // Etiquetas cortas a propósito, distintas del título largo de cada
+          // sección más abajo ("Guardadas para después", etc.): en una pestaña
+          // de móvil no cabían las tres sin apretarse ni cortarse. Sin
+          // contador tampoco — aquí solo hace falta saber a qué sección se
+          // salta, el número ya se ve en el título de la sección. ?>
+    <ul class="nav nav-pills nav-fill mb-3 d-lg-none" data-tabs-placas>
+        <li class="nav-item">
+            <button type="button" class="nav-link" data-tab-placas="guardada">Guardadas</button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link" data-tab-placas="lista">Listas</button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link active" data-tab-placas="impresa">Impresas</button>
+        </li>
+    </ul>
+
     <div class="row">
         <?php // Impresas ocupa los dos tercios: es el historial de verdad, lo
               // que se viene a repasar. Línea de tiempo fija a la izquierda de
               // esta columna (Hoy / Ayer / la semana pasada / Julio...) y las
               // placas una debajo de otra — como el historial de una app de
               // fotos o de mensajería, no un archivador de tarjetitas. ?>
-        <div class="col-12 col-lg-8">
+        <div class="col-12 col-lg-8 d-lg-block" data-panel-placas="impresa">
             <h6 class="d-flex align-items-center gap-2 mb-2">
                 <i class="bi bi-check-circle"></i>
                 <?= esc($bloques['impresa']['titulo']) ?>
@@ -187,6 +210,7 @@
             <div class="position-sticky" style="top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto;">
                 <?php foreach ($bloquesLaterales as $claveBloque => $bloque): ?>
                     <?php $totalBloque = array_sum(array_map('count', $bloque['grupos'])); ?>
+                    <div class="d-none d-lg-block" data-panel-placas="<?= $claveBloque ?>">
                     <h6 class="d-flex align-items-center gap-2 mb-2">
                         <i class="bi <?= $iconoBloque[$claveBloque] ?? 'bi-inbox' ?>"></i>
                         <?= esc($bloque['titulo']) ?>
@@ -223,140 +247,63 @@
                             </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
+                    </div>
                 <?php endforeach; ?>
             </div>
         </div>
     </div>
 
-    <?php // Un único modal para todas las placas (fase 48: solo lectura — al
-          // abrirlo se le presta el bloque de botones de su tarjeta, para no
-          // duplicarlos, y se le pide al servidor el vistazo rápido de la
-          // bitácora. Editar de verdad es "Ver completa", dentro del propio
-          // resumen, que lleva a la pantalla completa. ?>
-    <div class="modal fade" id="modalPlaca" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
-            <div class="modal-content">
-                <div class="modal-header py-2">
-                    <div class="me-auto">
-                        <h6 class="modal-title mb-0" id="modalPlacaTitulo"></h6>
-                        <div class="text-muted" style="font-size: .72rem;" id="modalPlacaMontada"></div>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body p-3 p-md-4" id="modalPlacaCuerpo">
-                    <div class="text-muted small">Cargando…</div>
-                </div>
-                <div class="modal-footer py-2" id="modalPlacaPie">
-                    <div class="d-flex flex-wrap gap-2 w-100" id="modalPlacaAcciones"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 <?php endif; ?>
 
 <script>
 (function () {
-    // ---- La bitácora de una placa, en un modal de solo lectura (fase 48) -----
-    var modalEl = document.getElementById('modalPlaca');
-    var cuerpo = document.getElementById('modalPlacaCuerpo');
-    var acciones = document.getElementById('modalPlacaAcciones');
-    var titulo = document.getElementById('modalPlacaTitulo');
-    var montada = document.getElementById('modalPlacaMontada');
-
-    var accionesPrestadas = null;  // el bloque de botones, y de qué tarjeta salió
-    var cunaDeAcciones = null;
-    var peticion = 0;              // cuál es la última carga pedida, ver más abajo
-    var placaActual = null;        // qué placa hay abierta, para el atajo de Enter
-
-    // La instancia se crea al pulsar, no aquí: este <script> va en el cuerpo de
-    // la vista y el bundle de Bootstrap se carga al final del layout, así que
-    // ahora mismo `bootstrap` todavía no existe — hacerlo aquí tiraba el bloque
-    // entero con un ReferenceError y se llevaba por delante hasta el botón de
-    // las fotos.
-    function modalDePlacas() {
-        return (modalEl && window.bootstrap) ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-    }
-
+    // ---- Pulsar una placa lleva directo a su bitácora completa ---------------
+    // Antes esto abría un modal de solo lectura con un botón "Ver completa"
+    // dentro; ese paso intermedio se quita, la tarjeta entera navega ya a la
+    // pantalla de edición. Se deja pasar el click cuando cae dentro de un
+    // enlace, botón o formulario propio de la tarjeta (borrar, descargar,
+    // cargar, repartir, deshacer reparto, el enlace al pedido…), para no
+    // robarles el suyo.
     document.querySelectorAll('[data-abrir-placa]').forEach(function (tarjeta) {
         tarjeta.addEventListener('click', function (e) {
-            // La tarjeta entera es el disparador, así que hay que dejar pasar
-            // cualquier enlace o formulario que caiga dentro.
-            if (e.target.closest('form, a')) return;
+            if (e.target.closest('form, a, button')) return;
 
-            var modal = modalDePlacas();
-            if (!modal) return;
-
-            var detalle = document.getElementById(tarjeta.getAttribute('data-abrir-placa'));
-            if (!detalle) return;
-
-            titulo.textContent = detalle.getAttribute('data-nombre-placa') || 'Placa';
-            montada.textContent = 'Montada el ' + (detalle.getAttribute('data-montada') || '');
-
-            // Los botones salen del bloque oculto de la tarjeta y se van al pie.
-            accionesPrestadas = detalle.querySelector('[data-acciones-placa]');
-            cunaDeAcciones = detalle;
-            if (accionesPrestadas) acciones.appendChild(accionesPrestadas);
-
-            placaActual = tarjeta.getAttribute('data-placa');
-            cargarResumen(placaActual);
-            modal.show();
+            window.location.href = '<?= site_url('piezas/placa') ?>/' + tarjeta.getAttribute('data-placa') + '/bitacora/editar';
         });
     });
 
-    /**
-     * El vistazo rápido se pide al abrir. `peticion` va contando: si se abre
-     * una placa, se cierra y se abre otra deprisa, la respuesta de la
-     * primera puede llegar después — y sin este número pintaría la bitácora
-     * equivocada encima de la que se está mirando.
-     */
-    function cargarResumen(id) {
-        var mia = ++peticion;
-        cuerpo.innerHTML = '<div class="text-muted small">Cargando…</div>';
+    // ---- Pestañas Guardada/Lista/Impresas, solo en móvil ---------------------
+    // En escritorio [data-panel-placas] lleva también la clase d-lg-block,
+    // que gana siempre a partir de lg (mismo idioma que Bootstrap para
+    // "oculto en móvil, visible en escritorio"), así que estos botones no
+    // hacen nada ahí — ni falta que hace, las tres secciones ya se ven a
+    // la vez. Se recuerda la última pestaña igual que el resto de
+    // interruptores de esta pantalla.
+    var TAB_PLACAS = 'piezas_placas_pestana_movil';
 
-        fetch('<?= site_url('piezas/placa') ?>/' + id + '/bitacora/resumen', {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        })
-            .then(function (r) {
-                if (!r.ok) throw new Error('respuesta ' + r.status);
-                return r.text();
-            })
-            .then(function (html) {
-                if (mia !== peticion) return;
-                cuerpo.innerHTML = html;
-            })
-            .catch(function () {
-                if (mia !== peticion) return;
-                cuerpo.innerHTML = '<div class="alert alert-warning py-2 mb-0">'
-                    + 'No se pudo cargar la bitácora. Prueba a abrirla con «Ver limpio».</div>';
-            });
-    }
-
-    if (modalEl) {
-        modalEl.addEventListener('hidden.bs.modal', function () {
-            // Los botones vuelven a su tarjeta antes de vaciar el modal, o se
-            // quedarían huérfanos en el pie y la placa se abriría sin ellos.
-            if (accionesPrestadas && cunaDeAcciones) cunaDeAcciones.appendChild(accionesPrestadas);
-            accionesPrestadas = null;
-            cunaDeAcciones = null;
-            placaActual = null;
-            peticion++;   // lo que llegue tarde ya no es de nadie
-            cuerpo.innerHTML = '';
+    function activarPestana(clave) {
+        var boton = document.querySelector('[data-tab-placas="' + clave + '"]');
+        if (!boton) return;
+        document.querySelectorAll('[data-tab-placas]').forEach(function (b) {
+            b.classList.toggle('active', b === boton);
+        });
+        document.querySelectorAll('[data-panel-placas]').forEach(function (panel) {
+            panel.classList.toggle('d-none', panel.getAttribute('data-panel-placas') !== clave);
         });
     }
 
-    // Enter en el modal = "Ver completa": es de solo lectura, así que no hay
-    // nada más que hacer con Enter salvo pasar a editar de verdad. Se deja
-    // pasar si el foco está en un botón, enlace o campo de un formulario
-    // prestado (borrar, cargar, repartir…) para no robarles su propio Enter.
-    document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Enter' || !placaActual) return;
-        if (!modalEl || !modalEl.classList.contains('show')) return;
-        var activo = document.activeElement;
-        if (activo && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(activo.tagName)) return;
-
-        window.location.href = '<?= site_url('piezas/placa') ?>/' + placaActual + '/bitacora/editar';
+    document.querySelectorAll('[data-tab-placas]').forEach(function (boton) {
+        boton.addEventListener('click', function () {
+            var clave = boton.getAttribute('data-tab-placas');
+            try { localStorage.setItem(TAB_PLACAS, clave); } catch (e) {}
+            activarPestana(clave);
+        });
     });
+
+    try {
+        var pestanaGuardada = localStorage.getItem(TAB_PLACAS);
+        if (pestanaGuardada) activarPestana(pestanaGuardada);
+    } catch (e) {}
 
     // ---- Plegar grupos de fecha ----------------------------------------------
     // A mano, mismo patrón que el índice de Piezas con sus categorías. Por

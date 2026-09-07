@@ -4,8 +4,7 @@
  * _placa_tarjeta.php (compacta, en grid), esta vive en una sola columna
  * centrada con sitio de sobra, así que enseña más de un vistazo —foto
  * grande, qué llevaba, un adelanto de las conclusiones— sin tener que
- * abrir el modal. El modal se sigue pudiendo abrir igual (mismo mecanismo
- * de botones prestados), para el vistazo con notas completas o para editar.
+ * entrar a editar. Pulsarla lleva directo a la bitácora completa.
  *
  * Espera las mismas variables que _placa_tarjeta.php: $placa, $lista,
  * $resumen, $origenNombres, $cuadrosPorPlaca, $gruposReparto,
@@ -13,7 +12,6 @@
  */
 $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
-$idDetalle = 'detalle-placa-' . $idPlaca;
 $fecha = strtotime($placa['creado_en']);
 $grupo = $gruposReparto[$idPlaca] ?? null;
 // Con la cantidad de cada una a mano, no solo la URL: para el badge de
@@ -39,8 +37,8 @@ $tiempoReal = $duracion($placa['minutos_reales']);
 $resinaEstimada = $pesoFmt($placa['resina_estimada']);
 ?>
 <div class="card shadow-sm mb-3 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
-    style="cursor: pointer" data-abrir-placa="<?= $idDetalle ?>" data-placa="<?= $idPlaca ?>"
-    data-tarjeta-placa="<?= $idPlaca ?>" title="Abrir la bitácora de esta placa">
+    style="cursor: pointer" data-abrir-placa data-placa="<?= $idPlaca ?>"
+    data-tarjeta-placa="<?= $idPlaca ?>" title="Editar la bitácora de esta placa">
     <?php if ($fotos): ?>
         <div data-foto-placa="tarjeta"
             style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; overflow: hidden; background: rgba(127,127,127,.15);">

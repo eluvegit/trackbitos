@@ -13,7 +13,6 @@
  */
 $disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
-$idDetalle = 'detalle-placa-' . $idPlaca;
 $fecha = strtotime($placa['creado_en']);
 $cuadros = $cuadrosPorPlaca[$idPlaca] ?? ['usados' => 0, 'sinMedir' => 0];
 $grupo = $gruposReparto[$idPlaca] ?? null;
@@ -24,8 +23,8 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
 ?>
 <div class="col" data-tarjeta-placa="<?= $idPlaca ?>">
     <div class="card shadow-sm h-100 user-select-none lomo-placa <?= $resumen['veredicto'] ? 'lomo-' . esc($resumen['veredicto'], 'attr') : '' ?>"
-        style="cursor: pointer" data-abrir-placa="<?= $idDetalle ?>" data-placa="<?= $idPlaca ?>"
-        title="Abrir la bitácora de esta placa">
+        style="cursor: pointer" data-abrir-placa data-placa="<?= $idPlaca ?>"
+        title="Editar la bitácora de esta placa">
         <?php if ($fotos): ?>
             <div class="d-flex" data-foto-placa="tarjeta"
                 style="gap: 2px; height: 72px; overflow: hidden; background: rgba(127,127,127,.15);">
@@ -131,12 +130,6 @@ $fotos = array_values(array_filter(array_column($lista, 'miniatura')));
             </div>
         </div>
 
-        <?php // Solo los botones viajan al modal, y siguen renderizados aquí
-              // (ocultos, en su propio parcial compartido) para que sus
-              // formularios lleven el CSRF de siempre sin duplicar un modal
-              // por placa. El contenido —la bitácora— se pide al abrir: son
-              // muchas placas y meter treinta formularios completos en la
-              // página costaría más que todo lo demás junto. ?>
         <?php include APPPATH . 'Views/piezas/_placa_acciones.php'; ?>
     </div>
 </div>

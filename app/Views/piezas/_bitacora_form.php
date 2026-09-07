@@ -1,8 +1,8 @@
 <?php
 /**
  * El formulario de la bitácora, a pantalla completa (fase 39, reordenado
- * fase 45, editar-solo desde fase 48 — el modal de Placas ahora es de solo
- * lectura, ver _bitacora_resumen.php). El formulario real (Form A: esencial
+ * fase 45; desde el histórico se llega aquí pulsando la tarjeta
+ * directamente, sin modal intermedio). El formulario real (Form A: esencial
  * + ajustes) se cierra tras los ajustes para poder meter la foto de la
  * placa justo después sin anidar un <form> dentro de otro; el resto de
  * secciones (piezas, pruebas, notas, enlace) siguen sumando al mismo

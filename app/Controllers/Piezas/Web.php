@@ -2541,23 +2541,6 @@ class Web extends BaseController
     }
 
     /**
-     * El vistazo rápido para el modal de Placas (fase 48): piezas impresas,
-     * foto, fecha, tiempo, estado, notas y conclusiones — solo lectura, para
-     * enterarse sin salir del histórico. Editar de verdad es "Ver completa",
-     * a pantalla completa (antes esto cargaba el formulario editable entero;
-     * con piezas/pruebas/fotos/ajustes ya no cabía en un vistazo rápido).
-     */
-    public function bitacoraResumen(int $id)
-    {
-        $placa = $this->placaModel->find($id);
-        if (!$placa) {
-            return $this->response->setStatusCode(404)->setBody('Esa placa ya no existe.');
-        }
-
-        return view('piezas/_bitacora_resumen', $this->datosDeLaBitacora($placa));
-    }
-
-    /**
      * En qué punto está el cuaderno de una placa, para poder verlo desde
      * fuera sin abrirla: si tiene algo apuntado, cuántas preguntas siguen sin
      * respuesta y cuántos enlaces cuelgan de ella. Las preguntas sin

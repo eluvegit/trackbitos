@@ -853,7 +853,6 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // bitácora desde la fase 50 (se quitó la versión imprimible: solo la
     // editable). Las rutas más específicas van primero, como en el resto
     // del fichero.
-    $routes->GET('placa/(:num)/bitacora/resumen', 'Web::bitacoraResumen/$1');
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
 

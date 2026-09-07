@@ -1,23 +1,18 @@
 <?php
 /**
  * El bloque de botones de una placa (borrar, descargar, cargar, repartir,
- * deshacer reparto, ver completa), oculto y compartido por las dos vistas
- * de tarjeta (_placa_tarjeta.php en grid, _placa_tarjeta_grande.php en el
- * timeline de Impresas) — el modal global de placas.php se lo "presta"
- * al abrirse, así que solo tiene que existir una vez por placa, no una
- * copia por tipo de tarjeta.
+ * deshacer reparto), compartido por las dos vistas de tarjeta
+ * (_placa_tarjeta.php en grid, _placa_tarjeta_grande.php en el timeline de
+ * Impresas). Vive dentro de la propia tarjeta, marcado con
+ * data-acciones-placa para que el click que abre la bitácora (ver
+ * placas.php) sepa dejarlo pasar en vez de navegar.
  *
- * Espera: $placa, $lista, $idPlaca, $idDetalle, $fecha, $origenNombres,
- * $sugerenciasReparto — las mismas variables que ya están en el scope de
- * quien la incluye.
+ * Espera: $placa, $lista, $idPlaca, $origenNombres, $sugerenciasReparto —
+ * las mismas variables que ya están en el scope de quien la incluye.
  */
 ?>
-<div id="<?= $idDetalle ?>" class="d-none" data-nombre-placa="<?= esc($placa['nombre'], 'attr') ?>"
-    data-montada="<?= esc(date('d/m/Y H:i', $fecha ?: time()), 'attr') ?>">
-    <?php // Borrar, marginado a la izquierda; el resto de acciones a la
-          // derecha, con "Ver completa" al final — es la que se usa
-          // para editar de verdad, y la última que se pulsa. ?>
-    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center w-100" data-acciones-placa>
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center w-100 mt-2 pt-2 border-top"
+    data-acciones-placa>
         <form method="post"
             action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
             onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
@@ -95,11 +90,5 @@
                     </button>
                 </form>
             <?php endif; ?>
-
-            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/editar') ?>"
-                class="btn btn-sm btn-primary" title="Editar piezas, pruebas, fotos y notas">
-                <i class="bi bi-arrows-fullscreen"></i> Ver completa
-            </a>
         </div>
-    </div>
 </div>

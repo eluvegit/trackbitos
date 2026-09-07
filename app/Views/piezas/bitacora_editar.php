@@ -4,9 +4,9 @@
 <?php
     /**
      * La bitácora a pantalla completa — la única pantalla de edición desde
-     * la fase 50 (se quitó la versión imprimible: solo la editable). El
-     * modal del histórico solo enseña un resumen; editar de verdad es
-     * siempre aquí, con "Ver completa".
+     * la fase 50 (se quitó la versión imprimible: solo la editable). Desde
+     * el histórico (placas.php) se llega aquí pulsando la tarjeta
+     * directamente, sin pasar por ningún modal intermedio.
      */
     $idPlaca = (int) $placa['id'];
 
