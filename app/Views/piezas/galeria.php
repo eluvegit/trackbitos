@@ -8,6 +8,26 @@
 <input type="hidden" id="piezasCsrfToken" name="<?= csrf_token() ?>" value="<?= csrf_hash() ?>"
     data-carrito-base="<?= site_url('piezas/carrito/') ?>">
 
+<?php /**
+       * Aquí y no en style.css a propósito: el Hostinger sirve los assets con
+       * una semana de caché, así que un cambio en la hoja tarda días en
+       * llegar al navegador. El HTML no se cachea, así que embebido siempre
+       * está al día.
+       */ ?>
+<style>
+    /* Dos líneas siempre, tenga el nombre una palabra o cinco: así todas las
+       fichas de la cuadrícula miden lo mismo de alto, en vez de bailar según
+       lo largo que sea cada nombre (y sin cortar el nombre para lograrlo). */
+    .nombre-pieza-galeria {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 2.4em;
+        line-height: 1.2em;
+    }
+</style>
+
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-grid-3x3-gap text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
@@ -17,20 +37,17 @@
     <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos
     </a>
-    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas">
         <i class="bi bi-printer"></i> Placas
     </a>
 
     <div class="d-flex gap-2 <?= empty($carrito) ? 'd-none' : '' ?>" id="cabeceraCarrito">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="botonVaciarPlaca">Vaciar placa</button>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="botonGuardarPlaca"
-            title="Anota qué llevaba, sin descargar nada — como una lista de la compra, para retomarla más adelante">
-            <i class="bi bi-bookmark-plus"></i> Guardar para después
-        </button>
-        <?php // Descargar deja la placa anotada en el histórico, así que antes de
-              // bajar el zip se pregunta con qué nombre la quieres encontrar luego. ?>
+        <?php // Antes bajaba el zip de los STL; ya no (fase 57, se generan en
+              // local aparte) — ahora solo pregunta con qué nombre quieres
+              // encontrar la placa luego. ?>
         <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNombrePlaca">
-            <i class="bi bi-file-earmark-zip"></i> Descargar placa (<span id="contadorPlaca"><?= count($carrito) ?></span>)
+            <i class="bi bi-journal-plus"></i> Crear placa (<span id="contadorPlaca"><?= count($carrito) ?></span>)
         </button>
     </div>
 </h5>
@@ -44,11 +61,8 @@
 
 <p class="text-muted small">
     Piezas validadas, y también las que ya tienen una versión "para imprimir" o "impresa, sin
-    validar". Añade a la placa las que quieras imprimir juntas y descarga todos los STL de golpe
-    en un .zip para el laminador. Puedes añadir piezas que <strong>todavía no tienen STL</strong>:
-    monta la placa ahora y genera los STL en local después. El zip trae un <code>FALTAN.txt</code>
-    con lo que falte; si no hay ningún STL aún, usa "Guardar para después" y baja el zip cuando los
-    generes.
+    validar". Añade a la placa las que quieras imprimir juntas y crea la placa: queda en el
+    histórico con su bitácora, tenga o no STL todavía — se generan aparte, en local.
 </p>
 
 <?php
@@ -60,11 +74,11 @@
 $badgeEstadoVersion = static function (array $version): string {
     if ($version['estado'] === 'impresa') {
         return '<span class="badge text-bg-primary" title="Impresa, pendiente de juzgar el resultado">'
-            . '<i class="bi bi-printer-fill"></i> sin validar</span>';
+            . '<i class="bi bi-printer-fill"></i></span>';
     }
     if ($version['estado'] === 'borrador') {
         return '<span class="badge text-bg-secondary" title="Promocionada, pendiente de imprimir de prueba">'
-            . '<i class="bi bi-printer"></i> para imprimir</span>';
+            . '<i class="bi bi-printer"></i></span>';
     }
 
     return '';
@@ -208,10 +222,26 @@ foreach ($piezasTodas as $p) {
                             $buscable = mb_strtolower(trim(
                                 $p['familiaNombre'] . ' ' . $variante['nombre'] . ' ' . ($variante['sku'] ?? '')
                             ));
+                            /**
+                             * La variante va pegada al nombre de la pieza ("Cabeza - calva"), no
+                             * en un renglón aparte: es un apellido, no un dato suelto — en dos
+                             * líneas parecía otra cosa distinta. Se calla cuando la variante es
+                             * la de nacimiento y además es la única, que es cuando no distingue
+                             * nada ("Lupa - base" no dice más que "Lupa"). Se calcula aquí arriba
+                             * (no solo junto al nombre visible, más abajo) porque también hace
+                             * falta para sugerir el nombre de la placa a partir de lo que lleva
+                             * (ver el modal "Crear placa").
+                             */
+                            $apellido = ($variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
+                                    || $p['variosVariantes'])
+                                ? $variante['nombre']
+                                : null;
+                            $nombrePiezaPlano = $p['familiaNombre'] . ($apellido !== null ? ' - ' . $apellido : '');
                         ?>
                         <div class="col" data-tarjeta data-estado="<?= esc($version['estado'], 'attr') ?>"
                             data-stl="<?= $tieneStl ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito ? 'en' : 'fuera' ?>"
                             data-buscar="<?= esc($buscable, 'attr') ?>"
+                            data-nombre-pieza="<?= esc($nombrePiezaPlano, 'attr') ?>"
                             data-version-tarjeta="<?= (int) $version['id'] ?>">
                             <div class="card shadow-sm h-100">
                                 <div class="position-relative">
@@ -226,6 +256,16 @@ foreach ($piezasTodas as $p) {
                                             </div>
                                         <?php endif; ?>
                                     </a>
+                                    <?php // Badge de versión encima de la foto, abajo a la izquierda —
+                                          // no ocupa línea en el cuerpo, así que el nombre puede usar sus
+                                          // dos líneas sin que la ficha crezca más de la cuenta. Verde con
+                                          // check si está validada (la buena); si no, oscuro semitransparente
+                                          // para leerse igual encima de cualquier foto. ?>
+                                    <span class="badge position-absolute bottom-0 start-0 m-1
+                                        <?= $esValidada ? 'text-bg-success' : 'bg-dark bg-opacity-75 text-white' ?>"
+                                        style="font-size: .7rem;">
+                                        <?php if ($esValidada): ?><i class="bi bi-check-circle-fill"></i> <?php endif; ?>v<?= sprintf('%03d', (int) $version['numero']) ?>
+                                    </span>
                                     <?php if ($p['miniatura']): ?>
                                         <?php // Ojo aparte del enlace a la ficha (que va en la imagen entera): abre la
                                               // foto suelta en una pestaña nueva para verla en grande, sin navegar. ?>
@@ -237,32 +277,14 @@ foreach ($piezasTodas as $p) {
                                     <?php endif; ?>
                                 </div>
                                 <div class="card-body p-2">
-                                    <?php
-                                        /**
-                                         * La variante va pegada al nombre de la pieza ("Cabeza - calva"),
-                                         * no en un renglón aparte: es un apellido, no un dato suelto —
-                                         * en dos líneas parecía otra cosa distinta. Se calla cuando la
-                                         * variante es la de nacimiento y además es la única, que es
-                                         * cuando no distingue nada ("Lupa - base" no dice más que "Lupa").
-                                         */
-                                        $apellido = ($variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
-                                                || $p['variosVariantes'])
-                                            ? $variante['nombre']
-                                            : null;
-                                    ?>
-                                    <div class="small fw-semibold text-truncate">
+                                    <div class="small fw-semibold nombre-pieza-galeria">
                                         <a href="<?= site_url('piezas/variante/' . (int) $variante['id']) ?>"
                                             class="text-decoration-none text-body"><?= esc($p['familiaNombre']) ?><?php
                                             if ($apellido !== null): ?><span class="text-muted fw-normal"> - <?= esc($apellido) ?></span><?php
                                             endif; ?></a>
                                     </div>
                                     <div class="text-muted small d-flex align-items-center flex-wrap gap-1">
-                                        <?php if ($esValidada): ?>
-                                            <span class="badge text-bg-success">
-                                                <i class="bi bi-check-circle-fill"></i> v<?= sprintf('%03d', (int) $version['numero']) ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span>v<?= sprintf('%03d', (int) $version['numero']) ?></span>
+                                        <?php if (!$esValidada): ?>
                                             <?= $badgeEstadoVersion($version) ?>
                                         <?php endif; ?>
                                         <?php if (!empty($variante['sku'])): ?>
@@ -286,7 +308,7 @@ foreach ($piezasTodas as $p) {
                                           // <form> con recarga completa perdía el filtro en el que
                                           // estabas trabajando cada vez que añadías una pieza. ?>
                                     <button type="button" class="btn btn-sm w-100 py-0 mt-1
-                                        <?= $enCarrito ? 'btn-success' : ($tieneStl ? 'btn-outline-primary' : 'btn-outline-warning') ?>"
+                                        <?= $enCarrito ? 'btn-success' : 'btn-outline-warning' ?>"
                                         data-carrito-boton data-version-id="<?= (int) $version['id'] ?>"
                                         data-en-carrito="<?= $enCarrito ? '1' : '0' ?>">
                                         <i class="bi <?= $enCarrito ? 'bi-check-lg' : 'bi-plus-lg' ?>"></i>
@@ -302,42 +324,31 @@ foreach ($piezasTodas as $p) {
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?php // El nombre es opcional a propósito: si lo dejas en blanco se apunta con la
-      // fecha, como hacía antes, y siempre se puede cambiar luego desde Placas. ?>
+<?php // La placa se crea siempre (fase 57: ya no hay opción de "solo
+      // descargar sin guardar", no tiene sentido sin el zip). El nombre
+      // sugerido sale de lo que lleva la placa (lo rellena el script de
+      // abajo al abrir); si se vacía del todo, se guarda con la fecha. ?>
 <div class="modal fade" id="modalNombrePlaca" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="post" action="<?= site_url('piezas/carrito/descargar') ?>" class="modal-content" id="formNombrePlaca">
+        <form method="post" action="<?= site_url('piezas/carrito/crear-placa') ?>" class="modal-content" id="formNombrePlaca">
             <?= csrf_field() ?>
             <div class="modal-header py-2">
-                <h6 class="modal-title">Descargar los STL</h6>
+                <h6 class="modal-title">Crear placa</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <?php // Guardar es lo normal (una placa que va a la impresora merece
-                      // su bitácora), pero se puede desmarcar: esta pantalla también
-                      // sirve para bajar STL sueltos de golpe, y eso no es una placa
-                      // ni tiene nada que documentar después. ?>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="guardar" value="1"
-                        id="guardarPlaca" checked>
-                    <label class="form-check-label small" for="guardarPlaca">
-                        Guardar esta placa en el histórico, con su bitácora
-                    </label>
-                </div>
-                <div id="bloqueNombrePlaca">
-                    <label class="form-label small mb-1" for="campoNombrePlaca">Nombre de la placa</label>
-                    <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
-                        id="campoNombrePlaca" autocomplete="off"
-                        placeholder="Placa <?= esc(date('d/m/Y H:i'), 'attr') ?>">
-                    <div class="form-text">
-                        Para reconocerla en el histórico. Si lo dejas vacío se guarda con la fecha.
-                    </div>
+                <label class="form-label small mb-1" for="campoNombrePlaca">Nombre de la placa</label>
+                <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
+                    id="campoNombrePlaca" autocomplete="off"
+                    placeholder="Placa <?= esc(date('d/m/Y H:i'), 'attr') ?>">
+                <div class="form-text">
+                    Para reconocerla en el histórico. Sugerido a partir de lo que lleva — cámbialo si quieres.
                 </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button class="btn btn-sm btn-success">
-                    <i class="bi bi-file-earmark-zip"></i> Descargar
+                    <i class="bi bi-journal-plus"></i> Crear placa
                 </button>
             </div>
         </form>
@@ -346,33 +357,26 @@ foreach ($piezasTodas as $p) {
 
 <script>
 (function () {
-    // El zip se baja en la misma pestaña y la página no navega a ningún sitio,
-    // así que el modal se queda abierto encima si no se cierra a mano. Se cierra
-    // al enviar, no antes: cancelar no debe disparar la descarga.
+    // Sugerencia del nombre a partir de lo que lleva la placa ahora mismo:
+    // las piezas en el carrito, unidas por coma. Se recalcula cada vez que
+    // se abre el modal, no solo la primera — si el carrito cambió desde la
+    // última vez, la sugerencia también. select() al final para que
+    // escribir un nombre propio sea sustituir, no primero borrar a mano.
     var formNombre = document.getElementById('formNombrePlaca');
     if (formNombre) {
-        formNombre.addEventListener('submit', function () {
-            var modalEl = document.getElementById('modalNombrePlaca');
-            setTimeout(function () {
-                if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-            }, 400);
-        });
-
-        // El foco en el campo al abrir: si vienes a ponerle nombre, es lo primero
-        // que quieres hacer; y si no, das a Descargar y ya.
         document.getElementById('modalNombrePlaca').addEventListener('shown.bs.modal', function () {
-            document.getElementById('campoNombrePlaca').focus();
-        });
-
-        // Sin guardar no hay nada que nombrar: el campo se esconde en vez de
-        // quedarse ahí pidiendo un dato que no se va a usar.
-        var guardar = document.getElementById('guardarPlaca');
-        var bloqueNombre = document.getElementById('bloqueNombrePlaca');
-        if (guardar && bloqueNombre) {
-            guardar.addEventListener('change', function () {
-                bloqueNombre.classList.toggle('d-none', !guardar.checked);
+            var campo = document.getElementById('campoNombrePlaca');
+            var nombres = [];
+            document.querySelectorAll('[data-tarjeta][data-placa="en"]').forEach(function (t) {
+                var n = t.getAttribute('data-nombre-pieza');
+                if (n) nombres.push(n);
             });
-        }
+            var sugerido = nombres.join(', ');
+            if (sugerido.length > 150) sugerido = sugerido.slice(0, 149) + '…';
+            campo.value = sugerido;
+            campo.focus();
+            campo.select();
+        });
     }
 
     // Plegar categorías, igual que en el índice pero con su propia clave de
@@ -536,7 +540,7 @@ foreach ($piezasTodas as $p) {
     function pintarBotonPlaca(boton, enCarrito) {
         boton.setAttribute('data-en-carrito', enCarrito ? '1' : '0');
         boton.classList.toggle('btn-success', enCarrito);
-        boton.classList.toggle('btn-outline-primary', !enCarrito);
+        boton.classList.toggle('btn-outline-warning', !enCarrito);
         var icono = boton.querySelector('i');
         if (icono) {
             icono.classList.toggle('bi-check-lg', enCarrito);
@@ -625,26 +629,6 @@ foreach ($piezasTodas as $p) {
                 actualizarContadorPlaca(0);
                 actualizarContadoresFiltroPlaca();
                 if (filtroPlaca !== '') aplicarFiltrosGaleria();
-            });
-        });
-    }
-
-    // ---- Guardar para después: anota la placa sin descargar nada ---------
-    var botonGuardarPlaca = document.getElementById('botonGuardarPlaca');
-    if (botonGuardarPlaca) {
-        botonGuardarPlaca.addEventListener('click', function () {
-            botonGuardarPlaca.disabled = true;
-
-            llamadaPlaca(baseCarrito + 'guardar').then(function (datos) {
-                botonGuardarPlaca.disabled = false;
-                if (!datos.ok) {
-                    alert(datos.mensaje || 'No se pudo guardar la placa.');
-                    return;
-                }
-                alert('Guardada como «' + datos.nombre + '». La puedes ver en Placas.');
-            }).catch(function () {
-                botonGuardarPlaca.disabled = false;
-                alert('No se pudo hablar con el servidor.');
             });
         });
     }

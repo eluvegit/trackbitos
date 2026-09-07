@@ -459,68 +459,22 @@ $colEstado = static function (array $v) use ($badgeMadurez): string {
 };
 
 /**
- * ¿Está lista para mandar a imprimir? Adjuntar el STL es un paso aparte de
- * promocionar, así que se olvida — y sin esto había que entrar pieza por
- * pieza a comprobarlo. Azul (mismo primary que el STL en la ficha): hay STL,
- * y el propio icono ES la descarga, no un icono aparte al lado — con un solo
- * STL baja directo; con varios trozos manda a la ficha a elegir cuál (o
- * bajarlos todos), en vez de intentar adivinar aquí cuál hace falta. Naranja
- * (igual que el .blend en la ficha): el máster, siempre descargable si hay
- * versión, tenga o no STL — sirve para coger piezas sueltas para montar en
- * otra escena, no solo para exportar.
+ * Solo el .blend (fase 58): el máster de la versión vigente, siempre
+ * descargable si hay versión promocionada, tenga o no STL — sirve para
+ * coger piezas sueltas y montarlas en otra escena, no solo para exportar.
+ * La columna de STL en sí se quitó de la tabla (fase 54: los STL se
+ * generan en local con otra herramienta), pero esta sigue haciendo falta.
  */
-$colStl = static function (array $v): string {
-    $stl = $v['stl'] ?? ['aplica' => false, 'trozos' => 0, 'version_id' => null, 'stl_id' => null];
-
-    // Sin ninguna versión promocionada no falta el STL: falta la versión, y
-    // tampoco hay .blend de esa versión que ofrecer.
-    if (empty($stl['aplica'])) {
+$colBlend = static function (array $v): string {
+    $stl = $v['stl'] ?? ['aplica' => false, 'version_id' => null];
+    if (empty($stl['aplica']) || empty($stl['version_id'])) {
         return '';
     }
 
-    $trozos = (int) $stl['trozos'];
-
-    // El .blend va primero, no el STL: es siempre el mismo icono de ancho
-    // fijo, así que la columna arranca en el mismo sitio en todas las
-    // filas. El STL detrás cambia de ancho según el caso (icono suelto,
-    // icono con número si hay varios trozos, o el badge más ancho de "sin
-    // STL"), y puesto en segundo lugar ese vaivén ya no descuadra la
-    // columna de un vistazo.
-    $html = '';
-
-    // El fichero llega con el sufijo "solo-lectura" en el nombre: esta
-    // descarga no pasa por el cliente, así que nadie registra esa copia y lo
-    // que se edite ahí no vuelve (spec 8).
-    if (!empty($stl['version_id'])) {
-        $html .= '<a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/blend/descargar') . '"'
-            . ' class="text-orange text-decoration-none"'
-            . ' title="Bajar el .blend de esta versión (copia de solo lectura)">'
-            . '<i class="bi bi-download"></i></a> ';
-    }
-
-    if ($trozos === 0) {
-        $html .= '<span class="badge border border-warning text-warning-emphasis fw-normal"'
-            . ' title="Esta versión no tiene STL: no se puede imprimir ni añadir a la placa">'
-            . '<i class="bi bi-file-earmark-x"></i> sin STL</span>';
-    } elseif ($trozos === 1 && !empty($stl['stl_id'])) {
-        $html .= '<a href="' . site_url('piezas/stl/' . (int) $stl['stl_id'] . '/descargar') . '"'
-            . ' class="text-primary text-decoration-none" title="Bajar el STL">'
-            . '<i class="bi bi-file-earmark-check-fill"></i></a>';
-    } elseif (!empty($stl['version_id'])) {
-        // Varios trozos: se bajan todos juntos en un zip, sin pasar por la
-        // ficha. El icono de zip avisa de que no es un STL suelto.
-        $html .= '<a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/stl/descargar') . '"'
-            . ' class="text-primary text-decoration-none"'
-            . ' title="Bajar los ' . $trozos . ' STL de esta pieza (se imprime en trozos), juntos en un zip">'
-            . '<i class="bi bi-file-earmark-zip-fill"></i> <span class="small">' . $trozos . '</span></a>';
-    } else {
-        $html .= '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '"'
-            . ' class="text-primary text-decoration-none"'
-            . ' title="' . $trozos . ' STL adjuntos (se imprime en trozos) — bájalos desde la ficha">'
-            . '<i class="bi bi-file-earmark-check-fill"></i> <span class="small">' . $trozos . '</span></a>';
-    }
-
-    return $html;
+    return '<a href="' . site_url('piezas/version/' . (int) $stl['version_id'] . '/blend/descargar') . '"'
+        . ' class="text-orange text-decoration-none"'
+        . ' title="Bajar el .blend de esta versión (copia de solo lectura)">'
+        . '<i class="bi bi-download"></i></a>';
 };
 
 /**
@@ -716,9 +670,10 @@ $filtrosImprimir = [
  * validada que además se está retocando sale en "Definitivas" y en
  * "Modificando", que es justo lo que pasa.
  *
- * El STL se lee tal cual lo pinta $colStl (el de la versión vigente: la
- * última promocionada que no sea «superada»): filtrar por algo distinto de
- * lo que se ve en la columna daría resultados que parecen un error.
+ * El STL se lee de $v['stl'], el de la versión vigente (la última
+ * promocionada que no sea «superada») — ya no hay columna de STL en la
+ * tabla (fase 58), pero los filtros «Sin STL» / «Con STL» / «Falta STL»
+ * siguen mirando ese mismo dato.
  */
 $tokensDe = static function (array $v): array {
     $tokens = [];
@@ -774,14 +729,16 @@ $tokensDeFamilia = static function (array $familia) use ($tokensDe): array {
 /**
  * Una tarjeta de la vista en cuadrícula: foto grande arriba, nombre debajo
  * y solo la información que sobrevive al modo Enfoque (estado a color +
- * icono, STL, aviso y tareas). Nada de ojo, SKU, medidas ni malla — para
- * eso está la tabla. Lleva data-buscar/data-tokens para que el buscador y
- * los filtros recorten también aquí (ver aplicarFiltros en el script).
+ * icono, .blend, aviso y tareas). El icono de STL se quitó de aquí (fase
+ * 58, igual que de la columna de la tabla): los STL se generan en local
+ * con otra herramienta. Nada de ojo, SKU, medidas ni malla — para eso está
+ * la tabla. Lleva data-buscar/data-tokens para que el buscador y los
+ * filtros recorten también aquí (ver aplicarFiltros en el script).
  */
 $tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, string $buscar)
-    use ($colFoto, $colEstado, $colStl, $colAviso, $botonTareas, $tokensDe): string {
+    use ($colFoto, $colEstado, $colBlend, $colAviso, $botonTareas, $tokensDe): string {
     $nombre = esc($familia['nombre'] . ($conVariante ? ' · ' . $v['nombre'] : ''));
-    $tira   = trim($colEstado($v) . ' ' . $colStl($v) . ' ' . $colAviso($v));
+    $tira   = trim($colEstado($v) . ' ' . $colBlend($v) . ' ' . $colAviso($v));
 
     return '<div class="galeria-tarjeta text-center" data-tarjeta'
         . ' data-buscar="' . $buscar . '" data-tokens="' . implode(' ', $tokensDe($v)) . '">'
@@ -795,15 +752,25 @@ $tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, 
         . '</div>';
 };
 
-// El número de cada chip: se cuentan piezas, no variantes, porque es lo que
-// se ve en la tabla y lo que uno tiene en la cabeza ("me faltan 6 STL").
+// El número de cada chip: se cuentan variantes, no piezas — contar piezas
+// escondía que una con 3 variantes y solo 1 sin STL sumaba +1 al filtro
+// "Sin STL" en vez de +1, y luego se veían más filas que el número del
+// chip (incongruente). Una pieza sin ninguna variante viva (invariante 6,
+// todas en la papelera) sigue contando como una unidad: no tiene tokens
+// que aportar, pero su fila ("recuperar en la papelera") sigue ahí.
 $cuentaFiltros = array_fill_keys(array_merge(array_keys($filtros), array_keys($filtrosImprimir)), 0);
 $totalPiezas   = 0;
 foreach ($grupos as $grupo) {
     foreach ($grupo['piezas'] as $familia) {
-        $totalPiezas++;
-        foreach ($tokensDeFamilia($familia) as $token) {
-            $cuentaFiltros[$token]++;
+        if ($familia['variantes'] === []) {
+            $totalPiezas++;
+            continue;
+        }
+        foreach ($familia['variantes'] as $v) {
+            $totalPiezas++;
+            foreach ($tokensDe($v) as $token) {
+                $cuentaFiltros[$token]++;
+            }
         }
     }
 }
@@ -892,7 +859,7 @@ foreach ($grupos as $grupo) {
         <?php $idGrupo = $categoria ? 'cat-' . (int) $categoria['id'] : 'cat-sin'; ?>
         <tbody class="table-group-divider">
             <tr>
-                <td colspan="10" class="py-1 bg-body-secondary">
+                <td colspan="11" class="py-1 bg-body-secondary">
                     <?php // Toda la línea pliega, no solo la flecha: es el objetivo grande y
                           // obvio, y acertar en un icono de 16px para algo que se hace a diario
                           // es un peaje sin motivo. El botón sigue existiendo para el teclado —
@@ -948,7 +915,7 @@ foreach ($grupos as $grupo) {
 
         <tbody id="<?= $idGrupo ?>">
             <?php if (empty($grupo['piezas'])): ?>
-                <tr><td colspan="10" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
+                <tr><td colspan="11" class="text-muted small ps-4">Vacía: mueve piezas aquí desde «Organizar».</td></tr>
             <?php endif; ?>
 
             <?php $filaAlterna = false; ?>
@@ -993,6 +960,7 @@ foreach ($grupos as $grupo) {
                     </td>
                     <td class="col-sku"><?= count($variantes) === 1 ? $colSku($variantes[0]) : '' ?></td>
                     <td class="col-estado"><?= count($variantes) === 1 ? $colEstado($variantes[0]) : '' ?></td>
+                    <td><?= count($variantes) === 1 ? $colBlend($variantes[0]) : '' ?></td>
                     <td class="col-medidas"><?= count($variantes) === 1 ? $colMedidas($variantes[0]) : '' ?></td>
                     <td class="text-center col-malla"><?= count($variantes) === 1 ? $colMalla($variantes[0]) : '' ?></td>
                     <td class="col-aviso"><?= count($variantes) === 1 ? $colAviso($variantes[0]) : '' ?></td>
@@ -1040,6 +1008,7 @@ foreach ($grupos as $grupo) {
                             </td>
                             <td class="col-sku"><?= $colSku($v) ?></td>
                             <td class="col-estado"><?= $colEstado($v) ?></td>
+                            <td><?= $colBlend($v) ?></td>
                             <td class="col-medidas"><?= $colMedidas($v) ?></td>
                             <td class="text-center col-malla"><?= $colMalla($v) ?></td>
                             <td class="col-aviso"><?= $colAviso($v) ?></td>

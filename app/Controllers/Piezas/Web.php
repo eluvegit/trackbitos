@@ -730,8 +730,7 @@ class Web extends BaseController
 
         // El fichero tiene que seguir existiendo cuando DownloadResponse lo
         // lea durante send(), que ocurre después de que este método
-        // retorne — por eso el borrado va en un shutdown function, no aquí
-        // (mismo patrón que carritoDescargar).
+        // retorne — por eso el borrado va en un shutdown function, no aquí.
         register_shutdown_function(static function () use ($rutaZip) {
             @unlink($rutaZip);
         });
@@ -1668,9 +1667,8 @@ class Web extends BaseController
     public function carritoAgregar(int $versionId)
     {
         // Una pieza sin STL todavía SÍ se puede meter en la placa: el flujo
-        // ahora es montar la placa aquí y generar los STL en local después
-        // (script generador). El zip de descarga ya avisa con FALTAN.txt de
-        // lo que falte, y "Guardar para después" no necesita ninguno.
+        // es montar la placa aquí y generar los STL en local después, con
+        // otra herramienta.
         $version = $this->versionModel->find($versionId);
         if (!$version) {
             $mensaje = 'Esa versión ya no existe.';
@@ -1724,9 +1722,8 @@ class Web extends BaseController
      * Crea la placa desde el carrito con el nombre que se le dé en el modal
      * (fase 57): antes esto empaquetaba los STL en un .zip para el
      * laminador, pero los STL se generan aparte (en local, con otra
-     * herramienta), así que ya no hay ningún fichero que bajar aquí — es
-     * "Guardar para después" con un nombre pensado en vez de la fecha por
-     * defecto.
+     * herramienta), así que ya no hay ningún fichero que bajar aquí — solo
+     * registra la placa en el histórico, con bitácora.
      */
     public function carritoCrearPlaca()
     {
@@ -1742,50 +1739,20 @@ class Web extends BaseController
     }
 
     /**
-     * "Guardar para después" — como una lista de la compra: no siempre se
-     * elige pensar un nombre en el momento, a veces es solo apuntar qué se
-     * quiere imprimir más adelante. Mismo registro que deja
-     * `carritoCrearPlaca()`, solo que con el nombre por defecto (la fecha).
-     */
-    public function carritoGuardarPlaca()
-    {
-        $carrito = $this->carritoActual();
-        if (empty($carrito)) {
-            $mensaje = 'La placa está vacía.';
-            if ($this->request->isAJAX()) {
-                return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje]);
-            }
-
-            return redirect()->to(site_url('piezas/galeria'))->with('error', $mensaje);
-        }
-
-        $placa = $this->registrarPlacaDesdeCarrito($carrito);
-
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['ok' => true, 'nombre' => $placa['nombre']]);
-        }
-
-        return redirect()->to(site_url('piezas/galeria'))
-            ->with('success', 'Guardada como "' . $placa['nombre'] . '". La puedes ver en Placas.');
-    }
-
-    /**
      * Queda registrada sola, con fecha y qué llevaba (fase 36): así hay
      * histórico sin depender de acordarse de guardar nada, y desde
-     * /piezas/placas se puede volver a cargar la misma combinación, bajar el
-     * zip más tarde, o borrar la entrada si solo era una prueba. El nombre
-     * es un punto de partida editable, no definitivo: si no llega ninguno
-     * (el usuario no lo escribió, o la acción no lo pregunta) se usa la
-     * fecha, que al menos sitúa la tanda en el tiempo.
+     * /piezas/placas se puede volver a cargar la misma combinación o borrar
+     * la entrada si solo era una prueba. El nombre es un punto de partida
+     * editable, no definitivo: si no llega ninguno (el usuario no lo
+     * escribió, o la acción no lo pregunta) se usa la fecha, que al menos
+     * sitúa la tanda en el tiempo.
      *
-     * `$descargada` distingue las dos acciones que llegan aquí: descargar el
-     * zip de verdad (carritoDescargar) frente a "Guardar para después"
-     * (carritoGuardarPlaca) — es lo que decide si la placa nace "lista para
-     * imprimir" o solo "guardada". Se fija una vez, al crear la fila, y no
-     * se vuelve a tocar: volver a descargar una placa ya guardada desde el
-     * histórico (placaDescargar) no pasa por aquí, así que no la asciende.
+     * `descargada_en` ya no se fija aquí (fase 57): distinguía "ya tienes el
+     * zip" de "solo una idea apuntada", pero con los STL generándose fuera
+     * de la web esa distinción dejó de significar nada real — ver la fusión
+     * de los cajones Guardada/Lista en placas().
      */
-    private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null, bool $descargada = false): array
+    private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null): array
     {
         $nombre = trim((string) $nombre);
         if ($nombre === '') {
@@ -1794,7 +1761,7 @@ class Web extends BaseController
         // Mismo tope que la columna y que el formulario de renombrar.
         $nombre = mb_substr($nombre, 0, 150);
 
-        $datos = ['nombre' => $nombre, 'descargada_en' => $descargada ? date('Y-m-d H:i:s') : null]
+        $datos = ['nombre' => $nombre, 'descargada_en' => null]
             + $this->herenciaDeLaPlacaAnterior();
 
         $pedidoId = (int) session(self::SESION_CARRITO_PEDIDO_ORIGEN);
@@ -1871,85 +1838,12 @@ class Web extends BaseController
         }
     }
 
-    /**
-     * Junta en un zip los STL de una lista de versiones (una versión puede
-     * aportar varios si la pieza se imprime en trozos — fase 21). Null si
-     * ninguno sigue disponible en el almacén: compartido por la descarga de
-     * la placa actual y por "descargar de nuevo" una placa guardada, cuyos
-     * ficheros pueden llevar meses purgados si la versión cambió de estado.
-     */
-    private function construirZipDePlaca(array $versionIds): ?string
-    {
-        $versiones = $this->versionModel->whereIn('id', $versionIds)->findAll();
-        $porVersion = $this->servicio->stlsDeVersiones(array_map(static fn($v) => (int) $v['id'], $versiones));
-
-        $aEmpaquetar = [];
-        // Antes, una versión sin ningún STL disponible simplemente no
-        // aportaba nada al zip y nadie se enteraba salvo contando piezas a
-        // mano en el laminador. Se anota aparte para escribir FALTAN.txt.
-        $faltantes = [];
-        foreach ($versiones as $version) {
-            $stlsVersion = $porVersion[(int) $version['id']] ?? [];
-            $disponibles = array_filter($stlsVersion, fn($stl) => $this->almacen->existe($stl['ruta_stl']));
-
-            foreach ($disponibles as $stl) {
-                $aEmpaquetar[] = [$version, $stl];
-            }
-
-            if ($disponibles === []) {
-                $variante = $this->varianteModel->find($version['variante_id']);
-                $familia  = $variante ? $this->familiaModel->find($variante['familia_id']) : null;
-                $faltantes[] = sprintf(
-                    '%s - %s v%03d (%s): %s',
-                    $familia['nombre'] ?? '?',
-                    $variante['nombre'] ?? ('variante ' . $version['variante_id']),
-                    (int) $version['numero'],
-                    $version['estado'],
-                    array_filter($stlsVersion, static fn($s) => !empty($s['ruta_stl'])) === []
-                        ? 'sin ningún STL con fichero (trozos apuntados solo con medidas)'
-                        : 'STL subido pero ya no está en el almacén'
-                );
-            }
-        }
-
-        if ($aEmpaquetar === []) {
-            return null;
-        }
-
-        $carpetaTmp = WRITEPATH . 'piezas/tmp';
-        if (!is_dir($carpetaTmp) && !mkdir($carpetaTmp, 0775, true) && !is_dir($carpetaTmp)) {
-            throw new RuntimeException('No se pudo crear la carpeta temporal para la placa.');
-        }
-        $rutaZip = $carpetaTmp . '/placa-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.zip';
-
-        $zip = new \ZipArchive();
-        if ($zip->open($rutaZip, \ZipArchive::CREATE) !== true) {
-            throw new RuntimeException('No se pudo crear el zip de la placa.');
-        }
-        foreach ($aEmpaquetar as [$version, $stl]) {
-            $variante = $this->varianteModel->find($version['variante_id']);
-            $zip->addFile(
-                $this->almacen->absoluta($stl['ruta_stl']),
-                $this->nombreArchivo($variante, $version, 'stl', $stl['nombre'])
-            );
-        }
-        if ($faltantes !== []) {
-            $zip->addFromString(
-                'FALTAN.txt',
-                "Piezas de esta placa sin STL en el zip:\n\n" . implode("\n", $faltantes) . "\n"
-            );
-        }
-        $zip->close();
-
-        return $rutaZip;
-    }
-
     // ---- Historial de placas ---------------------------------------------
 
     /**
      * Cada fila con sus piezas resueltas (nombre, estado, si el STL sigue
      * disponible) para poder decidir de un vistazo si merece la pena
-     * "descargar de nuevo" o "cargar en la placa actual".
+     * "cargar en la placa actual".
      */
     public function placas()
     {
@@ -2153,27 +2047,6 @@ class Web extends BaseController
         }
 
         return $etiqueta;
-    }
-
-    public function placaDescargar(int $id)
-    {
-        $placa = $this->placaModel->find($id);
-        if (!$placa) {
-            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
-        }
-
-        $versionIds = array_column($this->placaVersionModel->where('placa_id', $id)->findAll(), 'version_id');
-        $rutaZip = $versionIds ? $this->construirZipDePlaca($versionIds) : null;
-        if (!$rutaZip) {
-            return redirect()->to(site_url('piezas/placas'))
-                ->with('error', 'Ninguno de los STL de esta placa está ya disponible en el almacén.');
-        }
-
-        register_shutdown_function(static function () use ($rutaZip) {
-            @unlink($rutaZip);
-        });
-
-        return $this->response->download($rutaZip, null, true);
     }
 
     /**

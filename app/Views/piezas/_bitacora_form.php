@@ -86,7 +86,7 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
         <div class="col-6 col-md-3">
             <label class="form-label small mb-1">Tiempo real</label>
             <input type="text" name="minutos_reales" class="form-control form-control-sm" data-tiempo
-                placeholder="2h 35" value="<?= esc(old('minutos_reales', $duracion($placa['minutos_reales'])), 'attr') ?>">
+                value="<?= esc(old('minutos_reales', $duracion($placa['minutos_reales'])), 'attr') ?>">
         </div>
         <div class="col-6 col-md-3">
             <label class="form-label small mb-1">Número de capas</label>
@@ -135,12 +135,12 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                 <div class="col-6 col-md-4">
                     <label class="form-label small mb-1">Tiempo estimado (programa)</label>
                     <input type="text" name="minutos_estimados" class="form-control form-control-sm" data-tiempo
-                        placeholder="2h 35" value="<?= esc(old('minutos_estimados', $duracion($placa['minutos_estimados'])), 'attr') ?>">
+                        value="<?= esc(old('minutos_estimados', $duracion($placa['minutos_estimados'])), 'attr') ?>">
                 </div>
                 <div class="col-6 col-md-4">
                     <label class="form-label small mb-1">Tiempo previsto (máquina)</label>
                     <input type="text" name="minutos_previstos" class="form-control form-control-sm" data-tiempo
-                        placeholder="2:50" value="<?= esc(old('minutos_previstos', $duracion($placa['minutos_previstos'])), 'attr') ?>">
+                        value="<?= esc(old('minutos_previstos', $duracion($placa['minutos_previstos'])), 'attr') ?>">
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small mb-1">Resina estimada (g)</label>

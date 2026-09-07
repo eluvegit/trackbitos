@@ -823,9 +823,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
     // Desde el modal que pregunta el nombre de la placa (fase 57: ya no
-    // genera ningún zip, los STL se generan aparte).
+    // genera ningún zip, los STL se generan aparte; fase 59: era la única
+    // forma de crear una placa, "Guardar para después" se quitó por
+    // redundante).
     $routes->POST('carrito/crear-placa', 'Web::carritoCrearPlaca');
-    $routes->POST('carrito/guardar', 'Web::carritoGuardarPlaca');
 
     // Histórico de placas (fase 36): cada creación queda anotada sola, con
     // qué llevaba, para poder reimprimir la misma combinación o solo mirar

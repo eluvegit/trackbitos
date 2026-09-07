@@ -32,6 +32,8 @@
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-journal-text text-primary"></i>
+    <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
+    <span class="text-muted">/</span>
     <a href="<?= site_url('piezas/placas') ?>" class="text-decoration-none text-muted fw-normal">Placas</a>
     <span class="text-muted">/</span>
     <span class="text-muted fw-normal">#<?= $idPlaca ?></span>
