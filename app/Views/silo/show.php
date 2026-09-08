@@ -25,7 +25,7 @@
     <span class="text-muted small d-flex align-items-center gap-1">
         <?php if ($desde): ?>
             a <i class="bi bi-hdd"></i>
-            Nivel <?= (int) $desde['nivel'] ?> (<?= $nivelLabel[(int) $desde['nivel']] ?? '' ?>) #<?= (int) $desde['numero'] ?><?php if (!empty($desde['etiqueta'])): ?> — <?= esc($desde['etiqueta']) ?><?php endif; ?>
+            Nivel <?= (int) $desde['nivel'] ?> (<?= $nivelLabel[(int) $desde['nivel']] ?? '' ?>) #<?= (int) $desde['numero'] ?><?php if (!empty($desde['etiqueta'])): ?> — <?= silo_nombre_con_badges($desde['etiqueta']) ?><?php endif; ?>
         <?php else: ?>
             a <i class="bi bi-folder2"></i> Silo
         <?php endif; ?>
@@ -106,7 +106,7 @@
                                 Nivel <?= (int) $u['nivel'] ?> #<?= (int) $u['numero'] ?>
                             </a>
                             <?php if (!empty($u['unidad_etiqueta'])): ?>
-                                <span class="text-muted small">(<?= esc($u['unidad_etiqueta']) ?>)</span>
+                                <span class="text-muted small">(<?= silo_nombre_con_badges($u['unidad_etiqueta']) ?>)</span>
                             <?php endif; ?>
                         </td>
                         <td><?= esc($copiaLabel[(int) $u['copia']] ?? $u['copia']) ?></td>

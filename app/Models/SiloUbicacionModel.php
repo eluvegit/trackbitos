@@ -48,4 +48,24 @@ class SiloUbicacionModel extends Model
 
         return (int) ($fila['total'] ?? 0);
     }
+
+    /**
+     * Piezas que ya viven en Nivel 1 (Copia 1) pero todavía no tienen sitio
+     * en la copia indicada (2 = por año, 3 = por categoría) — lo que queda
+     * "pendiente de almacenar" ahora que el reparto no inventa unidades.
+     * Se recoloca al dar de alta más unidades y pulsar "Recalcular reparto".
+     *
+     * @return array{bytes: int, piezas: int}
+     */
+    public function pendienteDeCopia(int $copia): array
+    {
+        $sql = 'SELECT COALESCE(SUM(p.tamano_bytes), 0) AS bytes, COUNT(*) AS piezas
+                FROM silo_piezas p
+                WHERE EXISTS (SELECT 1 FROM silo_ubicaciones uc1 WHERE uc1.pieza_id = p.id AND uc1.copia = 1)
+                  AND NOT EXISTS (SELECT 1 FROM silo_ubicaciones ucn WHERE ucn.pieza_id = p.id AND ucn.copia = ?)';
+
+        $fila = $this->db->query($sql, [$copia])->getRowArray();
+
+        return ['bytes' => (int) ($fila['bytes'] ?? 0), 'piezas' => (int) ($fila['piezas'] ?? 0)];
+    }
 }

@@ -13,7 +13,7 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">
         Nivel <?= (int) $unidad['nivel'] ?> (<?= $nivelLabel[(int) $unidad['nivel']] ?? '' ?>) #<?= (int) $unidad['numero'] ?>
-        <?php if ($unidad['etiqueta']): ?> — <?= esc($unidad['etiqueta']) ?><?php endif; ?>
+        <?php if ($unidad['etiqueta']): ?> — <?= silo_nombre_con_badges($unidad['etiqueta']) ?><?php endif; ?>
     </strong>
 </h5>
 

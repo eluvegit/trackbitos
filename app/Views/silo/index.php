@@ -18,6 +18,12 @@
     <a href="<?= site_url('silo/mi-pc') ?>" class="text-decoration-none ms-1 text-muted" title="Mi PC">
         <i class="bi bi-pc-display"></i>
     </a>
+    <a href="<?= site_url('silo/ranking') ?>" class="text-decoration-none ms-1 text-muted" title="Lo que más ocupa">
+        <i class="bi bi-bar-chart-line"></i>
+    </a>
+    <a href="<?= site_url('silo/datos-faltan') ?>" class="text-decoration-none ms-1 text-muted" title="Datos que faltan">
+        <i class="bi bi-clipboard-x"></i>
+    </a>
     <a href="<?= site_url('silo/crear') ?>" class="text-decoration-none ms-1 text-success" title="Nueva pieza">
         <i class="bi bi-plus-circle fs-5"></i>
     </a>

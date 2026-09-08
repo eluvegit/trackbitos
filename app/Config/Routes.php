@@ -884,6 +884,8 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
     $routes->POST('vocabulario/renombrar/(:num)', 'Web::renombrarVocabulario/$1');
 
     $routes->GET('mi-pc', 'Web::miPc');
+    $routes->GET('ranking', 'Web::ranking');
+    $routes->GET('datos-faltan', 'Web::datosFaltan');
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');

@@ -23,6 +23,29 @@ if (!function_exists('silo_formatear_tamano')) {
     }
 }
 
+if (!function_exists('silo_tamano_corto')) {
+    /**
+     * Tamaño en una sola pieza corta para las tarjetas de unidad
+     * (`/silo/unidades`), donde no cabe "51.66 GB": GB sin decimales, TB
+     * con uno como mucho. El dato preciso va en el `title` con
+     * silo_formatear_tamano().
+     */
+    function silo_tamano_corto(?int $bytes): string
+    {
+        if (!$bytes || $bytes <= 0) {
+            return '0';
+        }
+        if ($bytes >= 1_000_000_000_000) {
+            return rtrim(rtrim(number_format($bytes / 1_000_000_000_000, 1), '0'), '.') . ' TB';
+        }
+        if ($bytes >= 1_000_000_000) {
+            return round($bytes / 1_000_000_000) . ' GB';
+        }
+
+        return max(1, (int) round($bytes / 1_000_000)) . ' MB';
+    }
+}
+
 if (!function_exists('silo_capacidad_partes')) {
     /**
      * Igual que silo_formatear_tamano() pero separado en {valor, unidad}
@@ -138,16 +161,30 @@ if (!function_exists('silo_icono_vocabulario')) {
 
 if (!function_exists('silo_badges_carpeta')) {
     /**
-     * Nombre de carpeta como badges. Las personas van solo con icono +
-     * nombre (sin fondo); el lugar y el tema con fondo gris claro; la
-     * categoría con fondo ámbar. Con $enBloques la galería saca un tipo de
-     * vocabulario por línea (categoría, tema, lugar, personas); sin él
-     * (listado) va todo en la misma línea, envolviendo. Espera la pieza con
-     * `categoria_nombre` y `atributos` [{tipo, nombre}] ya resueltos
+     * Nombre de carpeta como badges. Delante de la categoría va el año (gris
+     * claro, letras negras). Las personas van solo con icono + nombre (sin
+     * fondo); el lugar y el tema con fondo gris claro; la categoría con
+     * fondo ámbar. Con $enBloques la galería saca un tipo de vocabulario por
+     * línea (categoría, tema, lugar, personas); sin él (listado) va todo en
+     * la misma línea, envolviendo. Espera la pieza con `categoria_nombre`,
+     * `fecha`/`id_negocio` y `atributos` [{tipo, nombre}] ya resueltos
      * (SiloPiezaModel los adjunta).
      */
     function silo_badges_carpeta(array $pieza, bool $enBloques = false): string
     {
+        // Año (de la fecha; si no, de los 2 primeros dígitos del ID de
+        // negocio AAnnnn) como chip gris claro con letras negras, delante de
+        // la categoría.
+        $anio = '';
+        if (preg_match('/^(\d{4})-/', (string) ($pieza['fecha'] ?? ''), $mm)) {
+            $anio = $mm[1];
+        } elseif (preg_match('/^(\d{2})\d{4}$/', (string) ($pieza['id_negocio'] ?? ''), $mm)) {
+            $anio = '20' . $mm[1];
+        }
+        $anioBadge = $anio !== ''
+            ? '<span class="badge text-bg-light border fw-normal me-1" title="Año">' . esc($anio) . '</span>'
+            : '';
+
         $porTipo = [];
 
         $cat = trim((string) ($pieza['categoria_nombre'] ?? ''));
@@ -159,7 +196,7 @@ if (!function_exists('silo_badges_carpeta')) {
         }
 
         if ($porTipo === []) {
-            return '<span class="badge text-bg-secondary fw-normal">'
+            return $anioBadge . '<span class="badge text-bg-secondary fw-normal">'
                 . '<i class="bi bi-folder2 me-1"></i>sin clasificar</span>';
         }
 
@@ -178,12 +215,40 @@ if (!function_exists('silo_badges_carpeta')) {
             array_values(array_diff(array_keys($porTipo), $orden)),
         );
 
-        $salida = '';
+        // El año va pegado a la categoría; si la pieza no tiene categoría,
+        // suelto al principio.
+        $anioPendiente = $anioBadge;
+        if ($anioPendiente !== '' && !in_array('categoria', $tipos, true)) {
+            $salida = $enBloques
+                ? '<span class="d-block mt-1">' . $anioPendiente . '</span>'
+                : $anioPendiente;
+            $anioPendiente = '';
+        } else {
+            $salida = '';
+        }
+
         foreach ($tipos as $tipo) {
             $icono = silo_icono_vocabulario($tipo);
             $clase = $clasePorTipo[$tipo] ?? 'text-bg-secondary';
             $trozos = '';
+            if ($tipo === 'categoria' && $anioPendiente !== '') {
+                $trozos .= $anioPendiente;
+                $anioPendiente = '';
+            }
             foreach ($porTipo[$tipo] as $nombre) {
+                // La temática puede llevar al final la etiqueta de contenido
+                // "(Fotos + Vídeos + Montajes)": se saca como badges de color
+                // y el badge de tema se queda solo con el texto de delante.
+                if ($tipo === 'tema' && ($det = silo_contenido_detectar($nombre)) !== null) {
+                    if ($det['base'] !== '') {
+                        $trozos .= '<span class="badge ' . $clase . ' fw-normal me-1">'
+                            . '<i class="bi ' . $icono . ' me-1"></i>'
+                            . esc($det['base']) . '</span>';
+                    }
+                    $trozos .= silo_badges_contenido($nombre);
+                    continue;
+                }
+
                 if ($clase === '') {
                     // Mismo tamaño que los badges (.badge => font-size .75em),
                     // pero sin fondo ni relleno: solo icono + nombre.
@@ -196,10 +261,145 @@ if (!function_exists('silo_badges_carpeta')) {
                         . esc($nombre) . '</span>';
                 }
             }
-            $salida .= $enBloques ? '<span class="d-block mt-1">' . $trozos . '</span>' : $trozos;
+            $salida .= $enBloques
+                ? '<span class="d-block mt-1 silo-bloque-' . esc($tipo, 'attr') . '">' . $trozos . '</span>'
+                : $trozos;
         }
 
         return trim($salida);
+    }
+}
+
+if (!function_exists('silo_contenido_detectar')) {
+    /**
+     * Núcleo compartido: dado un nombre de unidad / temática, separa la
+     * "etiqueta de contenido" del paréntesis final ("Viajes 2019 (Fotos +
+     * Vídeos)") en {base, claves}. `claves` es un subconjunto ordenado de
+     * ['fotos', 'videos', 'montajes'] (sin duplicados). Devuelve null si no
+     * hay un paréntesis final o si dentro hay algo que no sean esas tres
+     * palabras (singular o plural, sin distinguir tildes/mayúsculas).
+     *
+     * @return array{base: string, claves: string[]}|null
+     */
+    function silo_contenido_detectar(?string $nombre): ?array
+    {
+        $nombre = trim((string) $nombre);
+        if ($nombre === '') {
+            return null;
+        }
+
+        // Solo el ÚLTIMO paréntesis y solo si cierra el nombre: "base (…)".
+        if (!preg_match('/^(.*?)\s*\(([^()]+)\)\s*$/u', $nombre, $m)) {
+            return null;
+        }
+
+        $normali = static function (string $s): string {
+            return strtr(strtolower(trim($s)), [
+                'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u',
+                'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u',
+            ]);
+        };
+        // Singular y plural valen; cualquier otra palabra -> no es etiqueta
+        // de contenido y se deja el nombre intacto.
+        $mapa = [
+            'foto' => 'fotos', 'fotos' => 'fotos',
+            'video' => 'videos', 'videos' => 'videos',
+            'montaje' => 'montajes', 'montajes' => 'montajes',
+        ];
+
+        // Separadores admitidos entre palabras: "+", ",", "&", " y ", " e ".
+        $trozos = preg_split('/\s*[+,&]\s*|\s+y\s+|\s+e\s+/iu', $m[2]) ?: [];
+
+        $presentes = [];
+        foreach ($trozos as $trozo) {
+            if (trim($trozo) === '') {
+                continue;
+            }
+            $clave = $mapa[$normali($trozo)] ?? null;
+            if ($clave === null) {
+                return null;
+            }
+            $presentes[$clave] = true;
+        }
+        if ($presentes === []) {
+            return null;
+        }
+
+        $claves = array_values(array_filter(
+            ['fotos', 'videos', 'montajes'],
+            static fn ($c) => isset($presentes[$c]),
+        ));
+
+        return ['base' => trim($m[1]), 'claves' => $claves];
+    }
+}
+
+if (!function_exists('silo_badges_contenido')) {
+    /**
+     * Solo los badges de la etiqueta de contenido ("" si el nombre no la
+     * lleva) — para poder colocarlos en su propia línea, aparte del nombre.
+     * Colores propios (clases `silo-badge-*` en _estilos_nivel.php): tinte
+     * suave + texto vivo que SÍ se lee en el tema oscuro fijo de la app —
+     * los tonos `*-subtle` de Bootstrap quedaban casi negros y no se veían.
+     * Devuelve HTML — echar SIN esc().
+     */
+    function silo_badges_contenido(?string $nombre): string
+    {
+        $det = silo_contenido_detectar($nombre);
+        if ($det === null) {
+            return '';
+        }
+
+        $estilos = [
+            'fotos'    => ['silo-badge-fotos', 'bi-image', 'Fotos'],
+            'videos'   => ['silo-badge-videos', 'bi-camera-video', 'Vídeos'],
+            'montajes' => ['silo-badge-montajes', 'bi-film', 'Montajes'],
+        ];
+
+        $badges = '';
+        foreach ($det['claves'] as $clave) {
+            [$clase, $icono, $texto] = $estilos[$clave];
+            $badges .= '<span class="badge fw-normal silo-badge-contenido ' . $clase . ' me-1">'
+                . '<i class="bi ' . $icono . ' me-1"></i>' . $texto . '</span>';
+        }
+
+        return $badges;
+    }
+}
+
+if (!function_exists('silo_nombre_sin_contenido')) {
+    /**
+     * El nombre sin la etiqueta de contenido del final ("Viajes 2019
+     * (Fotos + Vídeos)" -> "Viajes 2019"). Si no lleva etiqueta de
+     * contenido, el nombre entero. Texto plano — el llamador lo pasa por
+     * esc().
+     */
+    function silo_nombre_sin_contenido(?string $nombre): string
+    {
+        $det = silo_contenido_detectar($nombre);
+
+        return $det !== null ? $det['base'] : trim((string) $nombre);
+    }
+}
+
+if (!function_exists('silo_nombre_con_badges')) {
+    /**
+     * Nombre con la etiqueta de contenido del final ya convertida en badges,
+     * todo en una pieza — para los sitios donde el nombre va en línea y
+     * puede envolver (cabeceras, tablas). En las tarjetas de ancho fijo usa
+     * mejor silo_nombre_sin_contenido() + silo_badges_contenido() en líneas
+     * separadas. Devuelve HTML — echar SIN esc().
+     */
+    function silo_nombre_con_badges(?string $nombre): string
+    {
+        $badges = silo_badges_contenido($nombre);
+        $base   = esc(silo_nombre_sin_contenido($nombre));
+
+        if ($badges === '') {
+            return $base;
+        }
+
+        return $base !== '' ? $base . ' ' . $badges : $badges;
     }
 }
 

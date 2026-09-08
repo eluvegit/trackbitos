@@ -32,7 +32,7 @@ class SiloIngestaService
     private SiloUbicacionModel $ubicacionModel;
 
     private const EXTENSIONES_FOTO  = ['jpg', 'jpeg', 'png', 'heic', 'raw', 'cr2', 'nef'];
-    private const EXTENSIONES_VIDEO = ['mp4', 'mov', 'avi', 'mkv'];
+    private const EXTENSIONES_VIDEO = ['mp4', 'mov', 'avi', 'mkv', 'mpg', 'mpeg', 'm4v', 'wmv', 'webm', '3gp', 'mts', 'm2ts', 'flv'];
     private const MAX_PROXIES_POR_TIPO = 3;
 
     public function __construct()
@@ -105,7 +105,7 @@ class SiloIngestaService
 
         $ficherosInsertados = [];
         foreach ($ficheros as $f) {
-            $tipo = $this->tipoDeExtension($f['nombre']);
+            $tipo = self::tipoDeExtension($f['nombre']);
             $ficherosInsertados[] = [
                 'id'   => $this->ficheroModel->insert([
                     'pieza_id'     => $piezaId,
@@ -140,7 +140,12 @@ class SiloIngestaService
         return $this->piezaModel->find($piezaId);
     }
 
-    private function tipoDeExtension(string $nombre): string
+    /**
+     * `foto` / `video` / `otro` según la extensión del fichero. Público y
+     * estático para que `spark silo:reclasificar-ficheros` reetiquete lo ya
+     * ingestado cuando se amplía la lista de extensiones (p. ej. .mpg).
+     */
+    public static function tipoDeExtension(string $nombre): string
     {
         $ext = strtolower((string) pathinfo($nombre, PATHINFO_EXTENSION));
 

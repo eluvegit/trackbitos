@@ -11,7 +11,7 @@
 
     .silo-tarjeta {
         width: 11rem;
-        height: 11rem;
+        min-height: 12rem;
         border-radius: 1.25rem;
         border: 1px solid var(--bs-border-color);
         background: var(--bs-body-bg);
@@ -85,6 +85,18 @@
         text-overflow: ellipsis;
     }
 
+    /* Etiqueta de contenido (Fotos / Vídeos / Montajes) en su propia línea,
+       que envuelve — así no la recorta el ellipsis del nombre. */
+    .silo-tarjeta-contenido {
+        margin-top: .2rem;
+        line-height: 1.5;
+    }
+
+    .silo-tarjeta-contenido .badge {
+        font-size: .58rem;
+        font-weight: 400;
+    }
+
     .silo-tarjeta-ruta {
         font-size: .68rem;
         font-family: var(--bs-font-monospace);
@@ -100,6 +112,35 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .silo-tarjeta-uso {
+        width: 100%;
+        margin-bottom: .3rem;
+    }
+
+    .silo-tarjeta-uso .progress {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bs-secondary-bg);
+    }
+
+    .silo-tarjeta-uso-texto {
+        display: flex;
+        justify-content: space-between;
+        gap: .4rem;
+        margin-top: .1rem;
+        font-size: .66rem;
+        color: var(--bs-secondary-color);
+        white-space: nowrap;
+    }
+
+    .silo-tarjeta-uso-texto .silo-libre {
+        color: var(--bs-success);
+    }
+
+    .silo-tarjeta-uso-texto.excede .silo-libre {
+        color: var(--bs-danger);
     }
 
     .silo-tarjeta-escaneo {
@@ -123,6 +164,34 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
+    }
+
+    /* Tarjeta-resumen: lo que hay en el Maestro y todavía no cabe en
+       ninguna unidad de este nivel. No es una unidad — es lo que falta
+       por repartir. */
+    .silo-tarjeta-pendiente {
+        justify-content: center;
+        gap: .35rem;
+        border-style: dashed;
+        border-color: var(--bs-warning-border-subtle);
+        background: var(--bs-warning-bg-subtle);
+        color: var(--bs-warning-text-emphasis);
+    }
+
+    .silo-tarjeta-pendiente .bi {
+        font-size: 1.4rem;
+        opacity: .75;
+    }
+
+    .silo-tarjeta-pendiente-gb {
+        font-weight: 700;
+        font-size: 1.7rem;
+        line-height: 1;
+    }
+
+    .silo-tarjeta-pendiente-txt {
+        font-size: .72rem;
+        line-height: 1.25;
     }
 
     .silo-tarjeta-anadir:hover {
@@ -182,14 +251,17 @@
     <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
         <h6 class="mb-0 silo-nivel silo-n<?= $nivel ?>"><?= $nivelLabel[$nivel] ?></h6>
         <?php if ($nivel === 2): ?>
-            <!-- "Recalcular reparto" agrupa años consecutivos entre las
-                 unidades de Nivel 2 YA dadas de alta, cada una con su
-                 capacidad real (SiloPropagacionService::aplicarPlanNivel2())
-                 — no borra ni crea unidades, así que no toca identificación
-                 física/ruta de montaje/etiqueta puestas a mano; solo
-                 reconstruye qué años tiene cada una. -->
+            <!-- "Recalcular reparto" recoloca las copias automáticas entre
+                 las unidades YA dadas de alta: Nivel 2 agrupa años
+                 consecutivos según la capacidad de cada USB (sin fragmentar
+                 ninguno) y Nivel 3 coloca cada carpeta en la unidad de su
+                 categoría. NUNCA crea ni borra unidades — lo que no cabe en
+                 ninguna se queda en la tarjeta "pendiente de almacenar"
+                 hasta que se dé de alta una unidad donde quepa y se vuelva
+                 a pulsar aquí. (SiloPropagacionService::aplicarPlanNivel2()
+                 + ::repartirCopia3().) -->
             <form method="post" action="<?= site_url('silo/unidades/nivel2/recalcular') ?>" class="ms-auto"
-                  onsubmit="return confirm('Esto reparte de nuevo los años entre las unidades de Nivel 2 ya dadas de alta (agrupa consecutivos según la capacidad de cada una, sin fragmentar ninguno). No borra unidades ni sus datos, solo qué años tiene cada una. ¿Continuar?');">
+                  onsubmit="return confirm('Reparte de nuevo las copias automáticas (años en Nivel 2, categorías en Nivel 3) entre las unidades ya dadas de alta. No crea ni borra unidades: lo que no quepa queda pendiente de almacenar. ¿Continuar?');">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-arrow-repeat"></i> Recalcular reparto
@@ -210,6 +282,14 @@
                     ? ($bucketsTexto !== '' ? $bucketsTexto : ($u['agrupador'] ?? ''))
                     : trim((string) ($u['identificacion_fisica'] ?? ''));
                 $excede = $excedePorUnidad[$u['id']] ?? false;
+
+                // Ocupado / libre reales: el "reparto" llena las unidades
+                // pero no decía cuánto pesa ya cada una — $usado es la suma
+                // de silo_piezas.tamano_bytes de las piezas ubicadas aquí.
+                $usado    = (int) ($usadoPorUnidad[$u['id']] ?? 0);
+                $capBytes = $u['capacidad_bytes'] !== null ? (int) $u['capacidad_bytes'] : null;
+                $libre    = $capBytes !== null ? max(0, $capBytes - $usado) : null;
+                $pctUso   = $capBytes ? min(100, (int) round($usado / $capBytes * 100)) : 0;
             ?>
             <div class="silo-tarjeta silo-tarjeta-unidad"
                  data-id="<?= (int) $u['id'] ?>"
@@ -229,10 +309,34 @@
                         <i class="bi bi-exclamation-triangle-fill" title="Excede la capacidad declarada de la unidad"></i>
                     <?php endif; ?>
                     <?= esc($cap['valor']) ?><small><?= esc($cap['unidad']) ?></small>
+                    <span class="badge silo-badge-id align-middle" title="ID de la unidad (para búsquedas rápidas)">#<?= (int) $u['id'] ?></span>
                 </div>
                 <div class="silo-tarjeta-icono"><?= silo_icono_unidad($u['tipo_fisico'] ?? null) ?></div>
                 <div class="silo-tarjeta-info">
-                    <div class="silo-tarjeta-nombre"><?= esc($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']) ?></div>
+                    <?php if ($capBytes !== null || $usado > 0): ?>
+                        <div class="silo-tarjeta-uso"
+                             title="<?= esc(silo_formatear_tamano($usado ?: null)) ?> ocupado<?= $capBytes !== null ? ' de ' . esc(silo_formatear_tamano($capBytes)) . ' — ' . esc(silo_formatear_tamano($libre ?: null)) . ' libre' : '' ?>">
+                            <?php if ($capBytes !== null): ?>
+                                <div class="progress" role="presentation">
+                                    <div class="progress-bar<?= $excede ? ' bg-danger' : '' ?>" style="width: <?= $pctUso ?>%;"></div>
+                                </div>
+                                <div class="silo-tarjeta-uso-texto<?= $excede ? ' excede' : '' ?>">
+                                    <span><?= esc(silo_tamano_corto($usado)) ?></span>
+                                    <span class="silo-libre"><?= esc(silo_tamano_corto($libre)) ?> libre</span>
+                                </div>
+                            <?php else: ?>
+                                <div class="silo-tarjeta-uso-texto">
+                                    <span><?= esc(silo_tamano_corto($usado)) ?> en uso</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php $etq = $u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']; ?>
+                    <div class="silo-tarjeta-nombre"><?= esc(silo_nombre_sin_contenido($etq)) ?></div>
+                    <?php $badgesEtq = silo_badges_contenido($etq); ?>
+                    <?php if ($badgesEtq !== ''): ?>
+                        <div class="silo-tarjeta-contenido"><?= $badgesEtq ?></div>
+                    <?php endif; ?>
                     <?php if ($u['ruta_montaje']): ?>
                         <div class="silo-tarjeta-ruta"><?= esc($u['ruta_montaje']) ?></div>
                     <?php endif; ?>
@@ -262,6 +366,19 @@
                 </div>
             </div>
         <?php endforeach; ?>
+
+        <?php $pend = $pendientePorCopia[$nivel] ?? null; ?>
+        <?php if ($nivel !== 1 && $pend !== null && $pend['bytes'] > 0): ?>
+            <div class="silo-tarjeta silo-tarjeta-pendiente"
+                 title="<?= esc(silo_formatear_tamano($pend['bytes'])) ?> en <?= (int) $pend['piezas'] ?> carpeta(s) que ya están en el Maestro pero aún no caben en ninguna unidad de este nivel. Da de alta una unidad y pulsa «Recalcular reparto».">
+                <div class="silo-tarjeta-pendiente-gb"><?= esc(silo_tamano_corto($pend['bytes'])) ?></div>
+                <i class="bi bi-hourglass-split"></i>
+                <div class="silo-tarjeta-pendiente-txt text-center">
+                    pendiente de almacenar
+                    <span class="d-block opacity-75"><?= (int) $pend['piezas'] ?> carpeta<?= $pend['piezas'] === 1 ? '' : 's' ?></span>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="silo-tarjeta silo-tarjeta-anadir" title="Añadir unidad" onclick="siloAbrirAlta(<?= $nivel ?>)">
             <i class="bi bi-plus-lg"></i>

@@ -1613,23 +1613,20 @@ class Web extends BaseController
     }
 
     /**
-     * Foto representativa de una versión concreta: su propio render si lo
-     * tiene, si no un render suelto de la variante (fase 31 — puede que se
-     * subiera antes de la primera promoción, o sin ligar a ninguna versión
-     * en concreto, y sigue siendo más fiel que la referencia), y si tampoco
-     * hay eso, la referencia del original como último recurso. Compartido
-     * por la galería y por el histórico de placas.
+     * Foto representativa de una versión concreta: su propio render, y nada
+     * más. Si la versión no tiene render subido —o ni siquiera hay versión
+     * promocionada— la pieza se queda sin miniatura a propósito.
+     *
+     * Antes esto caía en cascada a un render suelto de la variante y, en
+     * último recurso, a una foto de referencia del original. Pero esas dos
+     * fuentes son material de trabajo (medidas de calibre, ángulos y
+     * fotogramas de progreso del original), no el retrato de la pieza:
+     * coladas en el índice y la galería enseñaban una imagen que no es la
+     * pieza. La columna "Sin imagen" del índice sirve justo para encontrar
+     * las que se han quedado sin render y ponerles uno de verdad.
      *
      * Devuelve las dos medidas de la misma foto en una sola pasada: la
-     * miniatura para la cuadrícula y la vista para abrirla en grande. Las
-     * dos salen de la misma búsqueda porque encontrar cuál es la foto de
-     * esta versión cuesta dos consultas, y hacerlas otra vez para lo mismo
-     * sería tirar el doble de consultas por cada tarjeta de la galería.
-     *
-     * La versión puede no existir: en el índice salen también las piezas
-     * que todavía no tienen ninguna promocionada, y esas se quedan con el
-     * render suelto o con la referencia, que es exactamente lo que la
-     * cascada de abajo hace ya cuando la versión no tiene render propio.
+     * miniatura para la cuadrícula y la vista para abrirla en grande.
      *
      * @return array{miniatura: ?string, vista: ?string}
      */
@@ -1639,22 +1636,12 @@ class Web extends BaseController
             ->where('version_id', $version['id'])->orderBy('subida_en', 'DESC')->first();
 
         if (!$render) {
-            $render = $this->renderModel
-                ->where('variante_id', $variante['id'])->where('version_id', null)
-                ->orderBy('subida_en', 'DESC')->first();
-        }
-
-        $registro = $render ?: ($this->referenciaModel->deVariante((int) $variante['familia_id'], (int) $variante['id'])[0] ?? null);
-
-        if (!$registro) {
             return ['miniatura' => null, 'vista' => null];
         }
 
-        $tipo = $render ? 'render' : 'referencia';
-
         return [
-            'miniatura' => imagen_pieza($registro, $tipo, PiezaImagenesPublicas::MINIATURA),
-            'vista'     => imagen_pieza($registro, $tipo, PiezaImagenesPublicas::VISTA),
+            'miniatura' => imagen_pieza($render, 'render', PiezaImagenesPublicas::MINIATURA),
+            'vista'     => imagen_pieza($render, 'render', PiezaImagenesPublicas::VISTA),
         ];
     }
 

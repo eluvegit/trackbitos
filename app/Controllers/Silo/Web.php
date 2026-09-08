@@ -77,6 +77,44 @@ class Web extends BaseController
         return $this->request->getGet('vista') === 'galeria' ? 'galeria' : 'lista';
     }
 
+    /**
+     * Ranking de los ficheros que más ocupan en disco (todo el Silo, sobre
+     * lo que ya midió el agente al escanear — no toca disco aquí). Filtro
+     * opcional `?tipo=foto|video|otro` y `?n=` para cuántos enseñar (tope
+     * 500, por defecto 100).
+     */
+    public function ranking()
+    {
+        $tipo = $this->request->getGet('tipo');
+        if (!in_array($tipo, ['foto', 'video', 'otro'], true)) {
+            $tipo = null;
+        }
+
+        $n = (int) $this->request->getGet('n');
+        $n = $n > 0 ? min($n, 500) : 100;
+
+        return view('silo/ranking', [
+            'ficheros' => $this->ficheroModel->ranking($n, $tipo),
+            'totales'  => $this->ficheroModel->totalesPorTipo(),
+            'tipo'     => $tipo,
+            'n'        => $n,
+        ]);
+    }
+
+    /**
+     * "Datos que faltan": repasa todas las piezas y las agrupa por lo que
+     * les falta (temática, lugar, personas) o por si el nombre está mal de
+     * fondo (sin categoría/fecha, fuera de formato). Una pestaña por grupo;
+     * las piezas completas no aparecen. Cada fila enlaza a "Reclasificar"
+     * para corregirla al momento.
+     */
+    public function datosFaltan()
+    {
+        return view('silo/datos_faltan', [
+            'grupos' => $this->piezaModel->datosQueFaltan(),
+        ]);
+    }
+
     /** "Mi PC": todas las unidades como discos del explorador, para entrar en cada una. */
     public function miPc()
     {
@@ -103,20 +141,34 @@ class Web extends BaseController
      * copia 2. Vuelve a llamarse cuando das de alta una unidad nueva o
      * cuánto ha crecido el contenido.
      */
+    /**
+     * "Recalcular reparto": recoloca las copias automáticas (2 por año, 3
+     * por categoría) entre las unidades **ya dadas de alta**. Nunca crea
+     * unidades — lo que no cabe en ninguna queda "pendiente de almacenar"
+     * (tarjeta de resumen) hasta que se registre una unidad donde quepa y
+     * se vuelva a pulsar aquí.
+     */
     public function recalcularNivel2()
     {
-        $plan = $this->propagacion->aplicarPlanNivel2();
+        $plan   = $this->propagacion->aplicarPlanNivel2();
+        $copia3 = $this->propagacion->repartirCopia3();
+
+        $partes = [];
 
         if ($plan === []) {
-            return redirect()->to(site_url('silo/unidades'))->with('error', 'No hay unidades de Nivel 2 con capacidad dada de alta todavía.');
+            $partes[] = 'Nivel 2: sin unidades con capacidad dadas de alta todavía.';
+        } else {
+            $sinSitio = count(array_filter($plan, fn ($run) => $run['estado'] !== 'ok'));
+            $partes[] = count($plan) . ' tramo(s) de Nivel 2 repartidos'
+                . ($sinSitio > 0 ? " ({$sinSitio} sin sitio — dar de alta más unidades)" : '') . '.';
         }
 
-        $problemas = count(array_filter($plan, fn ($run) => $run['estado'] !== 'ok'));
-        $aviso = $problemas > 0
-            ? " ({$problemas} tramo(s) sin sitio — ver el aviso en la tarjeta o dar de alta más unidades)"
-            : '';
+        if ($copia3['colocadas'] > 0 || $copia3['pendientes'] > 0) {
+            $partes[] = "Nivel 3: {$copia3['colocadas']} carpeta(s) colocada(s)"
+                . ($copia3['pendientes'] > 0 ? ", {$copia3['pendientes']} pendiente(s)" : '') . '.';
+        }
 
-        return redirect()->to(site_url('silo/unidades'))->with('success', count($plan) . ' tramo(s) de Nivel 2 recalculados.' . $aviso);
+        return redirect()->to(site_url('silo/unidades'))->with('success', implode(' ', $partes));
     }
 
     /**
@@ -328,12 +380,14 @@ class Web extends BaseController
         // "cabe un año entero o no cabe" es una posibilidad real que hay que
         // ver en la propia tarjeta, no solo en la salida del comando.
         $piezasPorUnidad = [];
+        $usadoPorUnidad  = [];
         $excedePorUnidad = [];
         foreach ($porNivel as $unidadesNivel) {
             foreach ($unidadesNivel as $u) {
                 $piezasPorUnidad[$u['id']] = $this->ubicacionModel->contarPorUnidad($u['id']);
 
                 $usado = $this->ubicacionModel->sumaTamanoPorUnidad($u['id']);
+                $usadoPorUnidad[$u['id']]  = $usado;
                 $excedePorUnidad[$u['id']] = $u['capacidad_bytes'] !== null && $usado > (int) $u['capacidad_bytes'];
             }
         }
@@ -345,12 +399,22 @@ class Web extends BaseController
             $tareasPorUnidad[$u['id']] = $this->tareaModel->ultimaDeUnidad((int) $u['id'], 'escaneo_maestro');
         }
 
+        // Lo que ya está en el Maestro pero aún no cabe en ninguna unidad de
+        // Copia 2 (año) / Copia 3 (categoría) — el reparto no crea unidades,
+        // así que esto se enseña en una tarjeta "pendiente de almacenar".
+        $pendientePorCopia = [
+            2 => $this->ubicacionModel->pendienteDeCopia(2),
+            3 => $this->ubicacionModel->pendienteDeCopia(3),
+        ];
+
         return view('silo/unidades', [
-            'porNivel'         => $porNivel,
-            'piezasPorUnidad'  => $piezasPorUnidad,
-            'excedePorUnidad'  => $excedePorUnidad,
-            'tareasPorUnidad'  => $tareasPorUnidad,
-            'bucketsPorUnidad' => $this->bucketsPorNivel($porNivel),
+            'porNivel'          => $porNivel,
+            'piezasPorUnidad'   => $piezasPorUnidad,
+            'usadoPorUnidad'    => $usadoPorUnidad,
+            'excedePorUnidad'   => $excedePorUnidad,
+            'tareasPorUnidad'   => $tareasPorUnidad,
+            'pendientePorCopia' => $pendientePorCopia,
+            'bucketsPorUnidad'  => $this->bucketsPorNivel($porNivel),
         ]);
     }
 

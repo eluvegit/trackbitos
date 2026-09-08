@@ -70,32 +70,48 @@ class SiloPropagacionService
         }
 
         $bucketAnio = $pieza['fecha'] ? substr($pieza['fecha'], 0, 4) : 'sin_fecha';
-        $this->asignarACopia($pieza, 2, $bucketAnio, "{$bucketAnio}/{$pieza['nombre_carpeta']}", "Año {$bucketAnio}");
+        $this->asignarACopia($pieza, 2, $bucketAnio, "{$bucketAnio}/{$pieza['nombre_carpeta']}");
 
-        $categoriaTexto = 'sin_clasificar';
+        $categoriaTexto = $this->categoriaBucket($pieza);
+        $this->asignarACopia($pieza, 3, $categoriaTexto, "{$categoriaTexto}/{$pieza['nombre_carpeta']}");
+    }
+
+    /** Slug de la categoría de la pieza = bucket de Copia 3 ("sin_clasificar" si no tiene). */
+    private function categoriaBucket(array $pieza): string
+    {
         if ($pieza['categoria_id']) {
             $cat = $this->vocabularioModel->find($pieza['categoria_id']);
             if ($cat) {
-                $categoriaTexto = $this->silo->slugify($cat['nombre']);
+                return $this->silo->slugify($cat['nombre']);
             }
         }
-        $this->asignarACopia($pieza, 3, $categoriaTexto, "{$categoriaTexto}/{$pieza['nombre_carpeta']}", "Categoría {$categoriaTexto}");
+
+        return 'sin_clasificar';
     }
 
     /**
-     * Da de alta la ubicación en la copia indicada si no existe ya. No
-     * re-sincroniza: si la pieza cambia de categoría después, esta pasada
-     * no mueve la ubicación de Copia 3 ya creada (recalcular de verdad
-     * pertenece a un comando de mantenimiento aparte, no a esta ruta).
+     * Da de alta la ubicación en la copia indicada si no existe ya y hay
+     * una unidad de ese nivel con sitio. El reparto **ya no crea unidades**
+     * (pisaba etiquetas/rutas puestas a mano y generaba una unidad por cada
+     * slug de categoría): si no cabe en ninguna existente, la pieza se queda
+     * *pendiente de almacenar* — la tarjeta de resumen de `/silo/unidades`
+     * la cuenta y `repartirCopia3()` / `aplicarPlanNivel2()` la recolocan
+     * cuando se dé de alta una unidad donde quepa.
+     *
+     * No re-sincroniza: si la pieza cambia de categoría después, esta pasada
+     * no mueve la ubicación de Copia 3 ya creada.
      */
-    private function asignarACopia(array $pieza, int $copia, string $bucket, string $rutaRelativa, string $etiquetaNueva): void
+    private function asignarACopia(array $pieza, int $copia, string $bucket, string $rutaRelativa): void
     {
         $existente = $this->ubicacionModel->where('pieza_id', $pieza['id'])->where('copia', $copia)->first();
         if ($existente) {
             return;
         }
 
-        $unidad = $this->unidadDestino($copia, $bucket, (int) ($pieza['tamano_bytes'] ?? 0), $etiquetaNueva);
+        $unidad = $this->unidadDestino($copia, $bucket, (int) ($pieza['tamano_bytes'] ?? 0));
+        if ($unidad === null) {
+            return; // sin unidad con sitio: queda pendiente hasta que se dé de alta una y se reparta.
+        }
 
         $this->ubicacionModel->insert([
             'pieza_id'      => $pieza['id'],
@@ -103,6 +119,42 @@ class SiloPropagacionService
             'copia'         => $copia,
             'ruta_relativa' => $rutaRelativa,
         ]);
+    }
+
+    /**
+     * Recoloca la Copia 3 (por categoría) de las piezas que quedaron
+     * pendientes por no haber unidad de Nivel 3 con sitio — a llamar cuando
+     * se den de alta más unidades y se pulse "Recalcular reparto". Solo usa
+     * unidades de Nivel 3 **ya existentes** cuyo bucket case con la
+     * categoría de la pieza; nunca crea ninguna.
+     *
+     * @return array{colocadas: int, pendientes: int}
+     */
+    public function repartirCopia3(): array
+    {
+        $pendientes = $this->piezaModel
+            ->where('EXISTS (SELECT 1 FROM silo_ubicaciones uc1 WHERE uc1.pieza_id = silo_piezas.id AND uc1.copia = 1)', null, false)
+            ->where('NOT EXISTS (SELECT 1 FROM silo_ubicaciones uc3 WHERE uc3.pieza_id = silo_piezas.id AND uc3.copia = 3)', null, false)
+            ->findAll();
+
+        $colocadas = 0;
+        foreach ($pendientes as $pieza) {
+            $bucket = $this->categoriaBucket($pieza);
+            $unidad = $this->unidadDestino(3, $bucket, (int) ($pieza['tamano_bytes'] ?? 0));
+            if ($unidad === null) {
+                continue;
+            }
+
+            $this->ubicacionModel->insert([
+                'pieza_id'      => $pieza['id'],
+                'unidad_id'     => $unidad['id'],
+                'copia'         => 3,
+                'ruta_relativa' => "{$bucket}/{$pieza['nombre_carpeta']}",
+            ]);
+            $colocadas++;
+        }
+
+        return ['colocadas' => $colocadas, 'pendientes' => count($pendientes) - $colocadas];
     }
 
     /**
@@ -235,8 +287,12 @@ class SiloPropagacionService
         return $plan;
     }
 
-    /** Reutiliza una unidad ya destinada a este bucket con hueco libre, o crea la siguiente si no cabe/no existe. */
-    private function unidadDestino(int $nivel, string $bucket, int $tamanoPieza, string $etiquetaNueva): array
+    /**
+     * Unidad ya destinada a este bucket (año/categoría) con hueco libre
+     * para la pieza, o `null` si no hay ninguna — el reparto ya no crea
+     * unidades, así que en ese caso la pieza queda pendiente de almacenar.
+     */
+    private function unidadDestino(int $nivel, string $bucket, int $tamanoPieza): ?array
     {
         foreach ($this->unidadModel->buscarPorAgrupador($nivel, $bucket) as $u) {
             if ($u['capacidad_bytes'] === null) {
@@ -249,9 +305,6 @@ class SiloPropagacionService
             }
         }
 
-        $numeroDelBucket = count($this->unidadModel->buscarPorAgrupador($nivel, $bucket)) + 1;
-        $etiqueta = $numeroDelBucket > 1 ? "{$etiquetaNueva} ({$numeroDelBucket})" : $etiquetaNueva;
-
-        return $this->silo->crearUnidad($nivel, $etiqueta, $bucket);
+        return null;
     }
 }

@@ -131,6 +131,84 @@ class SiloPiezaModel extends Model
     }
 
     /**
+     * Piezas a las que les falta algún dato de clasificación, agrupadas por
+     * qué les falta — alimenta la vista "Datos que faltan"
+     * (/silo/datos-faltan). Una pieza puede salir en varias listas; las que
+     * están completas NO se devuelven (solo interesa lo que hay que
+     * arreglar). Se mira la clasificación YA asignada (categoría +
+     * atributos), que es justo lo que se corrige en "Reclasificar" — no el
+     * nombre de carpeta, que está congelado.
+     *
+     * - `sin_tematica`: ningún atributo de tipo `tema`
+     * - `sin_lugar`:    ningún atributo de tipo `lugar`
+     * - `sin_personas`: ningún atributo de tipo `persona`
+     * - `mal`:          sin categoría, sin fecha, o el nombre de carpeta no
+     *                   sigue el patrón "<id> <fecha> ..." del contrato de
+     *                   entrada (cada pieza trae `motivos` con el detalle)
+     *
+     * @return array{sin_tematica: array<int, array>, sin_lugar: array<int, array>, sin_personas: array<int, array>, mal: array<int, array>}
+     */
+    public function datosQueFaltan(): array
+    {
+        $piezas = $this->adjuntarAtributos(
+            $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
+                ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
+                ->orderBy('silo_piezas.nombre_carpeta', 'ASC')
+                ->findAll()
+        );
+
+        $grupos = ['sin_tematica' => [], 'sin_lugar' => [], 'sin_personas' => [], 'mal' => []];
+
+        foreach ($piezas as $pieza) {
+            $tipos = array_column($pieza['atributos'] ?? [], 'tipo');
+
+            if (!in_array('tema', $tipos, true)) {
+                $grupos['sin_tematica'][] = $pieza;
+            }
+            if (!in_array('lugar', $tipos, true)) {
+                $grupos['sin_lugar'][] = $pieza;
+            }
+            if (!in_array('persona', $tipos, true)) {
+                $grupos['sin_personas'][] = $pieza;
+            }
+
+            $motivos = $this->motivosMalFormado($pieza);
+            if ($motivos !== []) {
+                $pieza['motivos'] = $motivos;
+                $grupos['mal'][]  = $pieza;
+            }
+        }
+
+        return $grupos;
+    }
+
+    /**
+     * Fallos "de fondo" de una pieza (los que no son un simple atributo
+     * suelto que falte): sin categoría, sin fecha o nombre de carpeta fuera
+     * del formato del contrato de entrada.
+     *
+     * @return string[]
+     */
+    private function motivosMalFormado(array $pieza): array
+    {
+        $motivos = [];
+
+        $categoria = strtolower(trim((string) ($pieza['categoria_nombre'] ?? '')));
+        if (empty($pieza['categoria_id']) || $categoria === '' || $categoria === 'sin_clasificar') {
+            $motivos[] = 'sin categoría';
+        }
+        if (empty($pieza['fecha'])) {
+            $motivos[] = 'sin fecha';
+        }
+        // Mismo patrón que SiloService::clasificarEntradaRoot(): "<id> <fecha> ...".
+        if (!preg_match('/^\S+\s+(\d{8}|\d{6}|\d{4}|sinfecha)\b/i', trim((string) $pieza['nombre_carpeta']))) {
+            $motivos[] = 'nombre fuera de formato';
+        }
+
+        return $motivos;
+    }
+
+    /**
      * Adjunta a cada pieza su lista de atributos [{tipo, nombre}] (persona,
      * lugar, tema, evento) en una sola consulta, para pintar el nombre de
      * carpeta como badges en los listados.

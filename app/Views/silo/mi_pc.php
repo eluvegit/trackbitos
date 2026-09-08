@@ -38,12 +38,17 @@ $hayAlguna  = array_sum(array_map('count', $porNivel)) > 0;
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <i class="bi bi-hdd-fill silo-hdd fs-4"></i>
                             <span class="fw-semibold text-truncate">
-                                <?= esc($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero']) ?>
+                                <?= esc(silo_nombre_sin_contenido($u['etiqueta'] ?: 'Unidad #' . (int) $u['numero'])) ?>
                             </span>
                             <?php if ($cap > 0): ?>
                                 <span class="badge text-bg-light border ms-auto"><?= esc(silo_formatear_tamano($cap)) ?></span>
                             <?php endif; ?>
+                            <span class="badge silo-badge-id<?= $cap > 0 ? '' : ' ms-auto' ?>" title="ID de la unidad (para búsquedas rápidas)">#<?= (int) $u['id'] ?></span>
                         </div>
+                        <?php $badgesEtq = silo_badges_contenido($u['etiqueta'] ?? ''); ?>
+                        <?php if ($badgesEtq !== ''): ?>
+                            <div class="mb-2" style="line-height: 1.9;"><?= $badgesEtq ?></div>
+                        <?php endif; ?>
                         <?php if (!empty($u['identificacion_fisica'])): ?>
                             <div class="small d-flex gap-1">
                                 <i class="bi bi-upc-scan flex-shrink-0 mt-1 text-muted"></i>
