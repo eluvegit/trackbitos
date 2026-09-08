@@ -346,10 +346,23 @@ if (!function_exists('silo_badges_contenido')) {
     function silo_badges_contenido(?string $nombre): string
     {
         $det = silo_contenido_detectar($nombre);
-        if ($det === null) {
-            return '';
-        }
 
+        return $det === null ? '' : silo_badges_contenido_claves($det['claves']);
+    }
+}
+
+if (!function_exists('silo_badges_contenido_claves')) {
+    /**
+     * Igual que silo_badges_contenido() pero partiendo de las claves ya
+     * resueltas (subconjunto de ['fotos', 'videos', 'montajes']) en vez del
+     * nombre con paréntesis. Lo usan los listados de «Datos que faltan», que
+     * trabajan con las claves detectadas/declaradas directamente. Siempre en
+     * el orden fotos → vídeos → montajes. Devuelve HTML — echar SIN esc().
+     *
+     * @param string[] $claves
+     */
+    function silo_badges_contenido_claves(array $claves): string
+    {
         $estilos = [
             'fotos'    => ['silo-badge-fotos', 'bi-image', 'Fotos'],
             'videos'   => ['silo-badge-videos', 'bi-camera-video', 'Vídeos'],
@@ -357,13 +370,37 @@ if (!function_exists('silo_badges_contenido')) {
         ];
 
         $badges = '';
-        foreach ($det['claves'] as $clave) {
+        foreach (['fotos', 'videos', 'montajes'] as $clave) {
+            if (!in_array($clave, $claves, true)) {
+                continue;
+            }
             [$clase, $icono, $texto] = $estilos[$clave];
             $badges .= '<span class="badge fw-normal silo-badge-contenido ' . $clase . ' me-1">'
                 . '<i class="bi ' . $icono . ' me-1"></i>' . $texto . '</span>';
         }
 
         return $badges;
+    }
+}
+
+if (!function_exists('silo_contenido_combo_label')) {
+    /**
+     * Texto legible de una clave de combinación del subfiltro de «Datos que
+     * faltan» ('fotos+videos' -> "Fotos + Vídeos", '' -> "Sin detectar").
+     */
+    function silo_contenido_combo_label(string $combo): string
+    {
+        if ($combo === '') {
+            return 'Sin detectar';
+        }
+
+        $nombres = ['fotos' => 'Fotos', 'videos' => 'Vídeos', 'montajes' => 'Montajes'];
+        $trozos  = array_map(
+            static fn ($c) => $nombres[$c] ?? ucfirst($c),
+            explode('+', $combo),
+        );
+
+        return implode(' + ', $trozos);
     }
 }
 

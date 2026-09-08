@@ -27,6 +27,7 @@ $qsDesde = isset($unidad['id']) ? '?desde=' . (int) $unidad['id'] : '';
                 <i class="bi bi-folder2 text-warning fs-5"></i>
                 <span class="flex-grow-1 d-flex flex-wrap align-items-center gap-1" title="<?= esc($p['nombre_carpeta']) ?>"><?= silo_badges_carpeta($p) ?></span>
                 <span class="text-muted small text-nowrap"><?= esc(silo_formatear_tamano($p['tamano_bytes'] ?? null)) ?></span>
+                <span class="badge silo-badge-id text-nowrap" title="ID de la carpeta (para búsquedas rápidas)">#<?= esc($p['id_negocio']) ?></span>
             </a>
             <?php if ($coincidencias): ?>
                 <div class="list-group-item py-2 ps-5 small">

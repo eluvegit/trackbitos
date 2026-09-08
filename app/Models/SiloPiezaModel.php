@@ -145,11 +145,23 @@ class SiloPiezaModel extends Model
      * - `mal`:          sin categoría, sin fecha, o el nombre de carpeta no
      *                   sigue el patrón "<id> <fecha> ..." del contrato de
      *                   entrada (cada pieza trae `motivos` con el detalle)
+     * - `sin_etiqueta_contenido`: tiene temática pero ninguna lleva la
+     *                   etiqueta de contenido "(Fotos + Vídeos + Montajes)".
+     *                   Cada pieza trae `contenido_real` (['fotos','videos']
+     *                   detectados en `silo_ficheros`) y `combo` para filtrar.
+     * - `contenido_descuadra`: la temática declara "(Fotos + Vídeos)" pero en
+     *                   `silo_ficheros` no hay material de un tipo detectable
+     *                   (foto/video) que se declara. Trae `contenido_declarado`,
+     *                   `contenido_real`, `contenido_falta` y `combo` (lo que
+     *                   falta). Montajes no se puede comprobar en ficheros y
+     *                   no cuenta como que falta.
      *
-     * @return array{sin_tematica: array<int, array>, sin_lugar: array<int, array>, sin_personas: array<int, array>, mal: array<int, array>}
+     * @return array{sin_tematica: array<int, array>, sin_lugar: array<int, array>, sin_personas: array<int, array>, mal: array<int, array>, sin_etiqueta_contenido: array<int, array>, contenido_descuadra: array<int, array>}
      */
     public function datosQueFaltan(): array
     {
+        helper('silo');
+
         $piezas = $this->adjuntarAtributos(
             $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
                 ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
@@ -157,12 +169,18 @@ class SiloPiezaModel extends Model
                 ->findAll()
         );
 
-        $grupos = ['sin_tematica' => [], 'sin_lugar' => [], 'sin_personas' => [], 'mal' => []];
+        $contenidoReal = $this->contenidoRealPorPieza(array_column($piezas, 'id'));
+
+        $grupos = [
+            'sin_tematica' => [], 'sin_lugar' => [], 'sin_personas' => [], 'mal' => [],
+            'sin_etiqueta_contenido' => [], 'contenido_descuadra' => [],
+        ];
 
         foreach ($piezas as $pieza) {
-            $tipos = array_column($pieza['atributos'] ?? [], 'tipo');
+            $tipos     = array_column($pieza['atributos'] ?? [], 'tipo');
+            $tieneTema = in_array('tema', $tipos, true);
 
-            if (!in_array('tema', $tipos, true)) {
+            if (!$tieneTema) {
                 $grupos['sin_tematica'][] = $pieza;
             }
             if (!in_array('lugar', $tipos, true)) {
@@ -177,9 +195,120 @@ class SiloPiezaModel extends Model
                 $pieza['motivos'] = $motivos;
                 $grupos['mal'][]  = $pieza;
             }
+
+            // Etiqueta de contenido "(Fotos + Vídeos + Montajes)" escrita en
+            // la temática. Solo tiene sentido si la pieza tiene temática (si
+            // no, ya sale en "Sin temática").
+            if ($tieneTema) {
+                $real       = $contenidoReal[(int) $pieza['id']] ?? [];
+                $declaradas = $this->clavesContenidoDeclaradas($pieza['atributos'] ?? []);
+
+                if ($declaradas === []) {
+                    $pieza['contenido_real'] = $real;
+                    $pieza['combo']          = $this->comboClave($real);
+                    $grupos['sin_etiqueta_contenido'][] = $pieza;
+                } else {
+                    $faltan = array_values(array_diff(
+                        array_intersect($declaradas, ['fotos', 'videos']),
+                        $real
+                    ));
+                    if ($faltan !== []) {
+                        $pieza['contenido_declarado'] = $declaradas;
+                        $pieza['contenido_real']      = $real;
+                        $pieza['contenido_falta']     = $faltan;
+                        $pieza['combo']               = $this->comboClave($faltan);
+                        $grupos['contenido_descuadra'][] = $pieza;
+                    }
+                }
+            }
         }
 
         return $grupos;
+    }
+
+    /**
+     * Para un conjunto de piezas, qué tipos de material detectable tiene cada
+     * una de verdad en `silo_ficheros`: subconjunto ordenado de
+     * ['fotos', 'videos'] con al menos un fichero. `otro` se ignora y
+     * `montajes` no es un tipo de fichero (no se puede detectar).
+     *
+     * @param array<int, int|string> $ids
+     * @return array<int, string[]>
+     */
+    private function contenidoRealPorPieza(array $ids): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $filas = (new SiloFicheroModel())
+            ->select('pieza_id, tipo')
+            ->whereIn('pieza_id', $ids)
+            ->whereIn('tipo', ['foto', 'video'])
+            ->groupBy('pieza_id, tipo')
+            ->findAll();
+
+        $mapa = ['foto' => 'fotos', 'video' => 'videos'];
+        $out  = [];
+        foreach ($filas as $f) {
+            $clave = $mapa[$f['tipo']] ?? null;
+            if ($clave !== null) {
+                $out[(int) $f['pieza_id']][$clave] = true;
+            }
+        }
+
+        foreach ($out as $piezaId => $presentes) {
+            $out[$piezaId] = array_values(array_filter(
+                ['fotos', 'videos'],
+                static fn ($c) => isset($presentes[$c]),
+            ));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Unión de las claves de contenido ('fotos'/'videos'/'montajes')
+     * declaradas en el paréntesis final de las temáticas de la pieza
+     * (silo_contenido_detectar()). `[]` si ninguna temática lo lleva.
+     *
+     * @param array<int, array{tipo: string, nombre: string}> $atributos
+     * @return string[]
+     */
+    private function clavesContenidoDeclaradas(array $atributos): array
+    {
+        $claves = [];
+        foreach ($atributos as $a) {
+            if (($a['tipo'] ?? '') !== 'tema') {
+                continue;
+            }
+            $det = silo_contenido_detectar($a['nombre'] ?? '');
+            if ($det !== null) {
+                foreach ($det['claves'] as $c) {
+                    $claves[$c] = true;
+                }
+            }
+        }
+
+        return array_values(array_filter(
+            ['fotos', 'videos', 'montajes'],
+            static fn ($c) => isset($claves[$c]),
+        ));
+    }
+
+    /**
+     * Clave estable para el subfiltro por combinación: 'fotos+videos',
+     * 'fotos', '' (nada)... siempre en el orden fotos → videos → montajes.
+     *
+     * @param string[] $claves
+     */
+    private function comboClave(array $claves): string
+    {
+        return implode('+', array_values(array_filter(
+            ['fotos', 'videos', 'montajes'],
+            static fn ($c) => in_array($c, $claves, true),
+        )));
     }
 
     /**
