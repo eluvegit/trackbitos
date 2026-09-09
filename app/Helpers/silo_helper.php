@@ -507,3 +507,86 @@ if (!function_exists('silo_icono_tipo')) {
         };
     }
 }
+
+if (!function_exists('silo_carpeta_partes')) {
+    /**
+     * Descompone la pieza en las partes del nombre troceado, ya resueltas y
+     * agrupadas, para las vistas alternativas de la prueba A/B
+     * (_listado_piezas_v2 / _galeria_piezas_v2). NO pinta HTML: devuelve los
+     * datos y cada parcial decide la forma. Mismas reglas que
+     * silo_badges_carpeta() — año de la fecha o de los 2 primeros dígitos
+     * del ID, categoría 'sin_clasificar' se trata como vacía, y la etiqueta
+     * de contenido «(Fotos + Vídeos)» de la temática se saca aparte en
+     * `contenido` (subconjunto ordenado de fotos/videos/montajes).
+     *
+     * @return array{
+     *   anio: string,
+     *   categoria: string,
+     *   eventos: string[],
+     *   temas: string[],
+     *   lugares: string[],
+     *   personas: string[],
+     *   otros: array<string, string[]>,
+     *   contenido: string[]
+     * }
+     */
+    function silo_carpeta_partes(array $pieza): array
+    {
+        $anio = '';
+        if (preg_match('/^(\d{4})-/', (string) ($pieza['fecha'] ?? ''), $mm)) {
+            $anio = $mm[1];
+        } elseif (preg_match('/^(\d{2})\d{4}$/', (string) ($pieza['id_negocio'] ?? ''), $mm)) {
+            $anio = '20' . $mm[1];
+        }
+
+        $categoria = trim((string) ($pieza['categoria_nombre'] ?? ''));
+        if ($categoria !== '' && strtolower($categoria) === 'sin_clasificar') {
+            $categoria = '';
+        }
+
+        $eventos = $temas = $lugares = $personas = [];
+        $otros     = [];
+        $contenido = [];
+
+        foreach ($pieza['atributos'] ?? [] as $a) {
+            $tipo   = (string) $a['tipo'];
+            $nombre = (string) $a['nombre'];
+
+            if ($tipo === 'tema') {
+                $det = silo_contenido_detectar($nombre);
+                if ($det !== null) {
+                    if ($det['base'] !== '') {
+                        $temas[] = $det['base'];
+                    }
+                    foreach ($det['claves'] as $c) {
+                        $contenido[$c] = true;
+                    }
+                } else {
+                    $temas[] = $nombre;
+                }
+                continue;
+            }
+
+            match ($tipo) {
+                'evento'  => $eventos[]  = $nombre,
+                'lugar'   => $lugares[]  = $nombre,
+                'persona' => $personas[] = $nombre,
+                default   => $otros[$tipo][] = $nombre,
+            };
+        }
+
+        return [
+            'anio'      => $anio,
+            'categoria' => $categoria,
+            'eventos'   => $eventos,
+            'temas'     => $temas,
+            'lugares'   => $lugares,
+            'personas'  => $personas,
+            'otros'     => $otros,
+            'contenido' => array_values(array_filter(
+                ['fotos', 'videos', 'montajes'],
+                static fn ($c) => isset($contenido[$c]),
+            )),
+        ];
+    }
+}

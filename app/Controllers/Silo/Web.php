@@ -71,10 +71,18 @@ class Web extends BaseController
         ]);
     }
 
-    /** Modo de presentación de las carpetas: 'galeria' o 'lista' (por defecto). */
+    /**
+     * Modo de presentación de las carpetas. Las dos vistas activas son
+     * 'lista2' (listado con la temática como titular, por defecto) y
+     * 'galeria2' (galería de tarjetas alineadas a la izquierda). Las
+     * antiguas 'lista' / 'galeria' siguen accesibles escribiendo el
+     * ?vista= a mano, pero ya no tienen botón.
+     */
     private function vistaSolicitada(): string
     {
-        return $this->request->getGet('vista') === 'galeria' ? 'galeria' : 'lista';
+        $v = (string) $this->request->getGet('vista');
+
+        return in_array($v, ['lista', 'galeria', 'galeria2'], true) ? $v : 'lista2';
     }
 
     /**

@@ -55,6 +55,38 @@
         text-align: left;
     }
 
+    /* ── PRUEBA A/B · el TEXTO como protagonista (A2 _listado_piezas_v2 y
+       B2 _galeria_piezas_v2): la TEMÁTICA es el titular — grande y con el
+       color de énfasis; año / categoría / lugar / personas quedan como
+       metadatos pequeños y atenuados debajo. */
+    .silo-lista-v2-titulo {
+        font-size: .95rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--bs-emphasis-color);
+    }
+    .silo-carpeta-v2-titulo {
+        font-size: .95rem;
+        font-weight: 600;
+        line-height: 1.2;
+        color: var(--bs-emphasis-color);
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .silo-carpeta-v2-sub {
+        font-size: .64rem;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* A2: los badges de contenido viven en el bloque derecho, pegados a lo
+       que ocupa la carpeta — sin el margen final que traen de serie. */
+    .silo-lista-v2-contenido .badge:last-child { margin-right: 0 !important; }
+
     /* ── Etiqueta de contenido de una temática: (Fotos + Vídeos + Montajes) ──
        Tinte flojo + texto vivo — pensado para el tema oscuro fijo de la app,
        donde los `*-subtle` de Bootstrap salían casi negros y no se leían.

@@ -25,7 +25,7 @@
 <?php endif; ?>
 
 <?php
-$vista = $vista ?? 'lista';
+$vista = $vista ?? 'lista2';
 $orden = $orden ?? 'nombre';
 // Conserva siempre el otro parámetro (vista/orden son independientes).
 $qs = static fn (array $overrides) => site_url('silo/unidades/' . $unidad['id'])
@@ -52,19 +52,24 @@ $qs = static fn (array $overrides) => site_url('silo/unidades/' . $unidad['id'])
             </a>
         </div>
         <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
-            <a href="<?= $qs(['vista' => 'lista']) ?>"
-               class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">
-                <i class="bi bi-list-ul"></i>
+            <a href="<?= $qs(['vista' => 'lista2']) ?>"
+               class="btn btn-outline-secondary <?= $vista === 'lista2' ? 'active' : '' ?>" title="Listado">
+                <i class="bi bi-card-text"></i>
             </a>
-            <a href="<?= $qs(['vista' => 'galeria']) ?>"
-               class="btn btn-outline-secondary <?= $vista === 'galeria' ? 'active' : '' ?>" title="Galería de carpetas">
-                <i class="bi bi-grid-3x3-gap"></i>
+            <a href="<?= $qs(['vista' => 'galeria2']) ?>"
+               class="btn btn-outline-secondary <?= $vista === 'galeria2' ? 'active' : '' ?>" title="Galería de carpetas">
+                <i class="bi bi-grid-1x2"></i>
             </a>
         </div>
     </div>
 </div>
 
-<?= $this->include($vista === 'galeria' ? 'silo/_galeria_piezas' : 'silo/_listado_piezas') ?>
+<?= $this->include(match ($vista) {
+    'galeria'  => 'silo/_galeria_piezas',
+    'lista2'   => 'silo/_listado_piezas_v2',
+    'galeria2' => 'silo/_galeria_piezas_v2',
+    default    => 'silo/_listado_piezas',
+}) ?>
 
 </div>
 

@@ -54,7 +54,7 @@
 </form>
 
 <?php
-$vista   = $vista ?? 'lista';
+$vista   = $vista ?? 'lista2';
 $vistaQs = static fn ($v) => site_url('silo') . '?' . http_build_query(
     array_filter([
         'q'            => $filtros['q'] ?? null,
@@ -64,17 +64,22 @@ $vistaQs = static fn ($v) => site_url('silo') . '?' . http_build_query(
 ?>
 <div class="d-flex justify-content-end mb-2">
     <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
-        <a href="<?= esc($vistaQs('lista'), 'attr') ?>"
-           class="btn btn-outline-secondary <?= $vista === 'lista' ? 'active' : '' ?>" title="Listado">
-            <i class="bi bi-list-ul"></i>
+        <a href="<?= esc($vistaQs('lista2'), 'attr') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'lista2' ? 'active' : '' ?>" title="Listado">
+            <i class="bi bi-card-text"></i>
         </a>
-        <a href="<?= esc($vistaQs('galeria'), 'attr') ?>"
-           class="btn btn-outline-secondary <?= $vista === 'galeria' ? 'active' : '' ?>" title="Galería de carpetas">
-            <i class="bi bi-grid-3x3-gap"></i>
+        <a href="<?= esc($vistaQs('galeria2'), 'attr') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'galeria2' ? 'active' : '' ?>" title="Galería de carpetas">
+            <i class="bi bi-grid-1x2"></i>
         </a>
     </div>
 </div>
 
-<?= $this->include($vista === 'galeria' ? 'silo/_galeria_piezas' : 'silo/_listado_piezas') ?>
+<?= $this->include(match ($vista) {
+    'galeria'  => 'silo/_galeria_piezas',
+    'lista2'   => 'silo/_listado_piezas_v2',
+    'galeria2' => 'silo/_galeria_piezas_v2',
+    default    => 'silo/_listado_piezas',
+}) ?>
 
 <?= $this->endSection() ?>
