@@ -49,6 +49,11 @@ class SterclicksApi extends BaseController
             ->get()
             ->getResultArray();
 
+        // Stock por variante (fase 60): sterclicks es solo espejo, el número
+        // de unidades vive aquí. Una variante sin movimientos sale como 0.
+        $stockPorVariante = (new \App\Services\PiezaInventario())
+            ->stockPorVariante(array_column($filas, 'variante_id'));
+
         $renderModel = new PiezaRenderModel();
         $referenciaModel = new PiezaReferenciaModel();
         $imagenesPublicas = new PiezaImagenesPublicas();
@@ -87,10 +92,19 @@ class SterclicksApi extends BaseController
                 'notas'            => $fila['notas'],
                 'imagen_url'       => $imagenUrl,
                 'actualizado_en'   => $fila['promocionada_en'],
+                // Negativo se manda tal cual: sterclicks lo trata como "sin
+                // stock" pero conserva el número para cuadrar.
+                'stock'            => (int) ($stockPorVariante[$fila['variante_id']] ?? 0),
             ];
         }
 
-        return $this->response->setJSON(['piezas' => $piezas]);
+        return $this->response->setJSON([
+            'piezas'      => $piezas,
+            // ISO-8601 con offset para que no haya líos de zona horaria
+            // entre los dos servidores. Sterclicks lo guarda y lo enseña
+            // como "unidades actualizadas el …".
+            'generado_en' => date('c'),
+        ]);
     }
 
     /**

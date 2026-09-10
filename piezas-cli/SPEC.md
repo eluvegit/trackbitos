@@ -38,6 +38,7 @@
 | 38 | Bitácora de placa: cantidades, pruebas, tiempos, resina, veredicto y conclusiones | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 | 39 | Miniaturas de 20 px en el listado del índice | ⛔ Retirada el mismo día (ver fase 40) |
 | 40 | Las imágenes se sirven con caché de un año y ETag (antes: ninguna) | ✅ Hecho (detalle abajo) |
+| 60 | Existencias: inventario de piezas físicas producidas, por variante | ✅ Hecho (detalle abajo) — requiere `php spark migrate` |
 
 Dónde vive cada cosa:
 - Migración: `app/Database/Migrations/2026-08-16-000001_CreatePiezasTables.php`
@@ -1673,3 +1674,44 @@ hay en pantalla). También en el resumen del modal y en la tarjeta grande de Imp
 `bitacoraGuardar` recorta `fallidas` a `min(cantidad, …)` al guardar; las vistas también
 recortan con `min()` por si un reparto dejó la fila descuadrada. Migración
 `2026-09-03-000013_AddFallidasAPiezasPlacasVersiones` (`php spark migrate`).
+
+**Fase 60 (2026-09-10): Existencias — inventario de piezas físicas producidas.** El stock se
+cuenta **por variante** (una copia física es la misma pieza imprima la versión que la imprima),
+como suma de un libro de movimientos: `piezas_stock_movimientos` (`delta` con signo, `origen`,
+`motivo`, `nota`, `creado_en`/`actualizado_en`, y `placa_id`/`placa_version_id` cuando viene de
+una placa). Dos clases de fila:
+
+- **`origen='manual'`** (`alta_manual` / `baja_manual` / `ajuste`): alta y baja a mano desde
+  `piezas/existencias/(:num)` — un modal pide cantidad y motivo (obligatorio). Append-only, cada
+  una con su nota; nunca se editan. Una baja que deja el stock en negativo pasa, con aviso.
+- **`origen='placa'`** (`impresion`): **reflejo** de una línea de bitácora, `cantidad − fallidas`.
+  Hay como mucho **una fila por `placa_version_id`** (índice UNIQUE). El botón *«Dar de alta en
+  inventario»* de la bitácora (sección «Qué llevaba», `POST piezas/placa/(:num)/inventario` →
+  `Web::inventarioSincronizar`) recorre las líneas y **sincroniza**: crea la fila que falte,
+  reajusta el `delta` de la que ya exista si cambiaron copias/fallidas, y **borra** la que se
+  quede a `servibles = 0`. Es re-ejecutable y **no apila movimientos** — el registro no se
+  satura al reimprimir o corregir fallidas. *«Quitar del inventario»*
+  (`inventarioDesvincular`) borra todas las filas de esa placa. `piezas_placas.inventario_sincronizado_en`
+  (columna nueva) guarda la última sincronización, solo para el estado del botón.
+
+`placa_version_id` va en **CASCADE**: si se quita esa pieza de la bitácora (`bitacoraPiezaQuitar`)
+o se borra la placa entera, su aportación al stock desaparece con ella — coherente con que es un
+reflejo, no un asiento congelado.
+
+`piezas/existencias` tiene **dos vistas** (`?vista=lista|galeria`; la galería pinta el render más
+reciente de cada variante, la lista es una tabla estrecha con el stock como primera columna) y
+**dos ejes de filtro que se combinan**: estado (`?filtro=existencias|sin-stock|todas`, por
+defecto `existencias`) y categoría (`?categoria=<id>|sin`, vacío = todas). En cualquiera de las
+dos vistas el nombre es **«familia variante» seguidos** —es la pieza, no una variante suelta.
+Los contadores de la cabecera (unidades, con stock, bajo mínimo) respetan la categoría elegida.
+**Semáforo** por variante contra
+`piezas_variantes.stock_minimo` (columna nueva, `int unsigned NOT NULL DEFAULT 0`, se fija en la
+ficha de existencias de la variante): **rojo** a cero, **amarillo** entre 1 y el mínimo,
+**verde** por encima (o con stock > 0 si no hay mínimo). La cabecera cuenta unidades totales,
+variantes con stock y variantes bajo mínimo.
+
+Migraciones `2026-09-10-000001_CreatePiezasStockMovimientos` y
+`2026-09-10-000002_AddStockMinimoAPiezasVariantes` (`php spark migrate`). Servicio:
+`app/Services/PiezaInventario.php`; modelo `PiezaStockMovimientoModel`; controlador
+`app/Controllers/Piezas/ExistenciasController.php`. Pendiente para más adelante: descontar stock
+desde Pedidos (`motivo` ya tiene sitio; hoy no se toca).

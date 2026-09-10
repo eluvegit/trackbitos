@@ -28,6 +28,7 @@ use App\Models\SubtaskModel;
 use App\Services\PiezaAlmacen;
 use App\Services\PiezaEmpaquetadoService;
 use App\Services\PiezaImagenesPublicas;
+use App\Services\PiezaInventario;
 use App\Services\PiezaService;
 use App\Services\PiezaSyncService;
 use RuntimeException;
@@ -203,6 +204,17 @@ class Web extends BaseController
                 fn(array $a, array $b) => $this->rangoMadurezVariante($a) <=> $this->rangoMadurezVariante($b)
             );
             $familia['variantes'] = $variantes;
+        }
+        unset($familia);
+
+        // Existencias por variante (fase 60): el número de unidades físicas,
+        // al lado del SKU en el listado. Una sola consulta para todas.
+        $stockPorVariante = (new PiezaInventario())->stockPorVariante();
+        foreach ($familias as &$familia) {
+            foreach ($familia['variantes'] as &$v) {
+                $v['unidades'] = $stockPorVariante[(int) $v['id']] ?? 0;
+            }
+            unset($v);
         }
         unset($familia);
 
@@ -1500,6 +1512,11 @@ class Web extends BaseController
                 'olvidada'         => $dias >= self::DIAS_PENDIENTE_DE_JUICIO,
                 'familia'          => $familia['nombre'],
                 'variante'         => $variante['nombre'],
+                // Tareas y advertencia de la pieza: se apuntan desde esta
+                // misma pantalla al revisar la impresión y son las mismas que
+                // salen en el modal del índice.
+                'tareas'           => $variante['tareas'] ?? '',
+                'advertencia'      => $variante['advertencia'] ?? '',
                 'stls'             => count($stlsPorVersion[(int) $v['id']] ?? []),
                 'render'           => $render,
                 'placas'           => $placasPorVersion[(int) $v['id']] ?? [],
@@ -2593,6 +2610,43 @@ class Web extends BaseController
         // pasara a ser de solo lectura.
         return redirect()->to(site_url('piezas/placa/' . $id . '/bitacora/editar'))
             ->with('success', 'Bitácora guardada.');
+    }
+
+    /**
+     * Da de alta / recuadra en existencias todo lo servible de esta placa
+     * (copias − fallidas de cada línea). Re-ejecutable: no apila movimientos
+     * en el registro, reajusta los que ya hay (una fila por línea de placa)
+     * y borra la que se quede a cero. Ver App\Services\PiezaInventario.
+     */
+    public function inventarioSincronizar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $r = (new PiezaInventario())->sincronizarPlaca($id);
+
+        return redirect()->back()->with('success', sprintf(
+            'Inventario actualizado: %d alta(s), %d ajuste(s), %d retirada(s) · %d unidades servibles.',
+            $r['altas'],
+            $r['ajustes'],
+            $r['retiradas'],
+            $r['unidades']
+        ));
+    }
+
+    /** Quita del inventario todo lo que aportaba esta placa. */
+    public function inventarioDesvincular(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $n = (new PiezaInventario())->desvincularPlaca($id);
+
+        return redirect()->back()->with('success', $n . ' movimiento(s) de esta placa quitados del inventario.');
     }
 
     /**

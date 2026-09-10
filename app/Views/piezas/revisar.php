@@ -45,6 +45,32 @@ $botones = static function (array $f): string {
 
 $etiquetaFila = static fn(array $f): string => $f['familia'] . ' / ' . $f['variante'] . ' v' . sprintf('%03d', (int) $f['numero']);
 
+/**
+ * Botón de tareas/advertencia de la pieza, junto a las badges de la fila.
+ * Abre el mismo modal que en el índice y guarda contra el mismo endpoint
+ * (piezas/variante/(:num)/tareas): lo que se apunte aquí al revisar la
+ * impresión sale luego en el índice. Azul si hay algo apuntado, apagado si
+ * no; el número es cuántas tareas (líneas no vacías) quedan.
+ */
+$botonTareas = static function (array $f): string {
+    $lineas = array_filter(
+        array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($f['tareas'] ?? ''))),
+        static fn($l) => $l !== ''
+    );
+    $n        = count($lineas);
+    $tieneAdv = trim((string) ($f['advertencia'] ?? '')) !== '';
+
+    return '<button type="button" class="btn btn-sm py-0 px-1 border-0 ' . ($n || $tieneAdv ? 'text-primary' : 'text-body-tertiary') . '"'
+        . ' data-tareas-boton data-variante="' . (int) $f['variante_id'] . '"'
+        . ' data-accion="' . site_url('piezas/variante/' . (int) $f['variante_id'] . '/tareas') . '"'
+        . ' data-nombre="' . esc($f['familia'] . ' / ' . $f['variante'], 'attr') . '"'
+        . ' data-tareas="' . esc((string) ($f['tareas'] ?? ''), 'attr') . '"'
+        . ' data-advertencia="' . esc((string) ($f['advertencia'] ?? ''), 'attr') . '"'
+        . ' title="Tareas pendientes y advertencia de esta pieza — se apuntan aquí y salen en el índice">'
+        . ($n ? '<span class="small">' . $n . '</span> ' : '') . '<i class="bi bi-card-checklist"></i>'
+        . '</button>';
+};
+
 // Partida en dos grupos, en el orden en que ya vienen (impresa primero).
 $grupos = ['impresa' => [], 'borrador' => []];
 foreach ($filas as $f) {
@@ -109,6 +135,7 @@ $titulos = [
                                     <span class="badge <?= $f['estado'] === 'impresa' ? 'text-bg-primary' : 'text-bg-secondary' ?>" data-badge-estado>
                                         <?= $f['estado'] === 'impresa' ? 'impresa' : 'borrador' ?>
                                     </span>
+                                    <?= $botonTareas($f) ?>
                                 </div>
 
                                 <?php if (!empty($f['superada_por_validada'])): ?>
@@ -196,6 +223,32 @@ $titulos = [
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="submit" class="btn btn-sm btn-primary" id="revisarConfirmar">Confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="modalTareasRevisar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="formTareasRevisar">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-card-checklist"></i> Tareas — <span id="tareasRevisarNombre" class="fw-normal text-muted"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small mb-1" for="tareasRevisarAdvertencia">Advertencia (opcional)</label>
+                <input type="text" id="tareasRevisarAdvertencia" name="advertencia" maxlength="255"
+                    class="form-control form-control-sm mb-2"
+                    placeholder="Funciona pero no es perfecta: la pega en una línea">
+                <label class="form-label small mb-1" for="tareasRevisarTexto">Tareas pendientes</label>
+                <textarea id="tareasRevisarTexto" name="tareas" rows="6" class="form-control form-control-sm"
+                    placeholder="Una por línea:&#10;rehacer los soportes de la base&#10;bajar la escala un 5%"></textarea>
+                <p class="text-muted small mb-0">Una tarea por línea. Salen también en el índice de piezas.</p>
+                <div class="alert alert-danger py-2 mt-2 d-none" id="tareasRevisarError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-sm btn-primary" id="tareasRevisarConfirmar">Guardar</button>
             </div>
         </form>
     </div>
@@ -615,6 +668,76 @@ $titulos = [
         }
 
         siguiente(0);
+    });
+
+    // ---- Tareas de la pieza, apuntadas aquí mismo al revisar ----
+    var modalTareasEl = document.getElementById('modalTareasRevisar');
+    var formTareas = document.getElementById('formTareasRevisar');
+    var tareasNombre = document.getElementById('tareasRevisarNombre');
+    var tareasTexto = document.getElementById('tareasRevisarTexto');
+    var tareasAdv = document.getElementById('tareasRevisarAdvertencia');
+    var tareasError = document.getElementById('tareasRevisarError');
+    var tareasConfirmar = document.getElementById('tareasRevisarConfirmar');
+    var tareasVarianteActual = null;
+    var tareasUrlActual = null;
+
+    function contarTareas(texto) {
+        return String(texto || '').split(/\r\n|\r|\n/).filter(function (l) { return l.trim() !== ''; }).length;
+    }
+
+    // Una variante puede tener varias filas (borrador + impresa a la vez):
+    // refleja en todos sus botones lo que se acaba de guardar, sin recargar.
+    function pintarBotonesTareas(varianteId, tareas, advertencia) {
+        document.querySelectorAll('[data-tareas-boton][data-variante="' + varianteId + '"]').forEach(function (b) {
+            b.setAttribute('data-tareas', tareas);
+            b.setAttribute('data-advertencia', advertencia);
+            var n = contarTareas(tareas);
+            var conAlgo = n > 0 || advertencia.trim() !== '';
+            b.className = 'btn btn-sm py-0 px-1 border-0 ' + (conAlgo ? 'text-primary' : 'text-body-tertiary');
+            b.innerHTML = (n ? '<span class="small">' + n + '</span> ' : '') + '<i class="bi bi-card-checklist"></i>';
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var boton = e.target.closest('[data-tareas-boton]');
+        if (!boton) return;
+        tareasVarianteActual = boton.getAttribute('data-variante');
+        tareasUrlActual = boton.getAttribute('data-accion');
+        tareasNombre.textContent = boton.getAttribute('data-nombre') || '';
+        tareasAdv.value = boton.getAttribute('data-advertencia') || '';
+        tareasTexto.value = boton.getAttribute('data-tareas') || '';
+        tareasError.classList.add('d-none');
+        tareasConfirmar.disabled = false;
+        bootstrap.Modal.getOrCreateInstance(modalTareasEl).show();
+    });
+
+    formTareas.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!tareasUrlActual) return;
+        tareasConfirmar.disabled = true;
+        tareasError.classList.add('d-none');
+
+        var datos = new FormData();
+        datos.append('tareas', tareasTexto.value);
+        datos.append('advertencia', tareasAdv.value);
+
+        llamada(tareasUrlActual, datos).then(function (r) {
+            if (!r.ok) {
+                tareasError.textContent = r.mensaje || 'No se pudo guardar.';
+                tareasError.classList.remove('d-none');
+                tareasConfirmar.disabled = false;
+                return;
+            }
+            var tareas = r.tareas == null ? '' : String(r.tareas);
+            var advertencia = r.advertencia == null ? '' : String(r.advertencia);
+            pintarBotonesTareas(tareasVarianteActual, tareas, advertencia);
+            bootstrap.Modal.getOrCreateInstance(modalTareasEl).hide();
+            aviso('Tareas de la pieza guardadas.');
+        }).catch(function () {
+            tareasError.textContent = 'No se pudo conectar con el servidor.';
+            tareasError.classList.remove('d-none');
+            tareasConfirmar.disabled = false;
+        });
     });
 
     actualizarLote();

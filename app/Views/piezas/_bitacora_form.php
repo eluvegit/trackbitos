@@ -289,6 +289,38 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                     data-resultados-pieza></div>
             </div>
         </div>
+
+        <?php // Alta en existencias (fase 60): da de alta / recuadra en el
+              // inventario lo servible de cada línea (copias − fallidas).
+              // Re-pulsable: si luego cambian copias o fallidas y se vuelve a
+              // pulsar, se reajusta lo ya dado de alta, no se añade otro
+              // movimiento. Formulario propio, fuera del <form> de la
+              // bitácora — mismo patrón que la subida de fotos. ?>
+        <div class="mt-3 pt-2 border-top d-flex flex-wrap align-items-center gap-2">
+            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario') ?>">
+                <?= csrf_field() ?>
+                <button class="btn btn-sm btn-success">
+                    <i class="bi bi-boxes"></i>
+                    <?= $placa['inventario_sincronizado_en'] ? 'Actualizar inventario con esta placa' : 'Dar de alta en inventario' ?>
+                </button>
+            </form>
+            <?php if ($placa['inventario_sincronizado_en']): ?>
+                <span class="text-muted small">
+                    <i class="bi bi-check2-circle text-success"></i>
+                    Sincronizado el <?= esc(substr((string) $placa['inventario_sincronizado_en'], 0, 16)) ?>
+                </span>
+                <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario/quitar') ?>"
+                    onsubmit="return confirm('¿Quitar del inventario todo lo que aportaba esta placa?');">
+                    <?= csrf_field() ?>
+                    <button class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-x-lg"></i> Quitar del inventario
+                    </button>
+                </form>
+            <?php endif; ?>
+            <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary" title="Ver existencias">
+                <i class="bi bi-box-arrow-up-right"></i> Existencias
+            </a>
+        </div>
     </div>
 
     <div class="mt-4" id="pruebas">

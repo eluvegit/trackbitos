@@ -819,6 +819,16 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // AJAX.
     $routes->GET('revisar', 'Web::revisarImpresiones');
 
+    // Existencias (fase 60): inventario de piezas físicas producidas, por
+    // variante. El alta automática de lo impreso la dispara el botón de la
+    // bitácora (placa/(:num)/inventario, más abajo); el alta/baja a mano va
+    // por 'existencias/movimiento'. 'movimiento' es literal y va antes que
+    // el patrón numérico, mismo criterio que 'categoria' arriba.
+    $routes->GET('existencias', 'ExistenciasController::index');
+    $routes->POST('existencias/movimiento', 'ExistenciasController::movimiento');
+    $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
+    $routes->GET('existencias/(:num)', 'ExistenciasController::variante/$1');
+
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
@@ -833,6 +843,11 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // qué se ha ido mandando a la impresora.
     $routes->GET('placas', 'Web::placas');
     $routes->POST('placa/(:num)/cargar', 'Web::placaCargar/$1');
+    // Inventario (fase 60): da de alta / recuadra en existencias todo lo
+    // servible de esta placa (copias − fallidas de cada línea), y el inverso.
+    // Re-ejecutable: no apila movimientos, reajusta los que ya hay.
+    $routes->POST('placa/(:num)/inventario', 'Web::inventarioSincronizar/$1');
+    $routes->POST('placa/(:num)/inventario/quitar', 'Web::inventarioDesvincular/$1');
     $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
     $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
     // No cupo entera en la plataforma: mueve un subconjunto de piezas a una
