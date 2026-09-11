@@ -88,11 +88,13 @@ $badgeEstadoVersion = static function (array $version): string {
 $piezasTodas = array_merge(...array_map(fn($g) => $g['piezas'], $grupos));
 
 $cuentaEstado = ['validada' => 0, 'impresa' => 0, 'borrador' => 0];
-$cuentaStl    = ['con' => 0, 'sin' => 0];
+$cuentaSinImagen = 0;
 $cuentaPlaca  = ['en' => 0, 'fuera' => 0];
 foreach ($piezasTodas as $p) {
     $cuentaEstado[$p['version']['estado']] = ($cuentaEstado[$p['version']['estado']] ?? 0) + 1;
-    $cuentaStl[$p['stls'] > 0 ? 'con' : 'sin']++;
+    if (!$p['miniatura']) {
+        $cuentaSinImagen++;
+    }
     $cuentaPlaca[in_array((int) $p['version']['id'], $carrito, true) ? 'en' : 'fuera']++;
 }
 ?>
@@ -119,10 +121,10 @@ foreach ($piezasTodas as $p) {
 
     <div class="d-none" id="panelFiltrosGaleria">
         <div class="border rounded p-2 mb-3">
-            <?php // Tres preguntas distintas (qué estado, si tiene STL, si está en la placa) que sí se
-                  // combinan entre sí — a diferencia del filtro único del índice, aquí interesa cruzarlas
-                  // ("para imprimir" + "sin STL" = qué exportar ya). Todas en gris neutro, sin colorinchis:
-                  // el icono ya dice de qué trata cada una, y así no compiten con los badges de las tarjetas. ?>
+            <?php // Tres preguntas distintas (qué estado, si le falta imagen, si está en la placa) que sí se
+                  // combinan entre sí — a diferencia del filtro único del índice, aquí interesa cruzarlas.
+                  // Todas en gris neutro, sin colorinchis: el icono ya dice de qué trata cada una, y así no
+                  // compiten con los badges de las tarjetas. ?>
             <div class="d-flex flex-wrap align-items-center gap-1 mb-2" id="filtrosEstadoGaleria">
                 <span class="text-muted small text-uppercase" style="width: 4.5rem;">Estado</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary active" data-filtro-estado=""
@@ -145,17 +147,14 @@ foreach ($piezasTodas as $p) {
                     <span class="badge text-bg-secondary"><?= $cuentaEstado['borrador'] ?></span>
                 </button>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-1 mb-2" id="filtrosStlGaleria">
-                <span class="text-muted small text-uppercase" style="width: 4.5rem;">STL</span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-stl="con"
-                    title="Solo las que ya tienen STL adjunto" <?= $cuentaStl['con'] === 0 ? 'disabled' : '' ?>>
-                    <i class="bi bi-file-earmark-check"></i> Con STL
-                    <span class="badge text-bg-secondary"><?= $cuentaStl['con'] ?></span>
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-stl="sin"
-                    title="Solo las que todavía no tienen ningún STL" <?= $cuentaStl['sin'] === 0 ? 'disabled' : '' ?>>
-                    <i class="bi bi-exclamation-circle"></i> Sin STL
-                    <span class="badge text-bg-secondary"><?= $cuentaStl['sin'] ?></span>
+            <div class="d-flex flex-wrap align-items-center gap-1 mb-2" id="filtrosImagenGaleria">
+                <span class="text-muted small text-uppercase" style="width: 4.5rem;">Imagen</span>
+                <?php // Solo "sin imagen" (no hace falta el par con/sin): sirve para juntar en una
+                      // placa todo lo que todavía no tiene foto y así saber qué miniaturas faltan. ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filtro-imagen="sin"
+                    title="Solo las que todavía no tienen ninguna foto" <?= $cuentaSinImagen === 0 ? 'disabled' : '' ?>>
+                    <i class="bi bi-image"></i> Sin imagen
+                    <span class="badge text-bg-secondary"><?= $cuentaSinImagen ?></span>
                 </button>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-1" id="filtrosPlacaGaleria">
@@ -214,7 +213,6 @@ foreach ($piezasTodas as $p) {
                             $esValidada = $version['estado'] === 'validada';
                             $enCarrito = in_array((int) $version['id'], $carrito, true);
                             $stls      = (int) ($p['stls'] ?? 0);
-                            $tieneStl  = $stls > 0;
                             // Lo mismo que busca el índice y en el mismo formato (en
                             // minúsculas, ya montado desde PHP): quien escribe "copa" aquí
                             // espera encontrar lo mismo que allí, y el SKU cuenta porque es
@@ -239,7 +237,7 @@ foreach ($piezasTodas as $p) {
                             $nombrePiezaPlano = $p['familiaNombre'] . ($apellido !== null ? ' - ' . $apellido : '');
                         ?>
                         <div class="col" data-tarjeta data-estado="<?= esc($version['estado'], 'attr') ?>"
-                            data-stl="<?= $tieneStl ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito ? 'en' : 'fuera' ?>"
+                            data-imagen="<?= $p['miniatura'] ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito ? 'en' : 'fuera' ?>"
                             data-buscar="<?= esc($buscable, 'attr') ?>"
                             data-nombre-pieza="<?= esc($nombrePiezaPlano, 'attr') ?>"
                             data-version-tarjeta="<?= (int) $version['id'] ?>">
@@ -451,12 +449,12 @@ foreach ($piezasTodas as $p) {
     // "para imprimir" + "sin STL" es justo la pregunta de "qué me falta
     // exportar ya".
     var cajaEstado = document.getElementById('filtrosEstadoGaleria');
-    var cajaStl = document.getElementById('filtrosStlGaleria');
+    var cajaImagen = document.getElementById('filtrosImagenGaleria');
     var cajaPlaca = document.getElementById('filtrosPlacaGaleria');
     var sinResultados = document.getElementById('sinResultadosGaleria');
     var buscador = document.getElementById('buscadorGaleria');
     var filtroEstado = '';
-    var filtroStl = '';
+    var filtroImagen = '';
     var filtroPlaca = '';
 
     function aplicarFiltrosGaleria() {
@@ -464,13 +462,13 @@ foreach ($piezasTodas as $p) {
         // suya aparte: dos recorridos independientes se pisarían el uno al
         // otro (el segundo volvería a enseñar lo que el primero escondió).
         var q = buscador ? buscador.value.trim().toLowerCase() : '';
-        var recortando = q !== '' || filtroEstado !== '' || filtroStl !== '' || filtroPlaca !== '';
+        var recortando = q !== '' || filtroEstado !== '' || filtroImagen !== '' || filtroPlaca !== '';
         var encontradas = 0;
 
         document.querySelectorAll('[data-tarjeta]').forEach(function (tarjeta) {
             var visible = (q === '' || (tarjeta.getAttribute('data-buscar') || '').indexOf(q) !== -1)
                 && (filtroEstado === '' || tarjeta.getAttribute('data-estado') === filtroEstado)
-                && (filtroStl === '' || tarjeta.getAttribute('data-stl') === filtroStl)
+                && (filtroImagen === '' || tarjeta.getAttribute('data-imagen') === filtroImagen)
                 && (filtroPlaca === '' || tarjeta.getAttribute('data-placa') === filtroPlaca);
             tarjeta.classList.toggle('d-none', !visible);
             if (visible) encontradas++;
@@ -521,8 +519,8 @@ foreach ($piezasTodas as $p) {
 
     engancharFacet(cajaEstado, 'data-filtro-estado',
         function () { return filtroEstado; }, function (v) { filtroEstado = v; });
-    engancharFacet(cajaStl, 'data-filtro-stl',
-        function () { return filtroStl; }, function (v) { filtroStl = v; });
+    engancharFacet(cajaImagen, 'data-filtro-imagen',
+        function () { return filtroImagen; }, function (v) { filtroImagen = v; });
     engancharFacet(cajaPlaca, 'data-filtro-placa',
         function () { return filtroPlaca; }, function (v) { filtroPlaca = v; });
 
