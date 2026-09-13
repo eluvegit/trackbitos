@@ -203,6 +203,14 @@ $porQueNo = function (array $v) use ($acciones, $puedeDevolver): array {
  * tarjeta "Desde tu máquina" del final y el atajo de cada versión.
  */
 $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+
+/** Mismo cálculo que $botonTareas en piezas/index.php: cuántas tareas hay y si hay advertencia, para pintar el icono. */
+$tareasLineas      = array_filter(
+    array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($variante['tareas'] ?? ''))),
+    static fn($t) => $t !== ''
+);
+$nTareasCabecera   = count($tareasLineas);
+$tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
 ?>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
@@ -236,6 +244,12 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
             <i class="bi bi-box-arrow-up-right"></i> original
         </a>
     <?php endif; ?>
+    <button type="button" class="btn btn-sm py-0 px-1 border-0 <?= ($nTareasCabecera || $tieneAdvertencia) ? 'text-primary' : 'text-body-tertiary' ?>"
+        title="Tareas pendientes y advertencia de esta pieza"
+        data-bs-toggle="modal" data-bs-target="#modalTareas">
+        <?php if ($nTareasCabecera): ?><span class="small"><?= $nTareasCabecera ?></span><?php endif; ?>
+        <i class="bi bi-card-checklist"></i>
+    </button>
     <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
         data-bs-toggle="modal" data-bs-target="#modalSku">
         <i class="bi bi-pencil"></i>
@@ -329,27 +343,6 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 
                 <hr>
 
-                <label class="form-label small mb-1">
-                    <i class="bi bi-card-checklist"></i> Tareas y advertencia
-                </label>
-                <p class="small text-muted mb-2">
-                    Lo que queda por hacerle a la pieza (una tarea por línea) y, si la pieza vale
-                    pero tiene alguna pega, un aviso corto. Es lo mismo que se edita desde el
-                    icono de tareas del índice.
-                </p>
-                <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/tareas') ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="volver" value="ficha">
-                    <input type="text" name="advertencia" class="form-control form-control-sm mb-1" maxlength="255"
-                        value="<?= esc($variante['advertencia'] ?? '', 'attr') ?>"
-                        placeholder="Advertencia (opcional)">
-                    <textarea name="tareas" class="form-control form-control-sm mb-1" rows="4"
-                        placeholder="Una tarea por línea"><?= esc($variante['tareas'] ?? '') ?></textarea>
-                    <button class="btn btn-sm btn-primary">Guardar</button>
-                </form>
-
-                <hr>
-
                 <label class="form-label small mb-1">SKU</label>
                 <p class="small text-muted mb-2">
                     <code><?= esc($variante['sku'] ?? '—') ?></code> — asignado solo al crear la
@@ -371,6 +364,38 @@ $refCli = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
                     <input type="url" name="enlace_original" class="form-control form-control-sm"
                         value="<?= esc($variante['enlace_original'] ?? '', 'attr') ?>"
                         placeholder="https://drive.google.com/..." maxlength="500">
+                    <button class="btn btn-sm btn-primary">Guardar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php // Aparte de modalSku: las tareas son lo que más se toca de una pieza en curso y
+      // compartir modal con nombre/SKU/enlace las escondía detrás del icono de lápiz. ?>
+<div class="modal fade" id="modalTareas" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">
+                    <i class="bi bi-card-checklist"></i> Tareas y advertencia — <?= esc($familia['nombre']) ?> / <?= esc($variante['nombre']) ?>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">
+                    Lo que queda por hacerle a la pieza (una tarea por línea) y, si la pieza vale
+                    pero tiene alguna pega, un aviso corto. Es lo mismo que se edita desde el
+                    icono de tareas del índice.
+                </p>
+                <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/tareas') ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="volver" value="ficha">
+                    <input type="text" name="advertencia" class="form-control form-control-sm mb-1" maxlength="255"
+                        value="<?= esc($variante['advertencia'] ?? '', 'attr') ?>"
+                        placeholder="Advertencia (opcional)">
+                    <textarea name="tareas" class="form-control form-control-sm mb-1" rows="4"
+                        placeholder="Una tarea por línea"><?= esc($variante['tareas'] ?? '') ?></textarea>
                     <button class="btn btn-sm btn-primary">Guardar</button>
                 </form>
             </div>
