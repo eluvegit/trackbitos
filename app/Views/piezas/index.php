@@ -651,6 +651,7 @@ $filtros = [
     // No tienen foto de miniatura (ni render ni referencia): para localizarlas
     // y ponerles una. Mira lo mismo que la columna de foto de la izquierda.
     'sin-imagen'  => ['Sin imagen', 'bi-image', 'secondary', 'No tienen ninguna foto de miniatura todavía — para añadírsela'],
+    'con-tareas'  => ['Con tareas', 'bi-card-checklist', 'secondary', 'Tienen alguna tarea apuntada en el modal de tareas'],
 ];
 
 /**
@@ -684,6 +685,9 @@ $tokensDe = static function (array $v): array {
     // el hueco vacío en la columna de la izquierda.
     if (empty($v['miniatura'])) {
         $tokens[] = 'sin-imagen';
+    }
+    if (trim((string) ($v['tareas'] ?? '')) !== '') {
+        $tokens[] = 'con-tareas';
     }
 
     return $tokens;
