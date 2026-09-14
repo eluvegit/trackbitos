@@ -121,6 +121,13 @@
         </button>
     </div>
 
+    <div class="jt-subtask-add">
+        <input type="text" id="subtaskInput" class="form-control form-control-sm" placeholder="Nueva subtarea..." maxlength="255">
+        <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+
     <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
         <?php foreach ($subtasks as $s):
             $isDone = !empty($s['is_done']);
@@ -179,13 +186,6 @@
     </div>
 
     <p class="text-muted small mb-2 <?= empty($subtasks) ? '' : 'd-none' ?>" id="subtaskEmptyMsg">Sin subtareas todavía.</p>
-
-    <div class="jt-subtask-add">
-        <input type="text" id="subtaskInput" class="form-control form-control-sm" placeholder="Nueva subtarea..." maxlength="255">
-        <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary">
-            <i class="bi bi-plus-lg"></i>
-        </button>
-    </div>
 </div>
 
 <?php $subtaskTitleById = array_column($subtasks, 'title', 'id'); ?>
@@ -1018,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskList.dataset.taskId + '/crear', { title });
             if (!data.success) throw new Error();
 
-            subtaskList.appendChild(buildSubtaskItem(data.subtask));
+            subtaskList.prepend(buildSubtaskItem(data.subtask));
             subtaskInput.value = '';
             subtaskEmptyMsg.classList.add('d-none');
             applyProgress(data.progress);
@@ -1227,10 +1227,11 @@ document.addEventListener('DOMContentLoaded', function () {
         subtaskSuggestAddBtn.disabled = true;
         try {
             let lastProgress = null;
+            const anchor = subtaskList.firstChild;
             for (const title of seleccionadas) {
                 const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + subtaskList.dataset.taskId + '/crear', { title });
                 if (data.success) {
-                    subtaskList.appendChild(buildSubtaskItem(data.subtask));
+                    subtaskList.insertBefore(buildSubtaskItem(data.subtask), anchor);
                     lastProgress = data.progress;
                 }
             }

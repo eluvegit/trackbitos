@@ -7,7 +7,9 @@ use CodeIgniter\HTTP\ResponseInterface;
 use App\Models\PiezaCategoriaModel;
 use App\Models\PiezaComposicionModel;
 use App\Models\PiezaConfigModel;
+use App\Models\PiezaEstucheModel;
 use App\Models\PiezaFamiliaModel;
+use App\Models\PiezaHuecoModel;
 use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaPedidoLineaModel;
 use App\Models\PiezaPedidoModel;
@@ -2435,6 +2437,7 @@ class Web extends BaseController
     {
         $id = (int) $placa['id'];
         $piezas = $this->piezasDeLaPlaca($id);
+        $colocacion = $this->colocacionDePlaca($piezas);
 
         return [
             'placa'    => $placa,
@@ -2457,7 +2460,70 @@ class Web extends BaseController
             // ahora también en el sidebar de la bitácora, no solo en el
             // desplegable del histórico).
             'sugerenciaReparto' => $this->filasFueraDeLaPrimeraPlaca($piezas),
+            // Dónde va físicamente cada pieza servible de esta placa, para
+            // el panel "Dónde colocar esto" — solo tiene sentido una vez
+            // sincronizada, así que la vista lo enseña solo entonces.
+            'colocacion'       => $colocacion['filas'],
+            'colocacionHuecos' => $colocacion['huecosDisponibles'],
         ];
+    }
+
+    /**
+     * Para cada pieza servible de esta placa, a qué hueco le toca ir — fijo
+     * (piezas_variantes.hueco_predeterminado_id) o inferido si no hay uno
+     * fijado pero todo su stock ya vive en un único sitio (ver
+     * PiezaInventario::huecoUnicoDeVariante()). Es solo para ENSEÑAR y, si
+     * falta, dejar elegirlo desde aquí — quien de verdad coloca el
+     * movimiento al sincronizar es PiezaInventario::sincronizarPlaca().
+     *
+     * @return array{filas: list<array>, huecosDisponibles: list<array>}
+     */
+    private function colocacionDePlaca(array $piezas): array
+    {
+        $estucheModel = new PiezaEstucheModel();
+        $huecoModel   = new PiezaHuecoModel();
+        $inventario   = new PiezaInventario();
+
+        $huecosDisponibles = [];
+        $codigoPorHuecoId  = [];
+        foreach ($estucheModel->ordenados() as $est) {
+            foreach ($huecoModel->deEstuche((int) $est['id']) as $h) {
+                $codigo = PiezaHuecoModel::codigoCompleto($est, $h);
+                $codigoPorHuecoId[(int) $h['id']] = $codigo;
+                $huecosDisponibles[] = ['estuche' => $est, 'hueco' => $h, 'codigo' => $codigo];
+            }
+        }
+
+        $filas = [];
+        foreach ($piezas as $p) {
+            if (!$p['variante']) {
+                continue;   // pieza borrada: nada que colocar
+            }
+            $servible = max(0, (int) $p['fila']['cantidad'] - (int) $p['fila']['fallidas']);
+            if ($servible === 0) {
+                continue;
+            }
+
+            $varianteId = (int) $p['variante']['id'];
+            $huecoId    = $p['variante']['hueco_predeterminado_id'] ?? null;
+            $inferido   = false;
+            if ($huecoId === null) {
+                $huecoId  = $inventario->huecoUnicoDeVariante($varianteId);
+                $inferido = $huecoId !== null;
+            }
+
+            $filas[] = [
+                'varianteId' => $varianteId,
+                'nombre'     => trim(($p['familia']['nombre'] ?? '') . ' ' . $p['variante']['nombre']),
+                'miniatura'  => $p['miniatura'],
+                'servible'   => $servible,
+                'huecoId'    => $huecoId,
+                'codigo'     => $huecoId ? ($codigoPorHuecoId[$huecoId] ?? '?') : null,
+                'inferido'   => $inferido,
+            ];
+        }
+
+        return ['filas' => $filas, 'huecosDisponibles' => $huecosDisponibles];
     }
 
     /**

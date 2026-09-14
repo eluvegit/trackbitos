@@ -101,6 +101,15 @@ $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
                 <i class="bi bi-arrow-down-square"></i>
             </button>
         </div>
+        <div class="jt-subtask-add">
+            <input type="text" class="form-control form-control-sm jt-subtask-input" placeholder="Nueva subtarea..." maxlength="255">
+            <button type="button" class="btn btn-sm btn-primary jt-subtask-add-btn">
+                <i class="bi bi-plus-lg"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary jt-subtask-suggest-btn" title="Sugerir subtareas">
+                <i class="bi bi-stars"></i>
+            </button>
+        </div>
         <div class="jt-subtask-list" data-task-id="<?= $task['id'] ?>">
             <?php foreach ($subs as $s): ?>
                 <?php $sDone = !empty($s['is_done']); ?>
@@ -135,15 +144,6 @@ $subsDone = count(array_filter($subs, fn($s) => !empty($s['is_done'])));
             <?php endforeach; ?>
         </div>
         <p class="text-muted small mb-2 jt-subtask-empty <?= $subsTotal > 0 ? 'd-none' : '' ?>">Sin subtareas todavía.</p>
-        <div class="jt-subtask-add">
-            <input type="text" class="form-control form-control-sm jt-subtask-input" placeholder="Nueva subtarea..." maxlength="255">
-            <button type="button" class="btn btn-sm btn-primary jt-subtask-add-btn">
-                <i class="bi bi-plus-lg"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary jt-subtask-suggest-btn" title="Sugerir subtareas">
-                <i class="bi bi-stars"></i>
-            </button>
-        </div>
     </div>
 
 </li>

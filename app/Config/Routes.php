@@ -827,6 +827,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->GET('existencias', 'ExistenciasController::index');
     $routes->POST('existencias/movimiento', 'ExistenciasController::movimiento');
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
+    $routes->POST('existencias/(:num)/hueco-defecto', 'ExistenciasController::fijarHuecoPredeterminado/$1');
     $routes->GET('existencias/(:num)', 'ExistenciasController::variante/$1');
 
     // Ubicaciones (fase 1 de "dónde está cada cosa"): a dos niveles, estuche
@@ -840,6 +841,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('ubicaciones/(:num)/borrar', 'UbicacionesController::borrar/$1');
     $routes->POST('ubicaciones/(:num)/huecos/crear', 'UbicacionesController::crearHueco/$1');
     $routes->POST('ubicaciones/huecos/(:num)/borrar', 'UbicacionesController::borrarHueco/$1');
+    $routes->POST('ubicaciones/huecos/(:num)/mover', 'UbicacionesController::moverStock/$1');
     $routes->GET('ubicaciones/huecos/(:num)', 'UbicacionesController::verHueco/$1');
 
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');

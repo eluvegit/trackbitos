@@ -233,10 +233,18 @@ class ExistenciasController extends BaseController
             $huecoId = null;
         }
 
+        // Si el movimiento se registra desde la ficha de un hueco (en vez
+        // de desde Existencias), se vuelve ahí en lugar de a la ficha de
+        // la variante — es donde físicamente está el usuario.
+        $volverHuecoId = (int) $this->request->getPost('volver_hueco') ?: null;
+        $volverAHueco  = $volverHuecoId !== null && $this->huecos->find($volverHuecoId);
+
         $variante = $this->variantes->find($varianteId);
-        $volver   = $variante
-            ? site_url('piezas/existencias/' . $varianteId)
-            : site_url('piezas/existencias');
+        $volver   = match (true) {
+            $volverAHueco => site_url('piezas/ubicaciones/huecos/' . $volverHuecoId),
+            (bool) $variante => site_url('piezas/existencias/' . $varianteId),
+            default => site_url('piezas/existencias'),
+        };
 
         if (!$variante) {
             return redirect()->to($volver)->with('error', 'Esa variante no existe.');
@@ -252,10 +260,49 @@ class ExistenciasController extends BaseController
         $motivo = $sentido === 'alta' ? 'alta_manual' : 'baja_manual';
         $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId);
 
+        // Casilla "usar este hueco por defecto" del formulario de la ficha
+        // del hueco: solo tiene sentido en un alta con hueco elegido — a
+        // partir de ahora sincronizarPlaca() manda aquí lo que se imprima
+        // de esta pieza, sin tener que fijarlo aparte.
+        if ($sentido === 'alta' && $huecoId !== null && $this->request->getPost('fijar_defecto')) {
+            $this->variantes->update($varianteId, ['hueco_predeterminado_id' => $huecoId]);
+        }
+
         $nuevo = $this->inventario->stockDeVariante($varianteId);
         $aviso = $nuevo < 0 ? ' Ojo: el stock queda en negativo.' : '';
 
         return redirect()->to($volver)->with('success', 'Movimiento registrado. Stock actual: ' . $nuevo . '.' . $aviso);
+    }
+
+    /**
+     * Fija (o quita) el hueco por defecto de una pieza: a dónde va
+     * automáticamente lo que salga de una placa suya a partir de ahora
+     * (App\Services\PiezaInventario::sincronizarPlaca()). Si ya había
+     * stock de esta pieza sin asignar —lo normal es que sea justo lo
+     * recién impreso, esperando destino—, se coloca ya mismo ahí.
+     */
+    public function fijarHuecoPredeterminado(int $id)
+    {
+        $variante = $this->variantes->find($id);
+        if (!$variante) {
+            return redirect()->back()->with('error', 'Esa variante no existe.');
+        }
+
+        $huecoId = (int) $this->request->getPost('hueco_id') ?: null;
+        if ($huecoId !== null && !$this->huecos->find($huecoId)) {
+            return redirect()->back()->with('error', 'Ese hueco no existe.');
+        }
+
+        $this->variantes->update($id, ['hueco_predeterminado_id' => $huecoId]);
+
+        if ($huecoId === null) {
+            return redirect()->back()->with('success', 'Hueco por defecto quitado.');
+        }
+
+        $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
+        $mensaje = 'Hueco por defecto fijado.' . ($movidos > 0 ? ' Se ha colocado ahí lo que tenía sin asignar.' : '');
+
+        return redirect()->back()->with('success', $mensaje);
     }
 
     public function minimo(int $id)

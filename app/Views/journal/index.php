@@ -899,10 +899,11 @@
             subtaskSuggestAddBtn.disabled = true;
             try {
                 let lastProgress = null;
+                const anchor = list.firstChild;
                 for (const title of seleccionadas) {
                     const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
                     if (data.success) {
-                        list.appendChild(buildSubtaskItem(data.subtask, taskId));
+                        list.insertBefore(buildSubtaskItem(data.subtask, taskId), anchor);
                         lastProgress = data.progress;
                     }
                 }
@@ -1031,7 +1032,7 @@
                         const data = await postJSON('<?= site_url('journal/subtasks') ?>/' + taskId + '/crear', { title });
                         if (!data.success) throw new Error();
 
-                        list.appendChild(buildSubtaskItem(data.subtask, taskId));
+                        list.prepend(buildSubtaskItem(data.subtask, taskId));
                         input.value = '';
                         emptyMsg.classList.add('d-none');
                         updateToggleBadge(taskId);

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaStockMovimientoModel;
+use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
 
 /**
@@ -26,6 +27,7 @@ class PiezaInventario
     private PiezaPlacaModel $placas;
     private PiezaPlacaVersionModel $placaVersiones;
     private PiezaVersionModel $versiones;
+    private PiezaVarianteModel $variantes;
 
     public function __construct()
     {
@@ -33,6 +35,7 @@ class PiezaInventario
         $this->placas         = new PiezaPlacaModel();
         $this->placaVersiones = new PiezaPlacaVersionModel();
         $this->versiones      = new PiezaVersionModel();
+        $this->variantes      = new PiezaVarianteModel();
     }
 
     public function stockDeVariante(int $varianteId): int
@@ -89,9 +92,21 @@ class PiezaInventario
                     $res['ajustes']++;
                 }
             } else {
+                // Dónde colocarlo, en dos pasos: el hueco por defecto que se
+                // haya fijado a mano en la pieza; si no hay ninguno, y todo
+                // su stock actual vive en un único hueco, ese mismo (una
+                // pieza nueva-nueva, sin stock en ningún sitio, se queda sin
+                // asignar — no hay nada de qué inferir).
+                $variante = $this->variantes->find($varianteId);
+                $huecoId  = $variante['hueco_predeterminado_id'] ?? null;
+                if ($huecoId === null) {
+                    $huecoId = $this->movimientos->huecoUnicoDeVariante($varianteId);
+                }
+
                 $this->movimientos->insert([
                     'variante_id'      => $varianteId,
                     'version_id'       => (int) $version['id'],
+                    'ubicacion_id'     => $huecoId,
                     'origen'           => 'placa',
                     'delta'            => $servibles,
                     'motivo'           => 'impresion',
@@ -153,6 +168,41 @@ class PiezaInventario
     public function stockDeHueco(int $huecoId): array
     {
         return $this->movimientos->stockDeHueco($huecoId);
+    }
+
+    /**
+     * Stock de todas las variantes desglosado por hueco, en una sola
+     * consulta (0 = sin asignar).
+     *
+     * @return array<int, array<int,int>>
+     */
+    public function stockPorVarianteYHueco(): array
+    {
+        return $this->movimientos->stockPorVarianteYHueco();
+    }
+
+    /** Mueve todo el stock (todas las variantes) de un hueco a otro. Devuelve cuántos movimientos tocó. */
+    public function moverStockDeHueco(int $origenId, int $destinoId): int
+    {
+        return $this->movimientos->moverUbicacion($origenId, $destinoId);
+    }
+
+    /**
+     * Si todo el stock de una variante vive en un único hueco, ese hueco;
+     * si está repartida en varios (o no tiene nada), null.
+     */
+    public function huecoUnicoDeVariante(int $varianteId): ?int
+    {
+        return $this->movimientos->huecoUnicoDeVariante($varianteId);
+    }
+
+    /**
+     * Coloca en un hueco todo lo que de una variante estuviera "sin
+     * asignar". Devuelve cuántas filas de movimiento tocó.
+     */
+    public function asignarSinAsignar(int $varianteId, int $huecoId): int
+    {
+        return $this->movimientos->asignarSinAsignar($varianteId, $huecoId);
     }
 
     /** Historial completo de una variante, lo mas nuevo primero. */

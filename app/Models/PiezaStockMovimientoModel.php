@@ -90,4 +90,79 @@ class PiezaStockMovimientoModel extends Model
 
         return $mapa;
     }
+
+    /**
+     * Stock de todas las variantes desglosado por hueco, en una sola
+     * consulta — para catálogos donde hace falta ver de un vistazo cuánto
+     * hay de cada pieza y dónde está, sin una consulta por variante.
+     *
+     * @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock)
+     */
+    public function stockPorVarianteYHueco(): array
+    {
+        $mapa = [];
+        foreach (
+            $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
+                ->groupBy(['variante_id', 'ubicacion_id'])
+                ->findAll() as $fila
+        ) {
+            $vid = (int) $fila['variante_id'];
+            $hid = (int) ($fila['ubicacion_id'] ?? 0);
+            $mapa[$vid][$hid] = (int) $fila['total'];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Si TODO el stock de una variante está en un único hueco, ese hueco —
+     * si no o está repartida en varios, null. Fallback de dónde colocar lo
+     * nuevo cuando la variante todavía no tiene hueco por defecto fijado
+     * (App\Services\PiezaInventario::sincronizarPlaca()): si ya vive en un
+     * sitio concreto, lo nuevo va ahí también; si está repartida o no tiene
+     * nada, no hay nada que inferir.
+     */
+    public function huecoUnicoDeVariante(int $varianteId): ?int
+    {
+        $conStock = array_filter(
+            $this->stockPorHueco($varianteId),
+            static fn (int $n, int $huecoId) => $n > 0 && $huecoId > 0,
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        return count($conStock) === 1 ? array_key_first($conStock) : null;
+    }
+
+    /**
+     * Coloca en un hueco todo lo que de una variante estuviera "sin
+     * asignar" (ubicacion_id NULL) — para cuando se fija el hueco por
+     * defecto de una pieza y ya había stock suelto esperando destino
+     * (típicamente lo recién impreso de una placa). Devuelve cuántas
+     * filas de movimiento tocó.
+     */
+    public function asignarSinAsignar(int $varianteId, int $huecoId): int
+    {
+        $n = $this->where('variante_id', $varianteId)->whereNull('ubicacion_id')->countAllResults(false);
+        if ($n > 0) {
+            $this->where('variante_id', $varianteId)->whereNull('ubicacion_id')->set('ubicacion_id', $huecoId)->update();
+        }
+
+        return $n;
+    }
+
+    /**
+     * Reasigna todos los movimientos de un hueco a otro — para fusionar dos
+     * huecos (mover y luego borrar el que queda vacío) o para corregir que
+     * algo se apuntó en el hueco equivocado. No toca las cantidades, solo
+     * la ubicación. Devuelve cuántas filas de movimiento tocó.
+     */
+    public function moverUbicacion(int $origenId, int $destinoId): int
+    {
+        $n = $this->where('ubicacion_id', $origenId)->countAllResults(false);
+        if ($n > 0) {
+            $this->where('ubicacion_id', $origenId)->set('ubicacion_id', $destinoId)->update();
+        }
+
+        return $n;
+    }
 }
