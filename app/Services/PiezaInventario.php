@@ -122,16 +122,37 @@ class PiezaInventario
     }
 
     /** Un alta/baja/ajuste a mano. $delta con signo. Devuelve el id insertado. */
-    public function movimientoManual(int $varianteId, int $delta, string $motivo, ?string $nota): int
+    public function movimientoManual(int $varianteId, int $delta, string $motivo, ?string $nota, ?int $huecoId = null): int
     {
         return (int) $this->movimientos->insert([
-            'variante_id' => $varianteId,
-            'origen'      => 'manual',
-            'delta'       => $delta,
-            'motivo'      => $motivo,
-            'nota'        => $nota,
-            'creado_en'   => date('Y-m-d H:i:s'),
+            'variante_id'  => $varianteId,
+            'ubicacion_id' => $huecoId,
+            'origen'       => 'manual',
+            'delta'        => $delta,
+            'motivo'       => $motivo,
+            'nota'         => $nota,
+            'creado_en'    => date('Y-m-d H:i:s'),
         ], true);
+    }
+
+    /**
+     * Desglose por hueco del stock de una variante (0 = sin asignar).
+     *
+     * @return array<int,int>
+     */
+    public function stockPorHueco(int $varianteId): array
+    {
+        return $this->movimientos->stockPorHueco($varianteId);
+    }
+
+    /**
+     * Qué variantes hay en un hueco y cuánto de cada una.
+     *
+     * @return array<int,int>  varianteId => stock
+     */
+    public function stockDeHueco(int $huecoId): array
+    {
+        return $this->movimientos->stockDeHueco($huecoId);
     }
 
     /** Historial completo de una variante, lo mas nuevo primero. */

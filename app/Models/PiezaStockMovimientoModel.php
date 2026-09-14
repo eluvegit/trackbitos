@@ -17,7 +17,7 @@ class PiezaStockMovimientoModel extends Model
     protected $useTimestamps = false;
 
     protected $allowedFields = [
-        'variante_id', 'version_id', 'origen', 'delta', 'motivo', 'nota',
+        'variante_id', 'version_id', 'ubicacion_id', 'origen', 'delta', 'motivo', 'nota',
         'placa_id', 'placa_version_id', 'creado_en', 'actualizado_en',
     ];
 
@@ -44,6 +44,47 @@ class PiezaStockMovimientoModel extends Model
 
         $mapa = [];
         foreach ($q->findAll() as $fila) {
+            $mapa[(int) $fila['variante_id']] = (int) $fila['total'];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Desglose por hueco del stock de una variante. La clave 0 agrupa lo
+     * que no tiene hueco asignado (ubicacion_id NULL).
+     *
+     * @return array<int,int>  huecoId (0 = sin asignar) => stock
+     */
+    public function stockPorHueco(int $varianteId): array
+    {
+        $mapa = [];
+        foreach (
+            $this->select('ubicacion_id, SUM(delta) AS total')
+                ->where('variante_id', $varianteId)
+                ->groupBy('ubicacion_id')
+                ->findAll() as $fila
+        ) {
+            $mapa[(int) ($fila['ubicacion_id'] ?? 0)] = (int) $fila['total'];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Qué variantes hay en un hueco y cuánto de cada una.
+     *
+     * @return array<int,int>  varianteId => stock
+     */
+    public function stockDeHueco(int $huecoId): array
+    {
+        $mapa = [];
+        foreach (
+            $this->select('variante_id, SUM(delta) AS total')
+                ->where('ubicacion_id', $huecoId)
+                ->groupBy('variante_id')
+                ->findAll() as $fila
+        ) {
             $mapa[(int) $fila['variante_id']] = (int) $fila['total'];
         }
 

@@ -205,6 +205,9 @@ $filaSesionActiva = static function (array $s): string {
     <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary" title="Existencias: inventario de piezas producidas">
         <i class="bi bi-boxes"></i>
     </a>
+    <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary" title="Ubicaciones: dónde está guardada cada pieza">
+        <i class="bi bi-geo-alt"></i>
+    </a>
     <div class="btn-group">
         <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary" title="Pedidos">
             <i class="bi bi-cart-check"></i>

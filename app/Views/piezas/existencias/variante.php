@@ -112,6 +112,27 @@
     </div>
 </div>
 
+<div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-geo-alt"></i> Dónde está</div>
+<?php if (empty($desglose)): ?>
+    <p class="text-muted small mb-4">Sin ubicación asignada todavía.</p>
+<?php else: ?>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <?php foreach ($desglose as $d): ?>
+            <?php $h = $d['hueco']; ?>
+            <?php if ($h): ?>
+                <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
+                    class="badge rounded-pill text-bg-light border text-decoration-none">
+                    <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?>: <strong><?= (int) $d['stock'] ?></strong>
+                </a>
+            <?php else: ?>
+                <span class="badge rounded-pill text-bg-light border text-muted">
+                    Sin asignar: <strong><?= (int) $d['stock'] ?></strong>
+                </span>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-clock-history"></i> Movimientos</div>
 <?php if (empty($historial)): ?>
     <p class="text-muted small">Sin movimientos todavía.</p>
@@ -176,6 +197,31 @@
                     <label class="form-label small mb-1">Cantidad</label>
                     <input type="number" name="cantidad" min="1" step="1" value="1" required
                         class="form-control" autocomplete="off">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small mb-1">Hueco (opcional)</label>
+                    <?php if (empty($huecosDisponibles)): ?>
+                        <select name="ubicacion_id" class="form-select" disabled>
+                            <option value="">Sin huecos todavía</option>
+                        </select>
+                        <div class="form-text">
+                            Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a>.
+                        </div>
+                    <?php else: ?>
+                        <select name="ubicacion_id" class="form-select">
+                            <option value="">Sin asignar</option>
+                            <?php $estucheActual = null; ?>
+                            <?php foreach ($huecosDisponibles as $hd): ?>
+                                <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
+                                    <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                                    <optgroup label="<?= esc($hd['estuche']['codigo']) ?><?= $hd['estuche']['zona'] ? ' — ' . esc($hd['estuche']['zona']) : '' ?>">
+                                    <?php $estucheActual = (int) $hd['estuche']['id']; ?>
+                                <?php endif; ?>
+                                <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                            <?php endforeach; ?>
+                            </optgroup>
+                        </select>
+                    <?php endif; ?>
                 </div>
                 <div class="mb-1">
                     <label class="form-label small mb-1">Motivo</label>

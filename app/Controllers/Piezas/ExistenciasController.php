@@ -4,7 +4,9 @@ namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
 use App\Models\PiezaCategoriaModel;
+use App\Models\PiezaEstucheModel;
 use App\Models\PiezaFamiliaModel;
+use App\Models\PiezaHuecoModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaVarianteModel;
 use App\Services\PiezaInventario;
@@ -28,6 +30,8 @@ class ExistenciasController extends BaseController
     private PiezaFamiliaModel $familias;
     private PiezaRenderModel $renders;
     private PiezaCategoriaModel $categorias;
+    private PiezaEstucheModel $estuches;
+    private PiezaHuecoModel $huecos;
 
     public function __construct()
     {
@@ -36,6 +40,8 @@ class ExistenciasController extends BaseController
         $this->familias   = new PiezaFamiliaModel();
         $this->renders    = new PiezaRenderModel();
         $this->categorias = new PiezaCategoriaModel();
+        $this->estuches   = new PiezaEstucheModel();
+        $this->huecos     = new PiezaHuecoModel();
     }
 
     public function index()
@@ -174,13 +180,44 @@ class ExistenciasController extends BaseController
         $stock  = $this->inventario->stockDeVariante($id);
         $minimo = (int) ($variante['stock_minimo'] ?? 0);
 
+        // Huecos disponibles, agrupados por estuche para el <select> del
+        // modal, con su código completo ("E1H2") ya resuelto.
+        $estuchesPorId = [];
+        foreach ($this->estuches->ordenados() as $e) {
+            $estuchesPorId[(int) $e['id']] = $e;
+        }
+        $huecosDisponibles = [];
+        $huecosPorId = [];
+        foreach ($estuchesPorId as $estucheId => $e) {
+            foreach ($this->huecos->deEstuche($estucheId) as $h) {
+                $codigo = PiezaHuecoModel::codigoCompleto($e, $h);
+                $huecosDisponibles[] = ['estuche' => $e, 'hueco' => $h, 'codigo' => $codigo];
+                $huecosPorId[(int) $h['id']] = ['hueco' => $h, 'codigo' => $codigo];
+            }
+        }
+
+        // Desglose por hueco (0 = sin asignar), con el código completo a
+        // mano para pintarlo sin otra vuelta a la base de datos.
+        $desglose = [];
+        foreach ($this->inventario->stockPorHueco($id) as $huecoId => $n) {
+            if ($n === 0) {
+                continue;
+            }
+            $desglose[] = [
+                'hueco'  => $huecoId > 0 ? ($huecosPorId[$huecoId] ?? null) : null,
+                'stock'  => $n,
+            ];
+        }
+
         return view('piezas/existencias/variante', [
-            'variante'  => $variante,
-            'familia'   => $this->familias->find($variante['familia_id']),
-            'stock'     => $stock,
-            'minimo'    => $minimo,
-            'estado'    => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
-            'historial' => $this->inventario->historialDeVariante($id),
+            'variante'   => $variante,
+            'familia'    => $this->familias->find($variante['familia_id']),
+            'stock'      => $stock,
+            'minimo'     => $minimo,
+            'estado'     => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
+            'historial'  => $this->inventario->historialDeVariante($id),
+            'desglose'   => $desglose,
+            'huecosDisponibles' => $huecosDisponibles,
         ]);
     }
 
@@ -190,6 +227,11 @@ class ExistenciasController extends BaseController
         $sentido    = (string) $this->request->getPost('sentido');
         $cantidad   = (int) $this->request->getPost('cantidad');
         $nota       = trim((string) $this->request->getPost('nota'));
+        $huecoId    = (int) $this->request->getPost('ubicacion_id') ?: null;
+
+        if ($huecoId !== null && !$this->huecos->find($huecoId)) {
+            $huecoId = null;
+        }
 
         $variante = $this->variantes->find($varianteId);
         $volver   = $variante
@@ -208,7 +250,7 @@ class ExistenciasController extends BaseController
 
         $delta  = $sentido === 'alta' ? $cantidad : -$cantidad;
         $motivo = $sentido === 'alta' ? 'alta_manual' : 'baja_manual';
-        $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota);
+        $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId);
 
         $nuevo = $this->inventario->stockDeVariante($varianteId);
         $aviso = $nuevo < 0 ? ' Ojo: el stock queda en negativo.' : '';

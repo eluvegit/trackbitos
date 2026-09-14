@@ -829,6 +829,19 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
     $routes->GET('existencias/(:num)', 'ExistenciasController::variante/$1');
 
+    // Ubicaciones (fase 1 de "dónde está cada cosa"): a dos niveles, estuche
+    // (la caja) y hueco dentro de él (la ubicación real de guardado, p. ej.
+    // "E1H2" = hueco H2 del estuche E1). 'crear' y 'huecos' son literales y
+    // van antes que el patrón numérico, mismo criterio que 'movimiento'
+    // arriba.
+    $routes->GET('ubicaciones', 'UbicacionesController::index');
+    $routes->POST('ubicaciones/crear', 'UbicacionesController::crear');
+    $routes->POST('ubicaciones/(:num)/actualizar', 'UbicacionesController::actualizar/$1');
+    $routes->POST('ubicaciones/(:num)/borrar', 'UbicacionesController::borrar/$1');
+    $routes->POST('ubicaciones/(:num)/huecos/crear', 'UbicacionesController::crearHueco/$1');
+    $routes->POST('ubicaciones/huecos/(:num)/borrar', 'UbicacionesController::borrarHueco/$1');
+    $routes->GET('ubicaciones/huecos/(:num)', 'UbicacionesController::verHueco/$1');
+
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
