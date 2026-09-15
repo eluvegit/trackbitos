@@ -828,6 +828,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('existencias/movimiento', 'ExistenciasController::movimiento');
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
     $routes->POST('existencias/(:num)/hueco-defecto', 'ExistenciasController::fijarHuecoPredeterminado/$1');
+    $routes->POST('existencias/(:num)/asignar-sueltos', 'ExistenciasController::asignarSueltos/$1');
     $routes->GET('existencias/(:num)', 'ExistenciasController::variante/$1');
 
     // Ubicaciones (fase 1 de "dónde está cada cosa"): a dos niveles, estuche
@@ -836,6 +837,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // van antes que el patrón numérico, mismo criterio que 'movimiento'
     // arriba.
     $routes->GET('ubicaciones', 'UbicacionesController::index');
+    $routes->GET('ubicaciones/imprimir', 'UbicacionesController::imprimir');
     $routes->POST('ubicaciones/crear', 'UbicacionesController::crear');
     $routes->POST('ubicaciones/(:num)/actualizar', 'UbicacionesController::actualizar/$1');
     $routes->POST('ubicaciones/(:num)/borrar', 'UbicacionesController::borrar/$1');

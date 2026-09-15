@@ -142,9 +142,9 @@ class PiezaStockMovimientoModel extends Model
      */
     public function asignarSinAsignar(int $varianteId, int $huecoId): int
     {
-        $n = $this->where('variante_id', $varianteId)->whereNull('ubicacion_id')->countAllResults(false);
+        $n = $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->countAllResults(false);
         if ($n > 0) {
-            $this->where('variante_id', $varianteId)->whereNull('ubicacion_id')->set('ubicacion_id', $huecoId)->update();
+            $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->set('ubicacion_id', $huecoId)->update();
         }
 
         return $n;

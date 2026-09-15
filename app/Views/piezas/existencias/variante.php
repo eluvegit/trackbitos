@@ -113,24 +113,73 @@
 </div>
 
 <div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-geo-alt"></i> Dónde está</div>
+<?php
+    $suelto = 0;
+    foreach ($desglose as $d) {
+        if ($d['hueco'] === null) {
+            $suelto = (int) $d['stock'];
+        }
+    }
+?>
 <?php if (empty($desglose)): ?>
     <p class="text-muted small mb-4">Sin ubicación asignada todavía.</p>
 <?php else: ?>
-    <div class="d-flex flex-wrap gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2 mb-2">
         <?php foreach ($desglose as $d): ?>
             <?php $h = $d['hueco']; ?>
             <?php if ($h): ?>
                 <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
-                    class="badge rounded-pill text-bg-light border text-decoration-none">
+                    class="badge rounded-pill text-bg-primary text-decoration-none">
                     <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?>: <strong><?= (int) $d['stock'] ?></strong>
                 </a>
             <?php else: ?>
-                <span class="badge rounded-pill text-bg-light border text-muted">
-                    Sin asignar: <strong><?= (int) $d['stock'] ?></strong>
+                <span class="badge rounded-pill text-bg-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Sin asignar: <strong><?= (int) $d['stock'] ?></strong>
                 </span>
             <?php endif; ?>
         <?php endforeach; ?>
     </div>
+
+    <?php // Lo suelto (sin hueco) se puede mover de golpe: al hueco donde ya
+          // vive el resto (preseleccionado si todo lo asignado está en uno
+          // solo) o a cualquier otro que se elija — sin tener que dar de
+          // baja/alta a mano para reubicarlo. ?>
+    <?php if ($suelto > 0): ?>
+        <?php if (empty($huecosDisponibles)): ?>
+            <p class="text-muted small mb-4">
+                Hay <?= $suelto ?> uds. sin asignar — crea estuches y huecos en
+                <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a> para poder colocarlas.
+            </p>
+        <?php else: ?>
+            <form method="post" action="<?= site_url('piezas/existencias/' . $idVar . '/asignar-sueltos') ?>"
+                class="d-flex flex-wrap gap-2 align-items-center mb-4">
+                <?= csrf_field() ?>
+                <span class="text-muted small">
+                    <i class="bi bi-arrow-right-circle"></i> Mover <?= $suelto ?> ud<?= $suelto === 1 ? '' : 's' ?>. sin asignar a
+                </span>
+                <select name="hueco_id" required class="form-select form-select-sm" style="max-width: 12rem;">
+                    <option value="">Elige hueco…</option>
+                    <?php $estucheActual = null; ?>
+                    <?php foreach ($huecosDisponibles as $hd): ?>
+                        <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
+                            <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                            <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
+                            <?php $estucheActual = (int) $hd['estuche']['id']; ?>
+                        <?php endif; ?>
+                        <option value="<?= (int) $hd['hueco']['id'] ?>"
+                            <?= $huecoSugerido === (int) $hd['hueco']['id'] ? 'selected' : '' ?>><?= esc($hd['codigo']) ?></option>
+                    <?php endforeach; ?>
+                    <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary">Mover</button>
+                <?php if ($huecoSugerido !== null): ?>
+                    <span class="text-muted small">Preseleccionado: es donde ya está el resto de esta pieza.</span>
+                <?php endif; ?>
+            </form>
+        <?php endif; ?>
+    <?php else: ?>
+        <div class="mb-4"></div>
+    <?php endif; ?>
 <?php endif; ?>
 
 <div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-clock-history"></i> Movimientos</div>

@@ -140,6 +140,11 @@ class ExistenciasController extends BaseController
         // Imágenes solo en galería y solo de lo que se va a pintar: el
         // render más reciente de cada variante (con versión o suelto).
         $imagenes = [];
+        // "Dónde está", igual que la ficha de la variante pero resuelto en
+        // una sola pasada para toda la galería: los códigos de hueco donde
+        // hay stock de cada una, para verlo de un vistazo sin entrar pieza
+        // por pieza.
+        $ubicaciones = [];
         if ($vista === 'galeria' && $filas !== []) {
             $ids = array_map(static fn (array $f) => (int) $f['variante']['id'], $filas);
             foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
@@ -152,6 +157,24 @@ class ExistenciasController extends BaseController
                     'v' => imagen_pieza($r, 'render', 'v'),
                 ];
             }
+
+            $codigoPorHuecoId = [];
+            foreach ($this->estuches->ordenados() as $est) {
+                foreach ($this->huecos->deEstuche((int) $est['id']) as $h) {
+                    $codigoPorHuecoId[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($est, $h);
+                }
+            }
+            $stockPorVarianteYHueco = $this->inventario->stockPorVarianteYHueco();
+            foreach ($ids as $vid) {
+                $codigos = [];
+                foreach ($stockPorVarianteYHueco[$vid] ?? [] as $huecoId => $n) {
+                    if ($n > 0 && $huecoId > 0) {
+                        $codigos[] = $codigoPorHuecoId[$huecoId] ?? '?';
+                    }
+                }
+                sort($codigos);
+                $ubicaciones[$vid] = $codigos;
+            }
         }
 
         return view('piezas/existencias/index', [
@@ -159,6 +182,7 @@ class ExistenciasController extends BaseController
             'vista'        => $vista,
             'filtro'       => $filtro,
             'imagenes'     => $imagenes,
+            'ubicaciones'  => $ubicaciones,
             'categorias'     => $categorias,
             'categoriaSel'   => $categoriaSel,
             'soloSterclicks' => $soloSterclicks,
@@ -218,7 +242,38 @@ class ExistenciasController extends BaseController
             'historial'  => $this->inventario->historialDeVariante($id),
             'desglose'   => $desglose,
             'huecosDisponibles' => $huecosDisponibles,
+            // Para preseleccionar en el formulario de "mover lo suelto": si
+            // todo el stock ya asignado vive en un único hueco, ese es el
+            // destino obvio; si no (repartido o sin nada asignado todavía),
+            // que elija a mano.
+            'huecoSugerido' => $this->inventario->huecoUnicoDeVariante($id),
         ]);
+    }
+
+    /**
+     * Mueve todo lo "sin asignar" (ubicacion_id NULL) de una variante a un
+     * hueco — para cuando se dio de alta suelto (a mano o desde una placa
+     * sin hueco por defecto) y luego se decide dónde va físicamente, sin
+     * tener que hacerlo movimiento a movimiento.
+     */
+    public function asignarSueltos(int $id)
+    {
+        $variante = $this->variantes->find($id);
+        if (!$variante) {
+            return redirect()->to(site_url('piezas/existencias'))->with('error', 'Esa variante no existe.');
+        }
+
+        $huecoId = (int) $this->request->getPost('hueco_id') ?: null;
+        if ($huecoId === null || !$this->huecos->find($huecoId)) {
+            return redirect()->to(site_url('piezas/existencias/' . $id))->with('error', 'Elige a qué hueco mover lo suelto.');
+        }
+
+        $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
+        $mensaje = $movidos > 0
+            ? 'Colocado en el hueco elegido lo que estaba sin asignar.'
+            : 'No había nada sin asignar que mover.';
+
+        return redirect()->to(site_url('piezas/existencias/' . $id))->with('success', $mensaje);
     }
 
     public function movimiento()
@@ -285,22 +340,45 @@ class ExistenciasController extends BaseController
     {
         $variante = $this->variantes->find($id);
         if (!$variante) {
-            return redirect()->back()->with('error', 'Esa variante no existe.');
+            $mensaje = 'Esa variante no existe.';
+
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
+                : redirect()->back()->with('error', $mensaje);
         }
 
         $huecoId = (int) $this->request->getPost('hueco_id') ?: null;
-        if ($huecoId !== null && !$this->huecos->find($huecoId)) {
-            return redirect()->back()->with('error', 'Ese hueco no existe.');
+        $hueco   = $huecoId !== null ? $this->huecos->find($huecoId) : null;
+        if ($huecoId !== null && !$hueco) {
+            $mensaje = 'Ese hueco no existe.';
+
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
+                : redirect()->back()->with('error', $mensaje);
         }
 
-        $this->variantes->update($id, ['hueco_predeterminado_id' => $huecoId]);
+        $movidos = $this->inventario->fijarHuecoPredeterminado($id, $huecoId);
 
-        if ($huecoId === null) {
-            return redirect()->back()->with('success', 'Hueco por defecto quitado.');
+        $mensaje = $huecoId === null
+            ? 'Hueco por defecto quitado.'
+            : 'Hueco por defecto fijado.' . ($movidos > 0 ? ' Se ha colocado ahí lo que tenía sin asignar.' : '');
+
+        if ($this->request->isAJAX()) {
+            // El JS repinta solo la fila de esta variante (badge + botón
+            // "Fijar"), sin volver a pedir el panel entero al servidor.
+            $codigo = null;
+            if ($hueco) {
+                $estuche = $this->estuches->find($hueco['estuche_id']);
+                $codigo  = $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : $hueco['codigo'];
+            }
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'mensaje' => $mensaje,
+                'huecoId' => $huecoId,
+                'codigo'  => $codigo,
+            ]);
         }
-
-        $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
-        $mensaje = 'Hueco por defecto fijado.' . ($movidos > 0 ? ' Se ha colocado ahí lo que tenía sin asignar.' : '');
 
         return redirect()->back()->with('success', $mensaje);
     }

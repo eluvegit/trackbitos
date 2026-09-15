@@ -2657,16 +2657,28 @@ class Web extends BaseController
             // recargar el histórico entero.
             $placa = $this->placaModel->find($id);
             $piezasActuales = $this->piezasDeLaPlaca($id);
+            // Las cantidades acaban de cambiar (el "Copias" de cada fila),
+            // así que el reparto de antes de guardar ya no vale.
+            $reparto  = $this->repartoLegible($piezasActuales);
+            $sinMedir = $this->itemsParaEmpaquetar($piezasActuales)['sinMedir'];
 
             return $this->response->setJSON([
                 'ok'        => true,
                 'nombre'    => $placa['nombre'],
                 'veredicto' => $placa['veredicto'],
                 'resumen'   => $this->resumenDeBitacora($id, $placa),
-                // Las cantidades acaban de cambiar (el "Copias" de cada
-                // fila), así que el reparto de antes de guardar ya no vale.
-                'reparto'   => $this->repartoLegible($piezasActuales),
-                'sinMedir'  => $this->itemsParaEmpaquetar($piezasActuales)['sinMedir'],
+                'reparto'   => $reparto,
+                'sinMedir'  => $sinMedir,
+                // Repintado del sidebar de reparto en la pantalla completa de
+                // edición (el modal no lo tiene, así que ignora esta clave).
+                // Ver _bitacora_reparto.php y el submit en _bitacora_js.php.
+                'repartoHtml' => view('piezas/_bitacora_reparto', [
+                    'placa'             => $placa,
+                    'piezas'            => $piezasActuales,
+                    'reparto'           => $reparto,
+                    'sinMedir'          => $sinMedir,
+                    'sugerenciaReparto' => $this->filasFueraDeLaPrimeraPlaca($piezasActuales),
+                ]),
             ]);
         }
 
@@ -2688,18 +2700,30 @@ class Web extends BaseController
     {
         $placa = $this->placaModel->find($id);
         if (!$placa) {
-            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.'])
+                : redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
         $r = (new PiezaInventario())->sincronizarPlaca($id);
 
-        return redirect()->back()->with('success', sprintf(
+        $mensaje = sprintf(
             'Inventario actualizado: %d alta(s), %d ajuste(s), %d retirada(s) · %d unidades servibles.',
             $r['altas'],
             $r['ajustes'],
             $r['retiradas'],
             $r['unidades']
-        ));
+        );
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'ok'      => true,
+                'mensaje' => $mensaje,
+                'html'    => $this->panelInventarioHtml($this->placaModel->find($id)),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $mensaje);
     }
 
     /** Quita del inventario todo lo que aportaba esta placa. */
@@ -2707,12 +2731,36 @@ class Web extends BaseController
     {
         $placa = $this->placaModel->find($id);
         if (!$placa) {
-            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.'])
+                : redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
         $n = (new PiezaInventario())->desvincularPlaca($id);
+        $mensaje = $n . ' movimiento(s) de esta placa quitados del inventario.';
 
-        return redirect()->back()->with('success', $n . ' movimiento(s) de esta placa quitados del inventario.');
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'ok'      => true,
+                'mensaje' => $mensaje,
+                'html'    => $this->panelInventarioHtml($this->placaModel->find($id)),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $mensaje);
+    }
+
+    /** Repinta el panel de inventario/colocación de una placa (ver _bitacora_inventario.php). */
+    private function panelInventarioHtml(array $placa): string
+    {
+        $piezas = $this->piezasDeLaPlaca((int) $placa['id']);
+        $colocacion = $this->colocacionDePlaca($piezas);
+
+        return view('piezas/_bitacora_inventario', [
+            'placa'            => $placa,
+            'colocacion'       => $colocacion['filas'],
+            'colocacionHuecos' => $colocacion['huecosDisponibles'],
+        ]);
     }
 
     /**

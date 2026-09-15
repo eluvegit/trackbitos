@@ -91,7 +91,10 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Ubicaciones</strong>
 
-    <button type="button" class="btn btn-sm btn-primary rounded-pill ms-auto px-3" data-bs-toggle="modal" data-bs-target="#modalEstuche">
+    <a href="<?= site_url('piezas/ubicaciones/imprimir') ?>" target="_blank" class="btn btn-sm btn-outline-secondary ms-auto" title="Documento para imprimir: qué hay en cada estuche y dónde está cada pieza">
+        <i class="bi bi-printer"></i> Imprimir
+    </a>
+    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalEstuche">
         <i class="bi bi-plus-lg"></i> Nuevo estuche
     </button>
 </h5>

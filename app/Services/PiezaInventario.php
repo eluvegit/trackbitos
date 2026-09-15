@@ -205,6 +205,19 @@ class PiezaInventario
         return $this->movimientos->asignarSinAsignar($varianteId, $huecoId);
     }
 
+    /**
+     * Fija (o quita, con $huecoId null) el hueco por defecto de una
+     * variante y, si se fija uno, coloca ahí lo que tuviera "sin asignar"
+     * (ver PiezaStockMovimientoModel::asignarSinAsignar()). Devuelve cuántas
+     * filas de movimiento tocó esa colocación.
+     */
+    public function fijarHuecoPredeterminado(int $varianteId, ?int $huecoId): int
+    {
+        $this->variantes->update($varianteId, ['hueco_predeterminado_id' => $huecoId]);
+
+        return $huecoId !== null ? $this->movimientos->asignarSinAsignar($varianteId, $huecoId) : 0;
+    }
+
     /** Historial completo de una variante, lo mas nuevo primero. */
     public function historialDeVariante(int $varianteId): array
     {

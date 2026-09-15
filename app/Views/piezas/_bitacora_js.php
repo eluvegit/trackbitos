@@ -311,6 +311,107 @@
                 });
         });
 
+        // ---- Inventario y "dónde colocar esto" por AJAX (fase de
+        // ubicaciones) -- la página es larga y recargarla tras cada acción
+        // (dar de alta, quitar, fijar un hueco) devolvía siempre la pantalla
+        // arriba del todo, un coñazo. Delegado en `raiz`: sigue funcionando
+        // tras repintar el panel entero, sin tener que re-enganchar nada. --
+        function actualizarFilaColocacion(form, datos) {
+            var fila = form.closest('[data-fila-colocacion]');
+            var controles = fila && fila.querySelector('[data-colocacion-controles]');
+            if (!controles) return;
+
+            var panel = fila.closest('[data-panel-inventario]');
+            var base = panel ? panel.dataset.urlHuecosBase : '';
+            var codigo = (datos.codigo || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+            controles.innerHTML = datos.huecoId
+                ? '<a href="' + base + '/' + datos.huecoId + '" class="badge rounded-pill text-decoration-none text-bg-primary" '
+                    + 'title="Hueco por defecto de esta pieza"><i class="bi bi-geo-alt"></i> ' + codigo + '</a>'
+                : '<span class="text-muted small">Sin hueco fijado.</span>';
+        }
+
+        raiz.addEventListener('submit', function (e) {
+            var f = e.target.closest('[data-ajax-form]');
+            if (!f) return;
+            e.preventDefault();
+
+            if (f.dataset.confirmar && !confirm(f.dataset.confirmar)) return;
+
+            var tipo = f.dataset.ajaxForm;
+            var botones = f.querySelectorAll('button');
+            botones.forEach(function (b) { b.disabled = true; });
+
+            fetch(f.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: new FormData(f)
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok && d.ok, datos: d }; }); })
+                .then(function (r) {
+                    if (!r.ok) {
+                        alert((r.datos && r.datos.mensaje) || 'No se pudo completar.');
+                        botones.forEach(function (b) { b.disabled = false; });
+                        return;
+                    }
+
+                    if (tipo === 'hueco-defecto') {
+                        actualizarFilaColocacion(f, r.datos);
+                        return;
+                    }
+
+                    var panel = f.closest('[data-panel-inventario]');
+                    if (panel && r.datos.html) panel.outerHTML = r.datos.html;
+                })
+                .catch(function () {
+                    alert('No se pudo completar.');
+                    botones.forEach(function (b) { b.disabled = false; });
+                });
+        });
+
+        // ---- Guardar por AJAX (fase de ubicaciones) -- el botón grande
+        // hacía un submit normal que recargaba toda la página y, con lo
+        // larga que es la bitácora, siempre te devolvía arriba del todo. El
+        // sidebar de reparto (data-panel-reparto, fuera de `raiz`: vive en
+        // la otra columna) se repinta con lo que devuelve el servidor
+        // porque las cantidades que se acaban de guardar pueden cambiar
+        // cuántas placas hacen falta. ----
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            var boton = raiz.querySelector('button[type="submit"][form="' + form.id + '"]');
+            var aviso = raiz.querySelector('[data-guardado-aviso]');
+            if (boton) boton.disabled = true;
+            if (aviso) aviso.hidden = true;
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: new FormData(form)
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok && d.ok, datos: d }; }); })
+                .then(function (r) {
+                    if (boton) boton.disabled = false;
+                    if (!r.ok) {
+                        alert((r.datos && r.datos.mensaje) || 'No se pudo guardar.');
+                        return;
+                    }
+
+                    var panelReparto = document.querySelector('[data-panel-reparto]');
+                    if (panelReparto && r.datos.repartoHtml !== undefined) panelReparto.outerHTML = r.datos.repartoHtml;
+
+                    if (aviso) {
+                        aviso.hidden = false;
+                        clearTimeout(aviso._temporizador);
+                        aviso._temporizador = setTimeout(function () { aviso.hidden = true; }, 2500);
+                    }
+                })
+                .catch(function () {
+                    if (boton) boton.disabled = false;
+                    alert('No se pudo guardar.');
+                });
+        });
+
         // Fallidas y servibles por línea de "Qué llevaba": cada fila lleva sus
         // copias y sus descartes; servibles = copias − fallidas, tanto por fila
         // como en el total de la sección. Se recuenta de lo que hay en pantalla

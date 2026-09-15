@@ -176,6 +176,15 @@
                         <?php if ($f['minimo'] > 0): ?>
                             <span class="text-muted" style="font-size: .72rem;">/ mín <?= (int) $f['minimo'] ?></span>
                         <?php endif; ?>
+                        <?php if (!empty($ubicaciones[$idVar])): ?>
+                            <div class="text-muted text-truncate mt-1" style="font-size: .68rem;" title="<?= esc(implode(', ', $ubicaciones[$idVar]), 'attr') ?>">
+                                <i class="bi bi-geo-alt"></i> <?= esc(implode(', ', $ubicaciones[$idVar])) ?>
+                            </div>
+                        <?php elseif ($f['stock'] > 0): ?>
+                            <div class="text-muted mt-1" style="font-size: .68rem;">
+                                <i class="bi bi-geo-alt"></i> Sin ubicación
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </a>
             </div>

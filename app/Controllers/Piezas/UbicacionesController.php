@@ -109,6 +109,93 @@ class UbicacionesController extends BaseController
         return view('piezas/ubicaciones/index', ['filas' => $filas]);
     }
 
+    /**
+     * Documento para imprimir/guardar como PDF, en dos listados —"por
+     * estuche" (qué hay en cada hueco) y "por pieza" (dónde vive cada
+     * una)— sin cantidades a propósito: es una chuleta física para
+     * localizar cosas a ojo, no un recuento (eso ya está en Existencias).
+     * Los huecos vacíos llevan líneas en blanco para apuntar a mano lo que
+     * se vaya guardando ahí sin tener que volver a imprimir cada vez.
+     */
+    public function imprimir()
+    {
+        $estuches = $this->estuches->ordenados();
+
+        $familias = [];
+        foreach ($this->familias->findAll() as $fam) {
+            $familias[(int) $fam['id']] = $fam;
+        }
+
+        $nombrePorVariante = [];
+        foreach ($this->variantes->findAll() as $v) {
+            $familia = $familias[(int) $v['familia_id']] ?? null;
+            $nombrePorVariante[(int) $v['id']] = trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']);
+        }
+
+        $codigoPorHuecoId = [];
+        foreach ($estuches as $e) {
+            foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
+                $codigoPorHuecoId[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($e, $h);
+            }
+        }
+
+        $porEstuche = [];
+        foreach ($estuches as $e) {
+            $huecos = [];
+            foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
+                $nombres = [];
+                foreach ($this->inventario->stockDeHueco((int) $h['id']) as $varianteId => $n) {
+                    if ($n > 0 && isset($nombrePorVariante[$varianteId])) {
+                        $nombres[] = $nombrePorVariante[$varianteId];
+                    }
+                }
+                sort($nombres);
+                $huecos[] = ['codigo' => $h['codigo'], 'nombres' => $nombres];
+            }
+            $porEstuche[] = ['estuche' => $e, 'huecos' => $huecos];
+        }
+
+        // El reverso del listado anterior: por pieza, en qué huecos vive
+        // (puede estar repartida en varios). "Sin asignar" cuenta como una
+        // ubicación más aquí, para que la pieza no desaparezca del listado
+        // solo porque parte de su stock aún no tiene hueco.
+        $porPieza = [];
+        foreach ($this->inventario->stockPorVarianteYHueco() as $varianteId => $porHueco) {
+            if (!isset($nombrePorVariante[$varianteId])) {
+                continue;   // variante borrada
+            }
+
+            $codigos = [];
+            $sinAsignar = false;
+            foreach ($porHueco as $huecoId => $n) {
+                if ($n <= 0) {
+                    continue;
+                }
+                if ($huecoId > 0) {
+                    $codigos[] = $codigoPorHuecoId[$huecoId] ?? '?';
+                } else {
+                    $sinAsignar = true;
+                }
+            }
+            if ($codigos === [] && !$sinAsignar) {
+                continue;
+            }
+            sort($codigos);
+
+            $porPieza[] = [
+                'nombre'     => $nombrePorVariante[$varianteId],
+                'codigos'    => $codigos,
+                'sinAsignar' => $sinAsignar,
+            ];
+        }
+        usort($porPieza, static fn (array $a, array $b) => $a['nombre'] <=> $b['nombre']);
+
+        return view('piezas/ubicaciones/imprimir', [
+            'porEstuche' => $porEstuche,
+            'porPieza'   => $porPieza,
+        ]);
+    }
+
     public function crear()
     {
         $codigo = trim((string) $this->request->getPost('codigo'));
