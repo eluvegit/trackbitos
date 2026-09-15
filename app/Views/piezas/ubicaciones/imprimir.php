@@ -9,6 +9,14 @@
      * Existencias, esto es solo para localizar a ojo. Los huecos vacíos
      * llevan líneas en blanco para apuntar a mano lo que se guarde ahí sin
      * tener que reimprimir el documento cada vez.
+     *
+     * Sin rastro de la app al imprimir: se oculta la barra de navegación
+     * (logo + "Trackbitos") además del pie de página, y el título de la
+     * pestaña (ver 'title' en UbicacionesController::imprimir()) tampoco la
+     * nombra — es lo que casi todos los navegadores meten en la cabecera
+     * automática de impresión. La URL de esa cabecera no se puede quitar
+     * desde la página: se apaga a mano en el diálogo de impresión
+     * ("Más ajustes" → desmarcar "Encabezados y pies de página").
      */
 ?>
 
@@ -23,18 +31,30 @@
         break-inside: avoid;
     }
     .hueco-imprimir .codigo { font-weight: 700; font-size: .9rem; }
-    .hueco-imprimir ul { margin: .25rem 0 0; padding-left: 1.1rem; font-size: .78rem; }
+    .hueco-imprimir ul { list-style: none; margin: .25rem 0 0; padding: 0; font-size: .78rem; }
+    .hueco-imprimir li { display: flex; align-items: center; gap: .35rem; margin-top: .25rem; }
     .hueco-imprimir .linea-vacia {
         border-bottom: 1px solid var(--bs-border-color);
         height: 1.1rem;
         margin-top: .35rem;
     }
+    .miniatura-imprimir {
+        width: 1.4rem;
+        height: 1.4rem;
+        object-fit: cover;
+        border-radius: .25rem;
+        border: 1px solid var(--bs-border-color);
+        flex: none;
+    }
     .tabla-por-pieza { font-size: .82rem; }
+    .tabla-por-pieza .miniatura-imprimir { width: 1.8rem; height: 1.8rem; }
 
     @media print {
         .no-print { display: none !important; }
+        nav.navbar { display: none !important; }
         .hueco-imprimir { border-color: #000; }
         .hueco-imprimir .linea-vacia { border-bottom-color: #000; }
+        .miniatura-imprimir { border-color: #000; }
         .salto-pagina { break-before: page; }
         a { color: inherit !important; text-decoration: none !important; }
     }
@@ -75,10 +95,15 @@
                     <?php foreach ($f['huecos'] as $h): ?>
                         <div class="hueco-imprimir">
                             <div class="codigo"><?= esc($estuche['codigo'] . $h['codigo']) ?></div>
-                            <?php if ($h['nombres'] !== []): ?>
+                            <?php if ($h['piezas'] !== []): ?>
                                 <ul>
-                                    <?php foreach ($h['nombres'] as $nombre): ?>
-                                        <li><?= esc($nombre) ?></li>
+                                    <?php foreach ($h['piezas'] as $pz): ?>
+                                        <li>
+                                            <?php if ($pz['img']): ?>
+                                                <img src="<?= esc($pz['img'], 'attr') ?>" alt="" class="miniatura-imprimir">
+                                            <?php endif; ?>
+                                            <span><?= esc($pz['nombre']) ?></span>
+                                        </li>
                                     <?php endforeach; ?>
                                 </ul>
                             <?php else: ?>
@@ -100,6 +125,7 @@
     <table class="table table-sm table-borderless tabla-por-pieza mb-0">
         <thead>
             <tr class="text-muted border-bottom">
+                <th></th>
                 <th>Pieza</th>
                 <th>Dónde está</th>
             </tr>
@@ -107,6 +133,11 @@
         <tbody>
             <?php foreach ($porPieza as $p): ?>
                 <tr class="border-bottom">
+                    <td>
+                        <?php if ($p['img']): ?>
+                            <img src="<?= esc($p['img'], 'attr') ?>" alt="" class="miniatura-imprimir">
+                        <?php endif; ?>
+                    </td>
                     <td><?= esc($p['nombre']) ?></td>
                     <td>
                         <?= esc(implode(', ', $p['codigos'])) ?>

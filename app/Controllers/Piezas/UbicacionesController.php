@@ -78,6 +78,19 @@ class UbicacionesController extends BaseController
             }
         }
 
+        // Miniatura de cada pieza (el render más reciente), para reconocerlas
+        // a ojo en la rejilla de huecos y no solo por el nombre.
+        $miniaturas = [];
+        if ($varianteIds !== []) {
+            foreach ($this->renders->whereIn('variante_id', $varianteIds)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (isset($miniaturas[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
+                    continue;
+                }
+                $miniaturas[$vid] = imagen_pieza($r, 'render', 't');
+            }
+        }
+
         $filas = [];
         foreach ($estuches as $estuche) {
             $huecos = [];
@@ -87,7 +100,11 @@ class UbicacionesController extends BaseController
                 $contenido = [];
                 foreach ($stock as $varianteId => $cantidad) {
                     if (isset($nombres[$varianteId])) {
-                        $contenido[] = ['nombre' => $nombres[$varianteId], 'stock' => $cantidad];
+                        $contenido[] = [
+                            'nombre' => $nombres[$varianteId],
+                            'stock'  => $cantidad,
+                            'img'    => $miniaturas[$varianteId] ?? null,
+                        ];
                     }
                 }
                 usort($contenido, static fn ($a, $b) => $a['nombre'] <=> $b['nombre']);
@@ -126,10 +143,27 @@ class UbicacionesController extends BaseController
             $familias[(int) $fam['id']] = $fam;
         }
 
+        $variantesTodas = $this->variantes->findAll();
+
         $nombrePorVariante = [];
-        foreach ($this->variantes->findAll() as $v) {
+        foreach ($variantesTodas as $v) {
             $familia = $familias[(int) $v['familia_id']] ?? null;
             $nombrePorVariante[(int) $v['id']] = trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']);
+        }
+
+        // Miniatura de cada pieza (el render más reciente), para que se
+        // reconozcan a ojo en el papel y no solo por el nombre — igual que
+        // el catálogo de "añadir pieza aquí" de verHueco().
+        $miniaturas = [];
+        $idsTodas = array_map(static fn (array $v) => (int) $v['id'], $variantesTodas);
+        if ($idsTodas !== []) {
+            foreach ($this->renders->whereIn('variante_id', $idsTodas)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (isset($miniaturas[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
+                    continue;
+                }
+                $miniaturas[$vid] = imagen_pieza($r, 'render', 't');
+            }
         }
 
         $codigoPorHuecoId = [];
@@ -143,14 +177,14 @@ class UbicacionesController extends BaseController
         foreach ($estuches as $e) {
             $huecos = [];
             foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
-                $nombres = [];
+                $piezas = [];
                 foreach ($this->inventario->stockDeHueco((int) $h['id']) as $varianteId => $n) {
                     if ($n > 0 && isset($nombrePorVariante[$varianteId])) {
-                        $nombres[] = $nombrePorVariante[$varianteId];
+                        $piezas[] = ['nombre' => $nombrePorVariante[$varianteId], 'img' => $miniaturas[$varianteId] ?? null];
                     }
                 }
-                sort($nombres);
-                $huecos[] = ['codigo' => $h['codigo'], 'nombres' => $nombres];
+                usort($piezas, static fn (array $a, array $b) => $a['nombre'] <=> $b['nombre']);
+                $huecos[] = ['codigo' => $h['codigo'], 'piezas' => $piezas];
             }
             $porEstuche[] = ['estuche' => $e, 'huecos' => $huecos];
         }
@@ -184,6 +218,7 @@ class UbicacionesController extends BaseController
 
             $porPieza[] = [
                 'nombre'     => $nombrePorVariante[$varianteId],
+                'img'        => $miniaturas[$varianteId] ?? null,
                 'codigos'    => $codigos,
                 'sinAsignar' => $sinAsignar,
             ];
@@ -193,6 +228,9 @@ class UbicacionesController extends BaseController
         return view('piezas/ubicaciones/imprimir', [
             'porEstuche' => $porEstuche,
             'porPieza'   => $porPieza,
+            // Sin "Trackbitos" en la pestaña: es lo que usan la mayoría de
+            // navegadores para la cabecera automática de impresión.
+            'title'      => 'Dónde está cada cosa',
         ]);
     }
 

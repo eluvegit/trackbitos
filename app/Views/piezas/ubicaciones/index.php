@@ -12,8 +12,9 @@
     .hueco-tile {
         /* Ya no es una casilla cuadrada fija: crece a lo alto (con tope)
            para que quepan los nombres de las piezas que contiene, en vez
-           de esconderlos detrás de un clic. */
-        width: 9.5rem;
+           de esconderlos detrás de un clic. Algo más ancha que antes para
+           que quepan también las miniaturas junto al nombre. */
+        width: 13rem;
         min-height: 4.75rem;
         max-height: 11rem;
         padding: .5rem .65rem;
@@ -39,9 +40,11 @@
     .hueco-tile .uds { font-size: .68rem; color: var(--bs-secondary-color); white-space: nowrap; }
     .hueco-tile.con-stock { border-color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .12); }
     .hueco-tile .piezas { font-size: .7rem; line-height: 1.3; overflow-y: auto; }
-    .hueco-tile .piezas .fila { display: flex; justify-content: space-between; gap: .4rem; }
-    .hueco-tile .piezas .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .hueco-tile .piezas .cant { color: var(--bs-secondary-color); white-space: nowrap; }
+    .hueco-tile .piezas .fila { display: flex; align-items: center; gap: .35rem; }
+    .hueco-tile .piezas .nombre-grupo { display: flex; align-items: center; gap: .3rem; min-width: 0; flex: 1 1 auto; }
+    .hueco-tile .piezas .miniatura { width: 1.6rem; height: 1.6rem; object-fit: cover; border-radius: .25rem; flex: none; }
+    .hueco-tile .piezas .nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hueco-tile .piezas .cant { color: var(--bs-secondary-color); white-space: nowrap; flex: none; }
     .hueco-tile .vacio { font-size: .7rem; color: var(--bs-secondary-color); font-style: italic; }
 
     .hueco-del-form { position: absolute; top: -.5rem; right: -.5rem; margin: 0; }
@@ -66,7 +69,7 @@
     .hueco-del-form .btn-del:hover { background: var(--bs-danger); border-color: var(--bs-danger); color: #fff; }
 
     .hueco-add {
-        width: 9.5rem;
+        width: 13rem;
         height: 4.75rem;
         border-radius: .85rem;
         border: 1.5px dashed var(--bs-border-color);
@@ -154,7 +157,12 @@
                                         <div class="piezas">
                                             <?php foreach ($h['contenido'] as $c): ?>
                                                 <div class="fila">
-                                                    <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                                    <span class="nombre-grupo">
+                                                        <?php if ($c['img']): ?>
+                                                            <img src="<?= esc($c['img'], 'attr') ?>" alt="" class="miniatura" loading="lazy">
+                                                        <?php endif; ?>
+                                                        <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                                    </span>
                                                     <span class="cant"><?= (int) $c['stock'] ?></span>
                                                 </div>
                                             <?php endforeach; ?>
