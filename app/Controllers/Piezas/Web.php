@@ -4620,6 +4620,12 @@ class Web extends BaseController
         // Una sola lectura de los STL de la vigente: la usan la columna de
         // STL y la de medidas de placa.
         $stlsVigente   = $vigente ? $this->servicio->stlsDe((int) $vigente['id']) : [];
+        // Para la foto: la vigente puede ser una `descartada` que quedó sin
+        // promocionar nada encima, y enseñar su render sería mostrar la
+        // imagen de una versión que ya se sabe que no sirve. Misma cascada
+        // que usa galeria() (versionParaImprimir): la última que siga siendo
+        // válida, no la última a secas.
+        $paraFoto      = $this->versionParaImprimir((int) $variante['id']);
 
         return $variante + [
             'validada'      => $validada,
@@ -4658,10 +4664,10 @@ class Web extends BaseController
             'tiene_vigente'  => $vigente !== null,
             // La foto en el listado: en una lista de treinta nombres, «Cabeza
             // – calva» y «Cabeza – base» son la misma línea de texto, y hay
-            // que entrar en las dos para saber cuál es cuál. Misma versión
-            // que el STL de arriba (la vigente) para que la foto y el estado
-            // de la fila hablen de lo mismo.
-            'miniatura' => $this->fotosDe($vigente, $variante)['miniatura'],
+            // que entrar en las dos para saber cuál es cuál. La última
+            // versión VÁLIDA (ver $paraFoto arriba), no la vigente: el STL de
+            // arriba sí sigue el rastro de una descartada, la foto no.
+            'miniatura' => $this->fotosDe($paraFoto, $variante)['miniatura'],
         ];
     }
 

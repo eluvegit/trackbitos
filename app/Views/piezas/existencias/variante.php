@@ -130,11 +130,11 @@
             <?php if ($h): ?>
                 <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
                     class="badge rounded-pill text-bg-primary text-decoration-none">
-                    <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?>: <strong><?= (int) $d['stock'] ?></strong>
+                    <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?>
                 </a>
             <?php else: ?>
                 <span class="badge rounded-pill text-bg-warning">
-                    <i class="bi bi-exclamation-triangle"></i> Sin asignar: <strong><?= (int) $d['stock'] ?></strong>
+                    <i class="bi bi-exclamation-triangle"></i> Sin asignar
                 </span>
             <?php endif; ?>
         <?php endforeach; ?>
@@ -147,7 +147,7 @@
     <?php if ($suelto > 0): ?>
         <?php if (empty($huecosDisponibles)): ?>
             <p class="text-muted small mb-4">
-                Hay <?= $suelto ?> uds. sin asignar — crea estuches y huecos en
+                Hay piezas sin asignar — crea estuches y huecos en
                 <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a> para poder colocarlas.
             </p>
         <?php else: ?>
@@ -155,7 +155,7 @@
                 class="d-flex flex-wrap gap-2 align-items-center mb-4">
                 <?= csrf_field() ?>
                 <span class="text-muted small">
-                    <i class="bi bi-arrow-right-circle"></i> Mover <?= $suelto ?> ud<?= $suelto === 1 ? '' : 's' ?>. sin asignar a
+                    <i class="bi bi-arrow-right-circle"></i> Mover lo sin asignar a
                 </span>
                 <select name="hueco_id" required class="form-select form-select-sm" style="max-width: 12rem;">
                     <option value="">Elige hueco…</option>
@@ -194,6 +194,7 @@
                     <th style="width: 8rem;">Tipo</th>
                     <th class="text-end" style="width: 4rem;">Δ</th>
                     <th>Motivo / origen</th>
+                    <th style="width: 2rem;"></th>
                 </tr>
             </thead>
             <tbody>
@@ -217,6 +218,18 @@
                                 <span class="text-muted"> · reflejo vivo (copias − fallidas)</span>
                             <?php else: ?>
                                 <?= nl2br(esc($m['nota'] ?? '')) ?: '<span class="text-muted">—</span>' ?>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end">
+                            <?php if (!$esPlaca): ?>
+                                <form method="post" action="<?= site_url('piezas/existencias/movimiento/' . (int) $m['id'] . '/borrar') ?>"
+                                    onsubmit="return confirm('¿Borrar este movimiento (<?= (int) $m['delta'] > 0 ? '+' : '' ?><?= (int) $m['delta'] ?>)? No se puede deshacer.');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="variante_id" value="<?= $idVar ?>">
+                                    <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Borrar movimiento">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -247,7 +260,11 @@
                     <input type="number" name="cantidad" min="1" step="1" value="1" required
                         class="form-control" autocomplete="off">
                 </div>
-                <div class="mb-3">
+                <?php // El hueco solo tiene sentido al dar de alta (dónde se coloca lo
+                      // nuevo). Al dar de baja no se pregunta: se descuenta del total y
+                      // los huecos se quedan exactamente como estaban — no van de la
+                      // mano con las bajas. ?>
+                <div class="mb-3" data-mov-hueco-wrap>
                     <label class="form-label small mb-1">Hueco (opcional)</label>
                     <?php if (empty($huecosDisponibles)): ?>
                         <select name="ubicacion_id" class="form-select" disabled>
@@ -257,7 +274,7 @@
                             Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a>.
                         </div>
                     <?php else: ?>
-                        <select name="ubicacion_id" class="form-select">
+                        <select name="ubicacion_id" class="form-select" data-mov-hueco-select>
                             <option value="">Sin asignar</option>
                             <?php $estucheActual = null; ?>
                             <?php foreach ($huecosDisponibles as $hd): ?>
@@ -316,6 +333,10 @@
 
         var modal = document.getElementById('modalMovimiento');
         if (!modal) return;
+
+        var huecoWrap   = modal.querySelector('[data-mov-hueco-wrap]');
+        var huecoSelect = modal.querySelector('[data-mov-hueco-select]');
+
         modal.addEventListener('show.bs.modal', function (ev) {
             var sentido = (ev.relatedTarget && ev.relatedTarget.dataset.sentido) || 'alta';
             var esAlta = sentido === 'alta';
@@ -326,6 +347,12 @@
             boton.classList.toggle('btn-success', esAlta);
             boton.classList.toggle('btn-danger', !esAlta);
             boton.classList.toggle('btn-primary', false);
+
+            // El hueco solo aplica al dar de alta (dónde se coloca lo
+            // nuevo). Al dar de baja se oculta y no se manda: se descuenta
+            // del total y los huecos existentes se quedan tal cual.
+            if (huecoWrap) huecoWrap.classList.toggle('d-none', !esAlta);
+            if (huecoSelect) huecoSelect.disabled = !esAlta;
         });
     })();
 </script>

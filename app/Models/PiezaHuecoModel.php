@@ -24,10 +24,17 @@ class PiezaHuecoModel extends Model
         'codigo' => 'required|max_length[20]',
     ];
 
-    /** Todos los huecos de un estuche, en orden de código. */
+    /**
+     * Todos los huecos de un estuche, en orden de código — natural (H2 antes
+     * que H10), no alfabético puro: un ORDER BY de SQL dejaría H10 y H11
+     * antes que H2 porque compara texto, no el número.
+     */
     public function deEstuche(int $estucheId): array
     {
-        return $this->where('estuche_id', $estucheId)->orderBy('codigo', 'ASC')->findAll();
+        $huecos = $this->where('estuche_id', $estucheId)->findAll();
+        usort($huecos, static fn (array $a, array $b) => strnatcasecmp($a['codigo'], $b['codigo']));
+
+        return $huecos;
     }
 
     /** "E1H2": el código combinado estuche+hueco, tal y como se rotula. */

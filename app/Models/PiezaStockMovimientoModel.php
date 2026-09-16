@@ -54,6 +54,10 @@ class PiezaStockMovimientoModel extends Model
      * Desglose por hueco del stock de una variante. La clave 0 agrupa lo
      * que no tiene hueco asignado (ubicacion_id NULL).
      *
+     * Las bajas (delta negativo) quedan fuera: quitan stock del total
+     * (stockDe/stockPorVariante lo suman todo), pero no son una asignación
+     * de hueco — no cuentan para la distribución, así que no restan aquí.
+     *
      * @return array<int,int>  huecoId (0 = sin asignar) => stock
      */
     public function stockPorHueco(int $varianteId): array
@@ -62,6 +66,7 @@ class PiezaStockMovimientoModel extends Model
         foreach (
             $this->select('ubicacion_id, SUM(delta) AS total')
                 ->where('variante_id', $varianteId)
+                ->where('delta >', 0)
                 ->groupBy('ubicacion_id')
                 ->findAll() as $fila
         ) {
@@ -72,7 +77,8 @@ class PiezaStockMovimientoModel extends Model
     }
 
     /**
-     * Qué variantes hay en un hueco y cuánto de cada una.
+     * Qué variantes hay en un hueco y cuánto de cada una. Igual que
+     * stockPorHueco(), las bajas no cuentan (ver ahí el porqué).
      *
      * @return array<int,int>  varianteId => stock
      */
@@ -82,6 +88,7 @@ class PiezaStockMovimientoModel extends Model
         foreach (
             $this->select('variante_id, SUM(delta) AS total')
                 ->where('ubicacion_id', $huecoId)
+                ->where('delta >', 0)
                 ->groupBy('variante_id')
                 ->findAll() as $fila
         ) {
@@ -94,7 +101,8 @@ class PiezaStockMovimientoModel extends Model
     /**
      * Stock de todas las variantes desglosado por hueco, en una sola
      * consulta — para catálogos donde hace falta ver de un vistazo cuánto
-     * hay de cada pieza y dónde está, sin una consulta por variante.
+     * hay de cada pieza y dónde está, sin una consulta por variante. Igual
+     * que stockPorHueco(), las bajas no cuentan.
      *
      * @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock)
      */
@@ -103,6 +111,7 @@ class PiezaStockMovimientoModel extends Model
         $mapa = [];
         foreach (
             $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
+                ->where('delta >', 0)
                 ->groupBy(['variante_id', 'ubicacion_id'])
                 ->findAll() as $fila
         ) {
@@ -138,13 +147,14 @@ class PiezaStockMovimientoModel extends Model
      * asignar" (ubicacion_id NULL) — para cuando se fija el hueco por
      * defecto de una pieza y ya había stock suelto esperando destino
      * (típicamente lo recién impreso de una placa). Devuelve cuántas
-     * filas de movimiento tocó.
+     * filas de movimiento tocó. Las bajas (delta negativo) también quedan
+     * sin hueco pero no son stock esperando destino — se dejan fuera.
      */
     public function asignarSinAsignar(int $varianteId, int $huecoId): int
     {
-        $n = $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->countAllResults(false);
+        $n = $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->where('delta >', 0)->countAllResults(false);
         if ($n > 0) {
-            $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->set('ubicacion_id', $huecoId)->update();
+            $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->where('delta >', 0)->set('ubicacion_id', $huecoId)->update();
         }
 
         return $n;

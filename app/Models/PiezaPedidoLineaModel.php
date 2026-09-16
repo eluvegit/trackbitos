@@ -10,7 +10,7 @@ class PiezaPedidoLineaModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
-    protected $allowedFields = ['pedido_id', 'variante_id', 'sku', 'descripcion_libre', 'cantidad', 'cantidad_completada', 'notas'];
+    protected $allowedFields = ['pedido_id', 'variante_id', 'sku', 'descripcion_libre', 'cantidad', 'cantidad_completada', 'hecha', 'notas'];
 
     protected $validationRules = [
         'pedido_id'         => 'required|is_natural_no_zero',

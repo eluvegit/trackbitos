@@ -226,4 +226,21 @@ class PiezaInventario
             ->orderBy('id', 'DESC')
             ->findAll();
     }
+
+    /**
+     * Borra un movimiento manual (alta/baja a mano) por error, p. ej. un
+     * alta duplicada. Solo admite origen='manual': las de origen='placa'
+     * son un reflejo vivo de la bitácora (PiezaInventario::sincronizarPlaca)
+     * y borrarlas aquí no las quita de verdad, solo desincroniza — para esas
+     * hay que corregir la bitácora o desvincular la placa.
+     */
+    public function borrarMovimientoManual(int $movimientoId): bool
+    {
+        $movimiento = $this->movimientos->find($movimientoId);
+        if (!$movimiento || $movimiento['origen'] !== 'manual') {
+            return false;
+        }
+
+        return (bool) $this->movimientos->delete($movimientoId);
+    }
 }

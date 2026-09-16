@@ -402,71 +402,13 @@ class UbicacionesController extends BaseController
         }
 
         // Código completo de todos los huecos que existan (de cualquier
-        // estuche), en un solo mapa — hace falta tanto para los destinos de
-        // "mover stock" como para mostrar dónde está cada pieza del
-        // catálogo de abajo.
+        // estuche), en un solo mapa — para los destinos de "mover stock".
         $codigoPorHuecoId = [];
         foreach ($this->estuches->ordenados() as $est) {
             foreach ($this->huecos->deEstuche((int) $est['id']) as $h) {
                 $codigoPorHuecoId[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($est, $h);
             }
         }
-
-        // Catálogo completo para "añadir pieza aquí" — a diferencia de
-        // $filas (solo lo que ya hay en este hueco), aquí hace falta poder
-        // elegir cualquier pieza para darla de alta. Con miniatura y con
-        // cuánto hay y dónde: elegir a ojo entre piezas parecidas es más
-        // rápido que leer nombres, y ver las ubicaciones ya existentes
-        // evita duplicar por error una pieza que ya está en otro hueco.
-        $variantesTodas = $this->variantes->findAll();
-        $idsTodas       = array_map(static fn (array $v) => (int) $v['id'], $variantesTodas);
-
-        $miniaturas = [];
-        if ($idsTodas !== []) {
-            foreach ($this->renders->whereIn('variante_id', $idsTodas)->orderBy('subida_en', 'DESC')->findAll() as $r) {
-                $vid = (int) $r['variante_id'];
-                if (isset($miniaturas[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
-                    continue;
-                }
-                $miniaturas[$vid] = imagen_pieza($r, 'render', 't');
-            }
-        }
-
-        $stockPorVarianteYHueco = $this->inventario->stockPorVarianteYHueco();
-
-        $catalogo = [];
-        foreach ($variantesTodas as $v) {
-            $vid     = (int) $v['id'];
-            $familia = $familias[(int) $v['familia_id']] ?? null;
-            $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']);
-
-            $ubicaciones = [];
-            $stockTotal  = 0;
-            foreach ($stockPorVarianteYHueco[$vid] ?? [] as $huecoId => $n) {
-                if ($n <= 0) {
-                    continue;
-                }
-                $stockTotal += $n;
-                $ubicaciones[] = [
-                    // huecoId 0 = sin asignar. Se manda aparte del código
-                    // (en vez de comparar el texto en JS) para que "aquí" /
-                    // "sin asignar" se resuelvan sin ambigüedad.
-                    'huecoId' => $huecoId,
-                    'codigo'  => $huecoId > 0 ? ($codigoPorHuecoId[$huecoId] ?? '?') : 'Sin asignar',
-                    'stock'   => $n,
-                ];
-            }
-            usort($ubicaciones, static fn ($a, $b) => $b['stock'] <=> $a['stock']);
-
-            $catalogo[] = [
-                'id'          => $vid,
-                'label'       => $nombre . (empty($v['sku']) ? '' : ' · ' . $v['sku']),
-                'img'         => $miniaturas[$vid] ?? null,
-                'stockTotal'  => $stockTotal,
-                'ubicaciones' => $ubicaciones,
-            ];
-        }
-        usort($catalogo, static fn ($a, $b) => $a['label'] <=> $b['label']);
 
         // Destinos posibles para "mover stock a otro hueco": todos los
         // demás huecos de cualquier estuche.
@@ -478,7 +420,6 @@ class UbicacionesController extends BaseController
             'estuche'  => $estuche,
             'codigo'   => $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : $hueco['codigo'],
             'filas'    => $filas,
-            'catalogo' => $catalogo,
             'destinos' => $destinos,
         ]);
     }

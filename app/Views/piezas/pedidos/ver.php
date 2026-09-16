@@ -101,6 +101,12 @@
     .fila-completa .badge { background-color: rgba(5, 46, 22, .12) !important; border-color: rgba(5, 46, 22, .35) !important; }
     .fila-completa .btn-outline-secondary { color: #052e16 !important; border-color: rgba(5, 46, 22, .4) !important; }
     .fila-completa .btn-outline-primary { color: #052e16 !important; border-color: rgba(5, 46, 22, .4) !important; }
+
+    /* "Hecha" es una anotación propia de preparación (qué queda por dejar
+       listo antes de imprimir), distinta de cantidad_completada (piezas ya
+       impresas y válidas) — por eso un estilo aparte y más discreto, que no
+       choca con el verde de fila-completa si coinciden las dos. */
+    .fila-hecha:not(.fila-completa) { opacity: .55; }
 </style>
 
 <?php
@@ -127,6 +133,7 @@
 <table class="table table-sm align-middle">
     <thead>
         <tr>
+            <th title="Lista para imprimir — una anotación tuya, no cuenta piezas">Hecha</th>
             <th></th>
             <th>Pieza</th>
             <th>Cantidad</th>
@@ -325,6 +332,45 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             return;
         }
+    });
+
+    // Casilla "Hecha": cambio optimista en el propio checkbox, sin
+    // redibujar la fila entera (eso era lo que provocaba el parpadeo de
+    // marcar/desmarcar de golpe). Si el guardado falla, se deshace.
+    document.addEventListener('change', function (e) {
+        var checkbox = e.target.closest('[data-checkbox-hecha]');
+        if (!checkbox) return;
+
+        var form = checkbox.form;
+        var fila = checkbox.closest('tr');
+        var marcado = checkbox.checked;
+        var datosForm = new FormData(form);
+
+        if (fila) fila.classList.toggle('fila-hecha', marcado);
+        checkbox.disabled = true;
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: datosForm,
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (datos) {
+                if (!datos.ok) {
+                    checkbox.checked = !marcado;
+                    if (fila) fila.classList.toggle('fila-hecha', checkbox.checked);
+                    alert(datos.mensaje || 'No se pudo actualizar.');
+                }
+            })
+            .catch(function () {
+                checkbox.checked = !marcado;
+                if (fila) fila.classList.toggle('fila-hecha', checkbox.checked);
+                alert('No se pudo conectar con el servidor.');
+            })
+            .finally(function () {
+                checkbox.disabled = false;
+            });
     });
 });
 </script>

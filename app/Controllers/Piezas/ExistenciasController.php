@@ -221,10 +221,13 @@ class ExistenciasController extends BaseController
         }
 
         // Desglose por hueco (0 = sin asignar), con el código completo a
-        // mano para pintarlo sin otra vuelta a la base de datos.
+        // mano para pintarlo sin otra vuelta a la base de datos. Las bajas
+        // a mano nunca se atan a un hueco (se descuentan del total y
+        // listo), así que el cubo "sin asignar" puede quedar en negativo:
+        // eso no es una ubicación real, no se pinta.
         $desglose = [];
         foreach ($this->inventario->stockPorHueco($id) as $huecoId => $n) {
-            if ($n === 0) {
+            if ($n <= 0) {
                 continue;
             }
             $desglose[] = [
@@ -258,6 +261,8 @@ class ExistenciasController extends BaseController
      */
     public function asignarSueltos(int $id)
     {
+        $volver = site_url('piezas/existencias/' . $id);
+
         $variante = $this->variantes->find($id);
         if (!$variante) {
             return redirect()->to(site_url('piezas/existencias'))->with('error', 'Esa variante no existe.');
@@ -265,7 +270,7 @@ class ExistenciasController extends BaseController
 
         $huecoId = (int) $this->request->getPost('hueco_id') ?: null;
         if ($huecoId === null || !$this->huecos->find($huecoId)) {
-            return redirect()->to(site_url('piezas/existencias/' . $id))->with('error', 'Elige a qué hueco mover lo suelto.');
+            return redirect()->to($volver)->with('error', 'Elige a qué hueco mover lo suelto.');
         }
 
         $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
@@ -273,7 +278,26 @@ class ExistenciasController extends BaseController
             ? 'Colocado en el hueco elegido lo que estaba sin asignar.'
             : 'No había nada sin asignar que mover.';
 
-        return redirect()->to(site_url('piezas/existencias/' . $id))->with('success', $mensaje);
+        return redirect()->to($volver)->with('success', $mensaje);
+    }
+
+    /**
+     * Borra un movimiento manual metido por error (p. ej. una alta
+     * duplicada al colocar una pieza en un hueco). Solo admite movimientos
+     * origen='manual' — ver PiezaInventario::borrarMovimientoManual().
+     */
+    public function borrarMovimiento(int $id)
+    {
+        $ok = $this->inventario->borrarMovimientoManual($id);
+
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $volver      = $varianteId > 0
+            ? site_url('piezas/existencias/' . $varianteId)
+            : site_url('piezas/existencias');
+
+        return redirect()->to($volver)->with($ok ? 'success' : 'error', $ok
+            ? 'Movimiento borrado.'
+            : 'Ese movimiento no existe o no se puede borrar a mano (es un reflejo de una placa).');
     }
 
     public function movimiento()
@@ -284,22 +308,20 @@ class ExistenciasController extends BaseController
         $nota       = trim((string) $this->request->getPost('nota'));
         $huecoId    = (int) $this->request->getPost('ubicacion_id') ?: null;
 
-        if ($huecoId !== null && !$this->huecos->find($huecoId)) {
+        // Una baja quita stock del total y punto — no va ligada a ningún
+        // hueco. Las asignaciones de hueco son solo para saber dónde está
+        // lo que queda (distribución), no cuentan para el stock, así que
+        // no se tocan al dar de baja.
+        if ($sentido === 'baja') {
+            $huecoId = null;
+        } elseif ($huecoId !== null && !$this->huecos->find($huecoId)) {
             $huecoId = null;
         }
 
-        // Si el movimiento se registra desde la ficha de un hueco (en vez
-        // de desde Existencias), se vuelve ahí en lugar de a la ficha de
-        // la variante — es donde físicamente está el usuario.
-        $volverHuecoId = (int) $this->request->getPost('volver_hueco') ?: null;
-        $volverAHueco  = $volverHuecoId !== null && $this->huecos->find($volverHuecoId);
-
         $variante = $this->variantes->find($varianteId);
-        $volver   = match (true) {
-            $volverAHueco => site_url('piezas/ubicaciones/huecos/' . $volverHuecoId),
-            (bool) $variante => site_url('piezas/existencias/' . $varianteId),
-            default => site_url('piezas/existencias'),
-        };
+        $volver   = $variante
+            ? site_url('piezas/existencias/' . $varianteId)
+            : site_url('piezas/existencias');
 
         if (!$variante) {
             return redirect()->to($volver)->with('error', 'Esa variante no existe.');
@@ -314,14 +336,6 @@ class ExistenciasController extends BaseController
         $delta  = $sentido === 'alta' ? $cantidad : -$cantidad;
         $motivo = $sentido === 'alta' ? 'alta_manual' : 'baja_manual';
         $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId);
-
-        // Casilla "usar este hueco por defecto" del formulario de la ficha
-        // del hueco: solo tiene sentido en un alta con hueco elegido — a
-        // partir de ahora sincronizarPlaca() manda aquí lo que se imprima
-        // de esta pieza, sin tener que fijarlo aparte.
-        if ($sentido === 'alta' && $huecoId !== null && $this->request->getPost('fijar_defecto')) {
-            $this->variantes->update($varianteId, ['hueco_predeterminado_id' => $huecoId]);
-        }
 
         $nuevo = $this->inventario->stockDeVariante($varianteId);
         $aviso = $nuevo < 0 ? ' Ojo: el stock queda en negativo.' : '';

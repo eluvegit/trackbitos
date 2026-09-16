@@ -17,7 +17,9 @@
         width: 13rem;
         min-height: 4.75rem;
         max-height: 11rem;
-        padding: .5rem .65rem;
+        /* Más hueco a la izquierda que a la derecha: ahí es donde se
+           monta encima la "x" de borrar (ver .hueco-del-form). */
+        padding: .5rem .65rem .5rem 1.4rem;
         border-radius: .85rem;
         border: 1px solid var(--bs-border-color);
         background: var(--bs-tertiary-bg, var(--bs-secondary-bg));
@@ -37,17 +39,15 @@
     }
     .hueco-tile .cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; margin-bottom: .3rem; }
     .hueco-tile .codigo { font-weight: 700; font-size: .95rem; line-height: 1; }
-    .hueco-tile .uds { font-size: .68rem; color: var(--bs-secondary-color); white-space: nowrap; }
     .hueco-tile.con-stock { border-color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .12); }
     .hueco-tile .piezas { font-size: .7rem; line-height: 1.3; overflow-y: auto; }
     .hueco-tile .piezas .fila { display: flex; align-items: center; gap: .35rem; }
     .hueco-tile .piezas .nombre-grupo { display: flex; align-items: center; gap: .3rem; min-width: 0; flex: 1 1 auto; }
     .hueco-tile .piezas .miniatura { width: 1.6rem; height: 1.6rem; object-fit: cover; border-radius: .25rem; flex: none; }
     .hueco-tile .piezas .nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .hueco-tile .piezas .cant { color: var(--bs-secondary-color); white-space: nowrap; flex: none; }
     .hueco-tile .vacio { font-size: .7rem; color: var(--bs-secondary-color); font-style: italic; }
 
-    .hueco-del-form { position: absolute; top: -.5rem; right: -.5rem; margin: 0; }
+    .hueco-del-form { position: absolute; top: -.5rem; left: -.5rem; margin: 0; }
     .hueco-del-form .btn-del {
         /* Círculo visual pequeño, pero área táctil real más grande (padding
            en vez de solo el tamaño del círculo) para que sea tocable con el
@@ -86,6 +86,25 @@
 
     .estuche-card { border-radius: 1rem; }
     .estuche-titulo { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; }
+
+    /* En móvil, un hueco por fila a todo el ancho: la casilla fija de
+       13rem obligaba a leer el contenido apretado o a hacer scroll
+       horizontal para ver el resto. */
+    @media (max-width: 575.98px) {
+        .hueco-tile-wrap, .hueco-tile, .hueco-add { width: 100%; }
+    }
+
+    .btn-toggle-huecos {
+        border: 0;
+        background: transparent;
+        color: var(--bs-secondary-color);
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 0 .15rem;
+    }
+    .btn-toggle-huecos:hover { color: var(--bs-primary); }
+    .btn-toggle-huecos i { display: inline-block; transition: transform .15s ease; }
+    .btn-toggle-huecos.colapsado i { transform: rotate(-90deg); }
 </style>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
@@ -124,32 +143,24 @@
                             <?php if ($estuche['zona']): ?>
                                 <span class="badge text-bg-secondary fw-normal"><i class="bi bi-signpost"></i> <?= esc($estuche['zona']) ?></span>
                             <?php endif; ?>
+                            <span class="text-muted small">
+                                <?= count($f['huecos']) ?> huecos
+                            </span>
                         </div>
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
-                                data-bs-toggle="modal" data-bs-target="#modalEditarEstuche<?= (int) $estuche['id'] ?>" title="Editar estuche">
-                                <i class="bi bi-pencil"></i>
+                            <button type="button" class="btn-toggle-huecos" data-estuche-id="<?= (int) $estuche['id'] ?>" title="Plegar/desplegar huecos">
+                                <i class="bi bi-chevron-down"></i>
                             </button>
-                            <form method="post" action="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id'] . '/borrar') ?>"
-                                onsubmit="return confirm('¿Borrar el estuche «<?= esc($estuche['codigo'], 'js') ?>» y todos sus huecos? El historial de stock que tuvieran queda sin asignar, no se pierde.');">
-                                <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Borrar estuche">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
                         </div>
                     </div>
 
-                    <div class="hueco-grid">
+                    <div class="hueco-grid" id="huecos-<?= (int) $estuche['id'] ?>">
                         <?php foreach ($f['huecos'] as $h): ?>
                             <div class="hueco-tile-wrap">
                                 <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
                                     class="hueco-tile<?= $h['unidades'] > 0 ? ' con-stock' : '' ?>">
                                     <div class="cabecera">
                                         <span class="codigo"><?= esc($h['codigo']) ?></span>
-                                        <?php if ($h['unidades'] > 0): ?>
-                                            <span class="uds"><?= (int) $h['unidades'] ?> uds.</span>
-                                        <?php endif; ?>
                                     </div>
                                     <?php if ($h['contenido'] === []): ?>
                                         <span class="vacio">Vacío</span>
@@ -163,7 +174,6 @@
                                                         <?php endif; ?>
                                                         <span class="nombre"><?= esc($c['nombre']) ?></span>
                                                     </span>
-                                                    <span class="cant"><?= (int) $c['stock'] ?></span>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
@@ -171,7 +181,7 @@
                                 </a>
                                 <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id'] . '/borrar') ?>"
                                     class="hueco-del-form"
-                                    onsubmit="return confirm('¿Quitar el hueco «<?= esc($h['codigo'], 'js') ?>»?<?= $h['unidades'] > 0 ? ' Tiene ' . (int) $h['unidades'] . ' uds. — el historial de stock queda sin asignar, no se pierde.' : '' ?>');">
+                                    onsubmit="return confirm('¿Quitar el hueco «<?= esc($h['codigo'], 'js') ?>»?<?= $h['contenido'] !== [] ? ' Lo que había aquí queda sin ubicación, no se pierde.' : '' ?>');">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn-del" title="Quitar hueco">&times;</button>
                                 </form>
@@ -183,6 +193,17 @@
                             <button type="submit" class="hueco-add" title="Añadir hueco (<?= esc($f['siguiente']) ?>)">
                                 <i class="bi bi-plus-lg"></i>
                             </button>
+                        </form>
+                    </div>
+
+                    <div class="text-start mt-2">
+                        <button type="button" class="btn btn-sm btn-link link-secondary small text-decoration-none p-0"
+                            data-bs-toggle="modal" data-bs-target="#modalEditarEstuche<?= (int) $estuche['id'] ?>">Editar</button>
+                        <span class="text-muted small"> · </span>
+                        <form method="post" action="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id'] . '/borrar') ?>" class="d-inline"
+                            onsubmit="return confirm('¿Borrar el estuche «<?= esc($estuche['codigo'], 'js') ?>» y todos sus huecos? El historial de stock que tuvieran queda sin asignar, no se pierde.');">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm btn-link link-secondary small text-decoration-none p-0">Borrar</button>
                         </form>
                     </div>
                 </div>
@@ -260,5 +281,32 @@
         </form>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Recuerda qué estuches se han plegado, por estuche, entre visitas
+        // — solo en este navegador (localStorage), no afecta a nadie más.
+        document.querySelectorAll('.btn-toggle-huecos').forEach(function (btn) {
+            var grid = document.getElementById('huecos-' + btn.dataset.estucheId);
+            if (!grid) return;
+            var clave = 'piezas_huecos_colapsado_' + btn.dataset.estucheId;
+
+            function aplicar(colapsado) {
+                grid.classList.toggle('d-none', colapsado);
+                btn.classList.toggle('colapsado', colapsado);
+            }
+
+            var colapsado = false;
+            try { colapsado = localStorage.getItem(clave) === '1'; } catch (e) {}
+            aplicar(colapsado);
+
+            btn.addEventListener('click', function () {
+                colapsado = !grid.classList.contains('d-none');
+                aplicar(colapsado);
+                try { localStorage.setItem(clave, colapsado ? '1' : '0'); } catch (e) {}
+            });
+        });
+    });
+</script>
 
 <?= $this->endSection() ?>

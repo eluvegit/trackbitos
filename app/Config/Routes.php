@@ -799,6 +799,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');
     $routes->POST('pedido/(:num)/linea', 'PedidosController::agregarLinea/$1');
     $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
+    $routes->POST('pedido-linea/(:num)/hecha', 'PedidosController::marcarHecha/$1');
     $routes->POST('pedido-linea/(:num)/editar', 'PedidosController::editarLinea/$1');
     $routes->POST('pedido-linea/(:num)/borrar', 'PedidosController::borrarLinea/$1');
     $routes->GET('pedido-variante-buscar', 'PedidosController::buscarVariante');
@@ -826,6 +827,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // el patrón numérico, mismo criterio que 'categoria' arriba.
     $routes->GET('existencias', 'ExistenciasController::index');
     $routes->POST('existencias/movimiento', 'ExistenciasController::movimiento');
+    $routes->POST('existencias/movimiento/(:num)/borrar', 'ExistenciasController::borrarMovimiento/$1');
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
     $routes->POST('existencias/(:num)/hueco-defecto', 'ExistenciasController::fijarHuecoPredeterminado/$1');
     $routes->POST('existencias/(:num)/asignar-sueltos', 'ExistenciasController::asignarSueltos/$1');

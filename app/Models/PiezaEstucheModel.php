@@ -23,8 +23,15 @@ class PiezaEstucheModel extends Model
         'codigo' => 'required|max_length[20]|is_unique[piezas_estuches.codigo,id,{id}]',
     ];
 
+    /**
+     * En orden de código, natural (E2 antes que E10) en vez de alfabético
+     * puro — ver PiezaHuecoModel::deEstuche() para el mismo motivo.
+     */
     public function ordenados(): array
     {
-        return $this->orderBy('codigo', 'ASC')->findAll();
+        $estuches = $this->findAll();
+        usort($estuches, static fn (array $a, array $b) => strnatcasecmp($a['codigo'], $b['codigo']));
+
+        return $estuches;
     }
 }

@@ -9,9 +9,24 @@
  * nombreFamilia, nombreVariante y foto además de las columnas de la tabla.
  */
 $completa = (int) $linea['cantidad_completada'] >= (int) $linea['cantidad'];
+$hecha    = !empty($linea['hecha']);
 $formId   = 'form-linea-' . (int) $linea['id'];
 ?>
-<tr data-linea-id="<?= (int) $linea['id'] ?>" class="<?= $completa ? 'fila-completa' : '' ?>">
+<tr data-linea-id="<?= (int) $linea['id'] ?>" class="<?= $completa ? 'fila-completa' : '' ?><?= $hecha ? ' fila-hecha' : '' ?>">
+    <td class="text-center" style="width: 2rem;">
+        <?php
+            // Sin outerHTML de por medio (a diferencia de las demás acciones
+            // de la fila): sustituir toda la <tr> en cuanto cambia esto
+            // provocaba un parpadeo visible (se marcaba y, con el redibujado,
+            // parecía desmarcarse de golpe). Aquí basta un cambio optimista
+            // en el propio checkbox — ver el listener 'change' en ver.php.
+        ?>
+        <form method="post" action="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/hecha') ?>" class="d-inline">
+            <?= csrf_field() ?>
+            <input type="checkbox" name="hecha" value="1" class="form-check-input" title="Lista para imprimir"
+                data-checkbox-hecha <?= $hecha ? 'checked' : '' ?>>
+        </form>
+    </td>
     <td style="width: 34px;">
         <?php if ($linea['foto']): ?>
             <img src="<?= esc($linea['foto'], 'attr') ?>" alt="" loading="lazy" class="rounded border"

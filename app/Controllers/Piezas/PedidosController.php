@@ -382,6 +382,29 @@ class PedidosController extends BaseController
     }
 
     /**
+     * Checklist de preparación propio del usuario ("qué tengo listo antes
+     * de imprimir"), independiente de cantidad_completada (esa cuenta
+     * piezas ya impresas y válidas, después de imprimir). Se marca y
+     * desmarca libremente, sin más lógica.
+     */
+    public function marcarHecha(int $lineaId)
+    {
+        $lineaModel = new PiezaPedidoLineaModel();
+        $linea = $lineaModel->find($lineaId);
+        if (!$linea) {
+            return $this->fallo('Línea no encontrada.', '/piezas/pedidos');
+        }
+
+        $lineaModel->update($lineaId, ['hecha' => $this->request->getPost('hecha') ? 1 : 0]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true]);
+        }
+
+        return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);
+    }
+
+    /**
      * Si todas las líneas del pedido ya tienen su cantidad completada, el
      * pedido pasa a "completado" solo, sin esperar a que alguien cambie el
      * estado a mano — da igual en qué estado estuviera (incluso cancelado),

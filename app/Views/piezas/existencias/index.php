@@ -59,7 +59,10 @@
         </a>
     <?php endif; ?>
 
-    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Histórico de placas">
+    <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Estuches y huecos de guardado">
+        <i class="bi bi-geo-alt"></i> Ubicaciones
+    </a>
+    <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas">
         <i class="bi bi-printer"></i> Placas
     </a>
 </h5>

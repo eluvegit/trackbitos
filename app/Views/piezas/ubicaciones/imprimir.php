@@ -93,6 +93,7 @@
             <?php else: ?>
                 <div class="hueco-imprimir-grid">
                     <?php foreach ($f['huecos'] as $h): ?>
+                        <?php $lineasVacias = max(0, 3 - count($h['piezas'])); ?>
                         <div class="hueco-imprimir">
                             <div class="codigo"><?= esc($estuche['codigo'] . $h['codigo']) ?></div>
                             <?php if ($h['piezas'] !== []): ?>
@@ -106,10 +107,10 @@
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
-                            <?php else: ?>
-                                <div class="linea-vacia"></div>
-                                <div class="linea-vacia"></div>
                             <?php endif; ?>
+                            <?php for ($i = 0; $i < $lineasVacias; $i++): ?>
+                                <div class="linea-vacia"></div>
+                            <?php endfor; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>
