@@ -21,6 +21,13 @@ class PiezaEstucheModel extends Model
 
     protected $validationRules = [
         'codigo' => 'required|max_length[20]|is_unique[piezas_estuches.codigo,id,{id}]',
+        // El placeholder {id} de la regla de arriba exige que 'id' tenga
+        // también su propia regla aquí — si no, CI4 lanza LogicException
+        // ("No validation rules for the placeholder") en vez de solo
+        // ignorar el placeholder cuando no llega. Solo hace falta al
+        // editar (update() manda 'id' en los datos para poder excluir la
+        // propia fila); al crear no llega y no se aplica.
+        'id' => 'permit_empty|is_natural_no_zero',
     ];
 
     /**

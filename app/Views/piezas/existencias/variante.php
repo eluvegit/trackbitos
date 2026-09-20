@@ -128,13 +128,42 @@
         <?php foreach ($desglose as $d): ?>
             <?php $h = $d['hueco']; ?>
             <?php if ($h): ?>
-                <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
-                    class="badge rounded-pill text-bg-primary text-decoration-none">
-                    <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?>
-                </a>
+                <div class="d-flex align-items-center gap-1">
+                    <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
+                        class="badge rounded-pill text-bg-primary text-decoration-none">
+                        <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?> · <?= (int) $d['stock'] ?>
+                    </a>
+                    <?php
+                        $otrosHuecos = array_filter($huecosDisponibles, static fn (array $hd) => (int) $hd['hueco']['id'] !== (int) $h['hueco']['id']);
+                    ?>
+                    <?php if ($otrosHuecos !== []): ?>
+                        <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id'] . '/mover-pieza') ?>"
+                            class="d-flex align-items-center gap-1">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="variante_id" value="<?= $idVar ?>">
+                            <input type="hidden" name="volver" value="variante">
+                            <select name="destino_id" required class="form-select form-select-sm py-0" style="max-width: 8rem; font-size: .75rem;">
+                                <option value="">mover a…</option>
+                                <?php $estucheActual = null; ?>
+                                <?php foreach ($otrosHuecos as $hd): ?>
+                                    <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
+                                        <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                                        <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
+                                        <?php $estucheActual = (int) $hd['estuche']['id']; ?>
+                                    <?php endif; ?>
+                                    <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                                <?php endforeach; ?>
+                                <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-secondary py-0" title="Mover esta pieza a otro hueco">
+                                <i class="bi bi-arrow-right-circle"></i>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             <?php else: ?>
                 <span class="badge rounded-pill text-bg-warning">
-                    <i class="bi bi-exclamation-triangle"></i> Sin asignar
+                    <i class="bi bi-exclamation-triangle"></i> Sin asignar · <?= (int) $d['stock'] ?>
                 </span>
             <?php endif; ?>
         <?php endforeach; ?>

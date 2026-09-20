@@ -187,6 +187,18 @@ class PiezaInventario
         return $this->movimientos->moverUbicacion($origenId, $destinoId);
     }
 
+    /** Traslada todo el stock de una variante concreta de un hueco a otro. */
+    public function moverVarianteDeHueco(int $origenId, int $destinoId, int $varianteId): int
+    {
+        return $this->movimientos->moverVarianteDeHueco($origenId, $destinoId, $varianteId);
+    }
+
+    /** Trae a un hueco todo el stock de una variante, esté donde esté. */
+    public function consolidarVarianteEnHueco(int $varianteId, int $huecoId): int
+    {
+        return $this->movimientos->consolidarVarianteEnHueco($varianteId, $huecoId);
+    }
+
     /**
      * Si todo el stock de una variante vive en un único hueco, ese hueco;
      * si está repartida en varios (o no tiene nada), null.

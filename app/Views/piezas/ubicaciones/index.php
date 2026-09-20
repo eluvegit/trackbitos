@@ -94,17 +94,19 @@
         .hueco-tile-wrap, .hueco-tile, .hueco-add { width: 100%; }
     }
 
-    .btn-toggle-huecos {
+    .estuche-toggle {
         border: 0;
         background: transparent;
-        color: var(--bs-secondary-color);
-        font-size: 1.1rem;
-        line-height: 1;
-        padding: 0 .15rem;
+        width: 100%;
+        text-align: left;
+        color: inherit;
+        border-radius: .5rem;
+        margin: -.25rem -.4rem;
+        padding: .25rem .4rem;
     }
-    .btn-toggle-huecos:hover { color: var(--bs-primary); }
-    .btn-toggle-huecos i { display: inline-block; transition: transform .15s ease; }
-    .btn-toggle-huecos.colapsado i { transform: rotate(-90deg); }
+    .estuche-toggle:hover { background: var(--bs-secondary-bg); }
+    .estuche-toggle .chevron { margin-left: auto; color: var(--bs-secondary-color); transition: transform .15s ease; }
+    .estuche-toggle.colapsado .chevron { transform: rotate(-90deg); }
 </style>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
@@ -136,23 +138,18 @@
             <?php $estuche = $f['estuche']; ?>
             <div class="card estuche-card">
                 <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-archive fs-5 text-primary"></i>
-                            <span class="estuche-titulo"><?= esc($estuche['codigo']) ?></span>
-                            <?php if ($estuche['zona']): ?>
-                                <span class="badge text-bg-secondary fw-normal"><i class="bi bi-signpost"></i> <?= esc($estuche['zona']) ?></span>
-                            <?php endif; ?>
-                            <span class="text-muted small">
-                                <?= count($f['huecos']) ?> huecos
-                            </span>
-                        </div>
-                        <div class="d-flex gap-1">
-                            <button type="button" class="btn-toggle-huecos" data-estuche-id="<?= (int) $estuche['id'] ?>" title="Plegar/desplegar huecos">
-                                <i class="bi bi-chevron-down"></i>
-                            </button>
-                        </div>
-                    </div>
+                    <button type="button" class="estuche-toggle d-flex align-items-center gap-2 flex-wrap mb-3"
+                        data-estuche-id="<?= (int) $estuche['id'] ?>" title="Plegar/desplegar huecos">
+                        <i class="bi bi-archive fs-5 text-primary"></i>
+                        <span class="estuche-titulo"><?= esc($estuche['codigo']) ?></span>
+                        <?php if ($estuche['zona']): ?>
+                            <span class="badge text-bg-secondary fw-normal"><i class="bi bi-signpost"></i> <?= esc($estuche['zona']) ?></span>
+                        <?php endif; ?>
+                        <span class="text-muted small">
+                            <?= count($f['huecos']) ?> huecos
+                        </span>
+                        <i class="bi bi-chevron-down chevron"></i>
+                    </button>
 
                     <div class="hueco-grid" id="huecos-<?= (int) $estuche['id'] ?>">
                         <?php foreach ($f['huecos'] as $h): ?>
@@ -286,7 +283,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         // Recuerda qué estuches se han plegado, por estuche, entre visitas
         // — solo en este navegador (localStorage), no afecta a nadie más.
-        document.querySelectorAll('.btn-toggle-huecos').forEach(function (btn) {
+        document.querySelectorAll('.estuche-toggle').forEach(function (btn) {
             var grid = document.getElementById('huecos-' + btn.dataset.estucheId);
             if (!grid) return;
             var clave = 'piezas_huecos_colapsado_' + btn.dataset.estucheId;

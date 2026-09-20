@@ -241,6 +241,16 @@ class UbicacionesController extends BaseController
             return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'El código del estuche es obligatorio.');
         }
 
+        // Antes de que salte el "código único" de la validación (que no dice
+        // con cuál choca), se busca el conflicto a mano para poder señalarlo
+        // — MySQL compara texto sin distinguir mayúsculas, así que "e1"
+        // choca con "E1" aunque no se vean iguales a simple vista.
+        $existente = $this->estuches->where('codigo', $codigo)->first();
+        if ($existente) {
+            return redirect()->to(site_url('piezas/ubicaciones'))
+                ->with('error', 'Ya existe un estuche con el código «' . $existente['codigo'] . '» (mayúsculas/minúsculas no cuentan como distinto).');
+        }
+
         $zona      = trim((string) $this->request->getPost('zona'));
         $notas     = trim((string) $this->request->getPost('notas'));
         $numHuecos = (int) $this->request->getPost('num_huecos');
@@ -287,10 +297,25 @@ class UbicacionesController extends BaseController
             return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'El código del estuche es obligatorio.');
         }
 
+        // Mismo aviso explícito que en crear(): si el código ya lo tiene
+        // OTRO estuche, se dice cuál en vez de dejar que salte el genérico
+        // "código único" de la validación.
+        $existente = $this->estuches->where('codigo', $codigo)->where('id !=', $id)->first();
+        if ($existente) {
+            return redirect()->to(site_url('piezas/ubicaciones'))
+                ->with('error', 'Ya existe otro estuche con el código «' . $existente['codigo'] . '» (mayúsculas/minúsculas no cuentan como distinto).');
+        }
+
         $zona  = trim((string) $this->request->getPost('zona'));
         $notas = trim((string) $this->request->getPost('notas'));
 
+        // El 'id' va también en los datos a validar (y no solo como primer
+        // argumento de update()): la regla is_unique[...,id,{id}] de
+        // PiezaEstucheModel necesita encontrarlo ahí para sustituir el
+        // placeholder y excluir esta misma fila de la comprobación —
+        // si no, "código único" salta siempre al guardar sin cambiarlo.
         $ok = $this->estuches->update($id, [
+            'id'     => $id,
             'codigo' => $codigo,
             'zona'   => $zona === '' ? null : $zona,
             'notas'  => $notas === '' ? null : $notas,
@@ -388,6 +413,20 @@ class UbicacionesController extends BaseController
             $familias[(int) $f['id']] = $f;
         }
 
+        // Miniatura de cada pieza (el render más reciente), igual que en el
+        // índice de Ubicaciones — para reconocerlas a ojo, no solo por el
+        // nombre.
+        $miniaturas = [];
+        if ($stock !== []) {
+            foreach ($this->renders->whereIn('variante_id', array_keys($stock))->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (isset($miniaturas[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
+                    continue;
+                }
+                $miniaturas[$vid] = imagen_pieza($r, 'render', 't');
+            }
+        }
+
         $filas = [];
         if ($stock !== []) {
             foreach ($this->variantes->whereIn('id', array_keys($stock))->findAll() as $v) {
@@ -396,24 +435,46 @@ class UbicacionesController extends BaseController
                     'variante' => $v,
                     'nombre'   => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
                     'stock'    => $stock[(int) $v['id']],
+                    'img'      => $miniaturas[(int) $v['id']] ?? null,
                 ];
             }
             usort($filas, static fn ($a, $b) => $a['nombre'] <=> $b['nombre']);
         }
 
-        // Código completo de todos los huecos que existan (de cualquier
-        // estuche), en un solo mapa — para los destinos de "mover stock".
-        $codigoPorHuecoId = [];
+        // Destinos posibles para "mover a otro hueco", agrupados por
+        // estuche (<optgroup>) — con varios estuches de una docena de
+        // huecos cada uno, un <select> plano se vuelve interminable.
+        $destinosPorEstuche = [];
+        $codigoPorHuecoId   = [];
         foreach ($this->estuches->ordenados() as $est) {
+            $huecosDelEstuche = [];
             foreach ($this->huecos->deEstuche((int) $est['id']) as $h) {
-                $codigoPorHuecoId[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($est, $h);
+                $codigo = PiezaHuecoModel::codigoCompleto($est, $h);
+                $codigoPorHuecoId[(int) $h['id']] = $codigo;
+                if ((int) $h['id'] !== $id) {
+                    $huecosDelEstuche[] = ['id' => (int) $h['id'], 'codigo' => $codigo];
+                }
+            }
+            if ($huecosDelEstuche !== []) {
+                $destinosPorEstuche[] = ['estuche' => $est, 'huecos' => $huecosDelEstuche];
             }
         }
-
-        // Destinos posibles para "mover stock a otro hueco": todos los
-        // demás huecos de cualquier estuche.
         $destinos = $codigoPorHuecoId;
         unset($destinos[$id]);
+
+        // ¿Hay algo en todo el inventario que viva fuera de este hueco? Solo
+        // para decidir si se pinta el buscador de "traer pieza aquí" — el
+        // buscador en sí resuelve sus resultados por AJAX (buscarPieza()),
+        // no con un listado precargado.
+        $hayAlgoQueTraer = false;
+        foreach ($this->inventario->stockPorVarianteYHueco() as $porHueco) {
+            foreach ($porHueco as $huecoId => $n) {
+                if ($huecoId !== $id && $n > 0) {
+                    $hayAlgoQueTraer = true;
+                    break 2;
+                }
+            }
+        }
 
         return view('piezas/ubicaciones/hueco', [
             'hueco'    => $hueco,
@@ -421,7 +482,64 @@ class UbicacionesController extends BaseController
             'codigo'   => $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : $hueco['codigo'],
             'filas'    => $filas,
             'destinos' => $destinos,
+            'destinosPorEstuche' => $destinosPorEstuche,
+            'hayAlgoQueTraer'    => $hayAlgoQueTraer,
         ]);
+    }
+
+    /**
+     * Búsqueda en vivo para "traer pieza aquí": piezas cuyo nombre/familia
+     * encaja y que tienen stock fuera de este hueco (en otro, o sin
+     * asignar) — igual patrón que Web::piezaBuscar() para la bitácora, pero
+     * filtrando por dónde vive el stock en vez de por versión imprimible.
+     */
+    public function buscarPieza(int $id)
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($q) < 2) {
+            return $this->response->setJSON(['resultados' => []]);
+        }
+
+        $familiasQueEncajan = $this->familias->where('borrado_en', null)->like('nombre', $q)->findAll();
+        $idsFamilia = array_column($familiasQueEncajan, 'id') ?: [0];
+
+        $variantes = $this->variantes->where('borrado_en', null)
+            ->groupStart()
+                ->like('nombre', $q)
+                ->orLike('sku', $q)
+                ->orWhereIn('familia_id', $idsFamilia)
+            ->groupEnd()
+            ->orderBy('nombre')
+            ->findAll(60);
+
+        $stockPorVarianteYHueco = $this->inventario->stockPorVarianteYHueco();
+
+        $resultados = [];
+        foreach ($variantes as $v) {
+            $vid   = (int) $v['id'];
+            $fuera = 0;
+            foreach ($stockPorVarianteYHueco[$vid] ?? [] as $huecoId => $n) {
+                if ($huecoId !== $id) {
+                    $fuera += $n;
+                }
+            }
+            if ($fuera <= 0) {
+                continue;
+            }
+
+            $familia = $this->familias->find($v['familia_id']);
+            $resultados[] = [
+                'id'     => $vid,
+                'nombre' => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
+                'stock'  => $fuera,
+            ];
+
+            if (count($resultados) >= 15) {
+                break;
+            }
+        }
+
+        return $this->response->setJSON(['resultados' => $resultados]);
     }
 
     /**
@@ -459,5 +577,96 @@ class UbicacionesController extends BaseController
             : 'Ese hueco ya estaba vacío, nada que mover.';
 
         return redirect()->to(site_url('piezas/ubicaciones/huecos/' . $destinoId))->with('success', $mensaje);
+    }
+
+    /**
+     * Traslada UNA pieza (todo su stock en este hueco) a otro hueco — a
+     * diferencia de moverStock(), que mueve todo el contenido. Permite
+     * separar piezas que convivían en el mismo hueco.
+     */
+    public function moverPieza(int $id)
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+
+        // Esta acción se llama tanto desde la vista de un hueco (volver ahí)
+        // como desde la ficha de la variante (volver a ella) — el origen se
+        // manda explícito en vez de confiar en la URL de vuelta a ciegas.
+        $volverAVariante = $this->request->getPost('volver') === 'variante' && $varianteId > 0;
+        $volver = $volverAVariante
+            ? site_url('piezas/existencias/' . $varianteId)
+            : site_url('piezas/ubicaciones/huecos/' . $id);
+
+        $hueco = $this->huecos->find($id);
+        if (!$hueco) {
+            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese hueco no existe.');
+        }
+
+        $destinoId = (int) $this->request->getPost('destino_id');
+        $destino   = $destinoId > 0 ? $this->huecos->find($destinoId) : null;
+
+        if (!$destino) {
+            return redirect()->to($volver)->with('error', 'Elige a qué hueco mover la pieza.');
+        }
+        if ($destinoId === $id) {
+            return redirect()->to($volver)->with('error', 'El hueco de destino no puede ser el mismo.');
+        }
+
+        $variante = $varianteId > 0 ? $this->variantes->find($varianteId) : null;
+        if (!$variante) {
+            return redirect()->to($volver)->with('error', 'Esa pieza no existe.');
+        }
+
+        $familia = $this->familias->find($variante['familia_id']);
+        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+
+        $unidades = max(0, $this->inventario->stockDeHueco($id)[$varianteId] ?? 0);
+        $movidos  = $this->inventario->moverVarianteDeHueco($id, $destinoId, $varianteId);
+
+        $estDestino    = $this->estuches->find($destino['estuche_id']);
+        $codigoDestino = $estDestino ? PiezaHuecoModel::codigoCompleto($estDestino, $destino) : $destino['codigo'];
+
+        $mensaje = $movidos > 0
+            ? 'Movidas ' . $unidades . ' uds. de «' . $nombre . '» a «' . $codigoDestino . '».'
+            : '«' . $nombre . '» ya no tenía stock en este hueco, nada que mover.';
+
+        // Al éxito, si no se viene de la ficha de la variante, se aterriza en
+        // el hueco destino (para ver que ha llegado ahí) en vez de en el de
+        // origen.
+        $volverExito = $volverAVariante ? $volver : site_url('piezas/ubicaciones/huecos/' . $destinoId);
+
+        return redirect()->to($volverExito)->with('success', $mensaje);
+    }
+
+    /**
+     * Trae a este hueco todo el stock de una pieza, esté donde esté (otro
+     * hueco, o sin asignar) — el "tirar" complementario a moverPieza(),
+     * pensado para cuando tienes el hueco delante y quieres meter ahí una
+     * pieza que ya existe en otro sitio.
+     */
+    public function traerPieza(int $id)
+    {
+        $hueco = $this->huecos->find($id);
+        if (!$hueco) {
+            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese hueco no existe.');
+        }
+
+        $volver = site_url('piezas/ubicaciones/huecos/' . $id);
+
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $variante   = $varianteId > 0 ? $this->variantes->find($varianteId) : null;
+        if (!$variante) {
+            return redirect()->to($volver)->with('error', 'Elige qué pieza traer.');
+        }
+
+        $familia = $this->familias->find($variante['familia_id']);
+        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+
+        $movidos = $this->inventario->consolidarVarianteEnHueco($varianteId, $id);
+
+        $mensaje = $movidos > 0
+            ? 'Traída «' . $nombre . '» a este hueco.'
+            : '«' . $nombre . '» ya estaba toda aquí (o no tiene stock en otro sitio).';
+
+        return redirect()->to($volver)->with('success', $mensaje);
     }
 }

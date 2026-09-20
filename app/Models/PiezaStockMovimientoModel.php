@@ -175,4 +175,50 @@ class PiezaStockMovimientoModel extends Model
 
         return $n;
     }
+
+    /**
+     * Traslada TODO el stock de una variante concreta de un hueco a otro —
+     * como moverUbicacion, pero filtrado también por variante, para separar
+     * una pieza de un hueco que tiene varias sin tocar el resto.
+     */
+    public function moverVarianteDeHueco(int $origenId, int $destinoId, int $varianteId): int
+    {
+        $n = $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->countAllResults(false);
+        if ($n > 0) {
+            $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->set('ubicacion_id', $destinoId)->update();
+        }
+
+        return $n;
+    }
+
+    /**
+     * Trae TODO el stock de una variante a un hueco, sea cual sea su
+     * ubicación actual (otro hueco, o suelta) — el "tirar" complementario a
+     * moverVarianteDeHueco() (que "empuja" desde un hueco concreto). Las
+     * bajas a mano (delta negativo con ubicacion_id NULL) no se tocan: no
+     * representan una ubicación real, ver asignarSinAsignar().
+     */
+    public function consolidarVarianteEnHueco(int $varianteId, int $huecoId): int
+    {
+        $n = $this->where('variante_id', $varianteId)
+            ->groupStart()
+                ->where('ubicacion_id !=', $huecoId)
+                ->orWhere('ubicacion_id', null)
+            ->groupEnd()
+            ->where('delta >', 0)
+            ->countAllResults(false);
+
+        if ($n > 0) {
+            $this->where('variante_id', $varianteId)
+                ->groupStart()
+                    ->where('ubicacion_id !=', $huecoId)
+                    ->orWhere('ubicacion_id', null)
+                ->groupEnd()
+                ->where('delta >', 0)
+                ->set('ubicacion_id', $huecoId)
+                ->update();
+        }
+
+        return $n;
+    }
 }
