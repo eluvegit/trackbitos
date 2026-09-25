@@ -10,7 +10,6 @@
  * $resumen, $origenNombres, $cuadrosPorPlaca, $gruposReparto,
  * $nombresPlacas.
  */
-$disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
 $fecha = strtotime($placa['creado_en']);
 $grupo = $gruposReparto[$idPlaca] ?? null;
@@ -73,10 +72,6 @@ $claseLomo = $resumen['veredicto']
                 </div>
                 <div class="text-muted small">
                     <?= $placa['impresa_en'] ? esc(date('d/m/Y H:i', strtotime($placa['impresa_en']))) : esc(date('d/m/Y H:i', $fecha ?: time())) ?>
-                    <?php if ($disponibles < count($lista)): ?>
-                        <i class="bi bi-exclamation-triangle text-warning ms-1"
-                            title="Algún STL de esta placa ya no está disponible"></i>
-                    <?php endif; ?>
                 </div>
                 <?php // Muy pequeños a propósito: son de apoyo, no el dato
                       // principal de la tarjeta — para eso está el veredicto. ?>

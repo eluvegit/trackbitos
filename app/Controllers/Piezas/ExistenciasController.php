@@ -103,9 +103,9 @@ class ExistenciasController extends BaseController
             // encendidos (misma cascada que SterclicksApi::catalogo y que lo
             // que deja ver el índice). Si cualquiera de los tres está
             // apagado, la pieza no se publica y aquí cuenta como oculta.
-            $visibleSterclicks = !empty($v['visible_sterclicks'])
-                && ($familia === null || !empty($familia['visible_sterclicks']))
+            $padresVisibles = ($familia === null || !empty($familia['visible_sterclicks']))
                 && ($catFam === null || ($catVisibleSt[(int) $catFam] ?? true));
+            $visibleSterclicks = !empty($v['visible_sterclicks']) && $padresVisibles;
 
             if ($soloSterclicks && !$visibleSterclicks) {
                 continue;
@@ -123,6 +123,7 @@ class ExistenciasController extends BaseController
                 // sigue pintando en rojo; el filtro no las deja fuera.
                 'bajoMinimo' => $minimo > 0 && $s < $minimo,
                 'visibleSterclicks' => $visibleSterclicks,
+                'padresVisibles'    => $padresVisibles,
             ];
         }
 
@@ -273,6 +274,10 @@ class ExistenciasController extends BaseController
             return redirect()->to($volver)->with('error', 'Elige a qué hueco mover lo suelto.');
         }
 
+        if ($error = $this->errorOtroHueco($id, $huecoId)) {
+            return redirect()->to($volver)->with('error', $error);
+        }
+
         $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
         $mensaje = $movidos > 0
             ? 'Colocado en el hueco elegido lo que estaba sin asignar.'
@@ -333,6 +338,14 @@ class ExistenciasController extends BaseController
             return redirect()->to($volver)->with('error', 'Escribe el motivo del movimiento.');
         }
 
+        if ($sentido === 'alta') {
+            if ($huecoId === null) {
+                $huecoId = $this->inventario->huecoDeVariante($varianteId);
+            } elseif ($error = $this->errorOtroHueco($varianteId, $huecoId)) {
+                return redirect()->to($volver)->with('error', $error);
+            }
+        }
+
         $delta  = $sentido === 'alta' ? $cantidad : -$cantidad;
         $motivo = $sentido === 'alta' ? 'alta_manual' : 'baja_manual';
         $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId);
@@ -366,6 +379,12 @@ class ExistenciasController extends BaseController
         if ($huecoId !== null && !$hueco) {
             $mensaje = 'Ese hueco no existe.';
 
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
+                : redirect()->back()->with('error', $mensaje);
+        }
+
+        if ($huecoId !== null && ($mensaje = $this->errorOtroHueco($id, $huecoId))) {
             return $this->request->isAJAX()
                 ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
                 : redirect()->back()->with('error', $mensaje);
@@ -409,5 +428,20 @@ class ExistenciasController extends BaseController
 
         return redirect()->to(site_url('piezas/existencias/' . $id))
             ->with('success', $min > 0 ? 'Mínimo fijado en ' . $min . '.' : 'Mínimo quitado.');
+    }
+
+    private function errorOtroHueco(int $varianteId, int $huecoId): ?string
+    {
+        $actual = $this->inventario->huecoDeVariante($varianteId);
+        if ($actual === null || $actual === $huecoId) {
+            return null;
+        }
+
+        $hueco   = $this->huecos->find($actual);
+        $estuche = $hueco ? $this->estuches->find($hueco['estuche_id']) : null;
+        $codigo  = $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : ($hueco['codigo'] ?? '#' . $actual);
+
+        return 'Esta pieza ya está en el hueco «' . $codigo . '» y solo puede estar en uno. '
+            . 'Muévela desde allí o usa «Traer pieza aquí» en el hueco nuevo.';
     }
 }

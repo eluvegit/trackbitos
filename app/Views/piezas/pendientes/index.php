@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <!-- Mismo patrón que la galería (fase 32): un token de sesión leído una vez,
      reutilizado en todos los fetch() de esta pantalla (crear pieza, marcar

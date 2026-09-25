@@ -669,4 +669,28 @@ class UbicacionesController extends BaseController
 
         return redirect()->to($volver)->with('success', $mensaje);
     }
+
+    public function quitarPieza(int $id)
+    {
+        $volver = site_url('piezas/ubicaciones/huecos/' . $id);
+
+        if (!$this->huecos->find($id)) {
+            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese hueco no existe.');
+        }
+
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $variante   = $varianteId > 0 ? $this->variantes->find($varianteId) : null;
+        if (!$variante) {
+            return redirect()->to($volver)->with('error', 'Esa pieza no existe.');
+        }
+
+        $familia = $this->familias->find($variante['familia_id']);
+        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+
+        $movidos = $this->inventario->quitarVarianteDeHueco($id, $varianteId);
+
+        return $movidos > 0
+            ? redirect()->to($volver)->with('success', '«' . $nombre . '» quitada de este hueco: queda sin asignar.')
+            : redirect()->to($volver)->with('error', '«' . $nombre . '» no estaba en este hueco.');
+    }
 }

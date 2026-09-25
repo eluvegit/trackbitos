@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <?php
     // Semáforo por variante: rojo a cero, amarillo entre 1 y el mínimo,
@@ -16,9 +17,17 @@
     // Marca de visibilidad en sterclicks, mismo criterio que el ojo del
     // índice: ojo tenue si la pieza llega al catálogo, ojo tachado en ámbar
     // si algún nivel (pieza, familia o categoría) la deja fuera.
-    $ojoSterclicks = static fn (array $f): string => $f['visibleSterclicks']
-        ? '<i class="bi bi-eye text-body-tertiary" title="Visible en sterclicks"></i>'
-        : '<i class="bi bi-eye-slash text-warning" title="Oculta de sterclicks"></i>';
+    $ojoSterclicks = static function (array $f): string {
+        $propia = !empty($f['variante']['visible_sterclicks']);
+        [$icono, $color, $titulo] = !$propia
+            ? ['bi-eye-slash', 'text-warning', 'Oculta de sterclicks. Pulsa para mostrarla']
+            : ($f['visibleSterclicks']
+                ? ['bi-eye', 'text-body-tertiary', 'Visible en sterclicks. Pulsa para ocultarla']
+                : ['bi-eye-slash', 'text-body-tertiary', 'Oculta por su pieza o categoría. Pulsa para ocultar también esta variante']);
+
+        return '<button type="button" class="btn btn-link p-0 border-0 lh-1 ' . $color . '" data-ojo-sterclicks="' . (int) $f['variante']['id'] . '"'
+            . ' data-padres="' . (empty($f['padresVisibles']) ? '0' : '1') . '" title="' . esc($titulo, 'attr') . '"><i class="bi ' . $icono . '"></i></button>';
+    };
 
     // Enlaces de filtro / vista / categoría / sterclicks que conservan los
     // demás parámetros (todos los ejes se combinan).
@@ -263,6 +272,37 @@
     input.addEventListener('input', aplicar);
     aplicar();
 })();
+</script>
+
+<script>
+document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-ojo-sterclicks]');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (b.disabled) return;
+    b.disabled = true;
+    var datos = new FormData();
+    datos.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+    fetch('<?= site_url('piezas/variante') ?>/' + b.dataset.ojoSterclicks + '/visibilidad', {
+        method: 'POST', body: datos, headers: {'X-Requested-With': 'XMLHttpRequest'}
+    }).then(function (r) { return r.json(); }).then(function (r) {
+        if (!r.ok) { alert(r.mensaje || 'No se pudo cambiar.'); return; }
+        var padres = b.dataset.padres !== '0';
+        var icono = b.querySelector('i');
+        b.classList.remove('text-warning', 'text-body-tertiary');
+        if (!r.visible) {
+            icono.className = 'bi bi-eye-slash';
+            b.classList.add('text-warning');
+            b.title = 'Oculta de sterclicks. Pulsa para mostrarla';
+        } else {
+            icono.className = padres ? 'bi bi-eye' : 'bi bi-eye-slash';
+            b.classList.add('text-body-tertiary');
+            b.title = padres ? 'Visible en sterclicks. Pulsa para ocultarla' : 'Oculta por su pieza o categoría. Pulsa para ocultar también esta variante';
+        }
+    }).catch(function () { alert('No se pudo cambiar la visibilidad.'); })
+      .finally(function () { b.disabled = false; });
+}, true);
 </script>
 
 <?= $this->endSection() ?>

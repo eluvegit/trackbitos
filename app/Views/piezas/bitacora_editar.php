@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <?php
     /**

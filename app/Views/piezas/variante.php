@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <?php
 $badges = [
@@ -213,63 +214,70 @@ $nTareasCabecera   = count($tareasLineas);
 $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
 ?>
 
-<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-box text-primary"></i>
-    <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
-    <span class="text-muted">/</span>
-    <?php // Entre familia y variante NO va "/": no hay pantalla intermedia (no
-          // existe una ficha "solo familia"), así que una barra ahí sugiere una
-          // navegación que no existe. Es un guion porque es una sola pieza, con
-          // familia y variante como dos partes de su nombre. ?>
-    <span class="text-muted fw-normal"><?= esc($familia['nombre']) ?></span>
-    <span class="text-muted">-</span>
-    <strong class="fw-semibold"><?= esc($variante['nombre']) ?></strong>
-    <?php // Sin color de fondo: text-bg-light sobre el tema oscuro deja el código
-          // casi ilegible (mismo arreglo que colSku() en piezas/index.php). ?>
-    <?php if (!empty($variante['sku'])): ?>
-        <span class="badge border text-body-secondary font-monospace fw-normal"><?= esc($variante['sku']) ?></span>
-    <?php endif; ?>
-    <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/visibilidad') ?>" class="d-inline">
-        <?= csrf_field() ?>
-        <button type="submit" class="btn btn-sm py-0 px-1 <?= empty($variante['visible_sterclicks']) ? 'btn-outline-secondary' : 'btn-outline-primary' ?>"
-            title="<?= empty($variante['visible_sterclicks']) ? 'Mostrar en sterclicks' : 'Ocultar de sterclicks' ?>">
-            <i class="bi <?= empty($variante['visible_sterclicks']) ? 'bi-eye-slash' : 'bi-eye' ?>"></i>
-            <?= empty($variante['visible_sterclicks']) ? 'oculta en sterclicks' : 'visible en sterclicks' ?>
-        </button>
-    </form>
-    <?php if (!empty($variante['enlace_original'])): ?>
-        <?php // El máster de máxima calidad vive fuera del tracker (Drive u otro sitio): esto es solo el enlace. ?>
-        <a href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener"
-            class="badge border text-body-secondary text-decoration-none" title="Abrir el original de máxima calidad">
-            <i class="bi bi-box-arrow-up-right"></i> original
-        </a>
-    <?php endif; ?>
-    <button type="button" class="btn btn-sm py-0 px-1 border-0 <?= ($nTareasCabecera || $tieneAdvertencia) ? 'text-primary' : 'text-body-tertiary' ?>"
-        title="Tareas pendientes y advertencia de esta pieza"
-        data-bs-toggle="modal" data-bs-target="#modalTareas">
-        <?php if ($nTareasCabecera): ?><span class="small"><?= $nTareasCabecera ?></span><?php endif; ?>
-        <i class="bi bi-card-checklist"></i>
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
-        data-bs-toggle="modal" data-bs-target="#modalSku">
-        <i class="bi bi-pencil"></i>
-    </button>
-    <?php // Borra solo esta variante (invariante 6, ahora también suelta): el resto de la pieza sigue intacto. ?>
-    <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>"
-        onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
-        <?= csrf_field() ?>
-        <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Borrar esta variante">
-            <i class="bi bi-trash"></i>
-        </button>
-    </form>
+<div class="cabecera-ficha mb-3">
+    <div class="d-flex align-items-end gap-3 flex-wrap">
+        <div style="min-width: 0;">
+            <div class="small text-body-secondary mb-1">
+                <a href="<?= site_url('piezas') ?>" class="text-reset text-decoration-none">Piezas</a>
+                <i class="bi bi-chevron-right mx-1" style="font-size: .65rem;"></i>
+                <?= esc($familia['nombre']) ?>
+            </div>
+            <h4 class="mb-0 fw-bold d-flex align-items-center gap-2 flex-wrap">
+                <?= esc($variante['nombre']) ?>
+                <?php if (!empty($variante['sku'])): ?>
+                    <span class="badge rounded-pill bg-body-secondary text-body-secondary font-monospace fw-normal fs-7"><?= esc($variante['sku']) ?></span>
+                <?php endif; ?>
+            </h4>
+        </div>
 
-    <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary ms-auto">
-        <i class="bi bi-grid-3x3-gap"></i> Galería
-        <?php if (!empty($carrito)): ?>
-            <span class="badge text-bg-primary"><?= count($carrito) ?></span>
+        <div class="btn-group ms-auto">
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
+                data-bs-toggle="modal" data-bs-target="#modalSku">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button type="submit" form="formBorrarVariante" class="btn btn-sm btn-outline-danger" title="Borrar esta variante">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+        <form id="formBorrarVariante" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>" class="d-none"
+            onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+            <?= csrf_field() ?>
+        </form>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        <?php $visible = !empty($variante['visible_sterclicks']); ?>
+        <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/visibilidad') ?>" class="d-inline">
+            <?= csrf_field() ?>
+            <button type="submit" class="chip <?= $visible ? 'chip-activo' : '' ?>" title="<?= $visible ? 'Ocultar de sterclicks' : 'Mostrar en sterclicks' ?>">
+                <i class="bi <?= $visible ? 'bi-eye' : 'bi-eye-slash' ?>"></i> <?= $visible ? 'Visible en sterclicks' : 'Oculta en sterclicks' ?>
+            </button>
+        </form>
+        <?php if (!empty($variante['enlace_original'])): ?>
+            <a href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener" class="chip" title="Abrir el original de máxima calidad">
+                <i class="bi bi-box-arrow-up-right"></i> Original
+            </a>
         <?php endif; ?>
-    </a>
-</h5>
+        <button type="button" class="chip <?= $tieneAdvertencia ? 'chip-aviso' : ($nTareasCabecera ? 'chip-activo' : '') ?>"
+            title="Tareas pendientes y advertencia de esta pieza" data-bs-toggle="modal" data-bs-target="#modalTareas">
+            <i class="bi <?= $tieneAdvertencia ? 'bi-exclamation-triangle' : 'bi-card-checklist' ?>"></i>
+            <?= $nTareasCabecera ? $nTareasCabecera . ' tarea' . ($nTareasCabecera === 1 ? '' : 's') : 'Tareas' ?>
+        </button>
+    </div>
+</div>
+<style>
+    .cabecera-ficha .fs-7 { font-size: .75rem; }
+    .cabecera-ficha .chip {
+        display: inline-flex; align-items: center; gap: .35rem;
+        font-size: .8rem; line-height: 1; padding: .4rem .75rem;
+        border-radius: 50rem; border: 1px solid var(--bs-border-color);
+        background: transparent; color: var(--bs-secondary-color); text-decoration: none;
+        transition: background-color .15s, color .15s, border-color .15s;
+    }
+    .cabecera-ficha .chip:hover { background: var(--bs-tertiary-bg); color: var(--bs-body-color); }
+    .cabecera-ficha .chip-activo { border-color: var(--bs-primary-border-subtle); background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+    .cabecera-ficha .chip-aviso { border-color: var(--bs-warning-border-subtle); background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+</style>
 
 <?php
 /**
@@ -552,36 +560,67 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
         <!-- Cabecera: cuál es la buena -->
         <div class="card shadow-sm mb-3">
             <div class="card-body p-3">
-                <?php if ($validada): ?>
-                    <?php $imagenValidada = $validada['renders'][0] ?? null; ?>
-                    <div class="d-flex align-items-center gap-3">
-                        <?php if ($imagenValidada): ?>
-                            <img src="<?= imagen_pieza($imagenValidada, 'render') ?>"
-                                class="rounded border flex-shrink-0" style="width: 110px; height: 110px; object-fit: cover;"
-                                alt="<?= esc($etiqueta($validada), 'attr') ?>">
-                        <?php endif; ?>
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="badge text-bg-success fs-6">
-                                    <i class="bi bi-check-circle-fill"></i> <?= $etiqueta($validada) ?>
-                                </span>
-                                <span class="fw-semibold">es la versión buena</span>
-                            </div>
-                            <div class="small text-muted"><?= esc($validada['cambio']) ?></div>
-                            <?php if (!empty($validada['medidas'])): ?>
-                                <div class="small text-muted mt-1"><i class="bi bi-rulers"></i> <?= esc($validada['medidas']) ?></div>
-                            <?php endif; ?>
+                <?php
+                    $ex = $existencias;
+                    $colorStock = ['cero' => 'danger', 'bajo' => 'warning', 'ok' => 'success'][$ex['estado']];
+                    $imagenValidada = $validada['renders'][0] ?? null;
+                ?>
+                <div class="cabecera-buena d-flex flex-wrap flex-md-nowrap align-items-stretch gap-3">
+                    <?php if ($validada && $imagenValidada): ?>
+                        <img src="<?= imagen_pieza($imagenValidada, 'render') ?>" class="cabecera-img rounded-3 flex-shrink-0"
+                            alt="<?= esc($etiqueta($validada), 'attr') ?>">
+                    <?php elseif ($validada): ?>
+                        <div class="cabecera-img rounded-3 flex-shrink-0 d-flex align-items-center justify-content-center text-body-tertiary">
+                            <i class="bi bi-image fs-1"></i>
                         </div>
+                    <?php endif; ?>
+
+                    <div class="flex-grow-1 d-flex flex-column justify-content-center" style="min-width: 0;">
+                        <?php if ($validada): ?>
+                            <div class="text-success small fw-semibold text-uppercase mb-1" style="letter-spacing: .05em;">
+                                <i class="bi bi-patch-check-fill"></i> Versión buena
+                            </div>
+                            <div class="fs-4 fw-bold lh-1 mb-2"><?= $etiqueta($validada) ?></div>
+                            <div class="mb-2"><?= esc($validada['cambio']) ?></div>
+                            <div class="d-flex flex-wrap gap-1">
+                                <?php if (!empty($validada['resina']['aplica']) && $validada['resina']['coste_eur'] !== null): ?>
+                                    <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal"><i class="bi bi-droplet"></i> <?= number_format((float) $validada['resina']['coste_eur'], 2, ',', '.') ?> €</span>
+                                <?php endif; ?>
+                                <span class="badge rounded-pill bg-body-secondary text-body-secondary fw-normal"><i class="bi bi-calendar3"></i> <?= esc(date('d/m/Y', strtotime($validada['promocionada_en']))) ?></span>
+                            </div>
+                        <?php else: ?>
+                            <div class="text-muted">
+                                <i class="bi bi-hourglass"></i>
+                                Ninguna versión validada todavía: pendiente de imprimir y llegar a una versión válida.
+                            </div>
+                        <?php endif; ?>
                     </div>
-                <?php else: ?>
-                    <div class="text-muted">
-                        <i class="bi bi-hourglass"></i>
-                        Ninguna versión validada todavía: pendiente de imprimir y llegar a una versión válida.
-                    </div>
-                <?php endif; ?>
+
+                    <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>"
+                        class="cabecera-stock rounded-3 text-decoration-none text-center d-flex flex-column justify-content-center px-3 py-2 border border-<?= $colorStock ?>-subtle bg-<?= $colorStock ?>-subtle"
+                        title="Ver ficha de existencias">
+                        <div class="display-6 fw-bold lh-1 text-<?= $colorStock ?>-emphasis"><?= (int) $ex['stock'] ?></div>
+                        <div class="small text-<?= $colorStock ?>-emphasis">en stock</div>
+                        <div class="small text-body-secondary mt-1">
+                            <i class="bi bi-geo-alt"></i> <?= $ex['hueco'] ? esc($ex['hueco']['codigo']) : 'sin hueco' ?>
+                        </div>
+                        <?php if ($ex['minimo'] > 0): ?>
+                            <div class="text-body-secondary" style="font-size: .7rem;">mínimo <?= (int) $ex['minimo'] ?></div>
+                        <?php endif; ?>
+                    </a>
+                </div>
+                <style>
+                    .cabecera-buena .cabecera-img { width: 140px; height: 140px; object-fit: cover; background: var(--bs-tertiary-bg); }
+                    .cabecera-buena .cabecera-stock { min-width: 110px; transition: transform .15s; }
+                    .cabecera-buena .cabecera-stock:hover { transform: translateY(-2px); }
+                    @media (max-width: 767.98px) {
+                        .cabecera-buena .cabecera-img { width: 100%; height: 200px; }
+                        .cabecera-buena .cabecera-stock { width: 100%; flex-direction: row !important; gap: .75rem; align-items: baseline; }
+                    }
+                </style>
 
                 <?php if ($origen): ?>
-                    <div class="small text-muted mt-2">
+                    <div class="small text-muted mt-3">
                         Derivada de <?= esc($origen['variante']['nombre'] ?? '?') ?> ·
                         <?= $etiqueta($origen) ?>
                     </div>
@@ -625,7 +664,9 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 cuando el modelo esté en un punto que merezca congelarse.
             </p>
         <?php else: ?>
+            <?php $idUltima = (int) (reset($versiones)['id'] ?? 0); ?>
             <?php foreach ($versiones as $v): ?>
+                <?php $desplegada = (int) $v['id'] === $idUltima || $v['estado'] === 'validada'; ?>
                 <?php
                     /**
                      * Renders de las OTRAS versiones (más los sueltos): lo que
@@ -648,13 +689,15 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 ?>
                 <div class="card shadow-sm mb-2" id="version-<?= (int) $v['id'] ?>">
                     <div class="card-body p-3">
-                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1" role="button" data-bs-toggle="collapse" data-bs-target="#detalle-v<?= (int) $v['id'] ?>" title="Mostrar u ocultar el detalle">
                             <span class="badge <?= $badges[$v['estado']] ?? 'text-bg-secondary' ?>"><?= $etiqueta($v) ?></span>
                             <span class="text-muted small"><?= esc($nombreEstado($v['estado'])) ?></span>
                             <span class="text-muted small ms-auto"><?= esc($v['promocionada_en']) ?></span>
+                            <i class="bi bi-chevron-expand text-muted small"></i>
                         </div>
 
                         <div class="mb-1"><?= esc($v['cambio']) ?></div>
+                        <div class="collapse<?= $desplegada ? ' show' : '' ?>" id="detalle-v<?= (int) $v['id'] ?>">
 
                         <?php if ($v['pendiente_de_juicio']): ?>
                             <div class="alert alert-secondary py-1 px-2 small my-2">
@@ -1012,6 +1055,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                                 <pre class="small mb-0 user-select-all"><code>trackbitos bajar "<?= esc($refCli) ?>"</code></pre>
                             </div>
                         <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
@@ -1447,10 +1491,6 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                     <input type="text" name="cambio" class="form-control form-control-sm mb-2"
                         placeholder="<?= $primeraVersion ? 'Primer modelado a partir de la foto del original' : 'Brazo 0.4mm más grueso en la unión' ?>"
                         <?= $acciones['puede_promocionar'] ? 'required' : 'disabled' ?>>
-                    <label class="form-label small">Medidas</label>
-                    <input type="text" name="medidas" class="form-control form-control-sm mb-2"
-                        placeholder="eje 4.9mm, pared 1.2mm"
-                        <?= $acciones['puede_promocionar'] ? '' : 'disabled' ?>>
                     <button type="<?= $conPautas ? 'button' : 'submit' ?>"
                         class="btn btn-sm w-100 <?= $acciones['puede_promocionar'] ? 'btn-primary' : 'btn-secondary' ?>"
                         <?= $conPautas ? 'data-bs-toggle="modal" data-bs-target="#modalPautasPromocion"' : '' ?>
@@ -1920,6 +1960,89 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
             <?php endif; ?>
         <?php endif; ?>
 
+        <?php $ex = $existencias; $colorStock = ['cero' => 'danger', 'bajo' => 'warning', 'ok' => 'success'][$ex['estado']]; ?>
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2 d-flex align-items-center gap-2">
+                    <i class="bi bi-boxes"></i> Existencias
+                    <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>" class="ms-auto small fw-normal">Ver ficha de existencias</a>
+                </h6>
+                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                    <div class="col">
+                        <div class="fs-6 fw-semibold text-<?= $colorStock ?>"><?= (int) $ex['stock'] ?></div>
+                        <div class="text-muted small">uds. en stock</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $ex['minimo'] > 0 ? (int) $ex['minimo'] : '—' ?></div>
+                        <div class="text-muted small">stock mínimo</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold">
+                            <?php if ($ex['hueco']): ?>
+                                <a href="<?= site_url('piezas/ubicaciones/huecos/' . $ex['hueco']['id']) ?>"><?= esc($ex['hueco']['codigo']) ?></a>
+                            <?php else: ?>—<?php endif; ?>
+                        </div>
+                        <div class="text-muted small">hueco</div>
+                    </div>
+                    <div class="col">
+                        <div class="fs-6 fw-semibold"><?= $ex['defecto'] ? esc($ex['defecto']['codigo']) : '—' ?></div>
+                        <div class="text-muted small">hueco por defecto</div>
+                    </div>
+                </div>
+                <?php if ($ex['sueltas'] > 0): ?>
+                    <div class="small text-muted mt-2"><?= (int) $ex['sueltas'] ?> uds. sin asignar a ningún hueco.</div>
+                <?php endif; ?>
+                <?php if ($ex['estado'] === 'bajo'): ?>
+                    <div class="small text-warning-emphasis mt-2">Por debajo del stock mínimo.</div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <?php
+        $etiquetasPedido = ['nuevo' => 'Pendiente', 'en_produccion' => 'Produciendo', 'completado' => 'Hecho', 'cancelado' => 'Cancelado'];
+        $coloresPedido   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'completado' => 'success', 'cancelado' => 'secondary'];
+        $porServir = 0;
+        foreach ($pedidosDeLaPieza as $pl) {
+            if (in_array($pl['estado'], ['nuevo', 'en_produccion'], true)) {
+                $porServir += max(0, (int) $pl['cantidad'] - (int) $pl['cantidad_completada']);
+            }
+        }
+        ?>
+        <div class="card shadow-sm mb-3">
+            <div class="card-body p-3">
+                <h6 class="mb-2 d-flex align-items-center gap-2">
+                    <i class="bi bi-cart-check"></i> Pedidos
+                    <?php if ($porServir > 0): ?>
+                        <span class="badge text-bg-primary fw-normal"><?= $porServir ?> uds. por hacer</span>
+                    <?php endif; ?>
+                </h6>
+                <?php if (empty($pedidosDeLaPieza)): ?>
+                    <p class="text-muted small mb-0">Esta pieza no aparece en ningún pedido.</p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle small mb-0">
+                            <thead>
+                                <tr class="text-muted"><th>Pedido</th><th>Estado</th><th class="text-end">Hechas / pedidas</th><th class="text-end">Fecha</th></tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pedidosDeLaPieza as $pl): ?>
+                                    <tr>
+                                        <td>
+                                            <a href="<?= site_url('piezas/pedido/' . (int) $pl['id']) ?>">#<?= (int) $pl['id'] ?></a>
+                                            <span class="text-muted"><?= esc($pl['referencia_externa'] ?: $pl['origen']) ?></span>
+                                        </td>
+                                        <td><span class="badge text-bg-<?= $coloresPedido[$pl['estado']] ?? 'secondary' ?>"><?= esc($etiquetasPedido[$pl['estado']] ?? $pl['estado']) ?></span></td>
+                                        <td class="text-end"><?= (int) $pl['cantidad_completada'] ?> / <?= (int) $pl['cantidad'] ?></td>
+                                        <td class="text-end text-muted"><?= esc(date('d/m/y', strtotime($pl['creado_en']))) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <!-- Estadísticas de esta pieza: tamaño en disco y un par de datos que solo importan aquí, no en el listado. -->
         <div class="card shadow-sm mb-3">
             <div class="card-body p-3">
@@ -1950,8 +2073,6 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                     </div>
                 <?php endif; ?>
             </div>
-        </div>
-
         </div>
 
         <!-- Cómo se toca el fichero -->

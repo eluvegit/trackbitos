@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <!-- Token para los fetch() de la placa (añadir/quitar/vaciar sin recargar,
      así no se pierde el filtro de la galería — fase 32). Con

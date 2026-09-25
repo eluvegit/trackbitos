@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <?php
 /** KB para lo pequeño, MB con un decimal en cuanto pasa de 1 MB — mismo criterio que la ficha de variante. */

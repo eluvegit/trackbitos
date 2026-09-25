@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <style>
     /* Tarjetas estrechas de ancho fijo en vez de una única lista a lo ancho
@@ -127,6 +128,15 @@
                     </a>
                     <div class="pie">
                         <span class="badge text-bg-light border"><?= (int) $f['stock'] ?> uds.</span>
+
+                        <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/quitar-pieza') ?>" class="ms-auto"
+                            onsubmit="return confirm('¿Quitar «<?= esc($f['nombre'], 'js') ?>» de este hueco? Queda sin asignar.');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="variante_id" value="<?= (int) $f['variante']['id'] ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Quitar del hueco (queda sin asignar)">
+                                <i class="bi bi-box-arrow-up"></i>
+                            </button>
+                        </form>
 
                         <?php if (!empty($destinos)): ?>
                             <div class="dropdown">

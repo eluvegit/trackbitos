@@ -848,6 +848,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('ubicaciones/huecos/(:num)/mover', 'UbicacionesController::moverStock/$1');
     $routes->POST('ubicaciones/huecos/(:num)/mover-pieza', 'UbicacionesController::moverPieza/$1');
     $routes->POST('ubicaciones/huecos/(:num)/traer-pieza', 'UbicacionesController::traerPieza/$1');
+    $routes->POST('ubicaciones/huecos/(:num)/quitar-pieza', 'UbicacionesController::quitarPieza/$1');
     $routes->GET('ubicaciones/huecos/(:num)/pieza-buscar', 'UbicacionesController::buscarPieza/$1');
     $routes->GET('ubicaciones/huecos/(:num)', 'UbicacionesController::verHueco/$1');
 

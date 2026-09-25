@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <!-- Mismo patrón que "Pendientes de crear" y la galería: un token de sesión
      leído una vez y reutilizado en todos los fetch() de esta pantalla

@@ -1715,3 +1715,9 @@ Migraciones `2026-09-10-000001_CreatePiezasStockMovimientos` y
 `app/Services/PiezaInventario.php`; modelo `PiezaStockMovimientoModel`; controlador
 `app/Controllers/Piezas/ExistenciasController.php`. Pendiente para más adelante: descontar stock
 desde Pedidos (`motivo` ya tiene sitio; hoy no se toca).
+
+**Corrección (2026-09-25): el stock por hueco cuadra con el total.** Una baja es una fila con delta negativo y `ubicacion_id` NULL (las piezas ya no existen, no están en ningún hueco). Los desgloses por hueco sumaban solo filas con ese hueco, así que la baja no restaba en ninguno y la ficha del hueco mostraba más que el inventario. Ahora `PiezaStockMovimientoModel::reparto()` resta cada baja del hueco de la pieza (regla: cada pieza vive en un único hueco): la suma de los huecos de una variante es siempre su stock total.
+
+**Regla (2026-09-25): una pieza, un solo hueco.** Se niega (y explica) meter una variante en un hueco si ya vive en otro: alta manual con hueco, colocar lo suelto y fijar hueco por defecto (`ExistenciasController::errorOtroHueco()`). Un alta manual sin hueco va sola al hueco de la pieza, y lo que sale de una placa también (`PiezaInventario::sincronizarPlaca()` usa primero `huecoDeVariante()`, después el hueco por defecto). Para cambiarla de sitio: "Mover pieza" desde su hueco o "Traer pieza aquí" desde el nuevo.
+
+**Quitar pieza de un hueco (2026-09-25).** En la ficha del hueco, cada pieza tiene un botón que la saca del hueco y la deja sin asignar, tras pedir confirmación (`UbicacionesController::quitarPieza()`, ruta `ubicaciones/huecos/(:num)/quitar-pieza`). No cambia el stock, solo la ubicación. Si ese hueco era su hueco por defecto, se quita también, para que la próxima placa no la vuelva a meter ahí.

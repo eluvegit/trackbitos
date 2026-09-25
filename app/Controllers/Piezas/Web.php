@@ -1297,6 +1297,13 @@ class Web extends BaseController
             // Checklist recordatorio antes de promocionar (spec: pautas de
             // promoción). Vacío cuando aún no se ha configurado ninguna.
             'pautas'    => (new PiezaConfigModel())->pautasPromocion(),
+            'existencias' => $this->existenciasDeVariante($variante),
+            'pedidosDeLaPieza' => db_connect()->table('piezas_pedidos_lineas l')
+                ->select('p.id, p.estado, p.origen, p.referencia_externa, p.creado_en, l.cantidad, l.cantidad_completada')
+                ->join('piezas_pedidos p', 'p.id = l.pedido_id')
+                ->where('l.variante_id', $id)
+                ->orderBy('p.creado_en', 'DESC')
+                ->get()->getResultArray(),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
             'carrito'   => $this->carritoActual(),
             // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban
@@ -3152,6 +3159,33 @@ class Web extends BaseController
     private function paraNombreDeArchivo(?string $texto): string
     {
         return trim(preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $texto), '-');
+    }
+
+    private function existenciasDeVariante(array $variante): array
+    {
+        $inventario = new PiezaInventario();
+        $id     = (int) $variante['id'];
+        $stock  = $inventario->stockDeVariante($id);
+        $minimo = (int) ($variante['stock_minimo'] ?? 0);
+
+        $codigo = static function (?int $huecoId): ?array {
+            $hueco = $huecoId ? (new PiezaHuecoModel())->find($huecoId) : null;
+            if (!$hueco) {
+                return null;
+            }
+            $estuche = (new PiezaEstucheModel())->find($hueco['estuche_id']);
+
+            return ['id' => (int) $hueco['id'], 'codigo' => $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : $hueco['codigo']];
+        };
+
+        return [
+            'stock'    => $stock,
+            'minimo'   => $minimo,
+            'estado'   => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
+            'hueco'    => $codigo($inventario->huecoDeVariante($id)),
+            'sueltas'  => max(0, $inventario->stockPorHueco($id)[0] ?? 0),
+            'defecto'  => $codigo(isset($variante['hueco_predeterminado_id']) ? (int) $variante['hueco_predeterminado_id'] : null),
+        ];
     }
 
     private function carritoActual(): array

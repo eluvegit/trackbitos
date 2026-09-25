@@ -51,76 +51,92 @@ class PiezaStockMovimientoModel extends Model
     }
 
     /**
-     * Desglose por hueco del stock de una variante. La clave 0 agrupa lo
-     * que no tiene hueco asignado (ubicacion_id NULL).
+     * Stock por hueco que cuadra con el total. Cada pieza vive en un único
+     * hueco: las bajas (delta negativo, sin hueco) se restan de ese hueco.
      *
-     * Las bajas (delta negativo) quedan fuera: quitan stock del total
-     * (stockDe/stockPorVariante lo suman todo), pero no son una asignación
-     * de hueco — no cuentan para la distribución, así que no restan aquí.
-     *
-     * @return array<int,int>  huecoId (0 = sin asignar) => stock
+     * @return array<int, array<int,int>>  varianteId => (huecoId => stock)
      */
+    private function reparto(array $varianteIds = []): array
+    {
+        $q = $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
+            ->where('NOT (delta < 0 AND ubicacion_id IS NULL)', null, false)
+            ->groupBy(['variante_id', 'ubicacion_id']);
+        if ($varianteIds !== []) {
+            $q->whereIn('variante_id', $varianteIds);
+        }
+
+        $mapa = [];
+        foreach ($q->findAll() as $fila) {
+            $mapa[(int) $fila['variante_id']][(int) ($fila['ubicacion_id'] ?? 0)] = (int) $fila['total'];
+        }
+
+        $q = $this->select('variante_id, SUM(-delta) AS total')
+            ->where('delta <', 0)
+            ->where('ubicacion_id', null)
+            ->groupBy('variante_id');
+        if ($varianteIds !== []) {
+            $q->whereIn('variante_id', $varianteIds);
+        }
+
+        foreach ($q->findAll() as $fila) {
+            $vid   = (int) $fila['variante_id'];
+            $hueco = max(array_keys($mapa[$vid] ?? [0 => 0]));
+            $mapa[$vid][$hueco] = ($mapa[$vid][$hueco] ?? 0) - (int) $fila['total'];
+        }
+
+        foreach ($mapa as $vid => $porHueco) {
+            $mapa[$vid] = array_filter($porHueco, static fn (int $n) => $n !== 0);
+            if ($mapa[$vid] === []) {
+                unset($mapa[$vid]);
+            }
+        }
+
+        return $mapa;
+    }
+
+    /** @return array<int,int>  huecoId (0 = sin asignar) => stock */
     public function stockPorHueco(int $varianteId): array
     {
-        $mapa = [];
-        foreach (
-            $this->select('ubicacion_id, SUM(delta) AS total')
-                ->where('variante_id', $varianteId)
-                ->where('delta >', 0)
-                ->groupBy('ubicacion_id')
-                ->findAll() as $fila
-        ) {
-            $mapa[(int) ($fila['ubicacion_id'] ?? 0)] = (int) $fila['total'];
-        }
-
-        return $mapa;
+        return $this->reparto([$varianteId])[$varianteId] ?? [];
     }
 
-    /**
-     * Qué variantes hay en un hueco y cuánto de cada una. Igual que
-     * stockPorHueco(), las bajas no cuentan (ver ahí el porqué).
-     *
-     * @return array<int,int>  varianteId => stock
-     */
+    /** Hueco donde vive la variante (con stock > 0), o null si no está en ninguno. */
+    public function huecoDeVariante(int $varianteId): ?int
+    {
+        foreach ($this->stockPorHueco($varianteId) as $huecoId => $n) {
+            if ($huecoId > 0 && $n > 0) {
+                return $huecoId;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array<int,int>  varianteId => stock en ese hueco */
     public function stockDeHueco(int $huecoId): array
     {
+        $ids = array_map('intval', array_column(
+            $this->select('variante_id')->distinct()->where('ubicacion_id', $huecoId)->findAll(),
+            'variante_id'
+        ));
+        if ($ids === []) {
+            return [];
+        }
+
         $mapa = [];
-        foreach (
-            $this->select('variante_id, SUM(delta) AS total')
-                ->where('ubicacion_id', $huecoId)
-                ->where('delta >', 0)
-                ->groupBy('variante_id')
-                ->findAll() as $fila
-        ) {
-            $mapa[(int) $fila['variante_id']] = (int) $fila['total'];
+        foreach ($this->reparto($ids) as $vid => $porHueco) {
+            if (isset($porHueco[$huecoId])) {
+                $mapa[$vid] = $porHueco[$huecoId];
+            }
         }
 
         return $mapa;
     }
 
-    /**
-     * Stock de todas las variantes desglosado por hueco, en una sola
-     * consulta — para catálogos donde hace falta ver de un vistazo cuánto
-     * hay de cada pieza y dónde está, sin una consulta por variante. Igual
-     * que stockPorHueco(), las bajas no cuentan.
-     *
-     * @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock)
-     */
+    /** @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock) */
     public function stockPorVarianteYHueco(): array
     {
-        $mapa = [];
-        foreach (
-            $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
-                ->where('delta >', 0)
-                ->groupBy(['variante_id', 'ubicacion_id'])
-                ->findAll() as $fila
-        ) {
-            $vid = (int) $fila['variante_id'];
-            $hid = (int) ($fila['ubicacion_id'] ?? 0);
-            $mapa[$vid][$hid] = (int) $fila['total'];
-        }
-
-        return $mapa;
+        return $this->reparto();
     }
 
     /**
@@ -186,6 +202,16 @@ class PiezaStockMovimientoModel extends Model
         $n = $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->countAllResults(false);
         if ($n > 0) {
             $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->set('ubicacion_id', $destinoId)->update();
+        }
+
+        return $n;
+    }
+
+    public function quitarVarianteDeHueco(int $huecoId, int $varianteId): int
+    {
+        $n = $this->where('ubicacion_id', $huecoId)->where('variante_id', $varianteId)->countAllResults(false);
+        if ($n > 0) {
+            $this->where('ubicacion_id', $huecoId)->where('variante_id', $varianteId)->set('ubicacion_id', null)->update();
         }
 
         return $n;

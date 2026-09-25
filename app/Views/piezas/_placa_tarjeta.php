@@ -11,7 +11,6 @@
  * (id => ['raiz' => int, 'hermanas' => list<int>], solo si tiene),
  * $nombresPlacas (id => nombre, para las hermanas).
  */
-$disponibles = count(array_filter($lista, static fn($p) => $p['disponible']));
 $idPlaca = (int) $placa['id'];
 $fecha = strtotime($placa['creado_en']);
 $cuadros = $cuadrosPorPlaca[$idPlaca] ?? ['usados' => 0, 'sinMedir' => 0];
@@ -51,10 +50,6 @@ $claseLomo = $resumen['veredicto']
             <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
                 <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
                 <span class="ms-auto"><?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?></span>
-                <?php if ($disponibles < count($lista)): ?>
-                    <i class="bi bi-exclamation-triangle text-warning"
-                        title="Algún STL de esta placa ya no está disponible"></i>
-                <?php endif; ?>
             </div>
 
             <?php // Procedencia: de qué placa se repite/reparte, y de qué pedido salió,
