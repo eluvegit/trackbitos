@@ -4,7 +4,11 @@ namespace App\Controllers\Silo;
 
 use App\Controllers\BaseController;
 use App\Models\SiloEventoModel;
+use App\Models\SiloFicheroModel;
+use App\Models\SiloPiezaModel;
+use App\Models\SiloProxyModel;
 use App\Models\SiloTareaModel;
+use App\Models\SiloUbicacionModel;
 use App\Models\SiloUnidadModel;
 use App\Services\SiloIngestaService;
 use App\Services\SiloService;
@@ -22,16 +26,24 @@ class Agente extends BaseController
     protected SiloUnidadModel $unidadModel;
     protected SiloTareaModel $tareaModel;
     protected SiloEventoModel $eventoModel;
+    protected SiloPiezaModel $piezaModel;
+    protected SiloUbicacionModel $ubicacionModel;
+    protected SiloProxyModel $proxyModel;
+    protected SiloFicheroModel $ficheroModel;
     protected SiloService $silo;
     protected SiloIngestaService $ingesta;
 
     public function __construct()
     {
-        $this->unidadModel = new SiloUnidadModel();
-        $this->tareaModel  = new SiloTareaModel();
-        $this->eventoModel = new SiloEventoModel();
-        $this->silo        = new SiloService();
-        $this->ingesta     = new SiloIngestaService();
+        $this->unidadModel    = new SiloUnidadModel();
+        $this->tareaModel     = new SiloTareaModel();
+        $this->eventoModel    = new SiloEventoModel();
+        $this->piezaModel     = new SiloPiezaModel();
+        $this->ubicacionModel = new SiloUbicacionModel();
+        $this->proxyModel     = new SiloProxyModel();
+        $this->ficheroModel   = new SiloFicheroModel();
+        $this->silo           = new SiloService();
+        $this->ingesta        = new SiloIngestaService();
     }
 
     /**
@@ -98,6 +110,19 @@ class Agente extends BaseController
      * por id_negocio) y deja rastro en silo_eventos de todo lo saltado y de
      * cualquier ID de negocio repetido dentro del propio escaneo. Nunca
      * bloquea el resto del lote por un error puntual en una entrada.
+     *
+     * El agente manda SIEMPRE el primer nivel completo del root (nunca un
+     * delta), así que también sirve para detectar borrados: cualquier pieza
+     * de Copia 1 de esta unidad cuyo `id_negocio` no aparezca entre las
+     * candidatas de esta pasada ya no está en el Maestro y se borra del
+     * catálogo (cascada a ficheros/atributos/proxies/ubicaciones vía FK) —
+     * si no, se quedaba huérfana para siempre (p.ej. seguía marcando "sin
+     * lugar" en /silo/datos-faltan una carpeta que ya no existe).
+     *
+     * Cada `ingestadas[]` trae `necesita_proxies`: si es true, el agente
+     * genera (ffmpeg) y sube por separado (subirProxy()) hasta 10 fotos + 10
+     * fotogramas de vídeo de previsualización para esa pieza — ver
+     * docs/silo-ingesta-propagacion.md § "Proxies / capturas".
      */
     public function escaneo()
     {
@@ -150,7 +175,18 @@ class Agente extends BaseController
 
             try {
                 $pieza = $this->ingesta->ingestarCarpeta($unidad['id'], $nombre, (array) ($entrada['ficheros'] ?? []));
-                $ingestadas[] = ['nombre' => $nombre, 'pieza_id' => $pieza['id'], 'id_negocio' => $pieza['id_negocio']];
+                $ingestadas[] = [
+                    'nombre'           => $nombre,
+                    'pieza_id'         => $pieza['id'],
+                    'id_negocio'       => $pieza['id_negocio'],
+                    // El agente genera proxies reales (ffmpeg) solo mientras
+                    // la pieza no tenga ya alguno — ver
+                    // SiloProxyModel::tieneProxiesReales(). Sin esto, cada
+                    // pasada normal (que reingesta TODAS las candidatas, no
+                    // solo las nuevas) volvería a generar proxies para todo
+                    // el Maestro cada vez.
+                    'necesita_proxies' => !$this->proxyModel->tieneProxiesReales((int) $pieza['id']),
+                ];
             } catch (\Throwable $e) {
                 $errores[] = ['nombre' => $nombre, 'error' => $e->getMessage()];
                 $this->eventoModel->registrar('error_ingesta', [
@@ -161,16 +197,34 @@ class Agente extends BaseController
             }
         }
 
+        $desaparecidas = [];
+        foreach ($this->ubicacionModel->deCopia1EnUnidad($unidad['id']) as $registrada) {
+            if (isset($idsVistos[$registrada['id_negocio']])) {
+                continue;
+            }
+
+            $desaparecidas[] = ['nombre' => $registrada['nombre_carpeta'], 'id_negocio' => $registrada['id_negocio']];
+            $this->eventoModel->registrar('carpeta_desaparecida', [
+                'unidad_id'  => $unidad['id'],
+                'pieza_id'   => $registrada['pieza_id'],
+                'referencia' => $registrada['nombre_carpeta'],
+                'detalle'    => "id_negocio {$registrada['id_negocio']}: ya no está en el primer nivel del Maestro, pieza borrada del catálogo.",
+            ]);
+            $this->piezaModel->delete($registrada['pieza_id']);
+        }
+
         $resumen = [
-            'unidad_id'  => $unidad['id'],
-            'ingestadas' => $ingestadas,
-            'saltadas'   => $saltadas,
-            'errores'    => $errores,
+            'unidad_id'     => $unidad['id'],
+            'ingestadas'    => $ingestadas,
+            'saltadas'      => $saltadas,
+            'errores'       => $errores,
+            'desaparecidas' => $desaparecidas,
         ];
 
         $this->eventoModel->registrar('escaneo', [
             'unidad_id' => $unidad['id'],
-            'detalle'   => count($ingestadas) . ' ingestada(s), ' . count($saltadas) . ' saltada(s), ' . count($errores) . ' error(es).',
+            'detalle'   => count($ingestadas) . ' ingestada(s), ' . count($saltadas) . ' saltada(s), '
+                . count($desaparecidas) . ' desaparecida(s), ' . count($errores) . ' error(es).',
         ]);
 
         $tareaId = (int) ($body['tarea_id'] ?? 0);
@@ -179,6 +233,75 @@ class Agente extends BaseController
         }
 
         return $this->response->setJSON($resumen);
+    }
+
+    /**
+     * Recibe UN proxy de previsualización ya generado por el agente
+     * (multipart: `tipo` foto|video, `orden` 0-9, `fichero_nombre` opcional
+     * para enlazarlo con su `silo_ficheros.id`, `reemplazar` — "1" en la
+     * primera subida del lote de esta pieza para borrar antes cualquier
+     * proxy previo (simulado o de una generación anterior), campo de
+     * fichero `archivo`). Se guarda como `public/assets/silo/proxies/{id}/
+     * {tipo}-{orden}.webp` — nombre determinista, así una regeneración
+     * futura simplemente sobreescribe el fichero y la URL en BD no cambia.
+     */
+    public function subirProxy(int $id)
+    {
+        $pieza = $this->piezaModel->find($id);
+        if (!$pieza) {
+            return $this->response->setJSON(['error' => 'Pieza no encontrada.'])->setStatusCode(404);
+        }
+
+        $tipo = (string) $this->request->getPost('tipo');
+        if (!in_array($tipo, ['foto', 'video'], true)) {
+            return $this->response->setJSON(['error' => 'tipo debe ser "foto" o "video".'])->setStatusCode(422);
+        }
+
+        $orden = (int) $this->request->getPost('orden');
+        if ($orden < 0 || $orden > 9) {
+            return $this->response->setJSON(['error' => 'orden debe estar entre 0 y 9.'])->setStatusCode(422);
+        }
+
+        $archivo = $this->request->getFile('archivo');
+        if (!$archivo || !$archivo->isValid() || $archivo->hasMoved()) {
+            return $this->response->setJSON(['error' => 'Falta el fichero "archivo" o no es válido.'])->setStatusCode(422);
+        }
+
+        if ((bool) $this->request->getPost('reemplazar')) {
+            $this->proxyModel->where('pieza_id', $id)->delete();
+        }
+
+        $directorio = FCPATH . 'assets/silo/proxies/' . $id . '/';
+        if (!is_dir($directorio) && !mkdir($directorio, 0755, true) && !is_dir($directorio)) {
+            return $this->response->setJSON(['error' => 'No se pudo crear el directorio de proxies.'])->setStatusCode(500);
+        }
+
+        $nombreFichero = $tipo . '-' . $orden . '.webp';
+        try {
+            $archivo->move($directorio, $nombreFichero, true);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['error' => 'No se pudo guardar el fichero: ' . $e->getMessage()])->setStatusCode(500);
+        }
+
+        $ficheroId       = null;
+        $nombreOriginal  = trim((string) $this->request->getPost('fichero_nombre'));
+        if ($nombreOriginal !== '') {
+            $fichero   = $this->ficheroModel->where('pieza_id', $id)->where('nombre', $nombreOriginal)->first();
+            $ficheroId = $fichero['id'] ?? null;
+        }
+
+        // Upsert manual por (pieza_id, tipo, orden): sustituye lo que hubiera
+        // en ese hueco en vez de acumular filas si se sube dos veces seguidas.
+        $this->proxyModel->where('pieza_id', $id)->where('tipo', $tipo)->where('orden', $orden)->delete();
+        $this->proxyModel->insert([
+            'pieza_id'   => $id,
+            'fichero_id' => $ficheroId,
+            'tipo'       => $tipo,
+            'url'        => 'assets/silo/proxies/' . $id . '/' . $nombreFichero,
+            'orden'      => $orden,
+        ]);
+
+        return $this->response->setJSON(['ok' => true]);
     }
 
     /** Reporte suelto de una tarea de la cola que no sea un escaneo (resultado genérico). */

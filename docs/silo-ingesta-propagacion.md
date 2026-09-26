@@ -287,37 +287,67 @@ corrupción silenciosa.
 
 ## Proxies / capturas para visualizar carpetas
 
-`silo_proxies` ya existe: hasta **3 fotos + 3 vídeos por carpeta**, para hacerse una idea
-de qué hay dentro sin abrir el original. Hoy están simulados (URL de placeholder); los
-reales los genera el agente `.py`.
+`silo_proxies` ya existe: hasta **10 fotos + 10 fotogramas de vídeo por carpeta**, para
+hacerse una idea de qué hay dentro sin abrir el original. **Implementado 2026-09-26** (plan
+cerrado 2026-09-06, quedó pendiente de programar hasta ahora; el número de fotos/vídeo y el
+reparto de fotogramas se ampliaron el mismo día tras ver el resultado de la primera pasada
+sobre datos reales — muchos vídeos salían con el frame fijo a 1s negro/borroso): reales,
+generados por el agente `.py` con `ffmpeg`.
 
-Decisiones acordadas:
+Decisiones acordadas y su implementación:
 
-- **Quién y cuándo**: el `.py` los genera durante la ingesta del Maestro, y los
-  **regenera** cuando cambian los ficheros de una pieza (lo detecta el diff de
-  manifiesto). El `.py` tiene los ficheros y la CPU — es el único sitio donde se pueden
-  hacer.
-- **Selección**: hasta 3 fotos y 3 vídeos, **repartidos a lo largo de la línea de tiempo
-  de la carpeta** (`capturado_en`: p.ej. primer / medio / último tercio) para que las 3
-  den idea del conjunto. Elección con **semilla estable** (derivada de `pieza_id` o del
-  `hash_indice` de la carpeta) para que no bailen en cada reescaneo.
-- **Formato**: foto → redimensionada (lado largo ~800 px, WebP/JPEG). Vídeo → un frame
-  póster + opcionalmente un WebP animado corto y mudo. Tamaños/códecs exactos, más
-  adelante.
-- **Dónde viven**: son **derivados regenerables**, no van en el disco de la unidad como
-  dato de backup. Se sirven desde el servidor web como assets
-  (`public/assets/silo/proxies/<pieza_id>/<orden>.webp`), y `silo_proxies.url` apunta
-  ahí.
-- **Transporte**: el `.py` sube el binario por la API
-  (`POST /api/silo/agente/piezas/{id}/proxies`, multipart); la web lo coloca en assets y
-  crea/actualiza las filas de `silo_proxies`.
+- **Quién y cuándo**: el `.py` los genera justo después de ingestar cada carpeta
+  candidata, dentro del mismo `silo`/`escanear_unidad()` — no un comando aparte.
+  `Agente::escaneo()` marca `necesita_proxies: true` en cada `ingestadas[]` cuya pieza
+  **no tenga ya ningún proxy real** (`SiloProxyModel::tieneProxiesReales()`: cuenta solo
+  `url` bajo `assets/silo/proxies/...`, no los picsum.photos de antes). Sin esto, cada
+  pasada normal —que reingesta TODAS las candidatas, no solo las nuevas— regeneraría
+  proxies para todo el Maestro en cada `silo`, carísimo. Contrapartida aceptada: sin
+  manifiesto/hash (N1-N3) todavía no hay forma de saber que los FICHEROS de una carpeta
+  ya proxied cambiaron, así que la "regeneración cuando cambian los ficheros" de la
+  decisión original **no está implementada** — toca borrar a mano los proxies de esa
+  pieza (`silo_proxies` por `pieza_id`) para forzar que se regeneren en el próximo
+  escaneo, hasta que exista el diff de manifiesto.
+- **Selección de fotos**: hasta `MAX_PROXIES_FOTO` (10). Sin `capturado_en` por fichero
+  todavía (columna pendiente, ver "Añadidos al esquema"), en vez de fecha de captura real
+  se usa el **orden alfabético del nombre dentro de la carpeta** como aproximación (mismo
+  criterio que ya usa el resto del sistema para ordenar sin datos EXIF), tomando elementos
+  **repartidos uniformemente** de esa lista (`_muestra_espaciada()` en `agente.py`).
+  Determinista sin necesidad de semilla: mismo fichero de entrada siempre da la misma
+  selección, así no baila entre reescaneos.
+- **Selección de fotogramas de vídeo**: hasta `MAX_PROXIES_VIDEO` (10) en total, **nunca al
+  arranque ni al final** del vídeo (el primer intento fijaba el frame a 1s de metraje y
+  salía negro/borroso en muchos vídeos reales — fundidos de entrada, inicialización de la
+  cámara). Con la duración real (`ffprobe`) se calculan instantes **interiores**
+  (`_puntos_interiores()`: para 1 solo frame, justo la mitad; para varios, repartidos por
+  dentro). `_muestra_espaciada()` elige hasta 10 vídeos distintos de la carpeta y
+  `_reparto_por_video()` reparte el objetivo de 10 entre ellos lo más parejo posible — si
+  hay **menos vídeos que 10** (incluido un único vídeo), a los que hay les toca más de un
+  fotograma para completar el objetivo, sacados de instantes distintos del mismo vídeo.
+- **Formato**: foto → redimensionada a WebP (lado largo máx. 800 px, aspecto conservado).
+  Vídeo → mismo redimensionado sobre el frame elegido; sin WebP animado (se descartó por
+  complejidad para la primera versión).
+- **Dónde viven**: derivados regenerables, no van en el disco de la unidad. Se sirven como
+  assets estáticos en `public/assets/silo/proxies/<pieza_id>/<tipo>-<orden>.webp`
+  (nombre determinista: una regeneración futura sobreescribe el mismo fichero, la URL en
+  BD no cambia) — gitignored, nunca al repo (contenido personal). `silo_proxies.url`
+  guarda la ruta relativa a la raíz pública; las vistas la resuelven con el helper
+  `silo_proxy_url()` (`app/Helpers/silo_helper.php`), que también sabe servir tal cual los
+  picsum.photos legado hasta que se regeneren.
+- **Transporte**: el `.py` sube el binario por la API (`POST
+  /silo/agente/piezas/{id}/proxies`, multipart hecho a mano con la librería estándar de
+  Python — sin `requests` — ver `api_post_multipart()`); la primera subida del lote de
+  una pieza manda `reemplazar=1` para que la web borre antes cualquier proxy previo
+  (simulado o de una generación anterior). La web lo coloca en `assets/` y hace upsert de
+  la fila de `silo_proxies` por `(pieza_id, tipo, orden)` (`Agente::subirProxy()`).
+- **Dependencia nueva**: `ffmpeg` en el PATH de la máquina donde corre el agente (única
+  excepción a "sin dependencias fuera de la librería estándar" — decisión ya cerrada
+  2026-09-06). Si no está, `agente.py` avisa una vez y sigue escaneando normal, sin
+  proxies — nunca rompe el resto del flujo.
 
 Pendiente de decidir: ¿guardar también una copia de los proxies en el Maestro
 (`.silo_proxies/` junto a cada carpeta) para poder reconstruir la parte visual de la web
 sin re-escanear todo el disco, o aceptar que reconstruir la web = re-generar proxies?
-
-Esto **no bloquea** el núcleo (esquema, cola, detección de cambios): es un hito posterior
-de la Fase 1.
 
 ## Réplica de la base de datos en cada unidad
 
@@ -468,11 +498,52 @@ websockets.
   tarea. No hay panel web para `silo_eventos` todavía (solo la BD).
 - **Comando de terminal**: función `silo` en ambos perfiles de PowerShell (mismo patrón que
   `trackbitos`/`stl`), llama a `silo-agente/agente.py` sin `cd` ni ruta completa.
-- `silo_proxies` existe y la web ya pinta los proxies (galería y `show`), pero se
-  insertan **simulados** (URL de placeholder) desde `SiloIngestaService`.
+- `silo_proxies` existe, la web pinta los proxies en `show` y **son reales** desde
+  2026-09-26 (antes simulados/placeholder) — ver el bullet dedicado más abajo y la
+  sección "Proxies / capturas" arriba.
+- **Borrado por desaparición del Maestro (2026-09-26)**: como el agente manda siempre el
+  primer nivel COMPLETO del root (nunca un delta), `Agente::escaneo()` compara las
+  candidatas de la pasada contra `SiloUbicacionModel::deCopia1EnUnidad()` (piezas ya
+  registradas en Copia 1 de esa unidad); cualquier `id_negocio` que ya no aparece se borra
+  del catálogo (cascada por FK a ficheros/atributos/proxies/ubicaciones) y queda un evento
+  `carpeta_desaparecida`. Antes de esto una carpeta borrada/renombrada en disco dejaba su
+  pieza huérfana para siempre (p.ej. seguía marcando "sin lugar" en `/silo/datos-faltan`
+  una carpeta que ya no existía). Solo aplica a Copia 1 (Maestro); no toca Copia 2/3 (Fase
+  3 sigue sin implementar).
+- **Vocabulario huérfano, visible pero borrado manual (2026-09-26)**: `silo_vocabulario`
+  (categoría/tema/lugar/persona/evento) es get-or-create y nunca se limpiaba solo — un
+  término sin ninguna pieza (reclasificación, o piezas borradas por el punto anterior) se
+  quedaba para siempre en `/silo/vocabulario` y en el filtro de categorías de `/silo`. Ahora
+  `SiloVocabularioModel::conteoUsos()` cuenta uso real (`silo_piezas.categoria_id` para
+  categorías, `silo_pieza_atributo` para el resto); `/silo/vocabulario` marca "sin uso" y
+  ofrece un botón de borrado manual (`Web::borrarVocabulario()`, rechaza si el término ganó
+  uso entre que se pintó la página y se pulsó el botón); el filtro de categorías de `/silo`
+  (`SiloVocabularioModel::categoriasEnUso()`) ya no ofrece categorías sin piezas. No hay
+  borrado automático a propósito: un término sin uso hoy puede querer conservarse.
+- **Herramienta puntual `--etiquetar-contenido` (2026-09-26)**: `silo-agente/agente.py
+  --etiquetar-contenido [--aplicar]` — repasa el Maestro y propone (o, con `--aplicar`,
+  renombra de verdad) añadir al tema de cada carpeta la etiqueta de contenido: `(Fotos)`,
+  `(Vídeos)`, `(Fotos + Vídeos)` por extensión de fichero real (mismo formato que
+  `silo_contenido_detectar()` en `app/Helpers/silo_helper.php`), y `(Montajes)` por
+  **heurística** (no es detección real): solo vídeos, sin ninguna foto, y `<=
+  UMBRAL_VIDEOS_MONTAJE` (4) — una carpeta así es más probable que sea un montaje ya
+  editado que un volcado bruto de cámara; con más de 4 se propone `(Vídeos)`. El informe
+  marca aparte cada propuesta por heurística para que se repase. Nunca toca carpetas cuyo
+  tema ya termine en una etiqueta de contenido reconocible o que no tengan hueco de tema.
+  Puramente local, sin hablar con la API/BD — tras aplicar hace falta un escaneo normal
+  para que la web recoja el tema nuevo. Ad hoc, no forma parte del flujo de ingesta
+  habitual.
+- **Proxies reales con ffmpeg (2026-09-26)**: rescatado del plan cerrado 2026-09-06 (ver
+  la sección "Proxies / capturas" arriba para el detalle completo) — `agente.py` genera y
+  sube hasta 10 fotos + 10 fotogramas de vídeo de previsualización por carpeta justo tras
+  ingestarla (fotogramas de vídeo siempre del interior del vídeo, repartidos entre los
+  vídeos disponibles — varios del mismo si hay menos de 10), `Agente::subirProxy()` los
+  guarda en `public/assets/silo/proxies/` y hace upsert en `silo_proxies`. Único punto sin
+  resolver: sin manifiesto (N1-N3) no hay regeneración automática cuando cambian los
+  ficheros de una pieza ya proxied, solo al darla de alta o tras borrar sus proxies a mano.
 - **No existe todavía**: disparar tareas desde la web con aprobación humana, hashing y
-  detección de cambios real (N0–N3), generación real de proxies, réplica de BD en disco
-  y su restauración, propagación física (Fase 3), panel de `silo_eventos`.
+  detección de cambios real (N0–N3), réplica de BD en disco y su restauración, propagación
+  física (Fase 3), panel de `silo_eventos`.
 
 ## Cosas que NO son features (no reintroducir)
 

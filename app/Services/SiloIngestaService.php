@@ -5,16 +5,17 @@ namespace App\Services;
 use App\Models\SiloFicheroModel;
 use App\Models\SiloPiezaAtributoModel;
 use App\Models\SiloPiezaModel;
-use App\Models\SiloProxyModel;
 use App\Models\SiloUbicacionModel;
 
 /**
  * Ingesta de una carpeta ya escaneada de una unidad Maestro: recibe el
  * nombre de carpeta TAL CUAL está en disco (ya lleva su ID de negocio,
  * porque ya se creó antes) y su listado de ficheros, y da de alta
- * pieza + ficheros + proxies simulados + ubicación — sin que un humano
- * teclee clasificación alguna. Simula lo que hará la API real cuando
- * escanee una unidad Maestro de verdad (plan Silo §7.1/§9); separado de
+ * pieza + ficheros + ubicación — sin que un humano teclee clasificación
+ * alguna (los proxies de previsualización los genera aparte
+ * Agente::escaneo() / silo-agente/agente.py, ver
+ * SiloProxyModel::tieneProxiesReales()). Esto es lo que hará la API real al
+ * escanear una unidad Maestro de verdad (plan Silo §7.1/§9); separado de
  * SiloService (que expone los helpers de dominio que aquí se reutilizan)
  * igual que PiezaSyncService está separado de PiezaService en Piezas.
  * Al terminar, dispara su propia propagación a Copia 2/3
@@ -28,12 +29,10 @@ class SiloIngestaService
     private SiloPiezaModel $piezaModel;
     private SiloPiezaAtributoModel $atributoModel;
     private SiloFicheroModel $ficheroModel;
-    private SiloProxyModel $proxyModel;
     private SiloUbicacionModel $ubicacionModel;
 
-    private const EXTENSIONES_FOTO  = ['jpg', 'jpeg', 'png', 'heic', 'raw', 'cr2', 'nef'];
+    private const EXTENSIONES_FOTO  = ['jpg', 'jpeg', 'jpe', 'png', 'bmp', 'tif', 'tiff', 'heic', 'raw', 'cr2', 'nef'];
     private const EXTENSIONES_VIDEO = ['mp4', 'mov', 'avi', 'mkv', 'mpg', 'mpeg', 'm4v', 'wmv', 'webm', '3gp', 'mts', 'm2ts', 'flv'];
-    private const MAX_PROXIES_POR_TIPO = 3;
 
     public function __construct()
     {
@@ -42,7 +41,6 @@ class SiloIngestaService
         $this->piezaModel     = new SiloPiezaModel();
         $this->atributoModel  = new SiloPiezaAtributoModel();
         $this->ficheroModel   = new SiloFicheroModel();
-        $this->proxyModel     = new SiloProxyModel();
         $this->ubicacionModel = new SiloUbicacionModel();
     }
 
@@ -81,11 +79,13 @@ class SiloIngestaService
             // Reingesta de una pieza ya conocida (rescaneo normal del
             // Maestro): sin manifiesto/hash todavía (N1-N3, pendiente) no
             // hay forma barata de saber qué cambió, así que se sustituye la
-            // lista de ficheros entera en vez de acumular duplicados en
-            // cada pasada. Los proxies simulados quedan huérfanos
-            // (fichero_id -> SET NULL) y se regeneran también.
+            // lista de ficheros entera en vez de acumular duplicados en cada
+            // pasada. Los proxies NO se tocan aquí (generarlos con ffmpeg es
+            // caro): sobreviven a la reingesta con `fichero_id` a NULL
+            // (FK -> SET NULL) hasta que el agente los regenere de verdad
+            // (Agente::escaneo() decide cuándo hace falta, ver
+            // SiloProxyModel::tieneProxiesReales()).
             $this->ficheroModel->where('pieza_id', $piezaId)->delete();
-            $this->proxyModel->where('pieza_id', $piezaId)->delete();
 
             // El nombre de carpeta es la fuente de verdad: si se renombró
             // para corregir la clasificación (o para adoptar el contrato de
@@ -103,22 +103,15 @@ class SiloIngestaService
 
         $this->atributoModel->reemplazarDeLaPieza($piezaId, $atributoIds);
 
-        $ficherosInsertados = [];
         foreach ($ficheros as $f) {
-            $tipo = self::tipoDeExtension($f['nombre']);
-            $ficherosInsertados[] = [
-                'id'   => $this->ficheroModel->insert([
-                    'pieza_id'     => $piezaId,
-                    'nombre'       => $f['nombre'],
-                    'tipo'         => $tipo,
-                    'tamano_bytes' => $f['tamano_bytes'] ?? null,
-                    'hash'         => $f['hash'] ?? null,
-                ], true),
-                'tipo' => $tipo,
-            ];
+            $this->ficheroModel->insert([
+                'pieza_id'     => $piezaId,
+                'nombre'       => $f['nombre'],
+                'tipo'         => self::tipoDeExtension($f['nombre']),
+                'tamano_bytes' => $f['tamano_bytes'] ?? null,
+                'hash'         => $f['hash'] ?? null,
+            ]);
         }
-
-        $this->generarProxiesSimulados($piezaId, $ficherosInsertados);
 
         // Siempre (no solo "si hay ficheros"): en un reingesta ya se
         // borraron los anteriores arriba, así que una carpeta que se quedó
@@ -157,32 +150,5 @@ class SiloIngestaService
         }
 
         return 'otro';
-    }
-
-    /**
-     * Hasta 3 fotos + 3 vídeos por carpeta, elegidos entre los ficheros
-     * reales de ese tipo que se acaban de ingestar — simulados con un
-     * placeholder determinista (mismo fichero = misma imagen si se
-     * reingesta), a falta de la miniatura real que generará la API.
-     */
-    private function generarProxiesSimulados(int $piezaId, array $ficheros): void
-    {
-        foreach (['foto', 'video'] as $tipo) {
-            $candidatos = array_values(array_filter($ficheros, fn ($f) => $f['tipo'] === $tipo));
-            shuffle($candidatos);
-            $elegidos = array_slice($candidatos, 0, self::MAX_PROXIES_POR_TIPO);
-
-            foreach ($elegidos as $i => $f) {
-                $seed = $piezaId . '-' . $f['id'];
-
-                $this->proxyModel->insert([
-                    'pieza_id'   => $piezaId,
-                    'fichero_id' => $f['id'],
-                    'tipo'       => $tipo,
-                    'url'        => "https://picsum.photos/seed/{$seed}/320/200",
-                    'orden'      => $i,
-                ]);
-            }
-        }
     }
 }

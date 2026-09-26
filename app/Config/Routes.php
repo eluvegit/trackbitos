@@ -678,6 +678,10 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // motivo que 'categoria' arriba — es literal, no debe competir con un
     // patrón numérico.
     $routes->GET('papelera', 'Web::papelera');
+    // La nevera: piezas hechas pero incompletas o que no funcionan bien,
+    // aparcadas fuera del índice sin caducidad (no es un aviso de borrado,
+    // no la purga nadie). Misma razón de orden que 'papelera'.
+    $routes->GET('nevera', 'Web::nevera');
     $routes->POST('familia/(:num)/nombre', 'Web::renombrarFamilia/$1');
     $routes->POST('familia/(:num)/notas', 'Web::editarNotasFamilia/$1');
     $routes->POST('familia/(:num)/borrar', 'Web::borrarFamilia/$1');
@@ -720,6 +724,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('variante/(:num)/tareas', 'Web::editarTareasVariante/$1');
     $routes->POST('variante/(:num)/enlace-original', 'Web::editarEnlaceOriginal/$1');
     $routes->POST('variante/(:num)/visibilidad', 'Web::toggleVisibilidadVariante/$1');
+    $routes->POST('variante/(:num)/nevera', 'Web::toggleCongelarVariante/$1');
     $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
     $routes->POST('variante/(:num)/restaurar', 'Web::restaurarVariante/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
@@ -920,6 +925,7 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 
     $routes->GET('vocabulario', 'Web::vocabulario');
     $routes->POST('vocabulario/renombrar/(:num)', 'Web::renombrarVocabulario/$1');
+    $routes->POST('vocabulario/(:num)/borrar', 'Web::borrarVocabulario/$1');
 
     $routes->GET('mi-pc', 'Web::miPc');
     $routes->GET('ranking', 'Web::ranking');
@@ -947,6 +953,7 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
 $routes->group('silo/agente', ['filter' => 'siloApi', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
     $routes->POST('handshake', 'Agente::handshake');
     $routes->POST('escaneo', 'Agente::escaneo');
+    $routes->POST('piezas/(:num)/proxies', 'Agente::subirProxy/$1');
     $routes->POST('tareas/(:num)/resultado', 'Agente::tareaResultado/$1');
 });
 

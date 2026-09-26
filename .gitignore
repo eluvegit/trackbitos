@@ -50,3 +50,9 @@ silo-agente/config.json
 # derivados regenerables del original que vive en writable/piezas, no
 # fuente. Se rehacen con `php spark piezas:publicar-imagenes`.
 /public/piezas-img/
+
+# Proxies de previsualización de Silo (public/assets/silo/proxies): derivados
+# regenerables generados por silo-agente/agente.py con ffmpeg a partir de
+# fotos/vídeos reales del usuario — ni deben ir al repo (contenido personal)
+# ni son la fuente (el Maestro lo es). Ver docs/silo-ingesta-propagacion.md.
+/public/assets/silo/proxies/

@@ -61,13 +61,22 @@ class Web extends BaseController
         $filtros = [
             'q'            => $this->request->getGet('q'),
             'categoria_id' => $this->request->getGet('categoria_id'),
+            'atributo_id'  => $this->request->getGet('atributo_id'),
         ];
 
+        // Nombre a mostrar en el banner "Filtrando por..." cuando se llega
+        // desde una etiqueta de /silo/vocabulario (tema/lugar/persona/evento;
+        // la categoría ya se resuelve con `categorias` para el desplegable).
+        $atributoFiltro = !empty($filtros['atributo_id'])
+            ? $this->vocabularioModel->find((int) $filtros['atributo_id'])
+            : null;
+
         return view('silo/index', [
-            'piezas'     => $this->piezaModel->buscar($filtros),
-            'categorias' => $this->vocabularioModel->porTipo('categoria'),
-            'filtros'    => $filtros,
-            'vista'      => $this->vistaSolicitada(),
+            'piezas'         => $this->piezaModel->buscar($filtros),
+            'categorias'     => $this->vocabularioModel->categoriasEnUso(),
+            'filtros'        => $filtros,
+            'atributoFiltro' => $atributoFiltro,
+            'vista'          => $this->vistaSolicitada(),
         ]);
     }
 
@@ -353,7 +362,7 @@ class Web extends BaseController
         $tipos = ['categoria', 'evento', 'lugar', 'persona', 'tema'];
         $porTipo = [];
         foreach ($tipos as $tipo) {
-            $porTipo[$tipo] = $this->vocabularioModel->porTipo($tipo);
+            $porTipo[$tipo] = $this->vocabularioModel->porTipoConUsos($tipo);
         }
 
         return view('silo/vocabulario', ['porTipo' => $porTipo]);
@@ -371,6 +380,30 @@ class Web extends BaseController
         }
 
         return redirect()->to(site_url('silo/vocabulario'))->with('success', 'Vocabulario actualizado.');
+    }
+
+    /**
+     * Borra un término de vocabulario sin ninguna pieza que lo use ("sin
+     * uso" en /silo/vocabulario). Nunca se borra solo (get-or-create no
+     * limpia huérfanos) — esto es el botón manual; si en el momento de
+     * pulsarlo ya tiene uso (otra pestaña lo acaba de usar), se rechaza en
+     * vez de desengancharlo de piezas reales.
+     */
+    public function borrarVocabulario(int $id)
+    {
+        $item = $this->vocabularioModel->find($id);
+        if (!$item) {
+            throw PageNotFoundException::forPageNotFound('Término de vocabulario no encontrado');
+        }
+
+        $usos = $this->vocabularioModel->conteoUsos([$id]);
+        if (($usos[$id] ?? 0) > 0) {
+            return redirect()->to(site_url('silo/vocabulario'))->with('error', '«' . $item['nombre'] . '» ya no está sin uso, no se ha borrado.');
+        }
+
+        $this->vocabularioModel->delete($id);
+
+        return redirect()->to(site_url('silo/vocabulario'))->with('success', '«' . $item['nombre'] . '» borrado.');
     }
 
     public function unidades()

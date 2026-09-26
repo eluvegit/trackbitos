@@ -33,7 +33,20 @@
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
 <?php endif; ?>
 
+<?php if (!empty($atributoFiltro)): ?>
+    <div class="alert alert-info py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-funnel"></i>
+        Filtrando por <strong><?= esc($atributoFiltro['nombre']) ?></strong>
+        <a href="<?= site_url('silo') ?>" class="ms-auto btn btn-sm btn-outline-secondary">
+            Quitar filtro <i class="bi bi-x-lg"></i>
+        </a>
+    </div>
+<?php endif; ?>
+
 <form method="get" action="<?= site_url('silo') ?>" class="row g-2 mb-3">
+    <?php if (!empty($filtros['atributo_id'])): ?>
+        <input type="hidden" name="atributo_id" value="<?= (int) $filtros['atributo_id'] ?>">
+    <?php endif; ?>
     <div class="col-sm-6 col-md-4">
         <input type="text" name="q" class="form-control" placeholder="Buscar por ID, nombre de carpeta o de fichero..."
                value="<?= esc($filtros['q'] ?? '') ?>">
@@ -59,6 +72,7 @@ $vistaQs = static fn ($v) => site_url('silo') . '?' . http_build_query(
     array_filter([
         'q'            => $filtros['q'] ?? null,
         'categoria_id' => $filtros['categoria_id'] ?? null,
+        'atributo_id'  => $filtros['atributo_id'] ?? null,
     ]) + ['vista' => $v]
 );
 ?>

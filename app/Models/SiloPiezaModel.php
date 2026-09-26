@@ -61,6 +61,16 @@ class SiloPiezaModel extends Model
             $builder->where('silo_piezas.categoria_id', (int) $filtros['categoria_id']);
         }
 
+        // Filtro por un término de vocabulario que NO es la categoría (tema,
+        // lugar, persona, evento) — vive en silo_pieza_atributo, no como
+        // columna. Viene de pinchar una etiqueta en /silo/vocabulario.
+        if (!empty($filtros['atributo_id'])) {
+            $piezasConAtributo = $this->db->table('silo_pieza_atributo')
+                ->select('pieza_id')
+                ->where('vocabulario_id', (int) $filtros['atributo_id']);
+            $builder->whereIn('silo_piezas.id', $piezasConAtributo);
+        }
+
         $piezas = $this->adjuntarAtributos($builder->findAll());
 
         if (!empty($filtros['q'])) {

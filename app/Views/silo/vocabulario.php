@@ -11,36 +11,43 @@
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
 <?php endif; ?>
+<?php if (session('error')): ?>
+    <div class="alert alert-danger py-2"><?= esc(session('error')) ?></div>
+<?php endif; ?>
 
 <?php $etiquetas = ['categoria' => 'Categorías', 'evento' => 'Eventos', 'lugar' => 'Lugares', 'persona' => 'Personas', 'tema' => 'Temas']; ?>
 
-<div class="row">
-    <?php foreach ($porTipo as $tipo => $items): ?>
-        <div class="col-md-6 col-lg-4 mb-4">
-            <h6><?= esc($etiquetas[$tipo] ?? $tipo) ?></h6>
-            <?php if (empty($items)): ?>
-                <p class="text-muted small">Ninguno todavía.</p>
-            <?php else: ?>
-                <ul class="list-group list-group-flush">
-                    <?php foreach ($items as $item): ?>
-                        <li class="list-group-item px-0">
-                            <form method="post" action="<?= site_url('silo/vocabulario/renombrar/' . $item['id']) ?>" class="d-flex flex-column gap-1">
+<?php foreach ($porTipo as $tipo => $items): ?>
+    <div class="mb-4">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2"><?= esc($etiquetas[$tipo] ?? $tipo) ?></h6>
+        <?php if (empty($items)): ?>
+            <p class="text-muted small">Ninguno todavía.</p>
+        <?php else: ?>
+            <?php $paramFiltro = $tipo === 'categoria' ? 'categoria_id' : 'atributo_id'; ?>
+            <div class="d-flex flex-wrap gap-2">
+                <?php foreach ($items as $item): ?>
+                    <?php $sinUso = ($item['usos'] ?? 0) === 0; ?>
+                    <?php $enlace = site_url('silo') . '?' . http_build_query([$paramFiltro => $item['id']]); ?>
+                    <span class="badge rounded-pill d-inline-flex align-items-center gap-1 fw-normal <?= $sinUso ? 'bg-body-secondary text-muted border' : 'text-bg-light border' ?>"
+                          title="<?= $sinUso ? 'Sin uso' : $item['usos'] . ' pieza(s) — pinchar para ver' ?>">
+                        <a href="<?= esc($enlace, 'attr') ?>" class="text-reset text-decoration-none">
+                            <?= esc($item['nombre']) ?>
+                            <span class="opacity-50" style="font-size:.75em;"><?= (int) ($item['usos'] ?? 0) ?></span>
+                        </a>
+                        <?php if ($sinUso): ?>
+                            <form method="post" action="<?= site_url('silo/vocabulario/' . $item['id'] . '/borrar') ?>"
+                                  onsubmit="return confirm('¿Borrar «<?= esc($item['nombre'], 'js') ?>»? No se puede deshacer.');" class="d-inline lh-1">
                                 <?= csrf_field() ?>
-                                <div class="d-flex gap-1">
-                                    <input type="text" name="nombre" class="form-control form-control-sm" value="<?= esc($item['nombre']) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
-                                        <i class="bi bi-check2"></i>
-                                    </button>
-                                </div>
-                                <textarea name="descripcion" rows="1" class="form-control form-control-sm text-muted"
-                                          placeholder="descripción (opcional)"><?= esc($item['descripcion'] ?? '') ?></textarea>
+                                <button type="submit" class="btn btn-link btn-sm p-0 text-danger lh-1" title="Borrar (sin uso)">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
                             </form>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </div>
-    <?php endforeach; ?>
-</div>
+                        <?php endif; ?>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+<?php endforeach; ?>
 
 <?= $this->endSection() ?>

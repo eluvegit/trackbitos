@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?= $this->include('piezas/_nav') ?>
 
 <style>
     /* Dos tonos alternos por pieza: una pieza y sus variantes comparten
@@ -117,25 +118,6 @@ $filaSesionActiva = static function (array $s): string {
           // en unas vistas sí y en otras no movía de sitio el mismo enlace. Para volver
           // al dashboard está el logo de la barra de arriba, que sí está en todas. ?>
     <strong class="fw-semibold">Piezas</strong>
-
-    <?php
-        /**
-         * Backup, Pendientes, Placas, Pedidos, Galería y "+ Pieza" fuera,
-         * sueltos — son los que se usan a diario. El resto (Organizar,
-         * Categorías, Máquinas, Estadísticas, Papelera) es de uso ocasional
-         * y va agrupado en el desplegable, en vez de sumar más botones
-         * sueltos a la cabecera. "+ Variante" no va ni ahí: se quita —
-         * crear una variante nace de una pieza concreta, así que su sitio
-         * natural es la ficha, no un selector suelto de "elige la pieza"
-         * aquí en el índice.
-         *
-         * Solo icono, sin texto: son muchos para llevar etiqueta cada uno
-         * sin saturar la cabecera, y el título (tooltip) sigue diciendo qué
-         * es cada uno al pasar el ratón. Los del desplegable si llevan
-         * texto — ahí no hay problema de espacio.
-         */
-    ?>
-    <?= $this->include('piezas/_barra') ?>
 </h5>
 
 <?php

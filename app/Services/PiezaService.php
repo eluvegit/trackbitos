@@ -417,6 +417,27 @@ class PiezaService
     }
 
     /**
+     * La nevera: aparca una variante hecha pero incompleta o que no
+     * funciona bien, sin borrarla ni ponerle fecha de caducidad — a
+     * diferencia de la papelera, nadie la purga con el tiempo. Alterna
+     * entre congelada y normal, igual que la visibilidad en sterclicks;
+     * no hay un verbo "restaurar" aparte porque no hay ninguna regla que
+     * pueda negarlo (no hace falta cerrar sesiones ni dejar al menos una
+     * variante viva, como sí exige borrar).
+     */
+    public function toggleCongelarVariante(int $varianteId): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+        $congelado = $variante['congelado_en'] === null ? date('Y-m-d H:i:s') : null;
+        $this->varianteModel->update($varianteId, ['congelado_en' => $congelado]);
+
+        return $this->varianteModel->find($varianteId);
+    }
+
+    /**
      * Purga definitiva de variantes sueltas que llevan más de N días en la
      * papelera (invariante 6) — mismo criterio que `purgarFamiliasBorradas`,
      * pero para una sola variante, sin tocar el resto de la pieza. Las

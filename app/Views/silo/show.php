@@ -40,7 +40,7 @@
     <div class="d-flex flex-wrap gap-2 mb-3">
         <?php foreach ($proxies as $p): ?>
             <div class="position-relative" style="width: 160px;">
-                <img src="<?= esc($p['url']) ?>" alt="" class="rounded w-100" style="height: 100px; object-fit: cover;">
+                <img src="<?= esc(silo_proxy_url($p['url'])) ?>" alt="" class="rounded w-100" style="height: 100px; object-fit: cover;">
                 <?php if ($p['tipo'] === 'video'): ?>
                     <span class="position-absolute top-50 start-50 translate-middle text-white bg-dark bg-opacity-50 rounded-circle p-1">
                         <i class="bi bi-play-fill fs-4"></i>

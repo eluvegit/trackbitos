@@ -145,6 +145,22 @@ if (!function_exists('silo_descripcion_carpeta')) {
     }
 }
 
+if (!function_exists('silo_proxy_url')) {
+    /**
+     * URL servible de un proxy: los reales (generados por el agente `.py`,
+     * `silo_proxies.url` = ruta relativa a la raíz pública, p.ej.
+     * "assets/silo/proxies/3/foto-0.webp") necesitan base_url(); los
+     * simulados de antes de 2026-09-26 (URL absoluta a picsum.photos, hasta
+     * que un reescaneo los sustituya) ya son servibles tal cual. Sin esto,
+     * base_url() les añadiría el dominio por delante y los rompería durante
+     * la transición.
+     */
+    function silo_proxy_url(string $url): string
+    {
+        return preg_match('#^https?://#i', $url) ? $url : base_url($url);
+    }
+}
+
 if (!function_exists('silo_icono_vocabulario')) {
     function silo_icono_vocabulario(string $tipo): string
     {

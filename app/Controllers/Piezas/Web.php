@@ -192,12 +192,23 @@ class Web extends BaseController
         // /piezas/papelera, mientras dura su plazo de gracia.
         $familias = $this->familiaModel->where('borrado_en', null)->orderBy('nombre', 'ASC')->findAll();
 
-        foreach ($familias as &$familia) {
+        foreach ($familias as $idFamilia => &$familia) {
+            $vivas = $this->varianteModel->where('familia_id', $familia['id'])->where('borrado_en', null)
+                ->orderBy('nombre', 'ASC')->findAll();
+
+            // Congeladas (la nevera): hechas pero incompletas o que no
+            // funcionan bien, aparcadas fuera del listado sin borrarlas.
+            // Si TODAS las de la pieza están en la nevera, la fila entera
+            // desaparece del índice — no tiene sentido dejar una fila vacía
+            // que además confundiría con "sin variantes" de la papelera.
             $variantes = array_map(
                 fn($v) => $this->resumen($v),
-                $this->varianteModel->where('familia_id', $familia['id'])->where('borrado_en', null)
-                    ->orderBy('nombre', 'ASC')->findAll()
+                array_filter($vivas, static fn($v) => $v['congelado_en'] === null)
             );
+            if ($variantes === [] && $vivas !== []) {
+                unset($familias[$idFamilia]);
+                continue;
+            }
             // Mismo orden que las piezas dentro de su categoría: sin empezar,
             // modificándose, descartadas, consolidadas y el resto. Estable,
             // así que a igual tramo se mantiene el orden alfabético.
@@ -205,9 +216,10 @@ class Web extends BaseController
                 $variantes,
                 fn(array $a, array $b) => $this->rangoMadurezVariante($a) <=> $this->rangoMadurezVariante($b)
             );
-            $familia['variantes'] = $variantes;
+            $familia['variantes'] = array_values($variantes);
         }
         unset($familia);
+        $familias = array_values($familias);
 
         // Existencias por variante (fase 60): el número de unidades físicas,
         // al lado del SKU en el listado. Una sola consulta para todas.
@@ -227,6 +239,7 @@ class Web extends BaseController
             'carritoCount'     => count($this->carritoActual()),
             'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
                 + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
+            'neveraCount'      => $this->varianteModel->where('congelado_en IS NOT NULL')->countAllResults(),
             'sesionesActivas'  => $this->calcularSesionesActivas(),
             'ultimoPedido'     => $this->ultimoPedidoEntrante(),
             'pendientesResumen' => $this->pendientesResumen(),
@@ -1580,12 +1593,14 @@ class Web extends BaseController
         // siempre se llama "base", el nombre no dice nada). La tarjeta debe
         // leerse como la pieza, no como una variante suelta sin dueño.
         $conteoVariantes = [];
-        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->select('familia_id')->findAll() as $v) {
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->where('congelado_en', null)->select('familia_id')->findAll() as $v) {
             $fid = (int) $v['familia_id'];
             $conteoVariantes[$fid] = ($conteoVariantes[$fid] ?? 0) + 1;
         }
 
-        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->findAll() as $variante) {
+        // Las congeladas (la nevera) tampoco cuentan como "listas para
+        // imprimir": es justo el sitio del que se las quiere sacar de en medio.
+        foreach ($this->varianteModel->whereIn('familia_id', $activas)->where('borrado_en', null)->where('congelado_en', null)->findAll() as $variante) {
             // Validada si la hay; si no, la más reciente que siga siendo
             // "para imprimir" (borrador) o "impresa, pendiente de juzgar" —
             // este apartado es para meter STL en placas, y esas dos ya
@@ -3300,6 +3315,52 @@ class Web extends BaseController
         ]);
     }
 
+    /**
+     * La nevera: variantes hechas pero incompletas o que no funcionan bien,
+     * aparcadas fuera del índice sin ponerles fecha de caducidad —
+     * distinto de la papelera, que es un aviso de borrado. Ordenada por
+     * fecha de congelado, la más reciente primero.
+     */
+    public function nevera()
+    {
+        $variantes = $this->varianteModel
+            ->where('congelado_en IS NOT NULL')
+            ->orderBy('congelado_en', 'DESC')
+            ->findAll();
+
+        $nombresFamilia = [];
+        if ($variantes !== []) {
+            $nombresFamilia = array_column(
+                $this->familiaModel->whereIn('id', array_column($variantes, 'familia_id'))->findAll(),
+                'nombre',
+                'id'
+            );
+        }
+        foreach ($variantes as &$variante) {
+            $variante['familia_nombre'] = $nombresFamilia[$variante['familia_id']] ?? '?';
+        }
+        unset($variante);
+
+        return view('piezas/nevera', ['variantes' => $variantes]);
+    }
+
+    /**
+     * Se llama tanto desde la ficha (congelar/descongelar sin moverse de
+     * ahí) como desde /piezas/nevera (descongelar y volver al listado de la
+     * nevera), así que el destino es "vuelve por donde has venido" en vez
+     * de una ruta fija como en borrar/restaurar.
+     */
+    public function toggleCongelarVariante(int $varianteId)
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->toggleCongelarVariante($varianteId),
+            fn() => previous_url(),
+            fn($r) => $r['congelado_en']
+                ? '"' . $r['nombre'] . '" a la nevera. Ya no aparece en el listado ni en la galería.'
+                : '"' . $r['nombre'] . '" fuera de la nevera.'
+        );
+    }
+
     public function restaurarFamilia(int $familiaId)
     {
         return $this->ejecutar(
@@ -4950,8 +5011,11 @@ class Web extends BaseController
 
         $nombresFamilia = array_column($this->familiaModel->whereIn('id', $activas)->findAll(), 'nombre', 'id');
 
+        // Las congeladas (la nevera) tampoco se ofrecen aquí: es la misma
+        // razón que la papelera, aparcadas para no estorbar mientras no
+        // estén listas.
         $variantes = $this->varianteModel->whereIn('familia_id', $activas)
-            ->where('borrado_en', null)->where('id !=', $varianteExcluidaId)->findAll();
+            ->where('borrado_en', null)->where('congelado_en', null)->where('id !=', $varianteExcluidaId)->findAll();
         if ($variantes === []) {
             return [];
         }

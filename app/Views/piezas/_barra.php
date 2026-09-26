@@ -45,6 +45,17 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
                     </a>
                 </li>
             <?php endif; ?>
+            <?php // La nevera: piezas hechas pero incompletas o que no funcionan bien,
+                  // aparcadas fuera del listado sin fecha de caducidad (a diferencia de
+                  // la papelera). Mismo criterio de visibilidad que ella. ?>
+            <?php if (!empty($neveraCount) || !$enIndex): ?>
+                <li>
+                    <a class="dropdown-item" href="<?= site_url('piezas/nevera') ?>">
+                        <i class="bi bi-snow"></i> Nevera
+                        <?php if (!empty($neveraCount)): ?><span class="badge text-bg-secondary"><?= (int) $neveraCount ?></span><?php endif; ?>
+                    </a>
+                </li>
+            <?php endif; ?>
         </ul>
     </div>
 

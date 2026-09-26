@@ -1,7 +1,9 @@
+<?php $enIndex ??= uri_string() === 'piezas'; ?>
 <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
     <a href="<?= site_url('piezas') ?>" class="btn btn-sm btn-outline-secondary" title="Piezas"><i class="bi bi-box"></i></a>
     <?= $this->include('piezas/_barra') ?>
 </div>
+<?php if (!$enIndex): ?>
 <script>
 document.addEventListener('click', function (e) {
     var b = e.target.closest('#btnOrganizar, [data-bs-toggle="modal"]');
@@ -13,3 +15,4 @@ document.addEventListener('click', function (e) {
     location.href = '<?= site_url('piezas') ?>' + destino;
 }, true);
 </script>
+<?php endif; ?>

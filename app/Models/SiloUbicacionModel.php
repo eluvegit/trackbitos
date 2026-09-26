@@ -38,6 +38,21 @@ class SiloUbicacionModel extends Model
         return $this->where('unidad_id', $unidadId)->countAllResults();
     }
 
+    /**
+     * Piezas que Copia 1 (Maestro) tiene registradas en esta unidad, con su
+     * `id_negocio`/`nombre_carpeta` — para que un reescaneo compare contra lo
+     * que de verdad hay en disco ahora mismo y detecte carpetas que
+     * desaparecieron (Silo\Agente::escaneo()).
+     */
+    public function deCopia1EnUnidad(int $unidadId): array
+    {
+        return $this->select('silo_ubicaciones.pieza_id, silo_piezas.id_negocio, silo_piezas.nombre_carpeta')
+            ->join('silo_piezas', 'silo_piezas.id = silo_ubicaciones.pieza_id')
+            ->where('silo_ubicaciones.unidad_id', $unidadId)
+            ->where('silo_ubicaciones.copia', 1)
+            ->findAll();
+    }
+
     /** Bytes ya ocupados en una unidad — para que la propagación sepa si le cabe una pieza más. */
     public function sumaTamanoPorUnidad(int $unidadId): int
     {

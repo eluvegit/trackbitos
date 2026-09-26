@@ -215,20 +215,16 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
 ?>
 
 <div class="cabecera-ficha mb-3">
-    <div class="d-flex align-items-end gap-3 flex-wrap">
-        <div style="min-width: 0;">
-            <div class="small text-body-secondary mb-1">
-                <a href="<?= site_url('piezas') ?>" class="text-reset text-decoration-none">Piezas</a>
-                <i class="bi bi-chevron-right mx-1" style="font-size: .65rem;"></i>
-                <?= esc($familia['nombre']) ?>
-            </div>
-            <h4 class="mb-0 fw-bold d-flex align-items-center gap-2 flex-wrap">
-                <?= esc($variante['nombre']) ?>
-                <?php if (!empty($variante['sku'])): ?>
-                    <span class="badge rounded-pill bg-body-secondary text-body-secondary font-monospace fw-normal fs-7"><?= esc($variante['sku']) ?></span>
-                <?php endif; ?>
-            </h4>
-        </div>
+    <h5 class="mb-2 d-flex align-items-center gap-2 flex-wrap">
+        <i class="bi bi-box text-primary"></i>
+        <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
+        <span class="text-muted">/</span>
+        <span class="text-muted fw-normal"><?= esc($familia['nombre']) ?></span>
+        <span class="text-muted">/</span>
+        <strong class="fw-semibold"><?= esc($variante['nombre']) ?></strong>
+        <?php if (!empty($variante['sku'])): ?>
+            <span class="badge rounded-pill bg-body-secondary text-body-secondary font-monospace fw-normal fs-7"><?= esc($variante['sku']) ?></span>
+        <?php endif; ?>
 
         <div class="btn-group ms-auto">
             <button type="button" class="btn btn-sm btn-outline-secondary" title="Editar nombre de la pieza, de la variante, SKU y enlace al original"
@@ -239,11 +235,11 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 <i class="bi bi-trash"></i>
             </button>
         </div>
-        <form id="formBorrarVariante" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>" class="d-none"
-            onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
-            <?= csrf_field() ?>
-        </form>
-    </div>
+    </h5>
+    <form id="formBorrarVariante" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>" class="d-none"
+        onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
+        <?= csrf_field() ?>
+    </form>
 
     <div class="d-flex flex-wrap gap-2 mt-2">
         <?php $visible = !empty($variante['visible_sterclicks']); ?>
@@ -258,6 +254,14 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 <i class="bi bi-box-arrow-up-right"></i> Original
             </a>
         <?php endif; ?>
+        <?php $congelado = !empty($variante['congelado_en']); ?>
+        <form method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/nevera') ?>" class="d-inline">
+            <?= csrf_field() ?>
+            <button type="submit" class="chip <?= $congelado ? 'chip-aviso' : '' ?>"
+                title="<?= $congelado ? 'Sacar de la nevera' : 'Aparcar en la nevera: hecha pero incompleta o que no funciona bien — no aparecerá en el listado, la galería ni el selector de componentes' ?>">
+                <i class="bi bi-snow"></i> <?= $congelado ? 'En la nevera' : 'Congelar' ?>
+            </button>
+        </form>
         <button type="button" class="chip <?= $tieneAdvertencia ? 'chip-aviso' : ($nTareasCabecera ? 'chip-activo' : '') ?>"
             title="Tareas pendientes y advertencia de esta pieza" data-bs-toggle="modal" data-bs-target="#modalTareas">
             <i class="bi <?= $tieneAdvertencia ? 'bi-exclamation-triangle' : 'bi-card-checklist' ?>"></i>

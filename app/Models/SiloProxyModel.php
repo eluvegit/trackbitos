@@ -19,4 +19,17 @@ class SiloProxyModel extends Model
     {
         return $this->where('pieza_id', $piezaId)->orderBy('tipo', 'ASC')->orderBy('orden', 'ASC')->findAll();
     }
+
+    /**
+     * ¿Ya tiene algún proxy REAL (generado por el agente `.py` con ffmpeg,
+     * `url` bajo `assets/silo/proxies/...`)? Los simulados de antes (URL
+     * `https://picsum.photos/...`) no cuentan — así `Agente::escaneo()` sabe
+     * a qué piezas pedirle al agente que genere proxies de verdad todavía.
+     */
+    public function tieneProxiesReales(int $piezaId): bool
+    {
+        return $this->where('pieza_id', $piezaId)
+            ->like('url', 'assets/silo/proxies/', 'after')
+            ->countAllResults() > 0;
+    }
 }
