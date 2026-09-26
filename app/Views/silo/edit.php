@@ -1,16 +1,15 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h5 class="mb-3 d-flex align-items-center gap-2">
-    <i class="bi bi-archive text-primary"></i>
-    <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
-    <span class="text-muted">/</span>
-    <a href="<?= site_url('silo/' . $pieza['id']) ?>" class="text-decoration-none text-muted fw-normal"><?= esc($pieza['id_negocio']) ?></a>
-    <span class="text-muted">/</span>
-    <strong class="fw-semibold">Reclasificar</strong>
-</h5>
+<?= $this->include('silo/_estilos_control') ?>
 
-<a href="<?= site_url('silo/' . $pieza['id']) ?>" class="btn btn-sm btn-outline-secondary rounded-pill mb-3">
+<div class="silo-control-breadcrumb">
+    <span class="silo-control-dot"></span>
+    <a href="<?= site_url('silo') ?>">Silo</a> / <a href="<?= site_url('silo/' . $pieza['id']) ?>"><?= esc($pieza['id_negocio']) ?></a> / Reclasificar
+</div>
+<h1 class="silo-control-titulo">Reclasificar</h1>
+
+<a href="<?= site_url('silo/' . $pieza['id']) ?>" class="btn btn-sm silo-btn-ghost rounded-pill mb-3">
     <i class="bi bi-chevron-left"></i> Volver
 </a>
 

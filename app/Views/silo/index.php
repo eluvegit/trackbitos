@@ -1,33 +1,22 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_control') ?>
 <?= $this->include('silo/_estilos_nivel') ?>
 
-<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-archive text-primary"></i>
-    <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>
-    <span class="text-muted">/</span>
-    <strong class="fw-semibold">Silo</strong>
-
-    <a href="<?= site_url('silo/vocabulario') ?>" class="text-decoration-none ms-1 text-muted" title="Vocabulario">
-        <i class="bi bi-tags"></i>
-    </a>
-    <a href="<?= site_url('silo/unidades') ?>" class="text-decoration-none ms-1 text-muted" title="Unidades">
-        <i class="bi bi-hdd-stack"></i>
-    </a>
-    <a href="<?= site_url('silo/mi-pc') ?>" class="text-decoration-none ms-1 text-muted" title="Mi PC">
-        <i class="bi bi-pc-display"></i>
-    </a>
-    <a href="<?= site_url('silo/ranking') ?>" class="text-decoration-none ms-1 text-muted" title="Lo que más ocupa">
-        <i class="bi bi-bar-chart-line"></i>
-    </a>
-    <a href="<?= site_url('silo/datos-faltan') ?>" class="text-decoration-none ms-1 text-muted" title="Datos que faltan">
-        <i class="bi bi-clipboard-x"></i>
-    </a>
-    <a href="<?= site_url('silo/crear') ?>" class="text-decoration-none ms-1 text-success" title="Nueva pieza">
-        <i class="bi bi-plus-circle fs-5"></i>
-    </a>
-</h5>
+<div class="silo-control-breadcrumb">
+    <span class="silo-control-dot"></span>
+    <a href="<?= site_url('dashboard') ?>">Dashboard</a> / Silo
+    <span class="silo-control-iconos">
+        <a href="<?= site_url('silo/vocabulario') ?>" title="Vocabulario"><i class="bi bi-tags"></i></a>
+        <a href="<?= site_url('silo/unidades') ?>" title="Unidades"><i class="bi bi-hdd-stack"></i></a>
+        <a href="<?= site_url('silo/mi-pc') ?>" title="Mi PC"><i class="bi bi-pc-display"></i></a>
+        <a href="<?= site_url('silo/ranking') ?>" title="Lo que más ocupa"><i class="bi bi-bar-chart-line"></i></a>
+        <a href="<?= site_url('silo/datos-faltan') ?>" title="Datos que faltan"><i class="bi bi-clipboard-x"></i></a>
+        <a href="<?= site_url('silo/crear') ?>" class="text-success" title="Nueva pieza"><i class="bi bi-plus-circle"></i></a>
+    </span>
+</div>
+<h1 class="silo-control-titulo">Catálogo de <strong>Piezas</strong></h1>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
@@ -43,10 +32,14 @@
     </div>
 <?php endif; ?>
 
+<?php $vista = $vista ?? 'lista2'; ?>
+
 <form method="get" action="<?= site_url('silo') ?>" class="row g-2 mb-3">
     <?php if (!empty($filtros['atributo_id'])): ?>
         <input type="hidden" name="atributo_id" value="<?= (int) $filtros['atributo_id'] ?>">
     <?php endif; ?>
+    <input type="hidden" name="vista" value="<?= esc($vista, 'attr') ?>">
+    <input type="hidden" name="orden" value="<?= esc($filtros['orden'] ?? 'nombre', 'attr') ?>">
     <div class="col-sm-6 col-md-4">
         <input type="text" name="q" class="form-control" placeholder="Buscar por ID, nombre de carpeta o de fichero..."
                value="<?= esc($filtros['q'] ?? '') ?>">
@@ -61,22 +54,46 @@
             <?php endforeach; ?>
         </select>
     </div>
+    <div class="col-sm-6 col-md-2">
+        <select name="anio" class="form-select">
+            <option value="">Todos los años</option>
+            <?php foreach ($anios as $a): ?>
+                <option value="<?= (int) $a ?>" <?= (string) ($filtros['anio'] ?? '') === (string) $a ? 'selected' : '' ?>>
+                    <?= (int) $a ?>
+                </option>
+            <?php endforeach; ?>
+            <option value="sin_fecha" <?= ($filtros['anio'] ?? '') === 'sin_fecha' ? 'selected' : '' ?>>Sin fecha</option>
+        </select>
+    </div>
     <div class="col-auto">
         <button type="submit" class="btn btn-outline-secondary">Buscar</button>
     </div>
 </form>
 
 <?php
-$vista   = $vista ?? 'lista2';
-$vistaQs = static fn ($v) => site_url('silo') . '?' . http_build_query(
+$qsBase = static fn (array $overrides = []) => site_url('silo') . '?' . http_build_query(array_merge(
     array_filter([
         'q'            => $filtros['q'] ?? null,
         'categoria_id' => $filtros['categoria_id'] ?? null,
         'atributo_id'  => $filtros['atributo_id'] ?? null,
-    ]) + ['vista' => $v]
-);
+        'anio'         => $filtros['anio'] ?? null,
+    ]),
+    ['vista' => $vista, 'orden' => $filtros['orden'] ?? 'nombre'],
+    $overrides
+));
+$vistaQs = static fn ($v) => $qsBase(['vista' => $v]);
 ?>
-<div class="d-flex justify-content-end mb-2">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <div class="btn-group btn-group-sm" role="group" aria-label="Orden">
+        <a href="<?= esc($qsBase(['orden' => 'nombre']), 'attr') ?>"
+           class="btn btn-outline-secondary <?= ($filtros['orden'] ?? 'nombre') === 'nombre' ? 'active' : '' ?>" title="Orden alfabético (por ID de alta)">
+            <i class="bi bi-sort-alpha-down"></i> Nombre
+        </a>
+        <a href="<?= esc($qsBase(['orden' => 'anio']), 'attr') ?>"
+           class="btn btn-outline-secondary <?= ($filtros['orden'] ?? 'nombre') === 'anio' ? 'active' : '' ?>" title="Ordenar por año (cronológico)">
+            <i class="bi bi-sort-numeric-down"></i> Año
+        </a>
+    </div>
     <div class="btn-group btn-group-sm" role="group" aria-label="Forma de ver las carpetas">
         <a href="<?= esc($vistaQs('lista2'), 'attr') ?>"
            class="btn btn-outline-secondary <?= $vista === 'lista2' ? 'active' : '' ?>" title="Listado">

@@ -1,12 +1,13 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h5 class="mb-3 d-flex align-items-center gap-2">
-    <i class="bi bi-tags text-primary"></i>
-    <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
-    <span class="text-muted">/</span>
-    <strong class="fw-semibold">Vocabulario</strong>
-</h5>
+<?= $this->include('silo/_estilos_control') ?>
+
+<div class="silo-control-breadcrumb">
+    <span class="silo-control-dot"></span>
+    <a href="<?= site_url('silo') ?>">Silo</a> / Vocabulario
+</div>
+<h1 class="silo-control-titulo">Vocabulario</h1>
 
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
@@ -17,9 +18,14 @@
 
 <?php $etiquetas = ['categoria' => 'Categorías', 'evento' => 'Eventos', 'lugar' => 'Lugares', 'persona' => 'Personas', 'tema' => 'Temas']; ?>
 
-<?php foreach ($porTipo as $tipo => $items): ?>
+<?php $indice = 0; ?>
+<?php foreach ($porTipo as $tipo => $items): $indice++; ?>
     <div class="mb-4">
-        <h6 class="text-muted text-uppercase small fw-semibold mb-2"><?= esc($etiquetas[$tipo] ?? $tipo) ?></h6>
+        <div class="silo-seccion-header-row">
+            <span class="silo-seccion-num"><?= sprintf('%02d', $indice) ?></span>
+            <h6 class="silo-seccion-titulo"><?= esc(mb_strtoupper($etiquetas[$tipo] ?? $tipo)) ?></h6>
+            <div class="silo-seccion-linea"></div>
+        </div>
         <?php if (empty($items)): ?>
             <p class="text-muted small">Ninguno todavía.</p>
         <?php else: ?>

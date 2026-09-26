@@ -1,20 +1,19 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
+<?= $this->include('silo/_estilos_control') ?>
 <?= $this->include('silo/_estilos_nivel') ?>
 
 <div class="<?= $desde ? 'silo-nivel silo-n' . (int) $desde['nivel'] : '' ?>">
 
-<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-folder2 text-warning"></i>
-    <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
-    <span class="text-muted">/</span>
-    <strong class="fw-semibold"><?= esc($pieza['nombre_carpeta']) ?></strong>
-
-    <a href="<?= site_url('silo/' . $pieza['id'] . '/editar') ?>" class="text-decoration-none ms-1" title="Reclasificar">
-        <i class="bi bi-pencil"></i>
-    </a>
-</h5>
+<div class="silo-control-breadcrumb">
+    <span class="silo-control-dot"></span>
+    <a href="<?= site_url('silo') ?>">Silo</a> / <?= esc($pieza['id_negocio']) ?>
+    <span class="silo-control-iconos">
+        <a href="<?= site_url('silo/' . $pieza['id'] . '/editar') ?>" title="Reclasificar"><i class="bi bi-pencil"></i></a>
+    </span>
+</div>
+<h1 class="silo-control-titulo"><?= esc($pieza['nombre_carpeta']) ?></h1>
 
 <?php $nivelLabel = [1 => 'Maestro', 2 => 'Año', 3 => 'Temática']; ?>
 <div class="d-flex align-items-center gap-2 mb-3">
@@ -93,7 +92,7 @@
     <?php if (empty($ubicaciones)): ?>
         <p class="text-muted small">Sin ubicaciones registradas — esta pieza no llegó por ingesta (alta manual) o aún no se ha simulado/escaneado.</p>
     <?php else: ?>
-        <table class="table table-sm">
+        <table class="table table-sm silo-tabla-control">
             <thead>
                 <tr><th>Unidad</th><th>Copia</th><th>Ruta</th><th></th></tr>
             </thead>
@@ -110,7 +109,7 @@
                             <?php endif; ?>
                         </td>
                         <td><?= esc($copiaLabel[(int) $u['copia']] ?? $u['copia']) ?></td>
-                        <td><code class="small"><?= esc($u['ruta_relativa']) ?></code></td>
+                        <td><code class="small silo-mono"><?= esc($u['ruta_relativa']) ?></code></td>
                         <td>
                             <form method="post" action="<?= site_url('silo/ubicacion/' . $u['id'] . '/borrar') ?>"
                                   onsubmit="return confirm('¿Quitar esta ubicación? (limpieza de una ingesta equivocada, no mueve nada en disco)')">
@@ -137,19 +136,21 @@
     <p class="text-muted">Sin ficheros registrados todavía.</p>
 <?php else: ?>
     <div class="table-responsive">
-        <table class="table table-sm align-middle">
+        <table class="table table-sm align-middle silo-tabla-control">
             <thead>
                 <tr><th>Nombre</th><th>Tipo</th><th>Tamaño</th><th>Hash</th><th>Ingestado</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($ficheros as $f): ?>
                     <tr>
-                        <td class="d-flex align-items-center gap-2">
-                            <i class="bi <?= silo_icono_tipo($f['tipo']) ?> text-muted"></i>
-                            <?= esc($f['nombre']) ?>
+                        <td>
+                            <span class="d-flex align-items-center gap-2">
+                                <i class="bi <?= silo_icono_tipo($f['tipo']) ?> text-muted"></i>
+                                <?= esc($f['nombre']) ?>
+                            </span>
                         </td>
                         <td><span class="badge text-bg-light border"><?= esc($f['tipo']) ?></span></td>
-                        <td class="text-nowrap"><?= esc(silo_formatear_tamano($f['tamano_bytes'] ?? null)) ?></td>
+                        <td class="text-nowrap silo-mono"><?= esc(silo_formatear_tamano($f['tamano_bytes'] ?? null)) ?></td>
                         <td>
                             <?php if (!empty($f['hash'])): ?>
                                 <code class="small" title="<?= esc($f['hash']) ?>"><?= esc(substr($f['hash'], 0, 12)) ?>…</code>

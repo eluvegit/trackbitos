@@ -41,8 +41,25 @@ class SiloPiezaModel extends Model
     public function buscar(array $filtros = []): array
     {
         $builder = $this->select('silo_piezas.*, cat.nombre AS categoria_nombre')
-            ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left')
-            ->orderBy('silo_piezas.nombre_carpeta', 'ASC');
+            ->join('silo_vocabulario cat', 'cat.id = silo_piezas.categoria_id', 'left');
+
+        // 'anio': mismo criterio que deLaUnidad('fecha') — cronológico de
+        // verdad, sin fecha al final. 'nombre' (por defecto) es alfabético,
+        // que al llevar el ID delante equivale al orden de alta.
+        if (($filtros['orden'] ?? 'nombre') === 'anio') {
+            $builder->orderBy('silo_piezas.fecha IS NULL', 'ASC', false)
+                    ->orderBy('silo_piezas.fecha', 'ASC');
+        } else {
+            $builder->orderBy('silo_piezas.nombre_carpeta', 'ASC');
+        }
+
+        if (!empty($filtros['anio'])) {
+            if ($filtros['anio'] === 'sin_fecha') {
+                $builder->where('silo_piezas.fecha', null);
+            } else {
+                $builder->where('YEAR(silo_piezas.fecha) =', (int) $filtros['anio']);
+            }
+        }
 
         if (!empty($filtros['q'])) {
             $q = $filtros['q'];
@@ -78,6 +95,24 @@ class SiloPiezaModel extends Model
         }
 
         return $piezas;
+    }
+
+    /**
+     * Años con al menos una pieza (para el desplegable de filtro del
+     * catálogo), más recientes primero. Las piezas sin fecha no salen aquí
+     * — el filtro las cubre aparte con el valor especial 'sin_fecha'.
+     *
+     * @return array<int, int>
+     */
+    public function aniosEnUso(): array
+    {
+        $filas = $this->select('YEAR(fecha) AS anio')
+            ->where('fecha IS NOT NULL')
+            ->groupBy('anio')
+            ->orderBy('anio', 'DESC')
+            ->findAll();
+
+        return array_map(static fn ($f) => (int) $f['anio'], $filas);
     }
 
     /**

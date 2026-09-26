@@ -62,6 +62,8 @@ class Web extends BaseController
             'q'            => $this->request->getGet('q'),
             'categoria_id' => $this->request->getGet('categoria_id'),
             'atributo_id'  => $this->request->getGet('atributo_id'),
+            'anio'         => $this->request->getGet('anio'),
+            'orden'        => $this->request->getGet('orden') === 'anio' ? 'anio' : 'nombre',
         ];
 
         // Nombre a mostrar en el banner "Filtrando por..." cuando se llega
@@ -74,6 +76,7 @@ class Web extends BaseController
         return view('silo/index', [
             'piezas'         => $this->piezaModel->buscar($filtros),
             'categorias'     => $this->vocabularioModel->categoriasEnUso(),
+            'anios'          => $this->piezaModel->aniosEnUso(),
             'filtros'        => $filtros,
             'atributoFiltro' => $atributoFiltro,
             'vista'          => $this->vistaSolicitada(),

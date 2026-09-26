@@ -1,14 +1,13 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-    <i class="bi bi-clipboard-x text-primary"></i>
-    <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>
-    <span class="text-muted">/</span>
-    <a href="<?= site_url('silo') ?>" class="text-decoration-none text-muted fw-normal">Silo</a>
-    <span class="text-muted">/</span>
-    <strong class="fw-semibold">Datos que faltan</strong>
-</h5>
+<?= $this->include('silo/_estilos_control') ?>
+
+<div class="silo-control-breadcrumb">
+    <span class="silo-control-dot"></span>
+    <a href="<?= site_url('dashboard') ?>">Dashboard</a> / <a href="<?= site_url('silo') ?>">Silo</a> / Datos que faltan
+</div>
+<h1 class="silo-control-titulo">Datos que <strong>faltan</strong></h1>
 
 <p class="text-muted small">
     Piezas a las que les falta algo en la clasificación. Se mira lo que hay asignado
