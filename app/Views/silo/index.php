@@ -13,6 +13,18 @@
         <a href="<?= site_url('silo/mi-pc') ?>" title="Mi PC"><i class="bi bi-pc-display"></i></a>
         <a href="<?= site_url('silo/ranking') ?>" title="Lo que más ocupa"><i class="bi bi-bar-chart-line"></i></a>
         <a href="<?= site_url('silo/datos-faltan') ?>" title="Datos que faltan"><i class="bi bi-clipboard-x"></i></a>
+        <a href="<?= site_url('silo/avisos') ?>" title="Avisos de los escaneos" class="position-relative">
+            <i class="bi bi-bell"></i>
+            <?php if (!empty($avisosProblema)): ?>
+                <span class="badge rounded-pill text-bg-danger position-absolute top-0 start-100 translate-middle" style="font-size: .55rem;"><?= (int) $avisosProblema ?></span>
+            <?php endif; ?>
+        </a>
+        <a href="<?= site_url('silo/tareas') ?>" title="Tareas pendientes" class="position-relative">
+            <i class="bi bi-list-check"></i>
+            <?php if (!empty($tareasPendientes)): ?>
+                <span class="badge rounded-pill text-bg-warning position-absolute top-0 start-100 translate-middle" style="font-size: .55rem;"><?= (int) $tareasPendientes ?></span>
+            <?php endif; ?>
+        </a>
         <a href="<?= site_url('silo/crear') ?>" class="text-success" title="Nueva pieza"><i class="bi bi-plus-circle"></i></a>
     </span>
 </div>
@@ -49,7 +61,7 @@
             <option value="">Todas las categorías</option>
             <?php foreach ($categorias as $c): ?>
                 <option value="<?= (int) $c['id'] ?>" <?= (string) ($filtros['categoria_id'] ?? '') === (string) $c['id'] ? 'selected' : '' ?>>
-                    <?= esc($c['nombre']) ?>
+                    <?= esc(silo_titulo_categoria($c['nombre'])) ?>
                 </option>
             <?php endforeach; ?>
         </select>
@@ -103,14 +115,19 @@ $vistaQs = static fn ($v) => $qsBase(['vista' => $v]);
            class="btn btn-outline-secondary <?= $vista === 'galeria2' ? 'active' : '' ?>" title="Galería de carpetas">
             <i class="bi bi-grid-1x2"></i>
         </a>
+        <a href="<?= esc($vistaQs('miniaturas'), 'attr') ?>"
+           class="btn btn-outline-secondary <?= $vista === 'miniaturas' ? 'active' : '' ?>" title="Portadas con miniaturas">
+            <i class="bi bi-images"></i>
+        </a>
     </div>
 </div>
 
 <?= $this->include(match ($vista) {
-    'galeria'  => 'silo/_galeria_piezas',
-    'lista2'   => 'silo/_listado_piezas_v2',
-    'galeria2' => 'silo/_galeria_piezas_v2',
-    default    => 'silo/_listado_piezas',
+    'galeria'    => 'silo/_galeria_piezas',
+    'lista2'     => 'silo/_listado_piezas_v2',
+    'galeria2'   => 'silo/_galeria_piezas_v2',
+    'miniaturas' => 'silo/_miniaturas_piezas',
+    default      => 'silo/_listado_piezas',
 }) ?>
 
 <?= $this->endSection() ?>

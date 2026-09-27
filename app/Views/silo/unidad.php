@@ -60,15 +60,20 @@ $qs = static fn (array $overrides) => site_url('silo/unidades/' . $unidad['id'])
                class="btn btn-outline-secondary <?= $vista === 'galeria2' ? 'active' : '' ?>" title="Galería de carpetas">
                 <i class="bi bi-grid-1x2"></i>
             </a>
+            <a href="<?= $qs(['vista' => 'miniaturas']) ?>"
+               class="btn btn-outline-secondary <?= $vista === 'miniaturas' ? 'active' : '' ?>" title="Portadas con miniaturas">
+                <i class="bi bi-images"></i>
+            </a>
         </div>
     </div>
 </div>
 
 <?= $this->include(match ($vista) {
-    'galeria'  => 'silo/_galeria_piezas',
-    'lista2'   => 'silo/_listado_piezas_v2',
-    'galeria2' => 'silo/_galeria_piezas_v2',
-    default    => 'silo/_listado_piezas',
+    'galeria'    => 'silo/_galeria_piezas',
+    'lista2'     => 'silo/_listado_piezas_v2',
+    'galeria2'   => 'silo/_galeria_piezas_v2',
+    'miniaturas' => 'silo/_miniaturas_piezas',
+    default      => 'silo/_listado_piezas',
 }) ?>
 
 </div>

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SiloPiezaModel;
+use App\Models\SiloTareaModel;
 use App\Models\SiloUbicacionModel;
 use App\Models\SiloUnidadBucketModel;
 use App\Models\SiloUnidadModel;
@@ -32,6 +33,7 @@ class SiloPropagacionService
     private SiloUnidadModel $unidadModel;
     private SiloUnidadBucketModel $unidadBucketModel;
     private SiloVocabularioModel $vocabularioModel;
+    private SiloTareaModel $tareaModel;
     private SiloService $silo;
 
     public function __construct()
@@ -41,6 +43,7 @@ class SiloPropagacionService
         $this->unidadModel       = new SiloUnidadModel();
         $this->unidadBucketModel = new SiloUnidadBucketModel();
         $this->vocabularioModel  = new SiloVocabularioModel();
+        $this->tareaModel        = new SiloTareaModel();
         $this->silo              = new SiloService();
     }
 
@@ -98,13 +101,16 @@ class SiloPropagacionService
      * la cuenta y `repartirCopia3()` / `aplicarPlanNivel2()` la recolocan
      * cuando se dé de alta una unidad donde quepa.
      *
-     * No re-sincroniza: si la pieza cambia de categoría después, esta pasada
-     * no mueve la ubicación de Copia 3 ya creada.
+     * Si la copia YA existe no la toca: la ubicación refleja lo que hay en
+     * disco. Si ya no casa con lo esperado (carpeta renombrada en el
+     * Maestro, fecha o categoría corregidas) deja marcada la corrección —
+     * ver sincronizarCopia().
      */
     private function asignarACopia(array $pieza, int $copia, string $bucket, string $rutaRelativa): void
     {
         $existente = $this->ubicacionModel->where('pieza_id', $pieza['id'])->where('copia', $copia)->first();
         if ($existente) {
+            $this->sincronizarCopia($pieza, $existente, $bucket, $rutaRelativa);
             return;
         }
 
@@ -118,6 +124,65 @@ class SiloPropagacionService
             'unidad_id'     => $unidad['id'],
             'copia'         => $copia,
             'ruta_relativa' => $rutaRelativa,
+        ]);
+    }
+
+    /**
+     * Copia 2/3 ya creada cuya ruta no es la que tocaría ahora: se encola
+     * (silo_tareas, sin aprobar — mover cosas en disco es sensible) una
+     * corrección para hacerla en disco y confirmarla desde la ficha:
+     *   · `renombrar_copia` — sigue en su cubo (mismo año/categoría), solo
+     *     cambia el nombre de la carpeta; se queda en la misma unidad.
+     *   · `mover_copia` — cambió de cubo (p. ej. de `sin_fecha/` a `2006/`):
+     *     va a la unidad de ese cubo con sitio (`unidad_destino_id` null si
+     *     no hay ninguna todavía).
+     * Una sola corrección pendiente por ubicación: si se vuelve a renombrar
+     * antes de hacerla, se reescribe; si la ruta vuelve a casar, se cancela.
+     */
+    private function sincronizarCopia(array $pieza, array $ubicacion, string $bucket, string $rutaEsperada): void
+    {
+        $pendiente = $this->tareaModel->reubicacionPendienteDeUbicacion((int) $ubicacion['id']);
+
+        if ($ubicacion['ruta_relativa'] === $rutaEsperada) {
+            if ($pendiente) {
+                $this->tareaModel->update($pendiente['id'], ['estado' => 'cancelada']);
+            }
+            return;
+        }
+
+        $bucketActual = strstr((string) $ubicacion['ruta_relativa'], '/', true);
+        if ($bucketActual === $bucket) {
+            $tipo      = 'renombrar_copia';
+            $destinoId = (int) $ubicacion['unidad_id'];
+        } else {
+            $tipo      = 'mover_copia';
+            $destino   = $this->unidadDestino((int) $ubicacion['copia'], $bucket, (int) ($pieza['tamano_bytes'] ?? 0));
+            $destinoId = $destino ? (int) $destino['id'] : null;
+        }
+
+        // Orden de claves fijo: SiloTareaModel busca por el prefijo del JSON.
+        $payload = json_encode([
+            'ubicacion_id'      => (int) $ubicacion['id'],
+            'pieza_id'          => (int) $pieza['id'],
+            'copia'             => (int) $ubicacion['copia'],
+            'desde'             => $ubicacion['ruta_relativa'],
+            'hasta'             => $rutaEsperada,
+            'unidad_destino_id' => $destinoId,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($pendiente) {
+            if ($pendiente['tipo'] !== $tipo || $pendiente['payload'] !== $payload) {
+                $this->tareaModel->update($pendiente['id'], ['tipo' => $tipo, 'payload' => $payload]);
+            }
+            return;
+        }
+
+        $this->tareaModel->insert([
+            'unidad_id' => (int) $ubicacion['unidad_id'],
+            'tipo'      => $tipo,
+            'payload'   => $payload,
+            'estado'    => 'pendiente',
+            'aprobada'  => 0,
         ]);
     }
 

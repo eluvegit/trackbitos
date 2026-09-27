@@ -13,7 +13,7 @@ class SiloFicheroModel extends Model
     protected $createdField  = 'creado_en';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['pieza_id', 'nombre', 'tipo', 'tamano_bytes', 'hash'];
+    protected $allowedFields = ['pieza_id', 'nombre', 'tipo', 'tamano_bytes', 'hash', 'mtime'];
 
     public function deLaPieza(int $piezaId): array
     {

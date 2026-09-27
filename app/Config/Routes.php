@@ -930,6 +930,8 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
     $routes->GET('mi-pc', 'Web::miPc');
     $routes->GET('ranking', 'Web::ranking');
     $routes->GET('datos-faltan', 'Web::datosFaltan');
+    $routes->GET('tareas', 'Web::tareas');
+    $routes->GET('avisos', 'Web::avisos');
 
     $routes->GET('unidades', 'Web::unidades');
     $routes->POST('unidades/crear', 'Web::crearUnidad');
@@ -945,6 +947,7 @@ $routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo
     $routes->POST('(:num)/actualizar', 'Web::update/$1');
     $routes->POST('(:num)/borrar', 'Web::delete/$1');
     $routes->POST('ubicacion/(:num)/borrar', 'Web::borrarUbicacion/$1');
+    $routes->POST('reubicacion/(:num)/hecha', 'Web::reubicacionHecha/$1');
 });
 
 // ---- Silo: API del agente .py (escaneo real de disco). Sin filtro 'auth'
@@ -954,6 +957,10 @@ $routes->group('silo/agente', ['filter' => 'siloApi', 'namespace' => 'App\Contro
     $routes->POST('handshake', 'Agente::handshake');
     $routes->POST('escaneo', 'Agente::escaneo');
     $routes->POST('piezas/(:num)/proxies', 'Agente::subirProxy/$1');
+    $routes->POST('piezas/(:num)/proxies/listar', 'Agente::listarProxies/$1');
+    $routes->POST('unidades/(:num)/sincronizada', 'Agente::unidadSincronizada/$1');
+    $routes->POST('catalogo', 'Agente::catalogo');
+    $routes->POST('catalogo/restaurar', 'Agente::restaurarCatalogo');
     $routes->POST('tareas/(:num)/resultado', 'Agente::tareaResultado/$1');
 });
 

@@ -10,6 +10,7 @@ use App\Models\SiloProxyModel;
 use App\Models\SiloTareaModel;
 use App\Models\SiloUbicacionModel;
 use App\Models\SiloUnidadModel;
+use App\Services\SiloCatalogoService;
 use App\Services\SiloIngestaService;
 use App\Services\SiloService;
 
@@ -17,9 +18,11 @@ use App\Services\SiloService;
  * API que habla el agente `.py` (ver silo-agente/agente.py y
  * docs/silo-ingesta-propagacion.md): el agente toca disco y reporta, esta
  * clase decide y guarda. Auth por token Bearer (filtro `siloApi`, no
- * Myth\Auth: aquí no hay sesión de navegador). Primer esbozo — cubre
- * handshake + escaneo del primer nivel del Maestro; no hay todavía cola de
- * aprobación humana, manifiesto por-fichero (N1-N3), ni propagación física.
+ * Myth\Auth: aquí no hay sesión de navegador). Cubre handshake, escaneo
+ * del primer nivel del Maestro con detección de cambios (el agente lleva el
+ * manifiesto N1–N3 en el disco y solo manda las carpetas que cambiaron),
+ * proxies (subida y copia en el Maestro) y la réplica del catálogo que el
+ * agente deja en cada unidad. No hay todavía propagación física (Fase 3).
  */
 class Agente extends BaseController
 {
@@ -84,12 +87,35 @@ class Agente extends BaseController
                 continue;
             }
 
+            // La réplica del catálogo que hay en ese disco es MÁS NUEVA que
+            // la BD viva: la BD perdió datos o se revirtió. Aviso fuerte en
+            // el panel (una vez por réplica, el daemon hace handshake cada
+            // pocos segundos) con cómo restaurar.
+            $metaDisco = (array) ($u['catalogo_meta'] ?? []);
+            if ($metaDisco && (new SiloCatalogoService())->esMasNuevaQueLaViva($metaDisco)) {
+                $referencia = 'catalogo ' . ($metaDisco['generado_en'] ?? '?');
+                $yaAvisado  = $this->eventoModel->where('tipo', 'catalogo_mas_nuevo')
+                    ->where('unidad_id', $unidad['id'])->where('referencia', $referencia)->countAllResults() > 0;
+                if (!$yaAvisado) {
+                    $this->eventoModel->registrar('catalogo_mas_nuevo', [
+                        'unidad_id'  => $unidad['id'],
+                        'referencia' => $referencia,
+                        'detalle'    => 'La réplica del catálogo de este disco llega hasta el evento #' . (int) ($metaDisco['ultimo_evento_id'] ?? 0)
+                            . ' y la BD viva no: se perdieron o revirtieron datos. Para recuperarla: silo --restaurar-catalogo '
+                            . (int) $unidad['id'] . ' (desde el PC con el disco) o php spark silo:restaurar <.catalogo.sql.gz> en el servidor.',
+                    ]);
+                }
+            }
+
             $resueltas[] = [
                 'unidad_id'    => (int) $unidad['id'],
                 'nivel'        => (int) $unidad['nivel'],
                 'numero'       => (int) $unidad['numero'],
                 'etiqueta'     => $unidad['etiqueta'],
                 'ruta_montaje' => $unidad['ruta_montaje'],
+                // N0: el agente lo compara con el de su `.silo_unit.json`;
+                // si no casan, manda todas las carpetas completas.
+                'hash_indice'  => $unidad['hash_indice'] ?? null,
                 'tareas'       => $this->tareaModel->pendientesDeUnidad((int) $unidad['id']),
             ];
         }
@@ -174,7 +200,20 @@ class Agente extends BaseController
             }
 
             try {
-                $pieza = $this->ingesta->ingestarCarpeta($unidad['id'], $nombre, (array) ($entrada['ficheros'] ?? []));
+                // Sin `ficheros`: el agente la da por sin cambios (manifiesto).
+                $ficheros = array_key_exists('ficheros', $entrada) ? (array) $entrada['ficheros'] : null;
+                $pieza    = $this->ingesta->ingestarCarpeta($unidad['id'], $nombre, $ficheros);
+
+                $cambios = $pieza['_cambios'];
+                if (!$pieza['_nueva'] && ($cambios['nuevos'] || $cambios['borrados'] || $cambios['modificados'])) {
+                    $this->eventoModel->registrar('ficheros_cambiados', [
+                        'unidad_id'  => $unidad['id'],
+                        'pieza_id'   => $pieza['id'],
+                        'referencia' => $nombre,
+                        'detalle'    => $this->resumenCambios($cambios),
+                    ]);
+                }
+
                 $ingestadas[] = [
                     'nombre'           => $nombre,
                     'pieza_id'         => $pieza['id'],
@@ -185,7 +224,9 @@ class Agente extends BaseController
                     // pasada normal (que reingesta TODAS las candidatas, no
                     // solo las nuevas) volvería a generar proxies para todo
                     // el Maestro cada vez.
-                    'necesita_proxies' => !$this->proxyModel->tieneProxiesReales((int) $pieza['id']),
+                    // ...o cuando cambiaron sus fotos/vídeos: los proxies de
+                    // antes ya no representan la carpeta.
+                    'necesita_proxies' => $pieza['_multimedia_cambiada'] || !$this->proxyModel->tieneProxiesReales((int) $pieza['id']),
                 ];
             } catch (\Throwable $e) {
                 $errores[] = ['nombre' => $nombre, 'error' => $e->getMessage()];
@@ -195,6 +236,20 @@ class Agente extends BaseController
                     'detalle'    => $e->getMessage(),
                 ]);
             }
+        }
+
+        // N2/N3: ficheros con el mismo tamaño y fecha que el manifiesto pero
+        // otro contenido (hash) — corrupción silenciosa o alguien tocó el
+        // disco por fuera conservando la fecha.
+        foreach ((array) ($body['corruptos'] ?? []) as $c) {
+            $this->eventoModel->registrar('hash_distinto', [
+                'unidad_id'  => $unidad['id'],
+                'referencia' => (string) ($c['carpeta'] ?? '') . '/' . (string) ($c['fichero'] ?? ''),
+                'detalle'    => 'Mismo tamaño y fecha que en la última sincronización, pero el contenido (hash) es otro. Revisa el fichero contra otra copia.',
+            ]);
+        }
+        if (!empty($body['verificacion'])) {
+            $this->unidadModel->update($unidad['id'], ['ultima_verificacion' => date('Y-m-d H:i:s')]);
         }
 
         $desaparecidas = [];
@@ -302,6 +357,128 @@ class Agente extends BaseController
         ]);
 
         return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * El agente terminó una pasada sobre la unidad y dejó en su raíz el
+     * manifiesto nuevo: guarda su rollup (`hash_indice`, N0 del próximo
+     * handshake) y lo refleja en el `.silo_unit.json` descargable.
+     */
+    public function unidadSincronizada(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        if (!$unidad) {
+            return $this->response->setJSON(['error' => 'Unidad no encontrada.'])->setStatusCode(404);
+        }
+
+        $hash = (string) ($this->cuerpoJson()['hash_indice'] ?? '');
+        if (!preg_match('/^[0-9a-f]{64}$/', $hash)) {
+            return $this->response->setJSON(['error' => 'hash_indice no válido.'])->setStatusCode(422);
+        }
+
+        $ahora   = date('Y-m-d H:i:s');
+        $control = json_decode((string) $unidad['fichero_control'], true) ?: [];
+        $control['hash_indice']           = $hash;
+        $control['ultima_sincronizacion'] = date('c');
+
+        $this->unidadModel->update($id, [
+            'hash_indice'           => $hash,
+            'ultima_sincronizacion' => $ahora,
+            'fichero_control'       => json_encode($control, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return $this->response->setJSON(['ok' => true, 'fichero_control' => $control]);
+    }
+
+    /**
+     * Réplica del catálogo para la raíz de una unidad: `.catalogo.sql.gz`
+     * (en base64 dentro del JSON, pesa poco) + su `.catalogo.meta.json`.
+     */
+    public function catalogo()
+    {
+        $unidadId = (int) ($this->cuerpoJson()['unidad_id'] ?? 0) ?: null;
+        $volcado  = (new SiloCatalogoService())->volcar($unidadId);
+
+        return $this->response->setJSON([
+            'meta'         => $volcado['meta'],
+            'contenido_b64' => base64_encode($volcado['gz']),
+        ]);
+    }
+
+    /**
+     * Restaura el catálogo desde la réplica que sube el agente (`silo
+     * --restaurar-catalogo`, para cuando la BD vive en un servidor sin
+     * acceso a consola). Exige `confirmar: "RESTAURAR"` en el cuerpo; guarda
+     * antes el estado actual en writable/silo/ (ver SiloCatalogoService).
+     */
+    public function restaurarCatalogo()
+    {
+        $body = $this->cuerpoJson();
+        if (($body['confirmar'] ?? '') !== 'RESTAURAR') {
+            return $this->response->setJSON(['error' => 'Falta confirmar: "RESTAURAR".'])->setStatusCode(422);
+        }
+
+        $gz = base64_decode((string) ($body['contenido_b64'] ?? ''), true);
+        if ($gz === false || $gz === '') {
+            return $this->response->setJSON(['error' => 'Falta la réplica (contenido_b64).'])->setStatusCode(422);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'silo_catalogo_');
+        file_put_contents($tmp, $gz);
+        try {
+            $resultado = (new SiloCatalogoService())->restaurar($tmp);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['error' => $e->getMessage()])->setStatusCode(500);
+        } finally {
+            @unlink($tmp);
+        }
+
+        // Tras restaurar, silo_eventos es el de la réplica: este evento ya
+        // queda en la BD restaurada.
+        $this->eventoModel->registrar('catalogo_restaurado', [
+            'unidad_id'  => isset($body['unidad_id']) ? (int) $body['unidad_id'] : null,
+            'referencia' => 'catalogo ' . (string) ($body['meta']['generado_en'] ?? '?'),
+            'detalle'    => "{$resultado['sentencias']} sentencia(s). Estado anterior guardado en {$resultado['copia_previa']}.",
+        ]);
+
+        return $this->response->setJSON(['ok' => true] + $resultado);
+    }
+
+    /**
+     * Proxies que la web tiene de una pieza (URL absoluta), para que el
+     * agente guarde su copia en el Maestro (`.silo_proxies/`) cuando falte.
+     */
+    public function listarProxies(int $id)
+    {
+        helper('silo');
+
+        $proxies = array_map(function (array $p) {
+            $fichero = $p['fichero_id'] ? $this->ficheroModel->find($p['fichero_id']) : null;
+
+            return [
+                'tipo'           => $p['tipo'],
+                'orden'          => (int) $p['orden'],
+                'url'            => silo_proxy_url($p['url']),
+                'fichero_nombre' => $fichero['nombre'] ?? null,
+            ];
+        }, $this->proxyModel->deLaPieza($id));
+
+        return $this->response->setJSON(['proxies' => $proxies]);
+    }
+
+    /** "+2 nuevos · −1 borrado · ~3 modificados", con los nombres (recortado). */
+    private function resumenCambios(array $cambios): string
+    {
+        $partes = [];
+        foreach (['nuevos' => '+', 'borrados' => '−', 'modificados' => '~'] as $clave => $signo) {
+            if ($cambios[$clave]) {
+                $nombres  = array_slice($cambios[$clave], 0, 5);
+                $mas      = count($cambios[$clave]) > 5 ? ' y ' . (count($cambios[$clave]) - 5) . ' más' : '';
+                $partes[] = $signo . count($cambios[$clave]) . ' ' . $clave . ': ' . implode(', ', $nombres) . $mas;
+            }
+        }
+
+        return implode(' · ', $partes);
     }
 
     /** Reporte suelto de una tarea de la cola que no sea un escaneo (resultado genérico). */

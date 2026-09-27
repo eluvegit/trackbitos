@@ -21,6 +21,32 @@ class SiloProxyModel extends Model
     }
 
     /**
+     * Proxies de varias piezas de una sola consulta, agrupados por pieza_id
+     * (fotos primero, luego fotogramas de vídeo). Para la vista de
+     * miniaturas del índice sin hacer una consulta por carpeta.
+     *
+     * @return array<int, array<int, array>>
+     */
+    public function dePiezas(array $piezaIds): array
+    {
+        $piezaIds = array_values(array_unique(array_map('intval', $piezaIds)));
+        if (!$piezaIds) {
+            return [];
+        }
+
+        $filas = $this->whereIn('pieza_id', $piezaIds)
+            ->orderBy('pieza_id', 'ASC')->orderBy('tipo', 'ASC')->orderBy('orden', 'ASC')
+            ->findAll();
+
+        $porPieza = [];
+        foreach ($filas as $f) {
+            $porPieza[(int) $f['pieza_id']][] = $f;
+        }
+
+        return $porPieza;
+    }
+
+    /**
      * ¿Ya tiene algún proxy REAL (generado por el agente `.py` con ffmpeg,
      * `url` bajo `assets/silo/proxies/...`)? Los simulados de antes (URL
      * `https://picsum.photos/...`) no cuentan — así `Agente::escaneo()` sabe

@@ -61,7 +61,7 @@
         <dd class="col-sm-9"><?= esc($pieza['fecha'] ?? 'sin fecha') ?></dd>
 
         <dt class="col-sm-3">Categoría</dt>
-        <dd class="col-sm-9"><?= $categoria ? esc($categoria['nombre']) : 'sin_clasificar' ?></dd>
+        <dd class="col-sm-9"><?= $categoria ? esc(silo_titulo_categoria($categoria['nombre'])) : 'sin_clasificar' ?></dd>
 
         <?php if (!empty($pieza['tipo'])): ?>
             <dt class="col-sm-3">Tipo</dt>
@@ -109,7 +109,33 @@
                             <?php endif; ?>
                         </td>
                         <td><?= esc($copiaLabel[(int) $u['copia']] ?? $u['copia']) ?></td>
-                        <td><code class="small silo-mono"><?= esc($u['ruta_relativa']) ?></code></td>
+                        <td>
+                            <code class="small silo-mono"><?= esc($u['ruta_relativa']) ?></code>
+                            <?php if ($r = $reubicaciones[(int) $u['id']] ?? null): ?>
+                                <?php $esMover = $r['tipo'] === 'mover_copia'; ?>
+                                <div class="small mt-1 text-warning">
+                                    <i class="bi <?= $esMover ? 'bi-arrow-left-right' : 'bi-pencil' ?> me-1"></i>
+                                    <?= $esMover ? 'Pendiente de mover a' : 'Pendiente de renombrar a' ?>
+                                    <code class="small silo-mono"><?= esc($r['datos']['hasta'] ?? '') ?></code>
+                                    <?php if ($esMover): ?>
+                                        <?php if ($r['destino']): ?>
+                                            en Nivel <?= (int) $r['destino']['nivel'] ?> #<?= (int) $r['destino']['numero'] ?>
+                                        <?php else: ?>
+                                            — <span class="fst-italic">sin unidad de destino con sitio</span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                    <?php if (!$esMover || $r['destino']): ?>
+                                        <form method="post" action="<?= site_url('silo/reubicacion/' . $r['id'] . '/hecha') ?>" class="d-inline ms-1"
+                                              onsubmit="return confirm('¿Ya está <?= $esMover ? 'movida' : 'renombrada' ?> en disco? Solo actualiza el catálogo.')">
+                                            <?= csrf_field() ?>
+                                            <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: .7rem;">
+                                                <i class="bi bi-check2"></i> Hecho
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <form method="post" action="<?= site_url('silo/ubicacion/' . $u['id'] . '/borrar') ?>"
                                   onsubmit="return confirm('¿Quitar esta ubicación? (limpieza de una ingesta equivocada, no mueve nada en disco)')">

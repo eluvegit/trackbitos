@@ -3,6 +3,7 @@
 namespace App\Controllers\Silo;
 
 use App\Controllers\BaseController;
+use App\Models\SiloEventoModel;
 use App\Models\SiloFicheroModel;
 use App\Models\SiloPiezaAtributoModel;
 use App\Models\SiloPiezaModel;
@@ -35,6 +36,7 @@ class Web extends BaseController
     protected SiloFicheroModel $ficheroModel;
     protected SiloProxyModel $proxyModel;
     protected SiloTareaModel $tareaModel;
+    protected SiloEventoModel $eventoModel;
     protected SiloUnidadBucketModel $unidadBucketModel;
     protected SiloService $silo;
     protected SiloPropagacionService $propagacion;
@@ -51,6 +53,7 @@ class Web extends BaseController
         $this->ficheroModel      = new SiloFicheroModel();
         $this->proxyModel        = new SiloProxyModel();
         $this->tareaModel        = new SiloTareaModel();
+        $this->eventoModel       = new SiloEventoModel();
         $this->unidadBucketModel = new SiloUnidadBucketModel();
         $this->silo              = new SiloService();
         $this->propagacion       = new SiloPropagacionService();
@@ -73,20 +76,31 @@ class Web extends BaseController
             ? $this->vocabularioModel->find((int) $filtros['atributo_id'])
             : null;
 
+        $piezas = $this->piezaModel->buscar($filtros);
+        $vista  = $this->vistaSolicitada();
+
         return view('silo/index', [
-            'piezas'         => $this->piezaModel->buscar($filtros),
-            'categorias'     => $this->vocabularioModel->categoriasEnUso(),
-            'anios'          => $this->piezaModel->aniosEnUso(),
-            'filtros'        => $filtros,
-            'atributoFiltro' => $atributoFiltro,
-            'vista'          => $this->vistaSolicitada(),
+            'piezas'           => $piezas,
+            // Solo la vista de miniaturas necesita los proxies (una consulta
+            // para todas las carpetas del listado).
+            'proxiesPorPieza'  => $vista === 'miniaturas'
+                ? $this->proxyModel->dePiezas(array_column($piezas, 'id'))
+                : [],
+            'categorias'       => $this->vocabularioModel->categoriasEnUso(),
+            'anios'            => $this->piezaModel->aniosEnUso(),
+            'filtros'          => $filtros,
+            'atributoFiltro'   => $atributoFiltro,
+            'vista'            => $vista,
+            'tareasPendientes' => $this->tareaModel->contarPendientes(),
+            'avisosProblema'   => $this->eventoModel->contarProblemasActuales(),
         ]);
     }
 
     /**
      * Modo de presentación de las carpetas. Las dos vistas activas son
      * 'lista2' (listado con la temática como titular, por defecto) y
-     * 'galeria2' (galería de tarjetas alineadas a la izquierda). Las
+     * 'galeria2' (galería de tarjetas alineadas a la izquierda), más
+     * 'miniaturas' (portada compuesta con los proxies). Las
      * antiguas 'lista' / 'galeria' siguen accesibles escribiendo el
      * ?vista= a mano, pero ya no tienen botón.
      */
@@ -94,7 +108,7 @@ class Web extends BaseController
     {
         $v = (string) $this->request->getGet('vista');
 
-        return in_array($v, ['lista', 'galeria', 'galeria2'], true) ? $v : 'lista2';
+        return in_array($v, ['lista', 'galeria', 'galeria2', 'miniaturas'], true) ? $v : 'lista2';
     }
 
     /**
@@ -128,6 +142,74 @@ class Web extends BaseController
      * las piezas completas no aparecen. Cada fila enlaza a "Reclasificar"
      * para corregirla al momento.
      */
+    /**
+     * Lista de tareas de Silo (cola silo_tareas): escaneos pedidos desde la
+     * web y correcciones de Copia 2/3 (renombrar/mover tras renombrar en el
+     * Maestro). `?ver=cerradas` enseña las últimas ya hechas/canceladas.
+     */
+    public function tareas()
+    {
+        $verCerradas = $this->request->getGet('ver') === 'cerradas';
+        $tareas      = $this->tareaModel->paraListado(!$verCerradas);
+
+        // Pieza y unidad destino de las correcciones, resueltas de una vez.
+        $piezaIds  = array_filter(array_map(static fn ($t) => (int) ($t['datos']['pieza_id'] ?? 0), $tareas));
+        $unidadIds  = array_filter(array_map(static fn ($t) => (int) ($t['datos']['unidad_destino_id'] ?? 0), $tareas));
+        $piezas    = $piezaIds ? array_column($this->piezaModel->whereIn('id', array_unique($piezaIds))->findAll(), null, 'id') : [];
+        $unidades  = $unidadIds ? array_column($this->unidadModel->whereIn('id', array_unique($unidadIds))->findAll(), null, 'id') : [];
+
+        return view('silo/tareas', [
+            'tareas'      => $tareas,
+            'piezas'      => $piezas,
+            'unidades'    => $unidades,
+            'verCerradas' => $verCerradas,
+            'pendientes'  => $verCerradas ? $this->tareaModel->contarPendientes() : count($tareas),
+        ]);
+    }
+
+    /**
+     * Panel de avisos (silo_eventos): arriba, lo que dejó el ÚLTIMO escaneo
+     * de cada unidad (IDs duplicados, errores, carpetas que desaparecieron y
+     * lo que se ignoró) — lo corregido deja de salir en la siguiente pasada;
+     * abajo, el historial (`?tipo=` para filtrar; sin él, todo menos las
+     * carpetas saltadas, que se repiten en cada pasada).
+     */
+    public function avisos()
+    {
+        $tipo  = (string) $this->request->getGet('tipo');
+        $tipos = ['escaneo', 'ficheros_cambiados', 'id_duplicado', 'error_ingesta', 'hash_distinto', 'carpeta_desaparecida',
+            'carpeta_saltada', 'catalogo_mas_nuevo', 'catalogo_restaurado'];
+        $tipo  = in_array($tipo, $tipos, true) ? $tipo : null;
+
+        $porUnidad = $this->eventoModel->ultimoEscaneoPorUnidad();
+        $unidades  = $porUnidad ? array_column($this->unidadModel->whereIn('id', array_keys($porUnidad))->findAll(), null, 'id') : [];
+
+        // Un problema del historial está resuelto si ya no salió en el
+        // último escaneo de su unidad (cada pasada lo vuelve a registrar
+        // mientras siga ahí).
+        $enUltimo = [];
+        foreach ($porUnidad as $unidadId => $bloque) {
+            foreach ($bloque['eventos'] as $e) {
+                $enUltimo[$unidadId . '|' . $e['tipo'] . '|' . $e['referencia']] = true;
+            }
+        }
+        $historial = $this->eventoModel->historial($tipo);
+        foreach ($historial as &$h) {
+            $h['resuelto'] = in_array($h['tipo'], SiloEventoModel::TIPOS_PROBLEMA, true)
+                && isset($porUnidad[(int) $h['unidad_id']])
+                && !isset($enUltimo[$h['unidad_id'] . '|' . $h['tipo'] . '|' . $h['referencia']]);
+        }
+        unset($h);
+
+        return view('silo/avisos', [
+            'porUnidad'       => $porUnidad,
+            'unidades'        => $unidades,
+            'historial'       => $historial,
+            'tipo'            => $tipo,
+            'catalogoMasNuevo' => $this->eventoModel->catalogoMasNuevoRecientes(),
+        ]);
+    }
+
     public function datosFaltan()
     {
         return view('silo/datos_faltan', [
@@ -281,14 +363,25 @@ class Web extends BaseController
         $desdeId = (int) $this->request->getGet('desde');
         $desde   = $desdeId ? $this->unidadModel->find($desdeId) : null;
 
+        // Copias 2/3 que se quedaron con nombre/cubo viejo tras renombrar en
+        // el Maestro (ubicacion_id => tarea), ver sincronizarCopia(). Con la
+        // unidad destino ya resuelta para pintarla.
+        $reubicaciones = $this->tareaModel->reubicacionesPendientesDePieza($id);
+        foreach ($reubicaciones as &$t) {
+            $destinoId    = (int) ($t['datos']['unidad_destino_id'] ?? 0);
+            $t['destino'] = $destinoId ? $this->unidadModel->find($destinoId) : null;
+        }
+        unset($t);
+
         return view('silo/show', [
-            'pieza'       => $pieza,
-            'atributos'   => $this->atributoModel->deLaPieza($id),
-            'ubicaciones' => $this->ubicacionModel->deLaPieza($id),
-            'categoria'   => $pieza['categoria_id'] ? $this->vocabularioModel->find($pieza['categoria_id']) : null,
-            'ficheros'    => $this->ficheroModel->deLaPieza($id),
-            'proxies'     => $this->proxyModel->deLaPieza($id),
-            'desde'       => $desde,
+            'pieza'         => $pieza,
+            'atributos'     => $this->atributoModel->deLaPieza($id),
+            'ubicaciones'   => $this->ubicacionModel->deLaPieza($id),
+            'reubicaciones' => $reubicaciones,
+            'categoria'     => $pieza['categoria_id'] ? $this->vocabularioModel->find($pieza['categoria_id']) : null,
+            'ficheros'      => $this->ficheroModel->deLaPieza($id),
+            'proxies'       => $this->proxyModel->deLaPieza($id),
+            'desde'         => $desde,
         ]);
     }
 
@@ -360,6 +453,39 @@ class Web extends BaseController
         return redirect()->to(site_url('silo/' . $ubicacion['pieza_id']))->with('success', 'Ubicación eliminada.');
     }
 
+    /**
+     * Confirma a mano que la corrección de una Copia 2/3 (renombrar o mover
+     * su carpeta, ver SiloPropagacionService::sincronizarCopia) ya está
+     * hecha en disco: la ubicación pasa a la ruta/unidad nueva y la tarea se
+     * cierra. Aquí no se toca disco.
+     */
+    public function reubicacionHecha(int $id)
+    {
+        $tarea = $this->tareaModel->find($id);
+        if (!$tarea || !in_array($tarea['tipo'], SiloTareaModel::TIPOS_REUBICACION, true)) {
+            throw PageNotFoundException::forPageNotFound('Tarea no encontrada');
+        }
+
+        $datos     = json_decode((string) $tarea['payload'], true) ?: [];
+        $ubicacion = $this->ubicacionModel->find((int) ($datos['ubicacion_id'] ?? 0));
+        $destinoId = (int) ($datos['unidad_destino_id'] ?? 0);
+
+        if (!$ubicacion || !in_array($tarea['estado'], ['pendiente', 'en_curso'], true)) {
+            return redirect()->back()->with('success', 'Esa corrección ya no está pendiente.');
+        }
+        if (!$destinoId) {
+            return redirect()->back()->with('success', 'No hay unidad de destino con sitio todavía: da de alta una y vuelve a escanear.');
+        }
+
+        $this->ubicacionModel->update($ubicacion['id'], [
+            'unidad_id'     => $destinoId,
+            'ruta_relativa' => $datos['hasta'],
+        ]);
+        $this->tareaModel->update($id, ['estado' => 'hecha']);
+
+        return redirect()->back()->with('success', 'Copia actualizada.');
+    }
+
     public function vocabulario()
     {
         $tipos = ['categoria', 'evento', 'lugar', 'persona', 'tema'];
@@ -373,7 +499,8 @@ class Web extends BaseController
 
     public function renombrarVocabulario(int $id)
     {
-        $nombre = trim((string) $this->request->getPost('nombre'));
+        $item   = $this->vocabularioModel->find($id);
+        $nombre = $item ? $this->silo->nombreVocabulario($item['tipo'], (string) $this->request->getPost('nombre')) : '';
         if ($nombre !== '') {
             $descripcion = trim((string) $this->request->getPost('descripcion'));
             $this->vocabularioModel->update($id, [
@@ -499,11 +626,18 @@ class Web extends BaseController
 
         $orden = $this->request->getGet('orden') === 'fecha' ? 'fecha' : 'nombre';
 
+        $piezas = $this->piezaModel->deLaUnidad($id, $orden);
+        $vista  = $this->vistaSolicitada();
+
         return view('silo/unidad', [
-            'unidad' => $unidad,
-            'piezas' => $this->piezaModel->deLaUnidad($id, $orden),
-            'vista'  => $this->vistaSolicitada(),
-            'orden'  => $orden,
+            'unidad'          => $unidad,
+            'piezas'          => $piezas,
+            // Igual que en el índice: los proxies solo para la vista de miniaturas.
+            'proxiesPorPieza' => $vista === 'miniaturas'
+                ? $this->proxyModel->dePiezas(array_column($piezas, 'id'))
+                : [],
+            'vista'           => $vista,
+            'orden'           => $orden,
         ]);
     }
 

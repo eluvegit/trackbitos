@@ -68,6 +68,74 @@ class SiloTareaModel extends Model
         return $this->find($id);
     }
 
+    /**
+     * Tipos de tarea que corrigen una Copia 2/3 que se quedó con el nombre
+     * o el cubo viejo tras renombrar la carpeta en el Maestro (ver
+     * SiloPropagacionService::sincronizarCopia). Su payload empieza SIEMPRE
+     * por `ubicacion_id` y luego `pieza_id` — así se buscan con un LIKE
+     * sobre el JSON sin tipo JSON nativo.
+     */
+    public const TIPOS_REUBICACION = ['renombrar_copia', 'mover_copia'];
+
+    /** La corrección pendiente de UNA ubicación (a lo sumo hay una). */
+    public function reubicacionPendienteDeUbicacion(int $ubicacionId): ?array
+    {
+        return $this->whereIn('tipo', self::TIPOS_REUBICACION)
+            ->whereIn('estado', ['pendiente', 'en_curso'])
+            ->like('payload', '{"ubicacion_id":' . $ubicacionId . ',', 'after')
+            ->orderBy('id', 'DESC')
+            ->first();
+    }
+
+    /**
+     * Correcciones pendientes de las copias de una pieza, indexadas por
+     * ubicacion_id y con el payload ya decodificado, para pintarlas en la
+     * ficha junto a cada ubicación.
+     */
+    public function reubicacionesPendientesDePieza(int $piezaId): array
+    {
+        $filas = $this->whereIn('tipo', self::TIPOS_REUBICACION)
+            ->whereIn('estado', ['pendiente', 'en_curso'])
+            ->like('payload', ',"pieza_id":' . $piezaId . ',', 'both')
+            ->findAll();
+
+        $porUbicacion = [];
+        foreach ($filas as $t) {
+            $t['datos'] = json_decode((string) $t['payload'], true) ?: [];
+            $porUbicacion[(int) ($t['datos']['ubicacion_id'] ?? 0)] = $t;
+        }
+
+        return $porUbicacion;
+    }
+
+    /** Cuántas tareas quedan por resolver (todas las unidades), para el botón del índice. */
+    public function contarPendientes(): int
+    {
+        return $this->whereIn('estado', ['pendiente', 'en_curso'])->countAllResults();
+    }
+
+    /**
+     * Para /silo/tareas: las pendientes (todas) o las ya cerradas (las
+     * `$limite` más recientes), con el payload decodificado en `datos` y la
+     * unidad de la tarea resuelta para pintar directo.
+     */
+    public function paraListado(bool $pendientes, int $limite = 100): array
+    {
+        $builder = $this->select('silo_tareas.*, silo_unidades.nivel, silo_unidades.numero, silo_unidades.etiqueta AS unidad_etiqueta')
+            ->join('silo_unidades', 'silo_unidades.id = silo_tareas.unidad_id', 'left');
+
+        $pendientes
+            ? $builder->whereIn('silo_tareas.estado', ['pendiente', 'en_curso'])->orderBy('silo_tareas.id', 'ASC')
+            : $builder->whereNotIn('silo_tareas.estado', ['pendiente', 'en_curso'])->orderBy('silo_tareas.actualizado_en', 'DESC')->limit($limite);
+
+        $filas = $builder->findAll();
+        foreach ($filas as &$t) {
+            $t['datos'] = json_decode((string) $t['payload'], true) ?: [];
+        }
+
+        return $filas;
+    }
+
     public function marcarResultado(int $id, array $resultado, ?string $error = null): void
     {
         $this->update($id, [

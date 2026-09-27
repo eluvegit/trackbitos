@@ -45,9 +45,21 @@ class SiloIngestaService
     }
 
     /**
-     * @param array<int, array{nombre: string, tamano_bytes?: int, hash?: string}> $ficheros
+     * `$ficheros` = null: el agente dice que la carpeta no cambió desde la
+     * última sincronización (su manifiesto, N1/N2 — ver
+     * docs/silo-ingesta-propagacion.md § "Detección de cambios") y no manda
+     * la lista: se actualiza lo que sale del NOMBRE (fecha, categoría,
+     * etiquetas, ruta) y los ficheros se quedan como estaban. Si la pieza
+     * aún no existe no hay de dónde sacarlos: error, y el agente la volverá
+     * a mandar completa en el siguiente escaneo.
+     *
+     * Devuelve la pieza con `_cambios` (nuevos/borrados/modificados, por
+     * nombre de fichero) y `_multimedia_cambiada` (algún cambio en fotos o
+     * vídeos: sus proxies ya no representan la carpeta).
+     *
+     * @param array<int, array{nombre: string, tamano_bytes?: int, mtime?: int, hash?: string}>|null $ficheros
      */
-    public function ingestarCarpeta(int $unidadId, string $nombreCarpeta, array $ficheros): array
+    public function ingestarCarpeta(int $unidadId, string $nombreCarpeta, ?array $ficheros): array
     {
         $parseado = $this->silo->parsearNombreCarpeta($nombreCarpeta);
 
@@ -73,25 +85,29 @@ class SiloIngestaService
         }
 
         $existente = $this->piezaModel->where('id_negocio', $parseado['id_negocio'])->first();
+        if (!$existente && $ficheros === null) {
+            throw new \RuntimeException('Carpeta nueva para la web pero el agente no mandó sus ficheros (la daba por sincronizada); se mandará completa en el próximo escaneo.');
+        }
+
         if ($existente) {
             $piezaId = (int) $existente['id'];
 
-            // Reingesta de una pieza ya conocida (rescaneo normal del
-            // Maestro): sin manifiesto/hash todavía (N1-N3, pendiente) no
-            // hay forma barata de saber qué cambió, así que se sustituye la
-            // lista de ficheros entera en vez de acumular duplicados en cada
-            // pasada. Los proxies NO se tocan aquí (generarlos con ffmpeg es
-            // caro): sobreviven a la reingesta con `fichero_id` a NULL
-            // (FK -> SET NULL) hasta que el agente los regenere de verdad
-            // (Agente::escaneo() decide cuándo hace falta, ver
-            // SiloProxyModel::tieneProxiesReales()).
-            $this->ficheroModel->where('pieza_id', $piezaId)->delete();
-
             // El nombre de carpeta es la fuente de verdad: si se renombró
             // para corregir la clasificación (o para adoptar el contrato de
-            // campos fijos), la categoría también se recalcula aquí, igual
-            // criterio que los ficheros.
-            $this->piezaModel->update($piezaId, ['categoria_id' => $categoriaId]);
+            // campos fijos), nombre, fecha y categoría se recalculan aquí,
+            // igual criterio que los ficheros — y la ruta de su Copia 1 en
+            // esta unidad, que es la carpeta que se acaba de escanear.
+            $this->piezaModel->update($piezaId, [
+                'nombre_carpeta' => $nombreCarpeta,
+                'fecha'          => $parseado['fecha'],
+                'categoria_id'   => $categoriaId,
+            ]);
+            $copia1 = $this->ubicacionModel
+                ->where('pieza_id', $piezaId)->where('unidad_id', $unidadId)->where('copia', 1)
+                ->first();
+            if ($copia1 && $copia1['ruta_relativa'] !== $nombreCarpeta) {
+                $this->ubicacionModel->update($copia1['id'], ['ruta_relativa' => $nombreCarpeta]);
+            }
         } else {
             $piezaId = $this->piezaModel->insert([
                 'id_negocio'     => $parseado['id_negocio'],
@@ -103,21 +119,14 @@ class SiloIngestaService
 
         $this->atributoModel->reemplazarDeLaPieza($piezaId, $atributoIds);
 
-        foreach ($ficheros as $f) {
-            $this->ficheroModel->insert([
-                'pieza_id'     => $piezaId,
-                'nombre'       => $f['nombre'],
-                'tipo'         => self::tipoDeExtension($f['nombre']),
-                'tamano_bytes' => $f['tamano_bytes'] ?? null,
-                'hash'         => $f['hash'] ?? null,
-            ]);
-        }
+        $cambios = ['nuevos' => [], 'borrados' => [], 'modificados' => []];
+        if ($ficheros !== null) {
+            $cambios = $this->sincronizarFicheros($piezaId, $ficheros);
 
-        // Siempre (no solo "si hay ficheros"): en un reingesta ya se
-        // borraron los anteriores arriba, así que una carpeta que se quedó
-        // vacía también tiene que reflejarse a 0, no quedarse con el
-        // tamaño de la pasada previa.
-        $this->piezaModel->update($piezaId, ['tamano_bytes' => $this->ficheroModel->sumaTamano($piezaId)]);
+            // Siempre que llegan ficheros (no solo si hubo cambios): una
+            // carpeta que se quedó vacía también tiene que reflejarse a 0.
+            $this->piezaModel->update($piezaId, ['tamano_bytes' => $this->ficheroModel->sumaTamano($piezaId)]);
+        }
 
         if (!$existente) {
             $this->ubicacionModel->insert([
@@ -130,7 +139,88 @@ class SiloIngestaService
 
         $this->propagacion->propagarPieza($piezaId);
 
-        return $this->piezaModel->find($piezaId);
+        $pieza = $this->piezaModel->find($piezaId);
+        $pieza['_nueva']   = !$existente;
+        $pieza['_cambios'] = $cambios;
+        $pieza['_multimedia_cambiada'] = false;
+        foreach (array_merge(...array_values($cambios)) as $nombre) {
+            if (self::tipoDeExtension($nombre) !== 'otro') {
+                $pieza['_multimedia_cambiada'] = true;
+                break;
+            }
+        }
+
+        return $pieza;
+    }
+
+    /**
+     * Deja `silo_ficheros` de la pieza igual que la lista del agente
+     * tocando solo lo que cambió (así los ids — y el enlace de cada proxy a
+     * su fichero — sobreviven a los reescaneos). Un fichero cuenta como
+     * modificado si cambió de tamaño, o de hash cuando hay hash a los dos
+     * lados; sin hashes, si cambió su mtime. Un mtime que la web aún no
+     * tenía (filas de antes del manifiesto) no cuenta como cambio.
+     *
+     * @return array{nuevos: string[], borrados: string[], modificados: string[]}
+     */
+    private function sincronizarFicheros(int $piezaId, array $ficheros): array
+    {
+        $actuales = array_column($this->ficheroModel->where('pieza_id', $piezaId)->findAll(), null, 'nombre');
+        $cambios  = ['nuevos' => [], 'borrados' => [], 'modificados' => []];
+        $vistos   = [];
+
+        foreach ($ficheros as $f) {
+            $nombre = (string) $f['nombre'];
+            $nuevo  = [
+                'tamano_bytes' => isset($f['tamano_bytes']) ? (int) $f['tamano_bytes'] : null,
+                'mtime'        => isset($f['mtime']) ? (int) $f['mtime'] : null,
+                'hash'         => ($f['hash'] ?? '') !== '' ? (string) $f['hash'] : null,
+            ];
+            $vistos[$nombre] = true;
+
+            $antes = $actuales[$nombre] ?? null;
+            if ($antes === null) {
+                $this->ficheroModel->insert($nuevo + [
+                    'pieza_id' => $piezaId,
+                    'nombre'   => $nombre,
+                    'tipo'     => self::tipoDeExtension($nombre),
+                ]);
+                $cambios['nuevos'][] = $nombre;
+                continue;
+            }
+
+            $tamanoAntes = $antes['tamano_bytes'] !== null ? (int) $antes['tamano_bytes'] : null;
+            $mtimeAntes  = $antes['mtime'] !== null ? (int) $antes['mtime'] : null;
+
+            $modificado = $tamanoAntes !== $nuevo['tamano_bytes'];
+            if (!$modificado && $antes['hash'] !== null && $nuevo['hash'] !== null) {
+                $modificado = $antes['hash'] !== $nuevo['hash'];
+            } elseif (!$modificado && $mtimeAntes !== null && $nuevo['mtime'] !== null) {
+                $modificado = $mtimeAntes !== $nuevo['mtime'];
+            }
+            if ($modificado) {
+                $cambios['modificados'][] = $nombre;
+            }
+
+            // Un hash que el agente no mandó esta vez (no hizo falta
+            // re-hashear) no borra el que ya había, salvo que el fichero
+            // cambiara: entonces el viejo ya no vale.
+            if ($nuevo['hash'] === null && !$modificado) {
+                $nuevo['hash'] = $antes['hash'];
+            }
+            if ($nuevo['tamano_bytes'] !== $tamanoAntes || $nuevo['mtime'] !== $mtimeAntes || $nuevo['hash'] !== $antes['hash']) {
+                $this->ficheroModel->update($antes['id'], $nuevo);
+            }
+        }
+
+        foreach ($actuales as $nombre => $antes) {
+            if (!isset($vistos[$nombre])) {
+                $this->ficheroModel->delete($antes['id']);
+                $cambios['borrados'][] = (string) $nombre;
+            }
+        }
+
+        return $cambios;
     }
 
     /**

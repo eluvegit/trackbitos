@@ -161,6 +161,21 @@ if (!function_exists('silo_proxy_url')) {
     }
 }
 
+if (!function_exists('silo_titulo_categoria')) {
+    /**
+     * Categoría en estilo Título ("recuerdos" -> "Recuerdos"), escrita como
+     * se escribiera. Se usa al guardar (SiloService::nombreVocabulario) y
+     * al pintar, así las que aún estén guardadas en minúsculas salen bien
+     * igualmente.
+     */
+    function silo_titulo_categoria(string $nombre): string
+    {
+        $nombre = trim((string) preg_replace('/\s+/u', ' ', $nombre));
+
+        return mb_convert_case($nombre, MB_CASE_TITLE, 'UTF-8');
+    }
+}
+
 if (!function_exists('silo_icono_vocabulario')) {
     function silo_icono_vocabulario(string $tipo): string
     {
@@ -203,7 +218,7 @@ if (!function_exists('silo_badges_carpeta')) {
 
         $porTipo = [];
 
-        $cat = trim((string) ($pieza['categoria_nombre'] ?? ''));
+        $cat = silo_titulo_categoria((string) ($pieza['categoria_nombre'] ?? ''));
         if ($cat !== '' && strtolower($cat) !== 'sin_clasificar') {
             $porTipo['categoria'][] = $cat;
         }
@@ -555,7 +570,7 @@ if (!function_exists('silo_carpeta_partes')) {
             $anio = '20' . $mm[1];
         }
 
-        $categoria = trim((string) ($pieza['categoria_nombre'] ?? ''));
+        $categoria = silo_titulo_categoria((string) ($pieza['categoria_nombre'] ?? ''));
         if ($categoria !== '' && strtolower($categoria) === 'sin_clasificar') {
             $categoria = '';
         }

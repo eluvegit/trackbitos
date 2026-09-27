@@ -541,9 +541,18 @@ websockets.
   guarda en `public/assets/silo/proxies/` y hace upsert en `silo_proxies`. Único punto sin
   resolver: sin manifiesto (N1-N3) no hay regeneración automática cuando cambian los
   ficheros de una pieza ya proxied, solo al darla de alta o tras borrar sus proxies a mano.
-- **No existe todavía**: disparar tareas desde la web con aprobación humana, hashing y
-  detección de cambios real (N0–N3), réplica de BD en disco y su restauración, propagación
-  física (Fase 3), panel de `silo_eventos`.
+- **Detección de cambios, réplica del catálogo y copia de proxies (2026-09-27)**: manifiesto
+  por unidad en su raíz (`.silo_manifest.json`) con N0 (rollup `hash_indice` contra
+  `silo_unidades.hash_indice`), N1 (`stat`), N2 (hash solo de lo que cambió de fecha) y N3
+  (`silo --verificar`); solo viajan a la web las carpetas que cambiaron y
+  `SiloIngestaService` compara fichero a fichero (conserva ids; proxies regenerados si
+  cambian fotos/vídeos). Réplica `.catalogo.sql.gz` generada en PHP
+  (`SiloCatalogoService`, sin mysqldump), restauración con `php spark silo:restaurar` o
+  `silo --restaurar-catalogo`; aviso `catalogo_mas_nuevo` si un disco va por delante de la
+  BD. Copia de proxies en `.silo_proxies/<id_negocio>/` del Maestro (decisión: sí se
+  guarda). Avisos en `/silo/avisos`.
+- **No existe todavía**: disparar tareas desde la web con aprobación humana, propagación
+  física (Fase 3).
 
 ## Cosas que NO son features (no reintroducir)
 

@@ -100,7 +100,7 @@ class SiloService
      */
     public function getOrCreateVocabulario(string $tipo, string $nombre): array
     {
-        $nombre = trim($nombre);
+        $nombre = $this->nombreVocabulario($tipo, $nombre);
         $slug   = $this->slugify($nombre);
 
         $existente = $this->vocabularioModel
@@ -112,6 +112,13 @@ class SiloService
             ->first();
 
         if ($existente) {
+            // El slug casa sin mirar mayúsculas: si la grafía normalizada
+            // cambió (p. ej. una categoría guardada en minúsculas), se corrige.
+            if ($existente['nombre'] !== $nombre && $this->nombreVocabulario($tipo, $existente['nombre']) === $nombre) {
+                $this->vocabularioModel->update($existente['id'], ['nombre' => $nombre]);
+                $existente['nombre'] = $nombre;
+            }
+
             return $existente;
         }
 
@@ -136,6 +143,21 @@ class SiloService
         }
 
         return $this->vocabularioModel->find($id);
+    }
+
+    /**
+     * Grafía con la que se guarda un término de vocabulario. Las categorías
+     * van SIEMPRE en estilo Título ("Recuerdos", "Sesion De Danza"), se
+     * escriban como se escriban en el nombre de carpeta o al renombrarlas;
+     * el resto de tipos se guarda tal cual (solo sin espacios de sobra).
+     */
+    public function nombreVocabulario(string $tipo, string $nombre): string
+    {
+        helper('silo');
+
+        return $tipo === 'categoria'
+            ? silo_titulo_categoria($nombre)
+            : trim((string) preg_replace('/\s+/u', ' ', $nombre));
     }
 
     /**

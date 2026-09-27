@@ -4,10 +4,12 @@ Agente de Silo — ejecutor tonto que habla por API con la web (ver
 docs/silo-ingesta-propagacion.md): no decide nada, hace `os.scandir` real
 del primer nivel del root de cada unidad configurada y reporta lo que
 encuentra; la web (App\\Controllers\\Silo\\Agente) es quien clasifica cada
-entrada y decide qué se ingesta. Primer esbozo: solo Fase 1 (ingesta del
-Maestro), sin hashing todavía (los `ficheros` van sin `hash`, la web los
-acepta igual) ni detección de cambios N0-N3 ni propagación física — ver
-README.md de este directorio para el alcance exacto.
+entrada y decide qué se ingesta. Fase 1 (ingesta del Maestro) con
+detección de cambios N0–N3: el manifiesto de cada unidad vive en su raíz
+(`.silo_manifest.json`) y solo se mandan a la web las carpetas que
+cambiaron; al terminar deja también la réplica del catálogo
+(`.catalogo.sql.gz`) y la copia de las miniaturas (`.silo_proxies/`). Sin
+propagación física todavía (Fase 3) — ver README.md de este directorio.
 
 Se lanza a mano (`silo` en la terminal, ver perfil de PowerShell) o se deja
 corriendo con `--daemon`: en ambos casos, si la web dejó un escaneo
@@ -25,6 +27,8 @@ agente avisa una vez y sigue escaneando normal, sin proxies.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -141,24 +145,34 @@ def api_post_multipart(config: dict, ruta: str, campos: dict, archivo_campo: str
         raise RuntimeError(f"no se pudo conectar con {config.get('api_base')}: {e.reason}") from e
 
 
+# Lo que el propio agente deja en la raíz de cada unidad: no son piezas ni
+# "entradas ignoradas", así que ni se reportan a la web.
+FICHEROS_CONTROL = {
+    ".silo_unit.json", ".silo_manifest.json", ".catalogo.sql.gz", ".catalogo.meta.json", ".silo_proxies",
+}
+
+
 def escanear_primer_nivel(ruta: Path) -> list[dict]:
     """
     Solo el primer nivel del root (plan Silo: las carpetas-pieza cuelgan
     directas de la raíz del Maestro, sin contenedores de año/temática por
-    encima). Para cada carpeta lista también sus ficheros sueltos (nombre +
-    tamaño, sin hash todavía) — la clasificación candidata/saltada (y el
-    motivo) la hace la web, aquí solo se reporta lo que hay en disco.
+    encima). Para cada carpeta lista también sus ficheros sueltos: nombre,
+    tamaño y mtime — solo `stat`, nunca se abre un fichero (N1). La
+    clasificación candidata/saltada (y el motivo) la hace la web, aquí solo
+    se reporta lo que hay en disco.
     """
     entradas = []
     with os.scandir(ruta) as it:
         for entrada in sorted(it, key=lambda e: e.name.lower()):
+            if entrada.name in FICHEROS_CONTROL or entrada.name.endswith(".silo_tmp"):
+                continue
             item = {"nombre": entrada.name, "es_carpeta": entrada.is_dir()}
             if entrada.is_dir():
-                item["ficheros"] = [
-                    {"nombre": f.name, "tamano_bytes": f.stat().st_size}
-                    for f in sorted(os.scandir(entrada.path), key=lambda e: e.name.lower())
-                    if f.is_file()
-                ]
+                item["ficheros"] = []
+                for f in sorted(os.scandir(entrada.path), key=lambda e: e.name.lower()):
+                    if f.is_file():
+                        st = f.stat()
+                        item["ficheros"].append({"nombre": f.name, "tamano_bytes": st.st_size, "mtime": int(st.st_mtime)})
             entradas.append(item)
 
     return entradas
@@ -265,7 +279,13 @@ def _generar_proxy_video(origen: Path, destino: Path, segundo: float | None) -> 
     return _ffmpeg_frame([], origen, destino)
 
 
-def generar_proxies_pieza(config: dict, pieza_id: int, ruta_carpeta: Path, ficheros: list[dict]) -> None:
+def generar_proxies_pieza(config: dict, pieza_id: int, ruta_carpeta: Path, ficheros: list[dict], copia: Path | None = None) -> None:
+    """
+    Genera (ffmpeg) y sube los proxies de una carpeta. Con `copia` (la
+    carpeta `.silo_proxies/<id_negocio>/` del Maestro) deja además allí los
+    .webp generados y su `proxies.json`, para poder volver a subirlos sin
+    ffmpeg si la web los pierde (ver guardar_copia_proxies()).
+    """
     fotos = sorted(
         (f["nombre"] for f in ficheros if _tipo_extension(f["nombre"]) == "foto"),
         key=str.lower,
@@ -291,6 +311,7 @@ def generar_proxies_pieza(config: dict, pieza_id: int, ruta_carpeta: Path, fiche
         return
 
     subidos = 0
+    generados = []  # (destino, tipo, orden, nombre_fichero) — para la copia en el Maestro
     primero = True  # se apaga tras la PRIMERA subida que de verdad se envía, no tras la primera tarea (si esa falla al generar, el flag de reemplazo tiene que esperar a la que sí lo consiga)
     with tempfile.TemporaryDirectory(prefix="silo_proxy_") as tmp:
         for tipo, orden, nombre_fichero, segundo in tareas:
@@ -300,6 +321,7 @@ def generar_proxies_pieza(config: dict, pieza_id: int, ruta_carpeta: Path, fiche
             if not ok:
                 print(f"      ! no se pudo generar el proxy de «{nombre_fichero}», se salta.")
                 continue
+            generados.append((destino, tipo, orden, nombre_fichero))
 
             try:
                 api_post_multipart(
@@ -323,8 +345,99 @@ def generar_proxies_pieza(config: dict, pieza_id: int, ruta_carpeta: Path, fiche
             except RuntimeError as e:
                 print(f"      ! error subiendo el proxy de «{nombre_fichero}»: {e}")
 
+        if copia is not None and generados:
+            guardar_copia_proxies(
+                copia, pieza_id, firma_multimedia(ficheros),
+                [(tipo, orden, nombre_fichero, destino.read_bytes()) for destino, tipo, orden, nombre_fichero in generados],
+            )
+
     if subidos:
         print(f"      proxies: {subidos}/{len(tareas)} generado(s) y subido(s).")
+
+
+# ---------------------------------------------------------------------------
+# Copia de los proxies en el Maestro (petición 2026-09-27): `.silo_proxies/
+# <id_negocio>/` en la raíz de la unidad, con los .webp y un `proxies.json`
+# que dice de qué versión de la carpeta salieron (`firma` de sus fotos y
+# vídeos, ver firma_multimedia()). Por id_negocio y no por nombre, así
+# renombrar la carpeta no la invalida. Sirve para reconstruir la parte
+# visual de la web sin volver a pasar ffmpeg por todo el disco: si la web
+# pide proxies de una carpeta cuyas fotos/vídeos no cambiaron, se suben los
+# de la copia.
+# ---------------------------------------------------------------------------
+
+def firma_multimedia(ficheros: list[dict]) -> str:
+    """Huella de las fotos y vídeos de una carpeta (nombre, tamaño, mtime): si no cambia, sus proxies siguen valiendo."""
+    lineas = sorted(
+        f"{f['nombre']}\t{f.get('tamano_bytes')}\t{f.get('mtime')}"
+        for f in ficheros if _tipo_extension(f["nombre"]) != "otro"
+    )
+    return hashlib.sha256("\n".join(lineas).encode("utf-8")).hexdigest()
+
+
+def leer_copia_proxies(copia: Path) -> dict | None:
+    try:
+        return json.loads((copia / "proxies.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def guardar_copia_proxies(copia: Path, pieza_id: int, firma: str, proxies: list[tuple]) -> None:
+    """`proxies`: (tipo, orden, fichero_nombre, bytes .webp). Sustituye la copia anterior entera."""
+    try:
+        if copia.exists():
+            shutil.rmtree(copia)
+        copia.mkdir(parents=True)
+        indice = []
+        for tipo, orden, fichero_nombre, contenido in proxies:
+            archivo = f"{tipo}-{orden}.webp"
+            (copia / archivo).write_bytes(contenido)
+            indice.append({"tipo": tipo, "orden": orden, "fichero_nombre": fichero_nombre, "archivo": archivo})
+        (copia / "proxies.json").write_text(
+            json.dumps({"pieza_id": pieza_id, "firma": firma, "proxies": indice}, ensure_ascii=False, indent=1),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        print(f"      ! no se pudo guardar la copia de proxies en {copia}: {e}")
+
+
+def subir_proxies_desde_copia(config: dict, pieza_id: int, copia: Path, indice: dict) -> int:
+    subidos = 0
+    for p in indice.get("proxies", []):
+        try:
+            api_post_multipart(
+                config,
+                f"/silo/agente/piezas/{pieza_id}/proxies",
+                {
+                    "tipo": p["tipo"],
+                    "orden": p["orden"],
+                    "fichero_nombre": p.get("fichero_nombre") or "",
+                    "reemplazar": "1" if subidos == 0 else "0",
+                },
+                "archivo",
+                copia / p["archivo"],
+            )
+            subidos += 1
+        except (RuntimeError, OSError) as e:
+            print(f"      ! error subiendo {p.get('archivo')} desde la copia: {e}")
+    return subidos
+
+
+def descargar_copia_proxies(config: dict, pieza_id: int, copia: Path, firma: str) -> bool:
+    """Guarda en el Maestro los proxies que ya tiene la web (piezas proxied antes de que existiera la copia)."""
+    listado = api_post(config, f"/silo/agente/piezas/{pieza_id}/proxies/listar", {}).get("proxies", [])
+    if not listado:
+        return False
+    proxies = []
+    for p in listado:
+        try:
+            with urllib.request.urlopen(p["url"], timeout=60, context=_contexto_tls(config)) as resp:
+                proxies.append((p["tipo"], p["orden"], p.get("fichero_nombre"), resp.read()))
+        except (urllib.error.URLError, OSError) as e:
+            print(f"      ! no se pudo bajar {p['url']}: {e}")
+    if proxies:
+        guardar_copia_proxies(copia, pieza_id, firma, proxies)
+    return bool(proxies)
 
 
 # ---------------------------------------------------------------------------
@@ -517,8 +630,123 @@ def etiquetar_contenido(config: dict, aplicar: bool) -> int:
     return 1 if errores else 0
 
 
+# ---------------------------------------------------------------------------
+# Detección de cambios N0–N3 (docs/silo-ingesta-propagacion.md § "Detección
+# de cambios", implementada 2026-09-27). El manifiesto de cada unidad vive en
+# su raíz, `.silo_manifest.json`:
+#   { "unidad_id", "generado_en",
+#     "carpetas": { "<carpeta>": { "firma", "ficheros": { "<fichero>": {"t": tamaño, "m": mtime, "h": sha256|null} } } } }
+#   · N0 — el rollup del manifiesto (hash_indice) se compara con el que la
+#     web guardó en la última sincronización: si no casan (primer escaneo,
+#     BD restaurada, manifiesto borrado...) se manda TODO completo.
+#   · N1 — `stat` de cada fichero (tamaño + mtime, sin abrirlo): una carpeta
+#     cuya firma no cambió va a la web como "sin cambios", sin su lista.
+#   · N2 — mismo tamaño pero otro mtime: se hashea SOLO ese fichero y el
+#     hash va a la web, que decide si de verdad cambió.
+#   · N3 — `--verificar`: se re-hashea todo; mismo tamaño y mtime pero otro
+#     hash = corrupción silenciosa -> aviso `hash_distinto` en la web.
+# ---------------------------------------------------------------------------
+
+MANIFIESTO = ".silo_manifest.json"
+
+
+def hash_fichero(ruta: Path) -> str:
+    h = hashlib.sha256()
+    with open(ruta, "rb") as f:
+        for bloque in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def firma_carpeta(ficheros: list[dict]) -> str:
+    lineas = sorted(f"{f['nombre']}\t{f.get('tamano_bytes')}\t{f.get('mtime')}" for f in ficheros)
+    return hashlib.sha256("\n".join(lineas).encode("utf-8")).hexdigest()
+
+
+def hash_indice(manifiesto: dict) -> str:
+    lineas = sorted(f"{nombre}\t{c['firma']}" for nombre, c in manifiesto.get("carpetas", {}).items())
+    return hashlib.sha256("\n".join(lineas).encode("utf-8")).hexdigest()
+
+
+def leer_json(ruta: Path) -> dict | None:
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def escribir_atomico(ruta: Path, contenido: bytes) -> None:
+    """Escribe a un temporal y lo renombra encima: nunca queda un fichero de control a medias."""
+    tmp = ruta.with_name(ruta.name + ".silo_tmp")
+    tmp.write_bytes(contenido)
+    os.replace(tmp, ruta)
+
+
+def comparar_con_manifiesto(ruta: Path, entradas: list[dict], anterior: dict | None, verificar: bool) -> tuple[list[dict], dict, list[dict]]:
+    """
+    Decide qué carpetas van completas a la web y deja preparada la entrada
+    de manifiesto de cada una. Devuelve (entradas para la web, manifiesto
+    nuevo por carpeta, corruptos N3). `anterior` = None -> todo completo.
+    """
+    previas = (anterior or {}).get("carpetas", {})
+    para_web, nuevas, corruptos = [], {}, []
+    hasheados = 0
+
+    for e in entradas:
+        if not e["es_carpeta"]:
+            para_web.append(e)
+            continue
+
+        ficheros = e["ficheros"]
+        firma = firma_carpeta(ficheros)
+        previa = previas.get(e["nombre"]) if anterior is not None else None
+
+        if previa and previa.get("firma") == firma and not verificar:
+            # N1: nada cambió. La web solo recalcula lo que sale del nombre.
+            para_web.append({"nombre": e["nombre"], "es_carpeta": True})
+            nuevas[e["nombre"]] = previa
+            continue
+
+        previos = (previa or {}).get("ficheros", {})
+        entrada_manifiesto = {}
+        for f in ficheros:
+            antes = previos.get(f["nombre"])
+            mismo_stat = antes is not None and antes.get("t") == f["tamano_bytes"] and antes.get("m") == f["mtime"]
+            hash_ = antes.get("h") if mismo_stat else None
+            # N2 (mismo tamaño, otro mtime) o N3 (--verificar): se lee el fichero.
+            candidato = antes is not None and antes.get("t") == f["tamano_bytes"] and antes.get("m") != f["mtime"]
+            if verificar or candidato:
+                try:
+                    nuevo_hash = hash_fichero(ruta / e["nombre"] / f["nombre"])
+                    hasheados += 1
+                except OSError as err:
+                    print(f"    ! no se pudo leer {e['nombre']}/{f['nombre']}: {err}")
+                    nuevo_hash = None
+                if verificar and mismo_stat and antes.get("h") and nuevo_hash and nuevo_hash != antes["h"]:
+                    corruptos.append({"carpeta": e["nombre"], "fichero": f["nombre"]})
+                hash_ = nuevo_hash or hash_
+            if hash_:
+                f["hash"] = hash_
+            entrada_manifiesto[f["nombre"]] = {"t": f["tamano_bytes"], "m": f["mtime"], "h": hash_}
+
+        para_web.append(e)
+        nuevas[e["nombre"]] = {"firma": firma, "ficheros": entrada_manifiesto}
+
+    if hasheados:
+        print(f"    hash leído de {hasheados} fichero(s) ({'verificación completa' if verificar else 'solo los que cambiaron de fecha'}).")
+    return para_web, nuevas, corruptos
+
+
 def handshake(config: dict) -> dict:
-    unidades = [{"unidad_id": u.get("unidad_id"), "ruta_montaje": u["ruta"]} for u in config["unidades"]]
+    unidades = []
+    for u in config["unidades"]:
+        item = {"unidad_id": u.get("unidad_id"), "ruta_montaje": u["ruta"]}
+        # Sello de la réplica del catálogo que hay en ese disco: si es más
+        # nueva que la BD viva, la web avisa (ver Agente::handshake()).
+        meta = leer_json(Path(u["ruta"]) / ".catalogo.meta.json")
+        if meta:
+            item["catalogo_meta"] = meta
+        unidades.append(item)
     return api_post(config, "/silo/agente/handshake", {"unidades": unidades})
 
 
@@ -530,7 +758,8 @@ def tarea_pendiente(unidad: dict, tipo: str) -> dict | None:
     return None
 
 
-def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool, tarea_id: int | None = None) -> None:
+def escanear_unidad(config: dict, unidad: dict, ruta: str, dry_run: bool, tarea_id: int | None = None, verificar: bool = False) -> None:
+    unidad_id = unidad["unidad_id"]
     ruta_path = Path(ruta)
     if not ruta_path.is_dir():
         print(f"  ! {ruta}: no existe o no está montada ahora mismo, se salta.")
@@ -539,18 +768,36 @@ def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool, tare
     entradas = escanear_primer_nivel(ruta_path)
     print(f"  {ruta}: {len(entradas)} entrada(s) en el primer nivel.")
 
+    # N0: ¿el manifiesto del disco es el mismo que la web dio por bueno?
+    anterior = leer_json(ruta_path / MANIFIESTO)
+    if anterior and anterior.get("unidad_id") != unidad_id:
+        anterior = None
+    if anterior is None:
+        print("    N0: sin manifiesto en el disco -> se manda todo completo.")
+    elif not unidad.get("hash_indice") or hash_indice(anterior) != unidad["hash_indice"]:
+        print("    N0: el manifiesto del disco no casa con la última sincronización de la web -> se manda todo completo.")
+        anterior = None
+
+    para_web, nuevas, corruptos = comparar_con_manifiesto(ruta_path, entradas, anterior, verificar)
+    completas = sum(1 for e in para_web if e["es_carpeta"] and "ficheros" in e)
+    sin_cambios = sum(1 for e in para_web if e["es_carpeta"] and "ficheros" not in e)
+    print(f"    carpetas: {completas} con cambios (se mandan completas), {sin_cambios} sin cambios.")
+    for c in corruptos:
+        print(f"    ! CONTENIDO DISTINTO con la misma fecha: {c['carpeta']}/{c['fichero']}")
+
     if dry_run:
-        for e in entradas:
-            tipo = "carpeta" if e["es_carpeta"] else "fichero suelto"
-            extra = f", {len(e.get('ficheros', []))} fichero(s)" if e["es_carpeta"] else ""
-            print(f"    - {e['nombre']}  ({tipo}{extra})")
-        print("  (--dry-run: no se ha mandado nada a la web)")
+        for e in para_web:
+            if e["es_carpeta"] and "ficheros" in e:
+                print(f"    - {e['nombre']}  ({len(e['ficheros'])} fichero(s))")
+        print("  (--dry-run: no se ha mandado nada a la web ni se ha escrito nada en el disco)")
         return
 
     cuerpo = {
         "unidad_id": unidad_id,
         "lista_negra": config.get("lista_negra", []),
-        "entradas": entradas,
+        "entradas": para_web,
+        "corruptos": corruptos,
+        "verificacion": verificar,
     }
     if tarea_id:
         # Cierra la tarea que la web dejó pendiente (botón "Solicitar
@@ -561,25 +808,122 @@ def escanear_unidad(config: dict, unidad_id: int, ruta: str, dry_run: bool, tare
     resultado = api_post(config, "/silo/agente/escaneo", cuerpo)
 
     print(f"    ingestadas: {len(resultado.get('ingestadas', []))}")
-    for s in resultado.get("saltadas", []):
-        print(f"    saltada:    {s['nombre']}  ({s['motivo']})")
+    for s_ in resultado.get("saltadas", []):
+        print(f"    saltada:    {s_['nombre']}  ({s_['motivo']})")
     for d in resultado.get("desaparecidas", []):
         print(f"    BORRADA:    {d['nombre']}  (ya no está en el Maestro)")
     for err in resultado.get("errores", []):
         print(f"    ERROR:      {err['nombre']}  -> {err['error']}")
 
-    pendientes = [i for i in resultado.get("ingestadas", []) if i.get("necesita_proxies")]
-    if pendientes and _ffmpeg_disponible():
-        ficheros_por_nombre = {e["nombre"]: e.get("ficheros", []) for e in entradas}
+    # Manifiesto nuevo: solo lo que la web aceptó. Una carpeta con error se
+    # queda fuera (el próximo escaneo la mandará completa otra vez) y las
+    # saltadas no son piezas.
+    fuera = {x["nombre"] for x in resultado.get("errores", [])} | {x["nombre"] for x in resultado.get("saltadas", [])}
+    carpetas = {nombre: entrada for nombre, entrada in nuevas.items() if nombre not in fuera}
+    manifiesto = {"formato": 1, "unidad_id": unidad_id, "generado_en": time.strftime("%Y-%m-%dT%H:%M:%S"), "carpetas": carpetas}
+
+    try:
+        escribir_atomico(ruta_path / MANIFIESTO, json.dumps(manifiesto, ensure_ascii=False).encode("utf-8"))
+        sinc = api_post(config, f"/silo/agente/unidades/{unidad_id}/sincronizada", {"hash_indice": hash_indice(manifiesto)})
+        control = sinc.get("fichero_control") or {}
+        escribir_atomico(ruta_path / ".silo_unit.json", json.dumps(control, ensure_ascii=False, indent=4).encode("utf-8"))
+        print(f"    manifiesto guardado ({len(carpetas)} carpeta(s)).")
+    except (OSError, RuntimeError) as e:
+        print(f"    ! no se pudo guardar el manifiesto / sincronizar: {e} (el próximo escaneo mandará todo completo)")
+
+    procesar_proxies(config, ruta_path, entradas, resultado)
+    guardar_catalogo(config, unidad_id, ruta_path)
+
+
+def procesar_proxies(config: dict, ruta_path: Path, entradas: list[dict], resultado: dict) -> None:
+    """
+    Proxies tras el escaneo, con la copia del Maestro (`.silo_proxies/`):
+      · la web los pide (carpeta nueva o con fotos/vídeos cambiados) -> si la
+        copia del disco es de esta misma versión de la carpeta, se suben de
+        ahí; si no, ffmpeg y se guarda la copia nueva.
+      · la web ya los tiene pero el disco no -> se bajan a la copia.
+      · carpetas borradas del catálogo -> fuera su copia.
+    """
+    raiz = ruta_path / ".silo_proxies"
+    ficheros_por_nombre = {e["nombre"]: e.get("ficheros", []) for e in entradas}
+
+    for d in resultado.get("desaparecidas", []):
+        copia = raiz / str(d.get("id_negocio"))
+        if copia.is_dir():
+            shutil.rmtree(copia, ignore_errors=True)
+
+    ingestadas = resultado.get("ingestadas", [])
+    pendientes = [i for i in ingestadas if i.get("necesita_proxies")]
+    if pendientes:
         print(f"    proxies pendientes: {len(pendientes)} carpeta(s)")
-        for item in pendientes:
-            print(f"    generando proxies: {item['nombre']}")
-            generar_proxies_pieza(
-                config,
-                item["pieza_id"],
-                ruta_path / item["nombre"],
-                ficheros_por_nombre.get(item["nombre"], []),
-            )
+    for item in pendientes:
+        ficheros = ficheros_por_nombre.get(item["nombre"], [])
+        copia = raiz / str(item["id_negocio"])
+        indice = leer_copia_proxies(copia)
+        if indice and indice.get("firma") == firma_multimedia(ficheros) and indice.get("proxies"):
+            n = subir_proxies_desde_copia(config, item["pieza_id"], copia, indice)
+            print(f"    proxies desde la copia del disco: {item['nombre']} ({n})")
+            continue
+        if not _ffmpeg_disponible():
+            continue
+        print(f"    generando proxies: {item['nombre']}")
+        generar_proxies_pieza(config, item["pieza_id"], ruta_path / item["nombre"], ficheros, copia)
+
+    sin_copia = [i for i in ingestadas if not i.get("necesita_proxies") and not (raiz / str(i["id_negocio"]) / "proxies.json").is_file()]
+    if sin_copia:
+        print(f"    copiando al disco los proxies que ya tiene la web: {len(sin_copia)} carpeta(s)...")
+        copiadas = 0
+        for item in sin_copia:
+            try:
+                if descargar_copia_proxies(config, item["pieza_id"], raiz / str(item["id_negocio"]), firma_multimedia(ficheros_por_nombre.get(item["nombre"], []))):
+                    copiadas += 1
+            except RuntimeError as e:
+                print(f"      ! {item['nombre']}: {e}")
+        print(f"    copia de proxies guardada para {copiadas} carpeta(s).")
+
+
+def guardar_catalogo(config: dict, unidad_id: int, ruta_path: Path) -> None:
+    """Réplica del catálogo en la raíz de la unidad (ver SiloCatalogoService en la web)."""
+    try:
+        r = api_post(config, "/silo/agente/catalogo", {"unidad_id": unidad_id})
+        gz = base64.b64decode(r["contenido_b64"])
+        if hashlib.sha256(gz).hexdigest() != r["meta"].get("sha256_gz"):
+            raise RuntimeError("la réplica llegó corrupta (sha256 no casa)")
+        escribir_atomico(ruta_path / ".catalogo.sql.gz", gz)
+        escribir_atomico(ruta_path / ".catalogo.meta.json", json.dumps(r["meta"], ensure_ascii=False, indent=2).encode("utf-8"))
+        print(f"    réplica del catálogo guardada ({len(gz) // 1024} KB, {r['meta']['tablas'].get('silo_piezas', '?')} piezas).")
+    except (OSError, RuntimeError, KeyError, ValueError) as e:
+        print(f"    ! no se pudo guardar la réplica del catálogo: {e}")
+
+
+def restaurar_catalogo(config: dict, unidad_id: int) -> int:
+    """`--restaurar-catalogo ID`: sube a la web la réplica que hay en la raíz de esa unidad y la restaura (pide confirmación)."""
+    cfg = next((u for u in config["unidades"] if u.get("unidad_id") == unidad_id), None)
+    if not cfg:
+        print(f"La unidad {unidad_id} no está en config.json.")
+        return 1
+    raiz = Path(cfg["ruta"])
+    gz_path = raiz / ".catalogo.sql.gz"
+    if not gz_path.is_file():
+        print(f"No hay réplica en {gz_path}.")
+        return 1
+    meta = leer_json(raiz / ".catalogo.meta.json") or {}
+    print(f"Réplica: {gz_path}")
+    print(f"  generada:      {meta.get('generado_en', '?')}")
+    print(f"  último evento: #{meta.get('ultimo_evento_id', '?')}")
+    print(f"  piezas:        {meta.get('tablas', {}).get('silo_piezas', '?')}")
+    print("Esto SUSTITUYE todas las tablas de Silo de la web por la réplica (la web guarda antes una copia del estado actual).")
+    if input('Escribe RESTAURAR para seguir: ').strip() != "RESTAURAR":
+        print("Cancelado.")
+        return 0
+    r = api_post(config, "/silo/agente/catalogo/restaurar", {
+        "confirmar": "RESTAURAR",
+        "unidad_id": unidad_id,
+        "meta": meta,
+        "contenido_b64": base64.b64encode(gz_path.read_bytes()).decode("ascii"),
+    })
+    print(f"Restaurado: {r.get('sentencias')} sentencia(s). Estado anterior guardado en el servidor: {r.get('copia_previa')}")
+    return 0
 
 
 def modo_daemon(config: dict, intervalo: int) -> int:
@@ -612,7 +956,7 @@ def modo_daemon(config: dict, intervalo: int) -> int:
                     continue
 
                 print(f"  tarea #{tarea['id']}: escaneo solicitado desde la web para unidad #{u['numero']} <- {cfg_unidad['ruta']}")
-                escanear_unidad(config, u["unidad_id"], cfg_unidad["ruta"], dry_run=False, tarea_id=tarea["id"])
+                escanear_unidad(config, u, cfg_unidad["ruta"], dry_run=False, tarea_id=tarea["id"])
         except RuntimeError as e:
             print(f"  ! {e}")
 
@@ -627,9 +971,14 @@ def main() -> int:
     parser.add_argument("--intervalo", type=int, default=20, help="segundos entre sondeos en modo --daemon (por defecto 20)")
     parser.add_argument("--etiquetar-contenido", action="store_true", help="herramienta puntual: propone (o aplica con --aplicar) la etiqueta de contenido Fotos/Vídeos/Montajes que falte en el tema de cada carpeta, según lo que haya de verdad dentro (Montajes es heurística: solo vídeos y pocos). No toca la API/BD.")
     parser.add_argument("--aplicar", action="store_true", help="con --etiquetar-contenido, renombra de verdad en disco en vez de solo listar la propuesta")
+    parser.add_argument("--verificar", action="store_true", help="N3: re-hashea TODOS los ficheros (lento) para detectar corrupción silenciosa; manda todas las carpetas completas")
+    parser.add_argument("--restaurar-catalogo", type=int, metavar="UNIDAD_ID", help="sube a la web la réplica del catálogo (.catalogo.sql.gz) de esa unidad y restaura la BD de Silo con ella (pide confirmación)")
     args = parser.parse_args()
 
     config = cargar_config()
+
+    if args.restaurar_catalogo:
+        return restaurar_catalogo(config, args.restaurar_catalogo)
 
     if args.etiquetar_contenido:
         return etiquetar_contenido(config, args.aplicar)
@@ -667,7 +1016,7 @@ def main() -> int:
         # pedido desde la web para esta unidad, lo cierra con este mismo
         # resultado en vez de dejarlo esperando al agente en --daemon.
         tarea = tarea_pendiente(u, "escaneo_maestro")
-        escanear_unidad(config, u["unidad_id"], cfg_unidad["ruta"], args.dry_run, tarea_id=tarea["id"] if tarea else None)
+        escanear_unidad(config, u, cfg_unidad["ruta"], args.dry_run, tarea_id=tarea["id"] if tarea else None, verificar=args.verificar)
 
     return 0
 

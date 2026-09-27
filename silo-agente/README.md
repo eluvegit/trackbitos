@@ -7,19 +7,28 @@ una unidad Maestro con `os.scandir` y manda lo que encuentra a
 se salta (y por qué, ver `SiloService::clasificarEntradaRoot()`) — este
 script no clasifica nada, solo lista disco y reporta.
 
-## Alcance de este primer esbozo
+## Alcance
 
-- Solo Fase 1 (ingesta del Maestro), solo el primer nivel del root.
-- Ficheros sin hash todavía (`tamano_bytes` sí, `hash` no) — la web los
-  acepta igual; simplemente no hay detección de cambios real todavía
-  (eso es N0–N3 del doc, pendiente).
-- Cola de tareas real solo para `escaneo_maestro`: la web puede pedir un
-  escaneo (botón "Solicitar escaneo" en `/silo/unidades`) y este script lo
-  detecta en el `handshake` y lo cierra — ver "Lanzarlo desde la web" más
-  abajo. Otros tipos de tarea (mover piezas, propagación física) siguen sin
-  aprobación humana ni cola real.
-- Sin generación de proxies (fotos/vídeo de muestra) ni réplica de BD en el
-  disco — siguen simulados/pendientes en la web.
+- Fase 1 (ingesta del Maestro), solo el primer nivel del root.
+- **Detección de cambios N0–N3** (2026-09-27): el manifiesto de cada unidad
+  vive en su raíz (`.silo_manifest.json`, tamaño + fecha + hash de cada
+  fichero). Solo se mandan a la web las carpetas que cambiaron; si el
+  manifiesto no casa con la última sincronización de la web (N0), se manda
+  todo. Un fichero con otra fecha pero el mismo tamaño se hashea (N2).
+  `silo --verificar` re-hashea TODO (N3, lento) y avisa de ficheros con el
+  mismo tamaño y fecha pero otro contenido (corrupción).
+- **Proxies** (ffmpeg): se generan al dar de alta una carpeta y se
+  regeneran cuando cambian sus fotos o vídeos. Copia en el Maestro en
+  `.silo_proxies/<id_negocio>/`: si la web los pierde, se vuelven a subir
+  desde ahí sin ffmpeg.
+- **Réplica del catálogo**: al final de cada pasada deja en la raíz de la
+  unidad `.catalogo.sql.gz` + `.catalogo.meta.json` (todas las tablas
+  `silo_*`). Para restaurar: `silo --restaurar-catalogo <unidad_id>` desde
+  este PC (sube la réplica a la web, pide escribir RESTAURAR), o
+  `php spark silo:restaurar <ruta>` en el servidor. Si un disco trae una
+  réplica más nueva que la BD viva, el panel de avisos de la web lo dice.
+- Cola de tareas real solo para `escaneo_maestro` (ver "Lanzarlo desde la
+  web"). Sin propagación física (Fase 3).
 
 ## Uso
 
@@ -72,9 +81,7 @@ dos formas:
 En ambos casos la tarjeta de la unidad en `/silo/unidades` refleja el
 estado (esperando agente / escaneado hace X / error).
 
-## Siguiente paso, cuando esto funcione
+## Siguiente paso
 
-Mover el escaneo real de discos aquí no cambia el resto del plan: cola de
-tareas de verdad (`silo_tareas` ya existe con ese fin), hashing +
-manifiesto por-fichero (N1–N3), generación de proxies, y el volcado de BD
-por unidad (`.catalogo.sql.gz`). Todo descrito en el doc de diseño.
+Propagación física (Fase 3): que el agente cree/renombre/mueva las Copias
+2/3 en disco a partir de las tareas de `/silo/tareas`. Ver el doc de diseño.
