@@ -8,7 +8,7 @@ class GimnasioEjerciciosModel extends Model
 {
     protected $table            = 'gimnasio_ejercicios';
     protected $primaryKey       = 'id';
-    protected $allowedFields    = ['nombre', 'grupo_muscular'];
+    protected $allowedFields    = ['nombre', 'grupo_muscular', 'catalogo_id'];
     protected $useTimestamps    = true;
     protected $createdField     = 'created_at';
     protected $updatedField     = 'updated_at';

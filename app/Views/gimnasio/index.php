@@ -15,6 +15,7 @@ $secciones = [
     ['ruta' => 'gimnasio/mesociclos',              'icono' => '🧩', 'titulo' => 'Mesociclos',      'texto' => 'Rutinas de progresión por mesociclos.'],
     ['ruta' => 'gimnasio/ejercicios',              'icono' => '📋', 'titulo' => 'Ejercicios',      'texto' => 'Gestiona y clasifica los ejercicios disponibles.'],
     ['ruta' => 'gimnasio/plantillas',              'icono' => '🗂️', 'titulo' => 'Plantillas',      'texto' => 'Guarda tus rutinas frecuentes.'],
+    ['ruta' => 'gimnasio/catalogo',                'icono' => '🎬', 'titulo' => 'Catálogo',        'texto' => '1.300+ ejercicios con animación e instrucciones.'],
 ];
 ?>
 

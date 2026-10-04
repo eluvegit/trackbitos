@@ -1559,8 +1559,37 @@ class Web extends BaseController
                 ?: (strtotime($b['promocionada_en']) <=> strtotime($a['promocionada_en']));
         });
 
+        // Agrupadas por pieza: las versiones de una misma variante juntas, la
+        // más nueva arriba. Se valida una (normalmente la última) y las demás
+        // se descartan de paso. Los grupos heredan el orden de arriba (el de
+        // su primera fila), y van a "impresas" si tienen alguna impresa.
+        $grupos = [];
+        foreach ($filas as $f) {
+            $vid = $f['variante_id'];
+            $grupos[$vid] ??= [
+                'variante_id' => $vid,
+                'familia'     => $f['familia'],
+                'variante'    => $f['variante'],
+                'tareas'      => $f['tareas'],
+                'advertencia' => $f['advertencia'],
+                'render'      => null,
+                'estado'      => 'borrador',
+                'versiones'   => [],
+            ];
+            $grupos[$vid]['versiones'][] = $f;
+            if ($f['estado'] === 'impresa') {
+                $grupos[$vid]['estado'] = 'impresa';
+            }
+        }
+        foreach ($grupos as &$g) {
+            usort($g['versiones'], static fn($a, $b) => $b['numero'] <=> $a['numero']);
+            $g['render'] = $g['versiones'][0]['render'];
+        }
+        unset($g);
+
         return view('piezas/revisar', [
-            'filas' => $filas,
+            'filas'  => $filas,
+            'grupos' => array_values($grupos),
             // variante_id => número de su versión validada. La vista lo lleva
             // a JS para volver a pintar el aviso de "ya hay una validada por
             // encima" en las filas hermanas cuando se valida una sin recargar.
@@ -3547,6 +3576,21 @@ class Web extends BaseController
 
     public function validar(int $versionId)
     {
+        // Desde "Revisar impresiones" (agrupado por pieza): validar esta y
+        // descartar a la vez las hermanas sin juzgar que vengan marcadas.
+        $descartar = (array) ($this->request->getPost('descartar') ?? []);
+        if ($descartar !== []) {
+            return $this->verboDeVersion(
+                $versionId,
+                fn() => $this->servicio->validarDescartandoHermanas($versionId, $this->request->getPost('resultado') ?: null, $descartar),
+                fn($version) => sprintf(
+                    'v%03d es ahora la versión buena. %d versión(es) hermana(s) descartada(s).',
+                    (int) $version['numero'],
+                    count($version['descartadas'])
+                )
+            );
+        }
+
         return $this->verboDeVersion(
             $versionId,
             fn() => $this->servicio->validar($versionId, $this->request->getPost('resultado') ?: null),

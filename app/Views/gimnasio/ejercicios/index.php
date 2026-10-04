@@ -10,6 +10,9 @@
     <a href="<?= site_url('gimnasio/ejercicios/create') ?>" class="text-decoration-none ms-1 text-success" title="Nuevo ejercicio">
         <i class="bi bi-plus-circle fs-5"></i>
     </a>
+    <a href="<?= site_url('gimnasio/catalogo') ?>" class="text-decoration-none ms-auto small fw-normal" title="Catálogo de ejercicios con animación">
+        <i class="bi bi-collection-play"></i> Catálogo
+    </a>
 </h5>
 
 <?php if (session()->getFlashdata('success')): ?>
@@ -60,6 +63,11 @@ foreach ($ejercicios as $e) {
                         <div class="ej-item" data-nombre="<?= esc(mb_strtolower($ejercicio['nombre'])) ?>">
                             <span class="ej-item-nombre"><?= esc($ejercicio['nombre']) ?></span>
                             <div class="ej-item-actions">
+                                <?php if (!empty($ejercicio['catalogo_id'])): ?>
+                                    <a class="ej-icon-btn" href="<?= site_url('gimnasio/catalogo/' . $ejercicio['catalogo_id']) ?>" title="Vinculado a: <?= esc(ucfirst((string) $ejercicio['catalogo_nombre'])) ?>">
+                                        <i class="bi bi-play-circle"></i>
+                                    </a>
+                                <?php endif; ?>
                                 <a class="ej-icon-btn" href="<?= site_url('gimnasio/ejercicios/estadisticas/' . $ejercicio['id']) ?>" title="Ver estadísticas">
                                     <i class="bi bi-graph-up"></i>
                                 </a>

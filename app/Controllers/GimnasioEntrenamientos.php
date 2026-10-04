@@ -103,7 +103,23 @@ class GimnasioEntrenamientos extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
-        $data = [
+        $data = [];
+
+        // Cambio de fecha: validar formato y evitar duplicados (un entrenamiento por día)
+        $fecha = trim((string) $this->request->getPost('fecha'));
+        if ($fecha !== '' && $fecha !== $ent['fecha']) {
+            $dt = \DateTime::createFromFormat('Y-m-d', $fecha);
+            if (!$dt || $dt->format('Y-m-d') !== $fecha) {
+                return redirect()->back()->with('error', 'Fecha no válida');
+            }
+            $otro = $this->entrenamientosModel->where('fecha', $fecha)->where('id !=', $id)->first();
+            if ($otro) {
+                return redirect()->back()->with('error', "Ya existe otro entrenamiento el " . date('d/m/Y', strtotime($fecha)) . '. No se ha cambiado la fecha.');
+            }
+            $data['fecha'] = $fecha;
+        }
+
+        $data += [
             'tipo_sesion'    => $this->request->getPost('tipo_sesion'),
             'notas_generales' => $this->request->getPost('notas_generales') ?: null,
             'lesiones'        => $this->request->getPost('lesiones') ?: null,

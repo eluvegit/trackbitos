@@ -10,6 +10,142 @@
     <strong class="fw-semibold"><?= esc($ejercicio['nombre']) ?></strong>
 </h5>
 
+<?php $volverAqui = 'gimnasio/ejercicios/estadisticas/' . $ejercicio['id']; ?>
+
+<?php if (!empty($catalogo)): ?>
+    <?php $pasosCat = json_decode($catalogo['pasos_es'] ?? '[]', true) ?: []; ?>
+    <details class="gim-cat-box mb-2">
+        <summary>
+            <img src="<?= esc(gim_catalogo_media($catalogo['imagen'])) ?>" alt="" width="40" height="40">
+            <span>
+                Cómo se hace
+                <span class="gim-cat-nombre">Vinculado a: <?= esc(ucfirst($catalogo['nombre'])) ?></span>
+            </span>
+        </summary>
+        <div class="gim-cat-body">
+            <a href="<?= site_url('gimnasio/catalogo/' . $catalogo['id']) ?>">
+                <img src="<?= esc(gim_catalogo_media($catalogo['gif'])) ?>" alt="" width="180" height="180" loading="lazy">
+            </a>
+            <ol class="small mb-0">
+                <?php foreach ($pasosCat as $p): ?><li><?= esc($p) ?></li><?php endforeach; ?>
+            </ol>
+        </div>
+        <div class="d-flex flex-wrap gap-3 align-items-center small mt-2">
+            <a href="<?= site_url('gimnasio/catalogo/' . $catalogo['id']) ?>"><i class="bi bi-box-arrow-up-right"></i> Ver ficha del catálogo</a>
+            <button type="button" class="btn btn-link btn-sm p-0" data-gim-cat-cambiar><i class="bi bi-arrow-left-right"></i> Cambiar por otro</button>
+            <form action="<?= site_url('gimnasio/catalogo/desvincular/' . $ejercicio['id']) ?>" method="post" class="m-0"
+                  onsubmit="return confirm('¿Quitar el vínculo con «<?= esc(ucfirst($catalogo['nombre']), 'js') ?>»? No borra nada.');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="volver" value="<?= esc($volverAqui) ?>">
+                <button class="btn btn-link btn-sm text-muted p-0"><i class="bi bi-x-circle"></i> Desvincular</button>
+            </form>
+        </div>
+    </details>
+<?php elseif ($hayCatalogo): ?>
+    <p class="small mb-2">
+        <button type="button" class="btn btn-link btn-sm p-0" data-gim-cat-cambiar>
+            <i class="bi bi-collection-play"></i> Vincular con un ejercicio del catálogo (animación e instrucciones)
+        </button>
+    </p>
+<?php endif; ?>
+
+<?php if ($hayCatalogo): ?>
+    <div class="gim-cat-picker mb-3 d-none" id="gimCatPicker">
+        <?php $sugeridos = array_filter($candidatosCatalogo, fn ($c) => (int) $c['id'] !== (int) ($catalogo['id'] ?? 0)); ?>
+        <?php if ($sugeridos): ?>
+            <div class="small text-muted mb-1">Sugerencias</div>
+            <div class="gim-cat-opciones mb-2">
+                <?php foreach ($sugeridos as $c): ?>
+                    <button type="button" class="gim-cat-op" data-id="<?= $c['id'] ?>">
+                        <img src="<?= esc(gim_catalogo_media($c['imagen'])) ?>" alt="" width="40" height="40" loading="lazy">
+                        <span><?= esc(ucfirst($c['nombre'])) ?></span>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <input type="search" class="form-control form-control-sm mb-2" id="gimCatBuscar"
+               placeholder="Buscar en el catálogo (español o inglés)…" autocomplete="off">
+        <div class="gim-cat-opciones" id="gimCatResultados"></div>
+
+        <form method="post" id="gimCatForm" class="d-none">
+            <?= csrf_field() ?>
+            <input type="hidden" name="ejercicio_id" value="<?= $ejercicio['id'] ?>">
+            <input type="hidden" name="volver" value="<?= esc($volverAqui) ?>">
+        </form>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const picker = document.getElementById('gimCatPicker');
+        const form = document.getElementById('gimCatForm');
+        const input = document.getElementById('gimCatBuscar');
+        const resultados = document.getElementById('gimCatResultados');
+        const urlVincular = id => '<?= site_url('gimnasio/catalogo') ?>/' + id + '/vincular';
+
+        document.querySelectorAll('[data-gim-cat-cambiar]').forEach(b => b.addEventListener('click', () => {
+            picker.classList.toggle('d-none');
+            if (!picker.classList.contains('d-none')) input.focus();
+        }));
+
+        picker.addEventListener('click', e => {
+            const op = e.target.closest('.gim-cat-op');
+            if (!op) return;
+            if (!confirm('¿Vincular con «' + op.textContent.trim() + '»?')) return;
+            form.action = urlVincular(op.dataset.id);
+            form.submit();
+        });
+
+        let t;
+        input.addEventListener('input', () => {
+            clearTimeout(t);
+            const q = input.value.trim();
+            if (q.length < 2) { resultados.innerHTML = ''; return; }
+            t = setTimeout(async () => {
+                const r = await fetch('<?= site_url('gimnasio/catalogo/buscar') ?>?q=' + encodeURIComponent(q));
+                const filas = await r.json();
+                resultados.innerHTML = '';
+                if (!filas.length) {
+                    resultados.innerHTML = '<span class="small text-muted">Sin resultados.</span>';
+                    return;
+                }
+                filas.forEach(f => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'gim-cat-op';
+                    b.dataset.id = f.id;
+                    const img = document.createElement('img');
+                    img.src = f.imagen; img.width = 40; img.height = 40; img.loading = 'lazy'; img.alt = '';
+                    const s = document.createElement('span');
+                    s.textContent = f.nombre;
+                    s.title = f.meta;
+                    b.append(img, s);
+                    resultados.append(b);
+                });
+            }, 250);
+        });
+    });
+    </script>
+<?php endif; ?>
+
+<style>
+.gim-cat-box { border: 1px solid var(--bs-border-color); border-radius: 12px; padding: 6px 10px; }
+.gim-cat-box summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: .9rem; }
+.gim-cat-box summary img, .gim-cat-body img { border-radius: 8px; background: #fff; }
+.gim-cat-nombre { display: block; font-weight: 400; font-size: .78rem; color: var(--bs-secondary-color); }
+.gim-cat-body { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.gim-cat-body ol { flex: 1 1 240px; padding-left: 1.1rem; }
+.gim-cat-picker { border: 1px dashed var(--bs-border-color); border-radius: 12px; padding: 8px 10px; }
+.gim-cat-opciones { display: flex; flex-wrap: wrap; gap: 6px; }
+.gim-cat-op {
+    display: flex; align-items: center; gap: 6px; text-align: left;
+    padding: 3px 8px 3px 3px; border: 1px solid var(--bs-border-color); border-radius: 10px;
+    background: var(--bs-tertiary-bg); color: var(--bs-body-color); font-size: .8rem;
+}
+.gim-cat-op:hover { border-color: var(--bs-primary); }
+.gim-cat-op img { border-radius: 6px; background: #fff; }
+</style>
+
 <?php if (empty($progresion)): ?>
     <p class="text-muted">Todavía no hay series con peso registradas para este ejercicio.</p>
 <?php else: ?>

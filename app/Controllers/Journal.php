@@ -995,7 +995,7 @@ class Journal extends BaseController
             'task_id'    => $taskId,
             'title'      => $title,
             'is_done'    => 0,
-            'orden'      => $this->subtaskModel->siguienteOrden($taskId),
+            'orden'      => $this->subtaskModel->primerOrden($taskId),
             'time_spent' => 0,
         ], true);
 

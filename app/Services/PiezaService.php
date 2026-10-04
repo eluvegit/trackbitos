@@ -1205,6 +1205,56 @@ class PiezaService
     }
 
     /**
+     * Validar una versión y, en el mismo golpe, descartar las hermanas sin
+     * juzgar que se indiquen (borrador/impresa de la misma variante). Es el
+     * flujo de "Revisar impresiones" agrupado por pieza: de varias
+     * iteraciones (un fallo menor, una colección mal puesta en Blender...)
+     * se valida una — normalmente la última — y el resto sobra.
+     *
+     * Las hermanas se descartan con un motivo automático que dice cuál se
+     * validó, así el historial sigue explicando por qué se apartaron. Todo o
+     * nada: si alguna no se puede descartar, no se valida tampoco.
+     *
+     * @param int[] $idsDescartar
+     * @return array la versión validada + 'descartadas' => int[]
+     */
+    public function validarDescartandoHermanas(int $versionId, ?string $resultado, array $idsDescartar): array
+    {
+        $version = $this->exigirEstado($versionId, ['impresa'], 'validar');
+
+        $idsDescartar = array_values(array_unique(array_filter(
+            array_map('intval', $idsDescartar),
+            static fn(int $id) => $id > 0 && $id !== $versionId
+        )));
+
+        $hermanas = [];
+        foreach ($idsDescartar as $id) {
+            $h = $this->exigirEstado($id, ['borrador', 'impresa'], 'descartar');
+            if ((int) $h['variante_id'] !== (int) $version['variante_id']) {
+                throw new RuntimeException("La versión {$id} no es de la misma pieza: no se descarta al validar otra.");
+            }
+            $hermanas[] = $h;
+        }
+
+        $motivo = sprintf('Descartada al validar la v%03d (se quedó esa iteración como la buena).', (int) $version['numero']);
+
+        $db = db_connect();
+        $db->transStart();
+
+        $validada = $this->versionModel->marcarValidada($versionId, $resultado);
+        foreach ($hermanas as $h) {
+            $this->versionModel->update($h['id'], ['estado' => 'descartada', 'resultado' => $motivo]);
+        }
+
+        $db->transComplete();
+        if ($db->transStatus() === false) {
+            throw new RuntimeException('No se pudo validar y descartar las demás: fallo de transacción.');
+        }
+
+        return $validada + ['descartadas' => array_map(static fn($h) => (int) $h['id'], $hermanas)];
+    }
+
+    /**
      * Aparta a mano los .blend de TODAS las sesiones (sin purgar todavía) de
      * la rama que cerró esta versión — el equivalente en bloque de ir
      * sesión por sesión con `descartarFicheroSesion`. Ya no se llama sola al

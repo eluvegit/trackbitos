@@ -1,7 +1,15 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<h2 class="mb-3">📅 Entrenamiento del <?= date('d/m/Y', strtotime($fecha)) ?></h2>
+<h2 class="mb-3">📅 Entrenamiento del <?= date('d/m/Y', strtotime($fecha)) ?>
+    <a href="#" id="editar-fecha-entrenamiento" class="btn btn-sm btn-outline-secondary align-middle ms-1" title="Cambiar fecha">✏️</a>
+</h2>
+<?php if (session()->getFlashdata('mensaje')): ?>
+    <div class="alert alert-success py-2"><?= esc(session()->getFlashdata('mensaje')) ?></div>
+<?php endif; ?>
+<?php if (session()->getFlashdata('error')): ?>
+    <div class="alert alert-danger py-2"><?= esc(session()->getFlashdata('error')) ?></div>
+<?php endif; ?>
 <div class="mb-3 d-flex flex-wrap gap-2">
     <a href="<?= site_url('gimnasio/entrenamientos') ?>" class="btn btn-sm btn-outline-secondary">← Volver a entrenamientos</a>
     <a href="<?= site_url('gimnasio/mesociclos') ?>" class="btn btn-sm btn-outline-secondary">← Mesociclos</a>
@@ -26,6 +34,11 @@
     <form method="post" action="<?= site_url('gimnasio/entrenamientos/actualizar-datos/' . $entrenamiento_id) ?>">
         <div class="card-body">
             <?= csrf_field() ?>
+            <div class="mb-3">
+                <label for="fecha_entrenamiento" class="form-label">Fecha</label>
+                <input type="date" name="fecha" id="fecha_entrenamiento" class="form-control"
+                    value="<?= esc($entrenamiento['fecha'] ?? $fecha) ?>" required>
+            </div>
             <div class="mb-3">
                 <label for="tipo_sesion" class="form-label">Tipo de sesión</label>
                 <select name="tipo_sesion" id="tipo_sesion" class="form-control">
@@ -60,6 +73,16 @@ document.getElementById('toggle-datos-entrenamiento').addEventListener('click', 
     let bloque = document.getElementById('bloque-datos-entrenamiento');
     bloque.classList.toggle('d-none');
     this.textContent = bloque.classList.contains('d-none') ? '📋 Mostrar datos del entrenamiento' : '📋 Ocultar datos del entrenamiento';
+});
+document.getElementById('editar-fecha-entrenamiento').addEventListener('click', function(e) {
+    e.preventDefault();
+    let bloque = document.getElementById('bloque-datos-entrenamiento');
+    if (bloque.classList.contains('d-none')) {
+        document.getElementById('toggle-datos-entrenamiento').click();
+    }
+    let input = document.getElementById('fecha_entrenamiento');
+    input.focus();
+    if (input.showPicker) { try { input.showPicker(); } catch (err) {} }
 });
 </script>
 

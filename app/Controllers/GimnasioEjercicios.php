@@ -68,7 +68,11 @@ class GimnasioEjercicios extends BaseController
 
     public function index()
     {
-        $data['ejercicios'] = $this->model->orderBy('grupo_muscular')->orderBy('nombre')->findAll();
+        $data['ejercicios'] = $this->model
+            ->select('gimnasio_ejercicios.*, gc.nombre AS catalogo_nombre')
+            ->join('gimnasio_catalogo gc', 'gc.id = gimnasio_ejercicios.catalogo_id', 'left')
+            ->orderBy('grupo_muscular')->orderBy('gimnasio_ejercicios.nombre')
+            ->findAll();
         $data['grupoNombres'] = gim_grupos();
         return view('gimnasio/ejercicios/index', $data);
     }
@@ -159,6 +163,14 @@ class GimnasioEjercicios extends BaseController
             'pr'             => $prog['pr'],
             'ultimo'         => $prog['ultimo'],
             'seriesDetalle'  => $seriesDetalle,
+            'catalogo'       => !empty($ejercicio['catalogo_id'])
+                ? $db->table('gimnasio_catalogo')->where('id', $ejercicio['catalogo_id'])->get()->getRowArray()
+                : null,
+            // Sugerencias para vincular o cambiar el vínculo (vacío si no hay catálogo importado)
+            'hayCatalogo'        => $hayCatalogo = $db->tableExists('gimnasio_catalogo'),
+            'candidatosCatalogo' => $hayCatalogo
+                ? (new \App\Services\GimnasioCatalogoService())->candidatosPara($ejercicio)
+                : [],
         ]);
     }
 

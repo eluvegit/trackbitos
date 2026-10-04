@@ -26,6 +26,16 @@ class SubtaskModel extends Model
     }
 
     /**
+     * Orden para una subtarea que debe quedar la primera de la lista
+     * (las subtareas nuevas se añaden arriba).
+     */
+    public function primerOrden(int $taskId): int
+    {
+        $min = $this->where('task_id', $taskId)->selectMin('orden')->first();
+        return ($min['orden'] ?? null) === null ? 1 : ((int) $min['orden']) - 1;
+    }
+
+    /**
      * Trae las subtareas de varias tareas de golpe, agrupadas por task_id
      * (para no hacer una consulta por tarea al listar el journal entero).
      */

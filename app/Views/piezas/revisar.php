@@ -19,7 +19,8 @@
     <strong>en borrador</strong> (para imprimir) y las <strong>impresas</strong> pendientes de validar o
     descartar. Los botones son los mismos que en la ficha de cada pieza y hacen exactamente lo mismo,
     solo que aquí se van pulsando en fila sin entrar una a una. Las impresas van arriba: mientras una
-    siga sin juzgar bloquea el trabajo nuevo de esa pieza.
+    siga sin juzgar bloquea el trabajo nuevo de esa pieza. Las versiones de una misma pieza van juntas:
+    al <strong>validar</strong> una, las demás sin juzgar se descartan a la vez.
 </p>
 
 <div id="mensajesRevisar"></div>
@@ -72,10 +73,11 @@ $botonTareas = static function (array $f): string {
         . '</button>';
 };
 
-// Partida en dos grupos, en el orden en que ya vienen (impresa primero).
-$grupos = ['impresa' => [], 'borrador' => []];
-foreach ($filas as $f) {
-    $grupos[$f['estado']][] = $f;
+// Partida en dos secciones por pieza: la que tenga alguna impresa va a
+// "impresas" (bloquea el trabajo nuevo), el resto a "en borrador".
+$secciones = ['impresa' => [], 'borrador' => []];
+foreach ($grupos as $g) {
+    $secciones[$g['estado']][] = $g;
 }
 $titulos = [
     'impresa'  => ['Impresas · pendientes de juicio', 'bi-hourglass-split'],
@@ -98,95 +100,106 @@ $titulos = [
         <button type="button" class="btn btn-sm btn-link text-decoration-none" id="btnLoteLimpiar">Quitar selección</button>
     </div>
 
-    <?php foreach ($grupos as $estado => $delGrupo): ?>
-        <section data-seccion="<?= $estado ?>" class="<?= $delGrupo === [] ? 'd-none' : '' ?>">
+    <?php foreach ($secciones as $estado => $deLaSeccion): ?>
+        <section data-seccion="<?= $estado ?>" class="<?= $deLaSeccion === [] ? 'd-none' : '' ?>">
             <h6 class="text-muted small text-uppercase mt-3 mb-2" data-cabecera>
                 <i class="bi <?= esc($titulos[$estado][1]) ?>"></i> <?= esc($titulos[$estado][0]) ?>
             </h6>
             <div data-cuerpo>
-                <?php foreach ($delGrupo as $f): ?>
-                    <?php $motivoSugerido = !empty($f['superada_por_validada'])
-                        ? 'La v' . sprintf('%03d', (int) $f['superada_por_validada']) . ' de esta pieza ya está validada; esta impresa se quedó sin juzgar.'
-                        : ''; ?>
-                    <div class="card shadow-sm mb-2 <?= !empty($f['superada_por_validada']) ? 'border-warning' : '' ?>"
-                        data-fila data-version="<?= (int) $f['id'] ?>" data-estado="<?= esc($f['estado']) ?>"
-                        data-variante="<?= (int) $f['variante_id'] ?>" data-numero="<?= (int) $f['numero'] ?>"
-                        data-label="<?= esc($etiquetaFila($f), 'attr') ?>"
-                        <?= $motivoSugerido !== '' ? 'data-motivo-sugerido="' . esc($motivoSugerido, 'attr') . '"' : '' ?>>
-                        <div class="card-body p-2 d-flex gap-2 align-items-start">
-                            <?php if ($f['estado'] === 'borrador'): ?>
-                                <div class="form-check pt-1">
-                                    <input class="form-check-input" type="checkbox" data-marcar value="<?= (int) $f['id'] ?>"
-                                        aria-label="Seleccionar para marcar impresa en lote">
-                                </div>
+                <?php foreach ($deLaSeccion as $g): ?>
+                    <!-- Una tarjeta por pieza con todas sus versiones sin
+                         juzgar, la más nueva arriba. Validar una descarta
+                         las demás (se pueden desmarcar en el modal). -->
+                    <div class="card shadow-sm mb-2" data-grupo data-variante="<?= (int) $g['variante_id'] ?>">
+                        <div class="card-header py-1 px-2 d-flex align-items-center gap-2 flex-wrap">
+                            <?php if (!empty($g['render'])): ?>
+                                <img src="<?= imagen_pieza($g['render'], 'render') ?>" alt=""
+                                    class="rounded flex-shrink-0" style="width: 36px; height: 36px; object-fit: cover;">
                             <?php endif; ?>
-
-                            <?php if (!empty($f['render'])): ?>
-                                <img src="<?= imagen_pieza($f['render'], 'render') ?>" alt=""
-                                    class="rounded flex-shrink-0" style="width: 44px; height: 44px; object-fit: cover;">
-                            <?php endif; ?>
-
-                            <div class="flex-grow-1" style="min-width: 0;">
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <a href="<?= site_url('piezas/variante/' . (int) $f['variante_id']) ?>#version-<?= (int) $f['id'] ?>"
-                                        class="text-decoration-none fw-semibold">
-                                        <?= esc($f['familia']) ?> <span class="text-muted">/</span> <?= esc($f['variante']) ?>
-                                    </a>
-                                    <span class="badge text-bg-secondary">v<?= sprintf('%03d', (int) $f['numero']) ?></span>
-                                    <span class="badge <?= $f['estado'] === 'impresa' ? 'text-bg-primary' : 'text-bg-secondary' ?>" data-badge-estado>
-                                        <?= $f['estado'] === 'impresa' ? 'impresa' : 'borrador' ?>
-                                    </span>
-                                    <?= $botonTareas($f) ?>
-                                </div>
-
-                                <?php if (!empty($f['superada_por_validada'])): ?>
-                                    <div class="alert alert-warning py-1 px-2 small my-2 mb-0 mt-2" data-aviso-superada>
-                                        <i class="bi bi-exclamation-triangle"></i>
-                                        La <strong>v<?= sprintf('%03d', (int) $f['superada_por_validada']) ?></strong> de esta pieza ya está
-                                        validada: se siguió trabajando y otra iteración quedó como la buena, y esta se dejó impresa sin juzgar.
-                                        Puedes descartarla directamente — el motivo viene ya escrito, revísalo y confirma.
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if (!empty($f['cambio'])): ?>
-                                    <div class="small mt-1"><?= esc($f['cambio']) ?></div>
-                                <?php endif; ?>
-
-                                <div class="small text-muted mt-1 d-flex flex-column gap-1">
-                                    <span data-antiguedad>
-                                        <i class="bi bi-clock-history"></i>
-                                        Promocionada hace <?= (int) $f['dias'] ?> día(s)
-                                        <?php if (!empty($f['olvidada'])): ?>
-                                            <span class="badge text-bg-warning ms-1">lleva demasiado sin resolverse</span>
+                            <a href="<?= site_url('piezas/variante/' . (int) $g['variante_id']) ?>" class="text-decoration-none fw-semibold">
+                                <?= esc($g['familia']) ?> <span class="text-muted">/</span> <?= esc($g['variante']) ?>
+                            </a>
+                            <span class="small text-muted" data-cuenta-versiones><?= count($g['versiones']) ?> sin juzgar</span>
+                            <?= $botonTareas($g['versiones'][0]) ?>
+                        </div>
+                        <div class="list-group list-group-flush" data-versiones>
+                            <?php foreach ($g['versiones'] as $f): ?>
+                                <?php $motivoSugerido = !empty($f['superada_por_validada'])
+                                    ? 'La v' . sprintf('%03d', (int) $f['superada_por_validada']) . ' de esta pieza ya está validada; esta impresa se quedó sin juzgar.'
+                                    : ''; ?>
+                                <div class="list-group-item p-2 <?= !empty($f['superada_por_validada']) ? 'list-group-item-warning' : '' ?>"
+                                    data-fila data-version="<?= (int) $f['id'] ?>" data-estado="<?= esc($f['estado']) ?>"
+                                    data-variante="<?= (int) $f['variante_id'] ?>" data-numero="<?= (int) $f['numero'] ?>"
+                                    data-label="<?= esc($etiquetaFila($f), 'attr') ?>"
+                                    <?= $motivoSugerido !== '' ? 'data-motivo-sugerido="' . esc($motivoSugerido, 'attr') . '"' : '' ?>>
+                                    <div class="d-flex gap-2 align-items-start" data-cuerpo-fila>
+                                        <?php if ($f['estado'] === 'borrador'): ?>
+                                            <div class="form-check pt-1">
+                                                <input class="form-check-input" type="checkbox" data-marcar value="<?= (int) $f['id'] ?>"
+                                                    aria-label="Seleccionar para marcar impresa en lote">
+                                            </div>
                                         <?php endif; ?>
-                                    </span>
-                                    <?php if (!empty($f['placas'])): ?>
-                                        <span>
-                                            <i class="bi bi-printer"></i>
-                                            <?= esc(implode(', ', array_map(static fn($p) => $p['nombre'], $f['placas']))) ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if ($f['estado'] === 'borrador'): ?>
-                                        <span>
-                                            <i class="bi bi-box"></i>
-                                            <?= $f['stls'] > 0 ? (int) $f['stls'] . ' STL adjunto(s)' : 'sin STL adjunto' ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($f['medidas'])): ?>
-                                        <span><i class="bi bi-rulers"></i> <?= esc($f['medidas']) ?></span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($f['params_impresion'])): ?>
-                                        <span><i class="bi bi-sliders"></i> <?= esc($f['params_impresion']) ?></span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($f['resultado'])): ?>
-                                        <span><i class="bi bi-clipboard-check"></i> <?= esc($f['resultado']) ?></span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
 
-                            <div class="d-flex flex-column gap-1 flex-shrink-0" data-botones>
-                                <?= $botones($f) ?>
-                            </div>
+                                        <div class="flex-grow-1" style="min-width: 0;">
+                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                <a href="<?= site_url('piezas/variante/' . (int) $f['variante_id']) ?>#version-<?= (int) $f['id'] ?>"
+                                                    class="badge text-bg-secondary text-decoration-none">v<?= sprintf('%03d', (int) $f['numero']) ?></a>
+                                                <span class="badge <?= $f['estado'] === 'impresa' ? 'text-bg-primary' : 'text-bg-secondary' ?>" data-badge-estado>
+                                                    <?= $f['estado'] === 'impresa' ? 'impresa' : 'borrador' ?>
+                                                </span>
+                                            </div>
+
+                                            <?php if (!empty($f['superada_por_validada'])): ?>
+                                                <div class="alert alert-warning py-1 px-2 small my-2 mb-0 mt-2" data-aviso-superada>
+                                                    <i class="bi bi-exclamation-triangle"></i>
+                                                    La <strong>v<?= sprintf('%03d', (int) $f['superada_por_validada']) ?></strong> de esta pieza ya está
+                                                    validada: se siguió trabajando y otra iteración quedó como la buena, y esta se dejó impresa sin juzgar.
+                                                    Puedes descartarla directamente — el motivo viene ya escrito, revísalo y confirma.
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <?php if (!empty($f['cambio'])): ?>
+                                                <div class="small mt-1"><?= esc($f['cambio']) ?></div>
+                                            <?php endif; ?>
+
+                                            <div class="small text-muted mt-1 d-flex flex-wrap column-gap-3 row-gap-1">
+                                                <span data-antiguedad>
+                                                    <i class="bi bi-clock-history"></i>
+                                                    Promocionada hace <?= (int) $f['dias'] ?> día(s)
+                                                    <?php if (!empty($f['olvidada'])): ?>
+                                                        <span class="badge text-bg-warning ms-1">lleva demasiado sin resolverse</span>
+                                                    <?php endif; ?>
+                                                </span>
+                                                <?php if (!empty($f['placas'])): ?>
+                                                    <span>
+                                                        <i class="bi bi-printer"></i>
+                                                        <?= esc(implode(', ', array_map(static fn($p) => $p['nombre'], $f['placas']))) ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if ($f['estado'] === 'borrador'): ?>
+                                                    <span>
+                                                        <i class="bi bi-box"></i>
+                                                        <?= $f['stls'] > 0 ? (int) $f['stls'] . ' STL adjunto(s)' : 'sin STL adjunto' ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($f['medidas'])): ?>
+                                                    <span><i class="bi bi-rulers"></i> <?= esc($f['medidas']) ?></span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($f['params_impresion'])): ?>
+                                                    <span><i class="bi bi-sliders"></i> <?= esc($f['params_impresion']) ?></span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($f['resultado'])): ?>
+                                                    <span><i class="bi bi-clipboard-check"></i> <?= esc($f['resultado']) ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex flex-column gap-1 flex-shrink-0" data-botones>
+                                            <?= $botones($f) ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -217,6 +230,17 @@ $titulos = [
                     <label class="form-label small" id="revisarEtiquetaResultado">Resultado</label>
                     <textarea name="resultado" class="form-control form-control-sm" rows="2"
                         placeholder="Encaja con el clic original, sin holgura"></textarea>
+                </div>
+
+                <!-- Solo al validar: las demás versiones sin juzgar de la misma
+                     pieza, marcadas para descartarse a la vez. -->
+                <div id="revisarHermanas" class="d-none mt-3">
+                    <label class="form-label small mb-1">Descartar a la vez las demás de esta pieza</label>
+                    <div id="revisarHermanasLista"></div>
+                    <p class="small text-muted mb-0 mt-1">
+                        Se descartan con un motivo automático ("descartada al validar la vXXX"). Desmarca la que
+                        quieras dejar sin juzgar.
+                    </p>
                 </div>
 
                 <div class="alert alert-danger py-2 mt-2 d-none" id="revisarError"></div>
@@ -331,7 +355,7 @@ $titulos = [
         },
         validar: {
             titulo: 'Validar',
-            ayuda: 'Pasa a ser la versión buena. Si había otra validada, esa queda superada.',
+            ayuda: 'Pasa a ser la versión buena. Si había otra validada, esa queda superada; las demás sin juzgar de la pieza se descartan.',
             confirmar: 'Validar', clase: 'btn-success',
             campos: ['resultado'], obligatorio: null, etiquetaResultado: 'Resultado'
         },
@@ -357,8 +381,32 @@ $titulos = [
     var elError = document.getElementById('revisarError');
     var elConfirmar = document.getElementById('revisarConfirmar');
     var elEtiquetaResultado = document.getElementById('revisarEtiquetaResultado');
+    var elHermanas = document.getElementById('revisarHermanas');
+    var elHermanasLista = document.getElementById('revisarHermanasLista');
     var accionActual = null;
     var versionActual = null;
+
+    // Al validar: casillas (marcadas) con las demás versiones sin juzgar de
+    // la misma pieza, que se descartarán en el mismo golpe.
+    function pintarHermanas(accion, version) {
+        elHermanasLista.innerHTML = '';
+        var fila = filaDe(version);
+        var grupo = fila ? fila.closest('[data-grupo]') : null;
+        var otras = accion === 'validar' && grupo
+            ? Array.prototype.filter.call(grupo.querySelectorAll('[data-fila]'), function (f) { return f !== fila; })
+            : [];
+        elHermanas.classList.toggle('d-none', otras.length === 0);
+        otras.forEach(function (f) {
+            var id = f.getAttribute('data-version');
+            var div = document.createElement('div');
+            div.className = 'form-check small';
+            div.innerHTML = '<input class="form-check-input" type="checkbox" checked data-descartar-hermana id="hermana' + id + '">'
+                + '<label class="form-check-label" for="hermana' + id + '"></label>';
+            div.querySelector('input').value = id;
+            div.querySelector('label').textContent = 'v' + pad3(f.getAttribute('data-numero')) + ' (' + f.getAttribute('data-estado') + ')';
+            elHermanasLista.appendChild(div);
+        });
+    }
 
     function abrirModal(accion, version, label, motivoSugerido) {
         accionActual = accion;
@@ -389,6 +437,7 @@ $titulos = [
             campo.required = cfg.obligatorio === nombre;
         });
         if (cfg.etiquetaResultado) elEtiquetaResultado.textContent = cfg.etiquetaResultado;
+        pintarHermanas(accion, version);
 
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
@@ -429,6 +478,11 @@ $titulos = [
             var campo = form.querySelector('[data-campo="' + nombre + '"] textarea');
             if (campo) datos.append(nombre, campo.value);
         });
+        if (accionActual === 'validar') {
+            elHermanasLista.querySelectorAll('[data-descartar-hermana]:checked').forEach(function (c) {
+                datos.append('descartar[]', c.value);
+            });
+        }
 
         llamada('<?= site_url('piezas/version/') ?>' + versionActual + '/' + accionActual, datos).then(function (r) {
             if (!r.ok) {
@@ -439,7 +493,7 @@ $titulos = [
             }
             bootstrap.Modal.getOrCreateInstance(modalEl).hide();
             aviso(r.mensaje || 'Hecho.');
-            aplicarResultado(accionActual, versionActual);
+            aplicarResultado(accionActual, versionActual, r);
         }).catch(function () {
             elError.textContent = 'No se pudo conectar con el servidor.';
             elError.classList.remove('d-none');
@@ -470,7 +524,7 @@ $titulos = [
         if (fila.querySelector('[data-aviso-superada]')) return;
 
         var et = 'v' + pad3(numValidada);
-        fila.classList.add('border-warning');
+        fila.classList.add('list-group-item-warning');
         fila.setAttribute('data-motivo-sugerido',
             'La ' + et + ' de esta pieza ya está validada; esta impresa se quedó sin juzgar.');
 
@@ -482,8 +536,18 @@ $titulos = [
             + 'Puedes descartarla directamente — el motivo viene ya escrito, revísalo y confirma.';
         fila.querySelector('[data-badge-estado]').closest('.d-flex').insertAdjacentElement('afterend', alerta);
 
-        var cuerpo = fila.closest('[data-cuerpo]');
-        if (cuerpo) cuerpo.prepend(fila);
+        var grupo = fila.closest('[data-grupo]');
+        var cuerpo = grupo ? grupo.closest('[data-cuerpo]') : null;
+        if (cuerpo) cuerpo.prepend(grupo);
+    }
+
+    // Una pieza va a "impresas" si le queda alguna versión impresa; si no,
+    // a "en borrador". Se llama cada vez que cambia el estado de una fila.
+    function recolocarGrupo(grupo) {
+        if (!grupo) return;
+        var destinoEstado = grupo.querySelector('[data-fila][data-estado="impresa"]') ? 'impresa' : 'borrador';
+        var destino = document.querySelector('[data-seccion="' + destinoEstado + '"] [data-cuerpo]');
+        if (destino && grupo.parentElement !== destino) destino.appendChild(grupo);
     }
 
     // Tras validar una versión, repasa las hermanas que siguen impresas con
@@ -496,9 +560,10 @@ $titulos = [
         });
     }
 
-    function aplicarResultado(accion, version) {
+    function aplicarResultado(accion, version, respuesta) {
         var fila = filaDe(version);
         if (!fila) return;
+        var grupo = fila.closest('[data-grupo]');
 
         if (accion === 'impresa' || accion === 'deshacer') {
             // Transforma la fila en su sitio: borrador <-> impresa. No sale
@@ -517,11 +582,10 @@ $titulos = [
                 var div = document.createElement('div');
                 div.className = 'form-check pt-1';
                 div.innerHTML = '<input class="form-check-input" type="checkbox" data-marcar value="' + version + '" aria-label="Seleccionar para marcar impresa en lote">';
-                fila.querySelector('.card-body').prepend(div);
+                fila.querySelector('[data-cuerpo-fila]').prepend(div);
             }
 
-            var destino = document.querySelector('[data-seccion="' + nuevoEstado + '"] [data-cuerpo]');
-            if (destino && fila.parentElement !== destino) destino.appendChild(fila);
+            recolocarGrupo(grupo);
 
             // Recién pasada a impresa y ya tenía una validada por encima
             // (p. ej. se marca impresa una vieja después de haber validado
@@ -530,8 +594,8 @@ $titulos = [
             if (nv !== null && parseInt(fila.getAttribute('data-numero'), 10) < nv) {
                 aplicarAvisoSuperada(fila, nv);
             } else {
-                fila.classList.add('border-info');
-                setTimeout(function () { fila.classList.remove('border-info'); }, 1500);
+                fila.classList.add('list-group-item-info');
+                setTimeout(function () { fila.classList.remove('list-group-item-info'); }, 1500);
             }
         } else {
             // validar / descartar: fuera de la lista, ya está juzgada. Al
@@ -541,6 +605,12 @@ $titulos = [
             var varianteId = fila.getAttribute('data-variante');
             var numero = parseInt(fila.getAttribute('data-numero'), 10);
             fila.remove();
+            // Las hermanas descartadas en el mismo golpe también se van.
+            ((respuesta && respuesta.descartadas) || []).forEach(function (id) {
+                var h = filaDe(id);
+                if (h) h.remove();
+            });
+            recolocarGrupo(grupo);
             if (esValidar) {
                 VALIDADAS[String(varianteId)] = numero;
                 revisarDescolgadas(varianteId);
@@ -552,6 +622,13 @@ $titulos = [
 
     // ---- Secciones vacías y lista vacía ----
     function repintar() {
+        // Piezas sin filas fuera; en las demás, el recuento al día.
+        document.querySelectorAll('[data-grupo]').forEach(function (g) {
+            var n = g.querySelectorAll('[data-fila]').length;
+            if (n === 0) { g.remove(); return; }
+            var c = g.querySelector('[data-cuenta-versiones]');
+            if (c) c.textContent = n + ' sin juzgar';
+        });
         document.querySelectorAll('[data-seccion]').forEach(function (sec) {
             sec.classList.toggle('d-none', sec.querySelectorAll('[data-fila]').length === 0);
         });

@@ -159,6 +159,16 @@ $routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
     $routes->GET('ejercicios/estadisticas/(:num)', 'GimnasioEjercicios::estadisticas/$1');
     $routes->GET('ejercicios/principales', 'GimnasioEjercicios::principales');
 
+    // Catálogo externo (exercises-dataset): biblioteca aparte de mis ejercicios
+    $routes->GET('catalogo', 'GimnasioCatalogo::index');
+    $routes->POST('catalogo/importar', 'GimnasioCatalogo::importar');
+    $routes->GET('catalogo/buscar', 'GimnasioCatalogo::buscar');
+    $routes->GET('catalogo/vincular-lote','GimnasioCatalogo::vincularLote');
+    $routes->POST('catalogo/vincular-lote', 'GimnasioCatalogo::vincularLoteGuardar');
+    $routes->POST('catalogo/desvincular/(:num)', 'GimnasioCatalogo::desvincular/$1');
+    $routes->GET('catalogo/(:num)', 'GimnasioCatalogo::ver/$1');
+    $routes->POST('catalogo/(:num)/adoptar', 'GimnasioCatalogo::adoptar/$1');
+    $routes->POST('catalogo/(:num)/vincular', 'GimnasioCatalogo::vincular/$1');
 
     $routes->GET('entrenamientos', 'GimnasioEntrenamientos::index');
     $routes->POST('entrenamientos/crear', 'GimnasioEntrenamientos::crear');

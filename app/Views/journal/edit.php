@@ -1235,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     lastProgress = data.progress;
                 }
             }
+            persistSubtaskOrder();
             subtaskEmptyMsg.classList.add('d-none');
             applyProgress(lastProgress);
             subtaskSuggestModal.hide();

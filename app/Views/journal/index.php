@@ -907,6 +907,7 @@
                         lastProgress = data.progress;
                     }
                 }
+                persistSubtaskOrder(list);
                 emptyMsg.classList.add('d-none');
                 updateToggleBadge(taskId);
                 updateTaskProgressSegments(taskId, lastProgress);
