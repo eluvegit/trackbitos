@@ -120,6 +120,11 @@ if (!function_exists('enl_color_from_string')) {
             </div>
 
             <div class="enl-item-actions">
+                <?php if (!empty($e['archivado_at'])): ?>
+                    <button data-id="<?= $e['id'] ?>" class="enl-icon-btn btn-desarchivar" title="Sacar del archivo">
+                        <i class="bi bi-box-arrow-up"></i>
+                    </button>
+                <?php endif; ?>
                 <button data-id="<?= $e['id'] ?>" class="enl-icon-btn btn-toggle-visto" title="Marcar visto/no visto">
                     <i class="bi <?= $isVisto ? 'bi-check-square-fill' : 'bi-square' ?>"></i>
                 </button>

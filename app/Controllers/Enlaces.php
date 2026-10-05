@@ -89,7 +89,11 @@ class Enlaces extends BaseController
             ? []
             : array_slice(preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY), 0, self::MAX_PALABRAS_BUSQUEDA);
 
-        $visto  = $req->getGet('visto'); // '', '0', '1'
+        $visto  = $req->getGet('visto'); // '', '0', '1', 'arch' (solo archivados)
+        $hayArchivo = $this->archivadoDisponible($db);
+        if ($visto === 'arch' && !$hayArchivo) {
+            $visto = '';
+        }
         $match  = strtolower((string) $req->getGet('match')) === 'all' ? 'all' : 'any';
 
         // cats puede venir como array (cats[]) o como string "1,2,3"
@@ -128,7 +132,7 @@ class Enlaces extends BaseController
             $tagIds = array_values(array_unique(array_merge($tagIds, array_map('intval', $tagIdsFromCb))));
         }
 
-        $hayFiltro = $q !== '' || $visto === '0' || $visto === '1' || !empty($cats) || !empty($tagIds);
+        $hayFiltro = $q !== '' || in_array($visto, ['0', '1', 'arch'], true) || !empty($cats) || !empty($tagIds);
 
         // Nunca pantalla en blanco: sin búsqueda ni filtro se listan los más
         // recientes (por id, que es el orden de alta real — la fecha suele ser
@@ -162,6 +166,11 @@ class Enlaces extends BaseController
         // Visto
         if ($visto === '0' || $visto === '1') {
             $builder->where('e.visto', (int)$visto);
+        }
+
+        // Archivados ("Fuera" en el repaso): solo se ven con su filtro.
+        if ($hayArchivo) {
+            $builder->where($visto === 'arch' ? 'e.archivado_at IS NOT NULL' : 'e.archivado_at IS NULL', null, false);
         }
 
         // --- Filtro CATEGORÍAS ---
@@ -310,9 +319,9 @@ class Enlaces extends BaseController
                 ]),
             ];
         }
-        if ($visto === '0' || $visto === '1') {
+        if (in_array($visto, ['0', '1', 'arch'], true)) {
             $chipsActivos[] = [
-                'texto' => $visto === '0' ? 'No vistos' : 'Vistos',
+                'texto' => ['0' => 'No vistos', '1' => 'Vistos', 'arch' => 'Archivados'][$visto],
                 'url'   => site_url('enlaces') . '?' . http_build_query(array_filter([
                     'q' => $q, 'match' => $match,
                 ], fn($v) => $v !== '' && $v !== null) + ['cats' => $cats, 'tag_ids' => $tagIdsSel]),
@@ -328,7 +337,7 @@ class Enlaces extends BaseController
         }
 
         // Cuenta solo lo que vive dentro del panel colapsable (para el badge y el auto-expandir)
-        $panelActiveCount = count($cats) + count($tagIdsSel) + ($visto === '0' || $visto === '1' ? 1 : 0);
+        $panelActiveCount = count($cats) + count($tagIdsSel) + (in_array($visto, ['0', '1', 'arch'], true) ? 1 : 0);
 
         // "Coincidió en…": para cada resultado, en qué casó la búsqueda —
         // título / URL / nota / categoría «X» / etiqueta «Y». Se calcula sobre
@@ -402,6 +411,7 @@ class Enlaces extends BaseController
             'q'                => $q,
             'qWords'           => $qWords,
             'visto'            => $visto,
+            'hayArchivo'       => $hayArchivo,
             'match'            => $match,
             'chipsActivos'      => $chipsActivos,
             'panelActiveCount'  => $panelActiveCount,
@@ -474,6 +484,19 @@ class Enlaces extends BaseController
         return self::$ftDisponible;
     }
 
+    /** Memo por request: ¿existe ya `enlaces_items.archivado_at`? */
+    private static ?bool $archivoDisponible = null;
+
+    /**
+     * ¿Está la columna `archivado_at` (migración del repaso)? Igual que el
+     * FULLTEXT: si el código llega antes que la migración, el listado sigue
+     * funcionando, solo que sin filtro de archivados.
+     */
+    private function archivadoDisponible($db): bool
+    {
+        return self::$archivoDisponible ??= $db->fieldExists('archivado_at', 'enlaces_items');
+    }
+
     /**
      * AJAX: etiquetas disponibles según las categorías (y búsqueda) seleccionadas
      * en vivo en el formulario, sin haber aplicado aún los filtros. Se usa para
@@ -498,6 +521,9 @@ class Enlaces extends BaseController
             : array_slice(preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY), 0, self::MAX_PALABRAS_BUSQUEDA);
 
         $builder = $db->table('enlaces_items e')->select('e.id');
+        if ($this->archivadoDisponible($db)) {
+            $builder->where('e.archivado_at IS NULL', null, false);
+        }
 
         if ($qWords) {
             $this->aplicarBusquedaTexto($builder, $qWords, $db);
@@ -1188,6 +1214,294 @@ class Enlaces extends BaseController
             . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
 
         return $rebuilt;
+    }
+
+    // --- REPASO DIARIO: una tarjeta al azar, una decisión, racha ---
+
+    /** Cada cuántas tarjetas del día se propone parar (sin culpa, se puede seguir). */
+    private const REPASO_PAUSA_CADA = 10;
+
+    /** Días que tarda en volver a salir un enlace mandado a "Luego". */
+    private const REPASO_LUEGO_DIAS = 7;
+
+    /** Veces que un enlace puede ir a "Luego"; a partir de ahí hay que decidir. */
+    private const REPASO_MAX_LUEGO = 2;
+
+    private const REPASO_ACCIONES = ['visto', 'fuera', 'luego'];
+
+    /** Clave de sesión con la tarjeta en curso: recargar no baraja otra. */
+    private const REPASO_SESION = 'enl_repaso';
+
+    public function repaso()
+    {
+        $db  = \Config\Database::connect();
+        $cat = (int) $this->request->getGet('cat');
+
+        if (!$db->tableExists('enlaces_repasos') || !$this->archivadoDisponible($db)) {
+            return view('enlaces/repaso', ['sinMigrar' => true]);
+        }
+
+        return view('enlaces/repaso', [
+            'sinMigrar'  => false,
+            'cat'        => $cat,
+            'categorias' => $this->repasoCategorias($db, $cat),
+            'stats'      => $this->repasoStats($db),
+            'tarjeta'    => $this->repasoTarjeta($db, $this->repasoActual($db, $cat), $cat),
+        ]);
+    }
+
+    /**
+     * AJAX: aplica la decisión sobre la tarjeta y devuelve la siguiente.
+     * Si viene `estrellas` (0–5, opcional), se guarda como relevancia con
+     * cualquier decisión.
+     *   visto → "Me lo quedo" (visto=1) · fuera → archivado (nunca se borra)
+     *   luego → vuelve en N días
+     */
+    public function repasoAccion($id)
+    {
+        $id     = (int) $id;
+        $accion = (string) $this->request->getPost('accion');
+        $cat    = (int) $this->request->getPost('cat');
+        $db     = \Config\Database::connect();
+        $estrellas = $this->request->getPost('estrellas');
+        $estrellas = ($estrellas === null || $estrellas === '') ? null : max(0, min(5, (int) $estrellas));
+
+        if (!in_array($accion, self::REPASO_ACCIONES, true)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Acción no válida']);
+        }
+        $item = $db->table('enlaces_items')->where('id', $id)->get()->getRowArray();
+        if (!$item) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Enlace no encontrado']);
+        }
+        if ($accion === 'luego' && $this->repasoVecesLuego($db, $id) >= self::REPASO_MAX_LUEGO) {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Este ya se ha pospuesto bastante: toca decidir']);
+        }
+
+        $ahora = date('Y-m-d H:i:s');
+        $fila  = ['item_id' => $id, 'accion' => $accion, 'created_at' => $ahora];
+
+        $db->transStart();
+        if ($estrellas !== null && $estrellas !== (int) $item['relevancia']) {
+            $fila['relevancia_antes'] = $item['relevancia'];
+            $db->table('enlaces_items')->where('id', $id)->update(['relevancia' => $estrellas]);
+        }
+        switch ($accion) {
+            case 'visto':
+                $db->table('enlaces_items')->where('id', $id)->update(['visto' => 1]);
+                break;
+            case 'fuera':
+                $db->table('enlaces_items')->where('id', $id)->update(['archivado_at' => $ahora]);
+                break;
+            case 'luego':
+                $fila['volver_en'] = date('Y-m-d', strtotime('+' . self::REPASO_LUEGO_DIAS . ' days'));
+                break;
+        }
+        $db->table('enlaces_repasos')->insert($fila);
+        $repasoId = (int) $db->insertID();
+        $db->transComplete();
+
+        session()->remove(self::REPASO_SESION);
+
+        return $this->repasoRespuesta($db, $cat, $repasoId, $accion);
+    }
+
+    /** AJAX: deshace una decisión del repaso y vuelve a poner esa tarjeta delante. */
+    public function repasoDeshacer($repasoId)
+    {
+        $db  = \Config\Database::connect();
+        $cat = (int) $this->request->getPost('cat');
+        $r   = $db->table('enlaces_repasos')->where('id', (int) $repasoId)->get()->getRowArray();
+        if (!$r) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Nada que deshacer']);
+        }
+
+        $db->transStart();
+        $revertir = [];
+        if ($r['relevancia_antes'] !== null) $revertir['relevancia']   = $r['relevancia_antes'];
+        if ($r['accion'] === 'visto')        $revertir['visto']        = 0;
+        if ($r['accion'] === 'fuera')        $revertir['archivado_at'] = null;
+        if ($revertir) {
+            $db->table('enlaces_items')->where('id', $r['item_id'])->update($revertir);
+        }
+        $db->table('enlaces_repasos')->where('id', $r['id'])->delete();
+        $db->transComplete();
+
+        session()->set(self::REPASO_SESION, ['id' => (int) $r['item_id'], 'cat' => $cat]);
+
+        return $this->repasoRespuesta($db, $cat);
+    }
+
+    /** AJAX (listado): saca un enlace del archivo. */
+    public function desarchivar($id)
+    {
+        \Config\Database::connect()->table('enlaces_items')
+            ->where('id', (int) $id)->update(['archivado_at' => null]);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    private function repasoRespuesta($db, int $cat, ?int $repasoId = null, ?string $accion = null)
+    {
+        $stats = $this->repasoStats($db);
+
+        return $this->response->setJSON([
+            'tarjeta'  => view('enlaces/_repaso_tarjeta', ['tarjeta' => $this->repasoTarjeta($db, $this->repasoActual($db, $cat), $cat)]),
+            'stats'    => view('enlaces/_repaso_stats', ['stats' => $stats]),
+            'deshacer' => $repasoId,
+            'accion'   => $accion,
+            'hoy'      => $stats['hoy'],
+            // Cada N tarjetas del día, propuesta de parar. Solo tras decidir, no al deshacer.
+            'pausa'    => $accion !== null && $stats['hoy'] > 0 && $stats['hoy'] % self::REPASO_PAUSA_CADA === 0,
+        ]);
+    }
+
+    /**
+     * Enlaces por repasar: sin ver, sin archivar y sin ninguna decisión que
+     * no sea "Luego". Con $soloDisponibles, quita además los pospuestos que
+     * aún no han vuelto.
+     */
+    private function repasoPendientes($db, int $cat = 0, bool $soloDisponibles = true)
+    {
+        $b = $db->table('enlaces_items e')
+            ->where('e.visto', 0)
+            ->where('e.archivado_at IS NULL', null, false)
+            ->where("NOT EXISTS (SELECT 1 FROM enlaces_repasos r WHERE r.item_id = e.id AND r.accion <> 'luego')", null, false);
+
+        if ($soloDisponibles) {
+            $b->where("NOT EXISTS (SELECT 1 FROM enlaces_repasos r WHERE r.item_id = e.id AND r.accion = 'luego' AND r.volver_en > "
+                . $db->escape(date('Y-m-d')) . ')', null, false);
+        }
+        if ($cat > 0) {
+            $b->where('EXISTS (SELECT 1 FROM enlaces_item_categorias ic WHERE ic.item_id = e.id AND ic.categoria_id = ' . $cat . ')', null, false);
+        }
+
+        return $b;
+    }
+
+    /**
+     * Id de la tarjeta en curso. Se guarda en sesión para que recargar no
+     * baraje otra; si ya no vale (decidida, o se cambió de categoría), sale
+     * una nueva al azar — primero las nunca vistas, luego las que vuelven de "Luego".
+     */
+    private function repasoActual($db, int $cat): ?int
+    {
+        $actual = session()->get(self::REPASO_SESION);
+        if (is_array($actual) && (int) ($actual['cat'] ?? -1) === $cat) {
+            $sigue = $this->repasoPendientes($db, $cat)->where('e.id', (int) $actual['id'])->countAllResults();
+            if ($sigue) {
+                return (int) $actual['id'];
+            }
+        }
+
+        $row = $this->repasoPendientes($db, $cat)
+            ->select('e.id')
+            ->orderBy('EXISTS (SELECT 1 FROM enlaces_repasos r WHERE r.item_id = e.id) ASC, RAND()', '', false)
+            ->get(1)->getRowArray();
+
+        if (!$row) {
+            session()->remove(self::REPASO_SESION);
+            return null;
+        }
+        session()->set(self::REPASO_SESION, ['id' => (int) $row['id'], 'cat' => $cat]);
+
+        return (int) $row['id'];
+    }
+
+    /** Datos para pintar una tarjeta (o el estado vacío si no hay). */
+    private function repasoTarjeta($db, ?int $id, int $cat): array
+    {
+        $catNombre = $cat > 0
+            ? $db->table('enlaces_categorias')->select('nombre')->where('id', $cat)->get()->getRow('nombre')
+            : null;
+
+        $data = ['item' => null, 'cats' => [], 'puedeLuego' => true, 'cat' => $cat, 'catNombre' => $catNombre];
+        if ($id === null) {
+            return $data;
+        }
+
+        $data['item'] = $db->table('enlaces_items')->where('id', $id)->get()->getRowArray();
+        $data['cats'] = $db->table('enlaces_item_categorias ic')
+            ->select('c.id, c.nombre')
+            ->join('enlaces_categorias c', 'c.id = ic.categoria_id')
+            ->where('ic.item_id', $id)
+            ->orderBy('c.nombre')
+            ->get()->getResultArray();
+        $data['puedeLuego'] = $this->repasoVecesLuego($db, $id) < self::REPASO_MAX_LUEGO;
+
+        return $data;
+    }
+
+    private function repasoVecesLuego($db, int $id): int
+    {
+        return $db->table('enlaces_repasos')->where('item_id', $id)->where('accion', 'luego')->countAllResults();
+    }
+
+    /** Categorías con enlaces por repasar (las que tienen 0 no salen, salvo la elegida). */
+    private function repasoCategorias($db, int $cat): array
+    {
+        $rows = $this->repasoPendientes($db, 0, false)
+            ->select('c.id, c.nombre, COUNT(*) AS total')
+            ->join('enlaces_item_categorias ic', 'ic.item_id = e.id')
+            ->join('enlaces_categorias c', 'c.id = ic.categoria_id')
+            ->groupBy('c.id, c.nombre')
+            ->orderBy('total', 'DESC')
+            ->orderBy('c.nombre', 'ASC')
+            ->get()->getResultArray();
+
+        if ($cat > 0 && !in_array($cat, array_map('intval', array_column($rows, 'id')), true)) {
+            $nombre = $db->table('enlaces_categorias')->select('nombre')->where('id', $cat)->get()->getRow('nombre');
+            if ($nombre !== null) {
+                $rows[] = ['id' => $cat, 'nombre' => $nombre, 'total' => 0];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Hoy, racha, récord y días totales, todo derivado de `enlaces_repasos`.
+     * La racha cuenta días seguidos con al menos una decisión; si hoy aún no
+     * hay ninguna, sigue viva la de ayer (se pierde al acabar el día, no antes).
+     */
+    private function repasoStats($db): array
+    {
+        $porDia = $db->query('SELECT DATE(created_at) AS d, COUNT(*) AS n FROM enlaces_repasos GROUP BY DATE(created_at) ORDER BY d ASC')
+            ->getResultArray();
+        $dias = array_column($porDia, 'n', 'd');
+
+        $hoyStr = date('Y-m-d');
+        $hoy    = (int) ($dias[$hoyStr] ?? 0);
+
+        $racha = 0;
+        $d = $hoy > 0 ? $hoyStr : date('Y-m-d', strtotime('-1 day'));
+        while (isset($dias[$d])) {
+            $racha++;
+            $d = date('Y-m-d', strtotime($d . ' -1 day'));
+        }
+
+        $record = 0;
+        $tramo  = 0;
+        $previo = null;
+        foreach (array_keys($dias) as $dia) {
+            $tramo  = ($previo !== null && $dia === date('Y-m-d', strtotime($previo . ' +1 day'))) ? $tramo + 1 : 1;
+            $record = max($record, $tramo);
+            $previo = $dia;
+        }
+
+        $repasados = (int) $db->table('enlaces_repasos')
+            ->select('COUNT(DISTINCT item_id) AS c', false)
+            ->where('accion <>', 'luego')
+            ->get()->getRow('c');
+
+        return [
+            'hoy'         => $hoy,
+            'racha'       => $racha,
+            'rachaHoy'    => $hoy > 0,
+            'record'      => $record,
+            'diasTotales' => count($dias),
+            'repasados'   => $repasados,
+            'porRepasar'  => $this->repasoPendientes($db, 0, false)->countAllResults(),
+        ];
     }
 
     // --- REVISIÓN DE ENLACES SIN TÍTULO ---

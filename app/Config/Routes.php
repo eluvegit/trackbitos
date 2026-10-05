@@ -445,6 +445,12 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
     $routes->POST('revision/borrar/(:num)',  'Enlaces::revisionBorrar/$1');   // borra y va al siguiente
     $routes->POST('revision/saltar/(:num)',  'Enlaces::revisionSaltar/$1');   // siguiente sin cambios
 
+    // Repaso diario: una tarjeta al azar, una decisión, racha
+    $routes->GET('repaso',                     'Enlaces::repaso');
+    $routes->POST('repaso/accion/(:num)',      'Enlaces::repasoAccion/$1');   // AJAX: decide y devuelve la siguiente
+    $routes->POST('repaso/deshacer/(:num)',    'Enlaces::repasoDeshacer/$1'); // AJAX: id de enlaces_repasos
+    $routes->POST('desarchivar/(:num)',        'Enlaces::desarchivar/$1');    // AJAX desde el listado
+
 
 
 });

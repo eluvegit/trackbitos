@@ -19,6 +19,10 @@
             </span>
         </h5>
         <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-warning" href="<?= site_url('enlaces/repaso') ?>"
+               title="Repaso diario: un enlace al azar cada vez">
+                🔥 Repaso
+            </a>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnEnfoque"
                 title="Modo enfoque: revisar los resultados de uno en uno (E)">
                 <i class="bi bi-fullscreen"></i>
@@ -101,6 +105,9 @@
                         <button type="button" data-value="">Todos</button>
                         <button type="button" data-value="0">No vistos</button>
                         <button type="button" data-value="1">Vistos</button>
+                        <?php if (!empty($hayArchivo)): ?>
+                            <button type="button" data-value="arch">Archivados</button>
+                        <?php endif; ?>
                     </div>
                     <input type="hidden" name="visto" id="inputVisto" value="<?= esc($visto) ?>">
                 </div>
@@ -748,7 +755,7 @@
         const p = new URLSearchParams();
         const q = inputQ.value.trim();
         if (q) p.set('q', q);
-        if (inputVisto.value === '0' || inputVisto.value === '1') p.set('visto', inputVisto.value);
+        if (['0', '1', 'arch'].includes(inputVisto.value)) p.set('visto', inputVisto.value);
         catSel.forEach(id => p.append('cats[]', id));
         tagPicker.selected.forEach(id => p.append('tag_ids[]', id));
         if ((catSel.size + tagPicker.selected.size) >= 2 && inputMatch.value === 'all') {
@@ -818,7 +825,7 @@
         const p = new URL(href, location.origin).searchParams;
         inputQ.value = p.get('q') || '';
         btnLimpiarTexto.classList.toggle('d-none', inputQ.value === '');
-        inputVisto.value = (p.get('visto') === '0' || p.get('visto') === '1') ? p.get('visto') : '';
+        inputVisto.value = ['0', '1', 'arch'].includes(p.get('visto')) ? p.get('visto') : '';
         inputMatch.value = p.get('match') === 'all' ? 'all' : 'any';
         const cats = p.getAll('cats[]').concat(p.getAll('cats'));
         const tags = p.getAll('tag_ids[]').concat(p.getAll('tag_ids'));
@@ -901,6 +908,20 @@
 
     // ============= Toggle visto (delegado: la lista se re-renderiza) =============
     const TOGGLE_VISTO_URL = '<?= site_url('enlaces/toggle-visto') ?>';
+    // ============= Desarchivar (solo con el filtro Archivados) =============
+    const DESARCHIVAR_URL = '<?= site_url('enlaces/desarchivar') ?>';
+    elResultados.addEventListener('click', async (ev) => {
+        const b = ev.target.closest('.btn-desarchivar');
+        if (!b) return;
+        b.disabled = true;
+        try {
+            const res = await fetch(DESARCHIVAR_URL + '/' + b.getAttribute('data-id'), { method: 'POST' });
+            if (res.ok) liveSearch(false);
+        } catch (err) {
+            b.disabled = false;
+        }
+    });
+
     elResultados.addEventListener('click', async (ev) => {
         const b = ev.target.closest('.btn-toggle-visto');
         if (!b) return;
