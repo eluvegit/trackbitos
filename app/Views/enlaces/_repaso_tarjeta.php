@@ -102,4 +102,26 @@ $item = $tarjeta['item'];
             <?php endif; ?>
         </div>
     </div>
+
+    <?php // El resto de la tanda: solo para verlas venir, sin acciones. ?>
+    <?php if (!empty($tarjeta['siguientes'])): ?>
+        <div class="rep-cola">
+            <div class="rep-cola-label">Después, en esta tanda (<?= count($tarjeta['siguientes']) ?>)</div>
+            <?php foreach ($tarjeta['siguientes'] as $s): ?>
+                <?php
+                $sHost    = parse_url((string) $s['url'], PHP_URL_HOST);
+                $sDominio = $sHost ? preg_replace('/^www\./', '', $sHost) : '';
+                $sTitulo  = trim((string) $s['titulo']) !== '' ? $s['titulo'] : ($sDominio ?: $s['url']);
+                ?>
+                <div class="rep-cola-item">
+                    <?php if ($sDominio): ?>
+                        <img src="https://www.google.com/s2/favicons?domain=<?= urlencode($sDominio) ?>&sz=32"
+                             alt="" width="14" height="14" loading="lazy" onerror="this.style.visibility='hidden'">
+                    <?php endif; ?>
+                    <span class="rep-cola-titulo"><?= esc($sTitulo) ?></span>
+                    <?php if ($sDominio): ?><span class="rep-cola-dominio"><?= esc($sDominio) ?></span><?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>

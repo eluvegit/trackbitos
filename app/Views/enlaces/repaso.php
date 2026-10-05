@@ -126,6 +126,22 @@
     }
     #repTarjeta.rep-cargando { opacity: .5; pointer-events: none; }
 
+    /* Resto de la tanda: pequeñas y apagadas, que se vean pero no compitan con la actual */
+    .rep-cola { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .rep-cola-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); opacity: .7; margin: 0 4px 2px; }
+    .rep-cola-item {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 12px; border-radius: 10px;
+        border: 1px dashed var(--bs-border-color); background: var(--bs-tertiary-bg);
+        font-size: .8rem; color: var(--bs-secondary-color);
+        opacity: .55; filter: grayscale(1);
+        transform: scale(.97); transform-origin: top center;
+    }
+    .rep-cola-item + .rep-cola-item { opacity: .4; }
+    .rep-cola-item + .rep-cola-item + .rep-cola-item { opacity: .3; }
+    .rep-cola-titulo { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rep-cola-dominio { font-size: .7rem; opacity: .8; white-space: nowrap; }
+
     .rep-pausa-btn { min-width: 150px; }
     .rep-hint { text-align: center; margin-top: 12px; }
 

@@ -1229,7 +1229,10 @@ class Enlaces extends BaseController
 
     private const REPASO_ACCIONES = ['visto', 'fuera', 'luego'];
 
-    /** Clave de sesión con la tarjeta en curso: recargar no baraja otra. */
+    /** Tarjetas por tanda: la primera es la que toca, el resto se ven atenuadas debajo. */
+    private const REPASO_TANDA = 5;
+
+    /** Clave de sesión con la tanda en curso: recargar no baraja otra. */
     private const REPASO_SESION = 'enl_repaso';
 
     public function repaso()
@@ -1246,7 +1249,7 @@ class Enlaces extends BaseController
             'cat'        => $cat,
             'categorias' => $this->repasoCategorias($db, $cat),
             'stats'      => $this->repasoStats($db),
-            'tarjeta'    => $this->repasoTarjeta($db, $this->repasoActual($db, $cat), $cat),
+            'tarjeta'    => $this->repasoTarjeta($db, $this->repasoCola($db, $cat), $cat),
         ]);
     }
 
@@ -1300,8 +1303,7 @@ class Enlaces extends BaseController
         $repasoId = (int) $db->insertID();
         $db->transComplete();
 
-        session()->remove(self::REPASO_SESION);
-
+        // No se toca la tanda: el decidido deja de estar pendiente y repasoCola() lo quita solo.
         return $this->repasoRespuesta($db, $cat, $repasoId, $accion);
     }
 
@@ -1326,7 +1328,11 @@ class Enlaces extends BaseController
         $db->table('enlaces_repasos')->where('id', $r['id'])->delete();
         $db->transComplete();
 
-        session()->set(self::REPASO_SESION, ['id' => (int) $r['item_id'], 'cat' => $cat]);
+        // Vuelve delante de la tanda (si era la última, desplaza a una de la nueva).
+        $actual = session()->get(self::REPASO_SESION);
+        $ids    = is_array($actual) && (int) ($actual['cat'] ?? -1) === $cat ? array_map('intval', $actual['ids'] ?? []) : [];
+        $ids    = array_slice(array_values(array_unique(array_merge([(int) $r['item_id']], $ids))), 0, self::REPASO_TANDA);
+        session()->set(self::REPASO_SESION, ['ids' => $ids, 'cat' => $cat]);
 
         return $this->repasoRespuesta($db, $cat);
     }
@@ -1345,7 +1351,7 @@ class Enlaces extends BaseController
         $stats = $this->repasoStats($db);
 
         return $this->response->setJSON([
-            'tarjeta'  => view('enlaces/_repaso_tarjeta', ['tarjeta' => $this->repasoTarjeta($db, $this->repasoActual($db, $cat), $cat)]),
+            'tarjeta'  => view('enlaces/_repaso_tarjeta', ['tarjeta' => $this->repasoTarjeta($db, $this->repasoCola($db, $cat), $cat)]),
             'stats'    => view('enlaces/_repaso_stats', ['stats' => $stats]),
             'deshacer' => $repasoId,
             'accion'   => $accion,
@@ -1379,42 +1385,54 @@ class Enlaces extends BaseController
     }
 
     /**
-     * Id de la tarjeta en curso. Se guarda en sesión para que recargar no
-     * baraje otra; si ya no vale (decidida, o se cambió de categoría), sale
-     * una nueva al azar — primero las nunca vistas, luego las que vuelven de "Luego".
+     * Tanda en curso: hasta REPASO_TANDA ids, el primero es la tarjeta que toca.
+     * Se guarda en sesión para que recargar no baraje otra; las que ya no valen
+     * (decididas, pospuestas) se caen, y cuando no queda ninguna sale una tanda
+     * nueva al azar — primero las nunca vistas, luego las que vuelven de "Luego".
+     *
+     * @return int[]
      */
-    private function repasoActual($db, int $cat): ?int
+    private function repasoCola($db, int $cat): array
     {
         $actual = session()->get(self::REPASO_SESION);
-        if (is_array($actual) && (int) ($actual['cat'] ?? -1) === $cat) {
-            $sigue = $this->repasoPendientes($db, $cat)->where('e.id', (int) $actual['id'])->countAllResults();
-            if ($sigue) {
-                return (int) $actual['id'];
-            }
+        $ids    = [];
+        if (is_array($actual) && (int) ($actual['cat'] ?? -1) === $cat && !empty($actual['ids'])) {
+            $ids = array_map('intval', $actual['ids']);
+            $validos = array_map('intval', array_column(
+                $this->repasoPendientes($db, $cat)->select('e.id')->whereIn('e.id', $ids)->get()->getResultArray(),
+                'id'
+            ));
+            $ids = array_values(array_intersect($ids, $validos));
         }
 
-        $row = $this->repasoPendientes($db, $cat)
-            ->select('e.id')
-            ->orderBy('EXISTS (SELECT 1 FROM enlaces_repasos r WHERE r.item_id = e.id) ASC, RAND()', '', false)
-            ->get(1)->getRowArray();
+        if (!$ids) {
+            $ids = array_map('intval', array_column(
+                $this->repasoPendientes($db, $cat)
+                    ->select('e.id')
+                    ->orderBy('EXISTS (SELECT 1 FROM enlaces_repasos r WHERE r.item_id = e.id) ASC, RAND()', '', false)
+                    ->get(self::REPASO_TANDA)->getResultArray(),
+                'id'
+            ));
+        }
 
-        if (!$row) {
+        if (!$ids) {
             session()->remove(self::REPASO_SESION);
-            return null;
+            return [];
         }
-        session()->set(self::REPASO_SESION, ['id' => (int) $row['id'], 'cat' => $cat]);
+        session()->set(self::REPASO_SESION, ['ids' => $ids, 'cat' => $cat]);
 
-        return (int) $row['id'];
+        return $ids;
     }
 
     /** Datos para pintar una tarjeta (o el estado vacío si no hay). */
-    private function repasoTarjeta($db, ?int $id, int $cat): array
+    private function repasoTarjeta($db, array $cola, int $cat): array
     {
+        $id = $cola[0] ?? null;
         $catNombre = $cat > 0
             ? $db->table('enlaces_categorias')->select('nombre')->where('id', $cat)->get()->getRow('nombre')
             : null;
 
-        $data = ['item' => null, 'cats' => [], 'puedeLuego' => true, 'cat' => $cat, 'catNombre' => $catNombre];
+        $data = ['item' => null, 'cats' => [], 'puedeLuego' => true, 'cat' => $cat, 'catNombre' => $catNombre, 'siguientes' => []];
         if ($id === null) {
             return $data;
         }
@@ -1427,6 +1445,19 @@ class Enlaces extends BaseController
             ->orderBy('c.nombre')
             ->get()->getResultArray();
         $data['puedeLuego'] = $this->repasoVecesLuego($db, $id) < self::REPASO_MAX_LUEGO;
+
+        // El resto de la tanda, en el mismo orden, solo para verlas venir.
+        $resto = array_slice($cola, 1);
+        if ($resto) {
+            $filas = array_column(
+                $db->table('enlaces_items')->select('id, url, titulo')->whereIn('id', $resto)->get()->getResultArray(),
+                null,
+                'id'
+            );
+            foreach ($resto as $r) {
+                if (isset($filas[$r])) $data['siguientes'][] = $filas[$r];
+            }
+        }
 
         return $data;
     }
