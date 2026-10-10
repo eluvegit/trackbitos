@@ -1594,7 +1594,35 @@ class Web extends BaseController
             // a JS para volver a pintar el aviso de "ya hay una validada por
             // encima" en las filas hermanas cuando se valida una sin recargar.
             'validadasPorVariante' => $validadaPorVariante,
+            // Borradores que se quedaron atrás antes de que promocionar los
+            // descartara solo: el botón "Descartar atrasados" los barre con
+            // el mismo criterio. Las etiquetas van en el confirm().
+            'atrasados' => array_map(
+                fn(array $b) => sprintf(
+                    '%s / %s v%03d (→ v%03d)',
+                    $familias[(int) $variantes[(int) $b['variante_id']]['familia_id']]['nombre'] ?? '?',
+                    $variantes[(int) $b['variante_id']]['nombre'] ?? '?',
+                    (int) $b['numero'],
+                    (int) $b['ultima']
+                ),
+                $this->servicio->borradoresAtrasados()
+            ),
         ]);
+    }
+
+    /**
+     * Descarta de golpe los borradores atrasados de todas las piezas, con el
+     * criterio de promocionar (PiezaService::borradoresAtrasados).
+     */
+    public function descartarBorradoresAtrasados()
+    {
+        return $this->ejecutar(
+            fn() => $this->servicio->descartarBorradoresAtrasados(),
+            fn() => site_url('piezas/revisar'),
+            fn(int $n) => $n === 0
+                ? 'No quedaba ningún borrador atrasado.'
+                : sprintf('%d borrador(es) atrasado(s) descartado(s) como "superada en edición".', $n)
+        );
     }
 
     /**
@@ -3561,7 +3589,10 @@ class Web extends BaseController
                 (int) $version['numero'],
                 date('d/m/Y H:i', strtotime($version['promocionada_en'])),
                 $this->ramaModel->nombre($this->ramaModel->abiertaDe($varianteId) ?? [])
-            )
+            ) . ($version['superadas_en_edicion'] === [] ? '' : sprintf(
+                ' Descartadas por superadas en edición: %s.',
+                implode(', ', array_map(static fn(int $n) => sprintf('v%03d', $n), $version['superadas_en_edicion']))
+            ))
         );
     }
 

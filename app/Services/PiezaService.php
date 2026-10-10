@@ -7,6 +7,7 @@ use App\Models\PiezaComposicionModel;
 use App\Models\PiezaDescargaModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaMaquinaModel;
+use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
@@ -968,8 +969,10 @@ class PiezaService
         }
         $almacen->copiar($ultimaSubida['ruta_blend'], $rutaVersion);
 
+        $superadas = [];
+
         try {
-            $versionId = $this->transaccion('promocionar', function () use ($varianteId, $numero, $cambio, $medidas, $rama, $ultimaSubida, $rutaVersion) {
+            $versionId = $this->transaccion('promocionar', function () use ($varianteId, $numero, $cambio, $medidas, $rama, $ultimaSubida, $rutaVersion, &$superadas) {
                 $versionId = $this->insertarOFallar($this->versionModel, [
                     'variante_id'     => $varianteId,
                     'numero'          => $numero,
@@ -984,15 +987,147 @@ class PiezaService
                 $this->ramaModel->cerrar($rama['id'], $versionId);
                 $this->ramaModel->abrir($varianteId, $versionId);
 
+                $superadas = $this->descartarBorradoresSuperados($varianteId, $numero);
+
                 return $versionId;
             });
         } catch (Throwable $e) {
+            $superadas = [];
             $almacen->descartarEscritura($rutaVersion);
 
             throw $e;
         }
 
-        return $this->versionModel->find($versionId);
+        return $this->versionModel->find($versionId)
+            + ['superadas_en_edicion' => $superadas];
+    }
+
+    /**
+     * Al promocionar, los borradores anteriores de la variante que nunca
+     * llegaron a una placa se descartan solos: son iteraciones que se
+     * corrigieron antes de imprimir (fallos vistos al preparar la placa) y
+     * dejarlas vivas obligaba a ir descartándolas a mano una a una.
+     *
+     * Solo `borrador` y solo fuera de placa, a propósito:
+     * - `impresa` no: tiene pieza física y la regla 9 existe para que se
+     *   juzgue, no para taparla promocionando otra encima.
+     * - un borrador que ya está en una placa puede haberse impreso aunque
+     *   nadie lo marcara; "superada en edición" sería falso, así que ese
+     *   se queda para juzgarlo a mano.
+     * - `validada` (la definitiva) y `superada` no se tocan nunca.
+     *
+     * Se reutiliza `descartada` con motivo automático: "Deshacer" la
+     * devuelve a borrador si sobraba el descarte.
+     *
+     * @return int[] números de las versiones descartadas
+     */
+    private function descartarBorradoresSuperados(int $varianteId, int $numeroNuevo): array
+    {
+        $borradores = $this->borradoresSuperados(
+            $this->versionModel
+                ->where('variante_id', $varianteId)
+                ->where('estado', 'borrador')
+                ->where('numero <', $numeroNuevo)
+                ->orderBy('numero', 'ASC')
+                ->findAll()
+        );
+
+        $motivo = sprintf('Superada en edición por la v%03d.', $numeroNuevo);
+        foreach ($borradores as $b) {
+            $this->versionModel->update($b['id'], ['estado' => 'descartada', 'resultado' => $motivo]);
+        }
+
+        return array_map(static fn(array $b) => (int) $b['numero'], $borradores);
+    }
+
+    /**
+     * Filtra de una lista de borradores los que están en alguna placa: el
+     * criterio común de "superada en edición" (ver descartarBorradoresSuperados).
+     */
+    private function borradoresSuperados(array $borradores): array
+    {
+        if ($borradores === []) {
+            return [];
+        }
+
+        $enPlaca = array_map(
+            static fn(array $f) => (int) $f['version_id'],
+            (new PiezaPlacaVersionModel())->select('version_id')
+                ->whereIn('version_id', array_map(static fn(array $b) => (int) $b['id'], $borradores))
+                ->findAll()
+        );
+
+        return array_values(array_filter(
+            $borradores,
+            static fn(array $b) => !in_array((int) $b['id'], $enPlaca, true)
+        ));
+    }
+
+    /**
+     * Los borradores que se quedaron atrás antes de que promocionar los
+     * descartara solo: mismo criterio que al promocionar, aplicado a toda
+     * pieza viva — borrador, fuera de placa y con alguna versión más nueva
+     * en la misma variante (sea cual sea su estado). 'ultima' es el número
+     * de esa versión más nueva, para el motivo.
+     *
+     * @return array<int, array> versiones con la clave extra 'ultima'
+     */
+    public function borradoresAtrasados(): array
+    {
+        $vivas = array_map(
+            static fn(array $v) => (int) $v['id'],
+            $this->varianteModel->select('piezas_variantes.id')
+                ->join('piezas_familias', 'piezas_familias.id = piezas_variantes.familia_id')
+                ->where('piezas_variantes.borrado_en', null)
+                ->where('piezas_familias.borrado_en', null)
+                ->findAll()
+        );
+        if ($vivas === []) {
+            return [];
+        }
+
+        $ultima = [];
+        foreach ($this->versionModel->select('variante_id, MAX(numero) AS ultima')
+            ->whereIn('variante_id', $vivas)->groupBy('variante_id')->findAll() as $f) {
+            $ultima[(int) $f['variante_id']] = (int) $f['ultima'];
+        }
+
+        $borradores = array_values(array_filter(
+            $this->versionModel->whereIn('variante_id', $vivas)->where('estado', 'borrador')
+                ->orderBy('variante_id', 'ASC')->orderBy('numero', 'ASC')->findAll(),
+            static fn(array $b) => (int) $b['numero'] < ($ultima[(int) $b['variante_id']] ?? 0)
+        ));
+
+        return array_map(
+            static fn(array $b) => $b + ['ultima' => $ultima[(int) $b['variante_id']]],
+            $this->borradoresSuperados($borradores)
+        );
+    }
+
+    /**
+     * Descarta de golpe los borradoresAtrasados(), con el mismo motivo que
+     * pondría promocionar ("Superada en edición por la vNNN", la más nueva
+     * de su variante). Todo o nada.
+     *
+     * @return int cuántas versiones se descartaron
+     */
+    public function descartarBorradoresAtrasados(): int
+    {
+        $atrasados = $this->borradoresAtrasados();
+        if ($atrasados === []) {
+            return 0;
+        }
+
+        $this->transaccion('descartar borradores atrasados', function () use ($atrasados) {
+            foreach ($atrasados as $b) {
+                $this->versionModel->update($b['id'], [
+                    'estado'    => 'descartada',
+                    'resultado' => sprintf('Superada en edición por la v%03d.', $b['ultima']),
+                ]);
+            }
+        });
+
+        return count($atrasados);
     }
 
     /**

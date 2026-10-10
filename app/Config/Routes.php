@@ -840,6 +840,9 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     // version/(:num)/impresa, /validar y /descartar, que ya responden JSON en
     // AJAX.
     $routes->GET('revisar', 'Web::revisarImpresiones');
+    // Única acción propia: barrer los borradores atrasados con el mismo
+    // criterio con el que promocionar ya los descarta solo.
+    $routes->POST('revisar/descartar-atrasados', 'Web::descartarBorradoresAtrasados');
 
     // Existencias (fase 60): inventario de piezas físicas producidas, por
     // variante. El alta automática de lo impreso la dispara el botón de la

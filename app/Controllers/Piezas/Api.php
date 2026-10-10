@@ -648,6 +648,7 @@ class Api extends BaseController
                     'id'     => (int) $ramaNueva['id'],
                     'nombre' => $this->ramaModel->nombre($ramaNueva),
                 ] : null,
+                'superadas_en_edicion' => $version['superadas_en_edicion'],
             ];
         });
     }

@@ -1535,6 +1535,10 @@ def cmd_promocionar(args) -> int:
     print(f"\n  ✓ {sentinel.get('variante', '?')} · {version['etiqueta']} promocionada")
     print(f"    {version['promocionada_en']} — {version['cambio']}")
     print(f"    Rama nueva abierta: {rama_nueva.get('nombre')}\n")
+    superadas = respuesta.get("superadas_en_edicion") or []
+    if superadas:
+        print("  Descartadas por superadas en edición: "
+              + ", ".join(f"v{n:03d}" for n in superadas) + "\n")
     print("  → Cuando la imprimas, anótalo con el estado: impresa / validada / descartada.\n")
     return 0
 

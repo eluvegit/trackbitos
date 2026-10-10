@@ -23,6 +23,35 @@
     al <strong>validar</strong> una, las demás sin juzgar se descartan a la vez.
 </p>
 
+<?php if (session('success')): ?>
+    <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
+<?php endif; ?>
+<?php if (session('error')): ?>
+    <div class="alert alert-warning py-2"><?= esc(session('error')) ?></div>
+<?php endif; ?>
+
+<?php if (!empty($atrasados)): ?>
+    <!-- Borradores que se quedaron atrás antes de que promocionar los
+         descartara solo: mismo criterio (borrador, fuera de placa, con una
+         versión más nueva en su pieza) y mismo motivo. -->
+    <form method="post" action="<?= site_url('piezas/revisar/descartar-atrasados') ?>"
+        class="d-flex align-items-center gap-2 flex-wrap mb-3 p-2 border rounded bg-body-tertiary"
+        onsubmit="return confirm(<?= esc(json_encode(
+            "Se descartarán como \"superada en edición\":\n\n" . implode("\n", $atrasados)
+            . "\n\nLas que están en alguna placa no se tocan. Se puede deshacer una a una.",
+            JSON_UNESCAPED_UNICODE
+        ), 'attr') ?>);">
+        <?= csrf_field() ?>
+        <span class="small">
+            <strong><?= count($atrasados) ?></strong> borrador(es) atrasado(s): tienen una versión más nueva en su
+            pieza y no están en ninguna placa.
+        </span>
+        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">
+            <i class="bi bi-trash3"></i> Descartar atrasados
+        </button>
+    </form>
+<?php endif; ?>
+
 <div id="mensajesRevisar"></div>
 
 <?php
@@ -176,10 +205,9 @@ $titulos = [
                                                         <?= esc(implode(', ', array_map(static fn($p) => $p['nombre'], $f['placas']))) ?>
                                                     </span>
                                                 <?php endif; ?>
-                                                <?php if ($f['estado'] === 'borrador'): ?>
+                                                <?php if ($f['estado'] === 'borrador' && $f['stls'] > 0): ?>
                                                     <span>
-                                                        <i class="bi bi-box"></i>
-                                                        <?= $f['stls'] > 0 ? (int) $f['stls'] . ' STL adjunto(s)' : 'sin STL adjunto' ?>
+                                                        <i class="bi bi-box"></i> <?= (int) $f['stls'] ?> STL adjunto(s)
                                                     </span>
                                                 <?php endif; ?>
                                                 <?php if (!empty($f['medidas'])): ?>
