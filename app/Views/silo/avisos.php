@@ -41,6 +41,9 @@ $historialInfo = [
     'error_ingesta'        => ['Error', 'text-bg-danger'],
     'carpeta_desaparecida' => ['Desaparecida', 'text-bg-warning'],
     'carpeta_saltada'      => ['Ignorada', 'text-bg-dark'],
+    'copia'                => ['Copia a USB', 'text-bg-primary'],
+    'copia_sobrante'       => ['Sobra en la copia', 'text-bg-warning'],
+    'copia_error'          => ['Error de copia', 'text-bg-danger'],
 ];
 $nombreUnidad = static fn ($nivel, $numero) => $nivel !== null ? 'Nivel ' . (int) $nivel . ' #' . (int) $numero : '—';
 ?>

@@ -8,8 +8,9 @@ entrada y decide qué se ingesta. Fase 1 (ingesta del Maestro) con
 detección de cambios N0–N3: el manifiesto de cada unidad vive en su raíz
 (`.silo_manifest.json`) y solo se mandan a la web las carpetas que
 cambiaron; al terminar deja también la réplica del catálogo
-(`.catalogo.sql.gz`) y la copia de las miniaturas (`.silo_proxies/`). Sin
-propagación física todavía (Fase 3) — ver README.md de este directorio.
+(`.catalogo.sql.gz`) y la copia de las miniaturas (`.silo_proxies/`).
+Fase 3 (propagación física a USB de nivel 2/3 y espejos): `--copiar` /
+`--renombrar`, ver más abajo y README.md de este directorio.
 
 Se lanza a mano (`silo` en la terminal, ver perfil de PowerShell) o se deja
 corriendo con `--daemon`: en ambos casos, si la web dejó un escaneo
@@ -926,6 +927,469 @@ def restaurar_catalogo(config: dict, unidad_id: int) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Propagación física (Fase 3, 2026-10-11): `--copiar` y `--renombrar`.
+#
+# La web (SiloCopiaService) dice qué carpetas le tocan a cada unidad de copia
+# — USB de nivel 2 (año) / 3 (categoría) y espejos del Maestro — y con qué
+# nombre. El agente va pidiendo los discos de uno en uno, los reconoce por su
+# `.silo_unit.json` (o, si es un USB nuevo, pregunta cuál es y se lo escribe)
+# y reconcilia el disco contra ese plan POR ID DE NEGOCIO, nunca por el
+# nombre completo:
+#   · Copia 2/3:  "<cubo>/<fecha …> [260015]"  -> el ID va entre corchetes al final.
+#   · Espejo:     "260015 <fecha …>"           -> mismo nombre que el Maestro.
+# Si la carpeta con ese ID está con otro nombre (se renombró en el Maestro)
+# se renombra/mueve en el sitio, sin volver a copiar nada. Dentro de cada
+# carpeta, un fichero renombrado en el Maestro (mismo tamaño y fecha) también
+# se renombra en vez de copiarse. Solo se copia lo que falta o cambió.
+# Lo que sobra (carpetas cuyo ID ya no le toca a esta unidad, ficheros que ya
+# no están en el Maestro) se avisa y solo se borra con --purgar.
+# ---------------------------------------------------------------------------
+
+_RE_ID_COPIA = re.compile(r"\[(\d{5,6})\]\s*$")
+_RE_ID_MAESTRO = re.compile(r"^(\d{5,6})\s")
+CARPETAS_SISTEMA = {"System Volume Information", "$RECYCLE.BIN", "RECYCLER", ".Trashes", ".Spotlight-V100", ".fseventsd"}
+TOLERANCIA_MTIME = 2  # FAT32/exFAT guardan la fecha con 2 s de resolución
+TMP = ".silo_tmp"
+
+
+class Abortar(Exception):
+    pass
+
+
+def id_de_carpeta(nombre: str) -> str | None:
+    m = _RE_ID_COPIA.search(nombre) or _RE_ID_MAESTRO.match(nombre)
+    return m.group(1) if m else None
+
+
+def _ignorable(nombre: str) -> bool:
+    return nombre in CARPETAS_SISTEMA or nombre in FICHEROS_CONTROL or nombre[:1] in "._~$" or nombre.endswith(TMP)
+
+
+def _tamano(n: int | None) -> str:
+    n = n or 0
+    for unidad, factor in (("TB", 1e12), ("GB", 1e9), ("MB", 1e6), ("KB", 1e3)):
+        if n >= factor:
+            return f"{n / factor:.1f} {unidad}"
+    return f"{n} B"
+
+
+def _nombre_unidad(u: dict) -> str:
+    if u.get("espejo_de"):
+        tipo = f"Espejo del Maestro (unidad {u['espejo_de']})"
+    else:
+        tipo = {1: "Maestro", 2: "Nivel 2 (año)", 3: "Nivel 3 (temática)"}.get(u["nivel"], f"Nivel {u['nivel']}")
+    etiqueta = f" «{u['etiqueta']}»" if u.get("etiqueta") else ""
+    cubos = f" [{u['buckets']}]" if u.get("buckets") else ""
+    return f"{tipo} #{u['numero']}{etiqueta}{cubos}"
+
+
+def raices_montadas() -> list[Path]:
+    """Raíz de cada disco montado ahora mismo (letras en Windows; /Volumes, /media… en el resto)."""
+    if os.name == "nt":
+        import ctypes
+        import string
+
+        k32 = ctypes.windll.kernel32
+        k32.SetErrorMode(1)  # sin diálogos de "inserte un disco" en lectores vacíos
+        mascara = k32.GetLogicalDrives()
+        return [Path(f"{l}:\\") for i, l in enumerate(string.ascii_uppercase) if mascara >> i & 1 and os.path.isdir(f"{l}:\\")]
+
+    raices = []
+    for base in ("/Volumes", "/media", f"/media/{os.environ.get('USER', '')}", f"/run/media/{os.environ.get('USER', '')}", "/mnt"):
+        if os.path.isdir(base):
+            raices += [Path(e.path) for e in os.scandir(base) if e.is_dir()]
+    return raices
+
+
+def _describir_disco(raiz: Path) -> str:
+    etiqueta = ""
+    if os.name == "nt":
+        import ctypes
+
+        buf = ctypes.create_unicode_buffer(261)
+        if ctypes.windll.kernel32.GetVolumeInformationW(str(raiz), buf, 261, None, None, None, None, 0):
+            etiqueta = buf.value
+    try:
+        uso = shutil.disk_usage(raiz)
+        espacio = f"{_tamano(uso.total)} ({_tamano(uso.free)} libres)"
+    except OSError:
+        espacio = "?"
+    return f"{raiz}  {('«' + etiqueta + '»  ') if etiqueta else ''}{espacio}"
+
+
+def _unit_json(raiz: Path) -> dict | None:
+    return leer_json(raiz / ".silo_unit.json")
+
+
+def localizar_unidad(config: dict, unidad_id: int) -> Path | None:
+    """Raíz donde está montada la unidad: por su `.silo_unit.json` (o por config.json, para el Maestro)."""
+    for u in config.get("unidades", []):
+        if u.get("unidad_id") == unidad_id and Path(u["ruta"]).is_dir():
+            return Path(u["ruta"])
+    for raiz in raices_montadas():
+        datos = _unit_json(raiz)
+        if datos and datos.get("unidad_id") == unidad_id:
+            return raiz
+    return None
+
+
+def _conectadas_ahora() -> str:
+    partes = []
+    for raiz in raices_montadas():
+        datos = _unit_json(raiz)
+        if datos and datos.get("unidad_id"):
+            partes.append(f"{raiz} = unidad {datos['unidad_id']} (nivel {datos.get('nivel', '?')} #{datos.get('numero', '?')})")
+    return "; ".join(partes) or "ninguna unidad de Silo"
+
+
+def pedir_unidad(config: dict, destino: dict, fichero_control: dict, dry_run: bool) -> Path | None:
+    """
+    Pide al usuario que conecte la unidad y espera a verla. Una unidad que
+    ya pasó por aquí se reconoce sola por su `.silo_unit.json`; un USB nuevo
+    (sin él) se elige de la lista de discos sin identificar y se le escribe.
+    None = saltar esta unidad.
+    """
+    unidad_id = destino["unidad_id"]
+    sistema = Path(os.environ.get("SystemDrive", "C:") + "\\") if os.name == "nt" else Path("/")
+
+    raiz = localizar_unidad(config, unidad_id)
+    while raiz is None:
+        resp = input(f"  Conecta {_nombre_unidad(destino)} y pulsa Enter  (s = saltar esta, q = terminar): ").strip().lower()
+        if resp == "q":
+            raise Abortar()
+        if resp == "s":
+            return None
+        raiz = localizar_unidad(config, unidad_id)
+        if raiz:
+            break
+
+        nuevos = [r for r in raices_montadas() if r != sistema and _unit_json(r) is None]
+        print(f"  No encuentro su .silo_unit.json. Conectadas: {_conectadas_ahora()}.")
+        if not nuevos:
+            print("  Tampoco veo ningún disco sin identificar (¿no ha terminado de montarse?).")
+            continue
+        print("  Discos sin identificar (¿es uno de estos un USB nuevo para esta unidad?):")
+        for i, r in enumerate(nuevos, 1):
+            print(f"    {i}) {_describir_disco(r)}")
+        eleccion = input("  Número del disco (Enter = volver a buscar): ").strip()
+        if not eleccion.isdigit() or not 1 <= int(eleccion) <= len(nuevos):
+            continue
+        candidato = nuevos[int(eleccion) - 1]
+
+        contenido = [e.name for e in os.scandir(candidato) if not _ignorable(e.name)]
+        capacidad = destino.get("capacidad_bytes")
+        total = shutil.disk_usage(candidato).total
+        if capacidad and total < capacidad * 0.9:
+            print(f"  ! Ese disco tiene {_tamano(total)} y la unidad está dada de alta con {_tamano(capacidad)}.")
+        if contenido:
+            print(f"  ! No está vacío ({len(contenido)} entrada(s): {', '.join(contenido[:5])}{'…' if len(contenido) > 5 else ''}).")
+            print("    Lo que no sea una carpeta de Silo se queda tal cual (se avisa como sobrante solo si lleva un ID).")
+        if input(f"  ¿Usar {candidato} como {_nombre_unidad(destino)}? Escribe SI: ").strip().upper() != "SI":
+            continue
+        if dry_run:
+            print("  (--dry-run: no se escribe su .silo_unit.json)")
+        else:
+            escribir_atomico(candidato / ".silo_unit.json", json.dumps(fichero_control, ensure_ascii=False, indent=4).encode("utf-8"))
+        raiz = candidato
+
+    print(f"  Unidad en {raiz}")
+    return raiz
+
+
+def indexar_destino(raiz: Path) -> tuple[dict, list[str]]:
+    """
+    Carpetas de Silo que hay en el disco, por ID: en la raíz (espejo, o una
+    carpeta suelta) o un nivel por debajo (dentro de su cubo de año /
+    categoría). Devuelve ({id: ruta_relativa}, [rutas con ID repetido]).
+    """
+    por_id, repetidas = {}, []
+
+    def anotar(ruta_rel: str, nombre: str) -> bool:
+        id_ = id_de_carpeta(nombre)
+        if id_ is None:
+            return False
+        if id_ in por_id:
+            repetidas.append(ruta_rel)
+        else:
+            por_id[id_] = ruta_rel
+        return True
+
+    for e in sorted(os.scandir(raiz), key=lambda x: x.name.lower()):
+        if not e.is_dir() or _ignorable(e.name):
+            continue
+        if anotar(e.name, e.name):
+            continue
+        for s in sorted(os.scandir(e.path), key=lambda x: x.name.lower()):
+            if s.is_dir() and not _ignorable(s.name):
+                anotar(f"{e.name}/{s.name}", s.name)
+
+    return por_id, repetidas
+
+
+def _mismo_fichero(st: os.stat_result, tamano: int | None, mtime: int | None) -> bool:
+    if tamano is not None and st.st_size != tamano:
+        return False
+    if mtime is None:
+        return True
+    diff = abs(int(st.st_mtime) - mtime)
+    # ±1 h: FAT32/exFAT guardan hora local y el cambio de horario la desplaza.
+    return diff <= TOLERANCIA_MTIME or abs(diff - 3600) <= TOLERANCIA_MTIME
+
+
+def _ficheros_en(carpeta: Path) -> dict:
+    if not carpeta.is_dir():
+        return {}
+    return {f.name: f.stat() for f in os.scandir(carpeta) if f.is_file() and not f.name.endswith(TMP)}
+
+
+def _diff_carpeta(carpeta: Path, esperados: list[dict]) -> tuple[list[dict], list[tuple[str, str]], list[str]]:
+    """(ficheros a copiar, renombrados (viejo, nuevo), sobrantes) dentro de una carpeta."""
+    actuales = _ficheros_en(carpeta)
+    faltan = [f for f in esperados if f["nombre"] not in actuales or not _mismo_fichero(actuales[f["nombre"]], f.get("tamano_bytes"), f.get("mtime"))]
+    nombres = {f["nombre"] for f in esperados}
+    extras = [n for n in actuales if n not in nombres]
+
+    renombres = []
+    for f in list(faltan):
+        if f["nombre"] in actuales:
+            continue
+        pareja = next((n for n in extras if _mismo_fichero(actuales[n], f.get("tamano_bytes"), f.get("mtime"))), None)
+        if pareja and f.get("tamano_bytes"):
+            renombres.append((pareja, f["nombre"]))
+            extras.remove(pareja)
+            faltan.remove(f)
+    return faltan, renombres, extras
+
+
+def _renombrar(origen: Path, destino: Path) -> None:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    if destino.exists() and str(origen).lower() != str(destino).lower():
+        raise OSError(f"ya existe «{destino.name}»")
+    os.rename(origen, destino)
+
+
+def _limpiar_cubos_vacios(raiz: Path) -> None:
+    for e in os.scandir(raiz):
+        if e.is_dir() and not _ignorable(e.name) and id_de_carpeta(e.name) is None:
+            try:
+                os.rmdir(e.path)  # solo si está vacío
+            except OSError:
+                pass
+
+
+def sincronizar_destino(config: dict, destino: dict, raiz: Path, plan: dict, solo_renombrar: bool, purgar: bool, dry_run: bool) -> dict:
+    items = sorted(plan["items"], key=lambda i: i["ruta"].lower())
+    por_id, repetidas = indexar_destino(raiz)
+    esperados = {i["id_negocio"]: i for i in items if i.get("id_negocio")}
+    sobrantes = sorted([ruta for id_, ruta in por_id.items() if id_ not in esperados] + repetidas, key=str.lower)
+    res = {"completas": [], "faltan": [], "sobrantes": [], "errores": [], "renombradas": 0, "copiados_bytes": 0}
+    accion = "(dry-run) " if dry_run else ""
+
+    # 1) Renombrar/mover carpetas que ya están con otro nombre: barato y sin el Maestro.
+    for item in items:
+        actual = por_id.get(item["id_negocio"])
+        if actual is None or actual == item["ruta"]:
+            continue
+        print(f"    {accion}renombrar  {actual}\n               -> {item['ruta']}")
+        if not dry_run:
+            try:
+                _renombrar(raiz / actual, raiz / item["ruta"])
+            except OSError as e:
+                res["errores"].append({"ruta": actual, "error": f"no se pudo renombrar a «{item['ruta']}»: {e}"})
+                continue
+            por_id[item["id_negocio"]] = item["ruta"]
+        res["renombradas"] += 1
+
+    # 2) Qué falta dentro de cada carpeta (solo stat, sin abrir nada).
+    trabajo = []  # (item, carpeta_de_trabajo, faltan, renombres, extras, es_nueva)
+    for item in items:
+        en_disco = por_id.get(item["id_negocio"])  # en dry-run, todavía con el nombre viejo
+        es_nueva = en_disco is None
+        trabajo_dir = Path(str(raiz / item["ruta"]) + TMP) if es_nueva else raiz / en_disco
+        faltan, renombres, extras = _diff_carpeta(trabajo_dir, item["ficheros"])
+        trabajo.append((item, trabajo_dir, faltan, renombres, extras, es_nueva))
+
+    a_copiar = sum((f.get("tamano_bytes") or 0) for _, _, faltan, _, _, _ in trabajo for f in faltan)
+    n_faltan = sum(1 for t in trabajo if t[2] or t[5])
+    print(f"    {len(items)} carpeta(s) en el plan · {res['renombradas']} renombrada(s) · {n_faltan} con ficheros por copiar ({_tamano(a_copiar)}) · {len(sobrantes)} sobrante(s)")
+
+    maestros = {m["unidad_id"]: m for m in plan.get("maestros", [])}
+    raices_maestro = {}
+    sin_espacio = False
+    if not solo_renombrar and a_copiar and not dry_run:
+        libre = shutil.disk_usage(raiz).free
+        if a_copiar > libre:
+            print(f"    ! No cabe: hay que copiar {_tamano(a_copiar)} y quedan {_tamano(libre)} libres. Solo se hacen los renombrados.")
+            sin_espacio = True
+
+    copiado = 0
+    interrumpido = False
+    for item, trabajo_dir, faltan, renombres, extras, es_nueva in trabajo:
+        if interrumpido:
+            res["faltan"].append({"pieza_id": item["pieza_id"], "ruta": item["ruta"], "motivo": "interrumpido"})
+            continue
+        try:
+            for viejo, nuevo in renombres:
+                print(f"    {accion}renombrar fichero  {item['ruta']}/{viejo} -> {nuevo}")
+                if not dry_run:
+                    os.rename(trabajo_dir / viejo, trabajo_dir / nuevo)
+
+            if faltan or es_nueva:
+                motivo = None
+                if solo_renombrar:
+                    motivo = "no está en el disco" if es_nueva else f"{len(faltan)} fichero(s) por copiar"
+                elif sin_espacio:
+                    motivo = "sin espacio en la unidad"
+                elif dry_run:
+                    print(f"    (dry-run) copiar  {item['ruta']}  ({len(faltan)} fichero(s), {_tamano(sum(f.get('tamano_bytes') or 0 for f in faltan))})")
+                    continue
+                if motivo:
+                    res["faltan"].append({"pieza_id": item["pieza_id"], "ruta": item["ruta"], "motivo": motivo})
+                    continue
+
+                origen = item.get("origen")
+                if not origen:
+                    res["errores"].append({"ruta": item["ruta"], "error": "la pieza no tiene Copia 1 (Maestro) de donde copiar"})
+                    continue
+                if origen["unidad_id"] not in raices_maestro:
+                    m = maestros.get(origen["unidad_id"], {"unidad_id": origen["unidad_id"], "nivel": 1, "numero": "?"})
+                    print(f"    Hace falta el Maestro para copiar.")
+                    raices_maestro[origen["unidad_id"]] = pedir_unidad(config, m, {}, dry_run=True)
+                maestro = raices_maestro[origen["unidad_id"]]
+                if maestro is None:
+                    res["faltan"].append({"pieza_id": item["pieza_id"], "ruta": item["ruta"], "motivo": "Maestro no conectado"})
+                    continue
+
+                trabajo_dir.mkdir(parents=True, exist_ok=True)
+                print(f"    copiar  {item['ruta']}  ({len(faltan)} fichero(s))")
+                for f in faltan:
+                    src = maestro / origen["ruta"] / f["nombre"]
+                    if not src.is_file():
+                        raise OSError(f"«{f['nombre']}» no está en el Maestro ({src.parent}); escanea el Maestro (silo) antes de copiar")
+                    if f.get("tamano_bytes") is not None and src.stat().st_size != f["tamano_bytes"]:
+                        raise OSError(f"«{f['nombre']}» cambió en el Maestro desde el último escaneo; escanea el Maestro (silo) antes de copiar")
+                    tmp = trabajo_dir / (f["nombre"] + TMP)
+                    shutil.copy2(src, tmp)
+                    os.replace(tmp, trabajo_dir / f["nombre"])
+                    copiado += f.get("tamano_bytes") or 0
+                    pct = f"{copiado * 100 // a_copiar:3d}%" if a_copiar else ""
+                    print(f"\r      {pct} {_tamano(copiado)} / {_tamano(a_copiar)}  {f['nombre'][:50]:<50}", end="", flush=True)
+                print()
+                if es_nueva:
+                    os.rename(trabajo_dir, raiz / item["ruta"])
+                    trabajo_dir = raiz / item["ruta"]
+
+            for n in extras:
+                if purgar and not dry_run:
+                    (trabajo_dir / n).unlink()
+                    print(f"    borrado fichero sobrante  {item['ruta']}/{n}")
+                else:
+                    res["sobrantes"].append(f"{item['ruta']}/{n}")
+
+            if not dry_run:
+                res["completas"].append({"pieza_id": item["pieza_id"], "ubicacion_id": item.get("ubicacion_id"), "ruta": item["ruta"]})
+        except KeyboardInterrupt:
+            print("\n    Interrumpido: lo copiado a medias se queda en *.silo_tmp y se retoma en la próxima pasada.")
+            res["faltan"].append({"pieza_id": item["pieza_id"], "ruta": item["ruta"], "motivo": "interrumpido"})
+            interrumpido = True
+        except OSError as e:
+            print()
+            res["errores"].append({"ruta": item["ruta"], "error": str(e)})
+            print(f"    ! {item['ruta']}: {e}")
+    res["copiados_bytes"] = copiado
+
+    # 3) Carpetas que ya no le tocan a esta unidad.
+    for ruta in sobrantes:
+        print(f"    sobrante  {ruta}")
+    if sobrantes and purgar and not dry_run and not interrumpido:
+        if input(f"    Escribe BORRAR para borrar {len(sobrantes)} carpeta(s) sobrante(s) de esta unidad: ").strip() == "BORRAR":
+            for ruta in sobrantes:
+                shutil.rmtree(raiz / ruta, ignore_errors=True)
+            sobrantes = []
+    res["sobrantes"] = sobrantes + res["sobrantes"]
+
+    if not dry_run:
+        _limpiar_cubos_vacios(raiz)
+    if interrumpido:
+        res["interrumpido"] = True
+    return res
+
+
+def _manifiesto_destino(raiz: Path, unidad_id: int) -> dict:
+    """Mismo formato que el del Maestro, con la ruta relativa (cubo/carpeta) como clave."""
+    carpetas = {}
+    por_id, _ = indexar_destino(raiz)
+    for ruta in por_id.values():
+        ficheros = [{"nombre": n, "tamano_bytes": st.st_size, "mtime": int(st.st_mtime)} for n, st in _ficheros_en(raiz / ruta).items()]
+        carpetas[ruta] = {"firma": firma_carpeta(ficheros), "ficheros": {f["nombre"]: {"t": f["tamano_bytes"], "m": f["mtime"], "h": None} for f in ficheros}}
+    return {"formato": 1, "unidad_id": unidad_id, "generado_en": time.strftime("%Y-%m-%dT%H:%M:%S"), "carpetas": carpetas}
+
+
+def propagar_a_copias(config: dict, ids: list[int], solo_renombrar: bool, purgar: bool, dry_run: bool) -> int:
+    destinos = api_post(config, "/silo/agente/destinos", {}).get("destinos", [])
+    if ids:
+        destinos = [d for d in destinos if d["unidad_id"] in ids]
+        desconocidos = set(ids) - {d["unidad_id"] for d in destinos}
+        if desconocidos:
+            print(f"! No son unidades de copia (nivel 2/3 o espejo): {sorted(desconocidos)}")
+    else:
+        destinos = [d for d in destinos if not d["pendiente"]["al_dia"]]
+        if solo_renombrar:
+            destinos = [d for d in destinos if d["pendiente"]["renombrar"] or d.get("espejo_de")]
+
+    if not destinos:
+        print("Todas las copias están al día." if not ids else "Nada que hacer.")
+        return 0
+
+    print(f"{'Renombrados' if solo_renombrar else 'Copia'} pendiente en {len(destinos)} unidad(es):")
+    for d in destinos:
+        p = d["pendiente"]
+        detalle = "por detrás del Maestro" if d.get("espejo_de") else f"{p['piezas']} carpeta(s) por copiar ({_tamano(p['bytes'])}), {p['renombrar']} renombrado(s)"
+        print(f"  · {_nombre_unidad(d)} — {'al día' if p['al_dia'] else detalle}")
+
+    errores = 0
+    try:
+        for d in destinos:
+            print(f"\n== {_nombre_unidad(d)} ==")
+            plan = api_post(config, f"/silo/agente/unidades/{d['unidad_id']}/plan-copia", {})
+            raiz = pedir_unidad(config, d, plan["unidad"].get("fichero_control") or {}, dry_run)
+            if raiz is None:
+                print("  Saltada.")
+                continue
+
+            res = sincronizar_destino(config, d, raiz, plan, solo_renombrar, purgar, dry_run)
+            if dry_run:
+                print("  (--dry-run: no se ha tocado el disco ni la web)")
+                continue
+
+            res["hash_origen"] = plan.get("hash_origen")
+            r = api_post(config, f"/silo/agente/unidades/{d['unidad_id']}/resultado-copia", res)
+            errores += len(res["errores"])
+            print(f"  {r.get('resumen')}")
+            for f in res["faltan"][:10]:
+                print(f"    sin completar: {f['ruta']} ({f['motivo']})")
+            if len(res["faltan"]) > 10:
+                print(f"    … y {len(res['faltan']) - 10} más")
+
+            try:
+                manifiesto = _manifiesto_destino(raiz, d["unidad_id"])
+                escribir_atomico(raiz / MANIFIESTO, json.dumps(manifiesto, ensure_ascii=False).encode("utf-8"))
+                sinc = api_post(config, f"/silo/agente/unidades/{d['unidad_id']}/sincronizada", {"hash_indice": hash_indice(manifiesto)})
+                escribir_atomico(raiz / ".silo_unit.json", json.dumps(sinc.get("fichero_control") or {}, ensure_ascii=False, indent=4).encode("utf-8"))
+            except (OSError, RuntimeError) as e:
+                print(f"  ! no se pudo guardar el manifiesto: {e}")
+            guardar_catalogo(config, d["unidad_id"], raiz)
+
+            if res.get("interrumpido"):
+                raise Abortar()
+            print("  Listo: ya puedes desconectarla.")
+    except (Abortar, KeyboardInterrupt):
+        print("\nTerminado a petición. Lo que quede se retoma la próxima vez.")
+
+    return 1 if errores else 0
+
+
 def modo_daemon(config: dict, intervalo: int) -> int:
     """
     Sondeo periódico para el botón "Solicitar escaneo" de /silo/unidades: a
@@ -948,7 +1412,7 @@ def modo_daemon(config: dict, intervalo: int) -> int:
                      if x["unidad_id"] == cfg_unidad.get("unidad_id") or x.get("ruta_montaje") == cfg_unidad["ruta"]),
                     None,
                 )
-                if not u:
+                if not u or u.get("nivel") != 1 or u.get("espejo_de"):
                     continue
 
                 tarea = tarea_pendiente(u, "escaneo_maestro")
@@ -973,9 +1437,16 @@ def main() -> int:
     parser.add_argument("--aplicar", action="store_true", help="con --etiquetar-contenido, renombra de verdad en disco en vez de solo listar la propuesta")
     parser.add_argument("--verificar", action="store_true", help="N3: re-hashea TODOS los ficheros (lento) para detectar corrupción silenciosa; manda todas las carpetas completas")
     parser.add_argument("--restaurar-catalogo", type=int, metavar="UNIDAD_ID", help="sube a la web la réplica del catálogo (.catalogo.sql.gz) de esa unidad y restaura la BD de Silo con ella (pide confirmación)")
+    parser.add_argument("--copiar", nargs="*", type=int, metavar="UNIDAD_ID", help="propagación física: pide uno a uno los USB de nivel 2/3 y espejos con trabajo pendiente (o los indicados) y les copia/renombra lo que les toca, reconciliando por ID")
+    parser.add_argument("--renombrar", nargs="*", type=int, metavar="UNIDAD_ID", help="como --copiar pero solo propaga los cambios de nombre del Maestro (no copia nada, no hace falta el Maestro)")
+    parser.add_argument("--purgar", action="store_true", help="con --copiar/--renombrar: borra de la copia las carpetas y ficheros que ya no le tocan (pide escribir BORRAR)")
     args = parser.parse_args()
 
     config = cargar_config()
+
+    if args.copiar is not None or args.renombrar is not None:
+        solo_renombrar = args.copiar is None
+        return propagar_a_copias(config, args.renombrar if solo_renombrar else args.copiar, solo_renombrar, args.purgar, args.dry_run)
 
     if args.restaurar_catalogo:
         return restaurar_catalogo(config, args.restaurar_catalogo)
@@ -1012,6 +1483,8 @@ def main() -> int:
         if not u:
             print(f"  ! {cfg_unidad['ruta']}: la web no la reconoce (¿falta dar de alta la unidad o su ruta de montaje?), se salta.")
             continue
+        if u.get("nivel") != 1 or u.get("espejo_de"):
+            continue  # unidad de copia (nivel 2/3 o espejo): se rellena con --copiar, no se escanea
         # Pasada manual: escanea siempre, y si de paso hay un escaneo
         # pedido desde la web para esta unidad, lo cierra con este mismo
         # resultado en vez de dejarlo esperando al agente en --daemon.

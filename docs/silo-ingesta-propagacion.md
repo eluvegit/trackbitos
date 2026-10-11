@@ -213,10 +213,8 @@ ficheros de control y su volcado de BD.
 **El nombre de carpeta en Nivel 2/3 puede diferir del Maestro** (petición 2026-09-05): la
 conexión con la pieza se mantiene por el **ID de negocio**, no por igualdad de nombre
 completo — mismo criterio que ya usa `parsearNombreCarpeta()` en Fase 1, pero aquí el ID no
-va primero. Pendiente de aplicar: hoy `SiloPropagacionService::asignarACopia()` solo guarda
-`ruta_relativa` como una **propuesta inicial** (`{bucket}/{nombre_carpeta}`, igual que el
-Maestro) y no la vuelve a tocar — lo de abajo es la convención que usará Fase 3 cuando se
-construya, todavía sin implementar.
+va primero. **Aplicado 2026-10-11** (`SiloService::nombreEnCopia()`, ver "Implementación"
+más abajo).
 
 **Convención de nombre en Nivel 2/3 — fecha primero, ID al final entre corchetes**:
 
@@ -234,6 +232,40 @@ más, para no parecer un campo de personas) — sirve solo para que Fase 3 recon
 al escanear esa unidad, nunca para ordenar. Requiere su propio parseo en Fase 3 (buscar el
 `[AAnnnn]` final con una regexp), independiente de `parsearNombreCarpeta()` (que asume el
 ID en primera posición y es específico del Maestro).
+
+### Implementación (2026-10-11): `silo --copiar` / `silo --renombrar`
+
+- **Destinos**: USB de nivel 2 (año) y 3 (categoría), y **espejos del Maestro** — unidad
+  de nivel 1 con `silo_unidades.espejo_de` apuntando al Maestro que copia (se elige al dar
+  de alta/editar la unidad en `/silo/unidades`). Un espejo lleva los **mismos nombres** que
+  el Maestro, en la raíz, sin cubos; no se escanea ni se ingesta (la API lo rechaza) y no
+  tiene filas propias en `silo_ubicaciones`: está al día si su `hash_origen` es el
+  `hash_indice` actual del Maestro.
+- **Clave = ID de negocio**. El agente escanea el disco destino (raíz y un nivel por debajo
+  para los cubos), saca el ID de cada carpeta (`[AAnnnn]` al final en Copia 2/3, primer
+  token en un espejo) y lo cruza con el plan que le da la web (`SiloCopiaService::plan()`).
+  El Maestro es el único que decide el nombre: si la carpeta con ese ID está con otro nombre
+  o en otro cubo de la misma unidad, se **renombra/mueve en el sitio** sin copiar nada.
+  Dentro de cada carpeta, un fichero que falta pero tiene una pareja sobrante con el mismo
+  tamaño y fecha (renombrado en el Maestro, p. ej. al añadirle el `+`) también se renombra.
+- **Copia**: solo lo que falta o cambió (tamaño, o fecha con ±2 s y ±1 h de tolerancia por
+  FAT/exFAT y el cambio de horario), del Maestro (por `config.json` o por su
+  `.silo_unit.json`) a una carpeta `*.silo_tmp` que se renombra al terminar — una copia
+  interrumpida se retoma. Si el fichero del Maestro no casa con la BD, error: hay que
+  escanear el Maestro antes.
+- **Pedir el USB**: `silo --copiar` lista las unidades con trabajo y las va pidiendo de una
+  en una ("Conecta Nivel 2 #1 «A64-1» [2001-2011] y pulsa Enter"). Las reconoce por su
+  `.silo_unit.json`; un USB nuevo se elige de la lista de discos sin identificar y se le
+  escribe. Al terminar cada una: manifiesto, `.silo_unit.json` y réplica del catálogo.
+- **Sobrantes** (carpetas cuyo ID ya no le toca a esa unidad, ficheros que ya no están en
+  el Maestro): se avisan (`copia_sobrante` en `/silo/avisos`) y solo se borran con
+  `--purgar` (pide escribir BORRAR).
+- **Estado en BD**: `silo_ubicaciones.copiado_en` (NULL = por copiar o a revisar; la
+  ingesta lo vacía cuando cambian los ficheros de la pieza en el Maestro). Mientras una
+  copia no se ha hecho, un renombrado en el Maestro corrige su `ruta_relativa` directamente;
+  ya copiada, encola `renombrar_copia`/`mover_copia`, que el agente cierra al aplicarlo.
+  `aplicarPlanNivel2()` conserva las copias ya hechas que siguen en el mismo USB.
+- API: `POST silo/agente/destinos`, `unidades/{id}/plan-copia`, `unidades/{id}/resultado-copia`.
 
 ## Detección de cambios
 
@@ -551,8 +583,9 @@ websockets.
   `silo --restaurar-catalogo`; aviso `catalogo_mas_nuevo` si un disco va por delante de la
   BD. Copia de proxies en `.silo_proxies/<id_negocio>/` del Maestro (decisión: sí se
   guarda). Avisos en `/silo/avisos`.
-- **No existe todavía**: disparar tareas desde la web con aprobación humana, propagación
-  física (Fase 3).
+- **Propagación física (Fase 3), 2026-10-11**: `silo --copiar` / `--renombrar` / `--purgar`,
+  ver "Fase 3 — Propagación física → Implementación" arriba.
+- **No existe todavía**: disparar tareas desde la web con aprobación humana.
 
 ## Cosas que NO son features (no reintroducir)
 

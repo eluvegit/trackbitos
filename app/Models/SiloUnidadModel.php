@@ -19,8 +19,8 @@ class SiloUnidadModel extends Model
     protected $updatedField  = '';
 
     protected $allowedFields = [
-        'nivel', 'numero', 'etiqueta', 'identificacion_fisica', 'tipo_fisico', 'ruta_montaje', 'agrupador', 'capacidad_bytes',
-        'ultima_sincronizacion', 'hash_indice', 'ultima_verificacion', 'fichero_control',
+        'nivel', 'espejo_de', 'numero', 'etiqueta', 'identificacion_fisica', 'tipo_fisico', 'ruta_montaje', 'agrupador', 'capacidad_bytes',
+        'ultima_sincronizacion', 'hash_indice', 'hash_origen', 'ultima_verificacion', 'fichero_control',
     ];
 
     public function porNivel(int $nivel): array

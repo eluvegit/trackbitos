@@ -981,6 +981,10 @@ $routes->group('silo/agente', ['filter' => 'siloApi', 'namespace' => 'App\Contro
     $routes->POST('catalogo', 'Agente::catalogo');
     $routes->POST('catalogo/restaurar', 'Agente::restaurarCatalogo');
     $routes->POST('tareas/(:num)/resultado', 'Agente::tareaResultado/$1');
+    // Propagación física: silo --copiar / --renombrar (SiloCopiaService).
+    $routes->POST('destinos', 'Agente::destinos');
+    $routes->POST('unidades/(:num)/plan-copia', 'Agente::planCopia/$1');
+    $routes->POST('unidades/(:num)/resultado-copia', 'Agente::resultadoCopia/$1');
 });
 
 // ---- Cuenta: gestión del propio usuario (cambio de contraseña) ----

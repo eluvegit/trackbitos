@@ -11,6 +11,7 @@ use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaVersionModel;
 use App\Models\PiezaRamaModel;
+use App\Models\PiezaRenderModel;
 use App\Models\PiezaSesionModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
@@ -954,7 +955,13 @@ class Api extends BaseController
                 'numero' => (int) $validada['numero'],
             ] : null,
             'version_para_imprimir' => $paraImprimir ? $this->resumenVersion($paraImprimir) : null,
-            'versiones'             => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
+            // Si la versión para imprimir ya tiene algún render: mismo
+            // criterio que la foto del índice y la galería (Web::fotosDe
+            // sobre versionParaImprimir) y que el filtro "Sin imagen". Lo usa
+            // `stl.py sin-imagen` para sacar los STL de las que faltan.
+            'tiene_imagen'          => $paraImprimir !== null
+                && (new PiezaRenderModel())->where('version_id', $paraImprimir['id'])->countAllResults() > 0,
+            'versiones'           => $this->versionModel->where('variante_id', $variante['id'])->countAllResults(),
             // Solo las ramas abiertas a partir de la última versión consolidada:
             // el trabajo de ramas anteriores ya quedó congelado en versiones
             // previas y no cuenta como "lo que hay pendiente de esta".

@@ -122,6 +122,9 @@ class SiloIngestaService
         $cambios = ['nuevos' => [], 'borrados' => [], 'modificados' => []];
         if ($ficheros !== null) {
             $cambios = $this->sincronizarFicheros($piezaId, $ficheros);
+            if ($existente && ($cambios['nuevos'] || $cambios['borrados'] || $cambios['modificados'])) {
+                $this->ubicacionModel->marcarCopiasDesactualizadas($piezaId);
+            }
 
             // Siempre que llegan ficheros (no solo si hubo cambios): una
             // carpeta que se quedó vacía también tiene que reflejarse a 0.

@@ -11,6 +11,7 @@ use App\Models\SiloTareaModel;
 use App\Models\SiloUbicacionModel;
 use App\Models\SiloUnidadModel;
 use App\Services\SiloCatalogoService;
+use App\Services\SiloCopiaService;
 use App\Services\SiloIngestaService;
 use App\Services\SiloService;
 
@@ -22,7 +23,8 @@ use App\Services\SiloService;
  * del primer nivel del Maestro con detección de cambios (el agente lleva el
  * manifiesto N1–N3 en el disco y solo manda las carpetas que cambiaron),
  * proxies (subida y copia en el Maestro) y la réplica del catálogo que el
- * agente deja en cada unidad. No hay todavía propagación física (Fase 3).
+ * agente deja en cada unidad, y la propagación física a las unidades de
+ * copia (destinos/plan-copia/resultado-copia, ver SiloCopiaService).
  */
 class Agente extends BaseController
 {
@@ -110,6 +112,7 @@ class Agente extends BaseController
             $resueltas[] = [
                 'unidad_id'    => (int) $unidad['id'],
                 'nivel'        => (int) $unidad['nivel'],
+                'espejo_de'    => $unidad['espejo_de'] !== null ? (int) $unidad['espejo_de'] : null,
                 'numero'       => (int) $unidad['numero'],
                 'etiqueta'     => $unidad['etiqueta'],
                 'ruta_montaje' => $unidad['ruta_montaje'],
@@ -158,6 +161,11 @@ class Agente extends BaseController
         $unidad   = $unidadId ? $this->unidadModel->find($unidadId) : null;
         if (!$unidad) {
             return $this->response->setJSON(['error' => 'unidad_id no encontrado.'])->setStatusCode(404);
+        }
+        // Solo el Maestro es fuente: escanear un espejo o un USB de copia
+        // como si lo fuera borraría del catálogo todo lo que no tenga.
+        if ((int) $unidad['nivel'] !== 1 || $unidad['espejo_de'] !== null) {
+            return $this->response->setJSON(['error' => 'Esta unidad es una copia (espejo o nivel 2/3): no se escanea, se rellena con silo --copiar.'])->setStatusCode(422);
         }
 
         $listaNegra = (array) ($body['lista_negra'] ?? []);
@@ -464,6 +472,40 @@ class Agente extends BaseController
         }, $this->proxyModel->deLaPieza($id));
 
         return $this->response->setJSON(['proxies' => $proxies]);
+    }
+
+    /**
+     * Unidades que reciben copias (USB de nivel 2/3 y espejos del Maestro)
+     * con lo que les falta — `silo --copiar` / `--renombrar` las va pidiendo
+     * una a una a partir de esta lista.
+     */
+    public function destinos()
+    {
+        return $this->response->setJSON(['destinos' => (new SiloCopiaService())->destinos()]);
+    }
+
+    /** Lo que tiene que quedar en el disco de esa unidad (ver SiloCopiaService::plan()). */
+    public function planCopia(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        $copia  = new SiloCopiaService();
+        if (!$unidad || !$copia->esDestino($unidad)) {
+            return $this->response->setJSON(['error' => 'No es una unidad de copia (nivel 2/3 o espejo).'])->setStatusCode(404);
+        }
+
+        return $this->response->setJSON($copia->plan($unidad));
+    }
+
+    /** El agente terminó con esa unidad: qué quedó completo, qué no y qué sobra. */
+    public function resultadoCopia(int $id)
+    {
+        $unidad = $this->unidadModel->find($id);
+        $copia  = new SiloCopiaService();
+        if (!$unidad || !$copia->esDestino($unidad)) {
+            return $this->response->setJSON(['error' => 'No es una unidad de copia (nivel 2/3 o espejo).'])->setStatusCode(404);
+        }
+
+        return $this->response->setJSON($copia->registrarResultado($unidad, $this->cuerpoJson()));
     }
 
     /** "+2 nuevos · −1 borrado · ~3 modificados", con los nombres (recortado). */

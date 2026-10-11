@@ -400,6 +400,23 @@ class SiloService
     }
 
     /**
+     * Nombre de la carpeta en una Copia 2/3 (docs/silo-ingesta-propagacion.md
+     * § "Convención de nombre en Nivel 2/3"): el ID del Maestro pasa al
+     * final entre corchetes para que el explorador ordene por fecha —
+     * `260015 20030603 Recuerdos, …` → `20030603 Recuerdos, … [260015]`. El
+     * agente reconcilia por ese `[id]`, nunca por el nombre completo.
+     */
+    public function nombreEnCopia(string $nombreCarpeta): string
+    {
+        $nombreCarpeta = trim($nombreCarpeta);
+        if (!preg_match('/^(\S+)\s+(.+)$/', $nombreCarpeta, $m)) {
+            return '[' . $nombreCarpeta . ']';
+        }
+
+        return $m[2] . ' [' . $m[1] . ']';
+    }
+
+    /**
      * Contrato de "campos fijos" del nombre de carpeta (plan Silo, contrato
      * de entrada): dado el resto de la lista de comas tras la categoría
      * (`elementos` de parsearNombreCarpeta(), posiciones ya conservadas

@@ -28,7 +28,8 @@ script no clasifica nada, solo lista disco y reporta.
   `php spark silo:restaurar <ruta>` en el servidor. Si un disco trae una
   réplica más nueva que la BD viva, el panel de avisos de la web lo dice.
 - Cola de tareas real solo para `escaneo_maestro` (ver "Lanzarlo desde la
-  web"). Sin propagación física (Fase 3).
+  web").
+- **Propagación física** a USB de nivel 2/3 y espejos: ver "Copias a USB".
 
 ## Uso
 
@@ -81,7 +82,23 @@ dos formas:
 En ambos casos la tarjeta de la unidad en `/silo/unidades` refleja el
 estado (esperando agente / escaneado hace X / error).
 
-## Siguiente paso
+## Copias a USB (Fase 3)
 
-Propagación física (Fase 3): que el agente cree/renombre/mueva las Copias
-2/3 en disco a partir de las tareas de `/silo/tareas`. Ver el doc de diseño.
+- `silo --copiar` — lista las unidades de copia con trabajo pendiente (USB de
+  nivel 2/3 y espejos del Maestro) y las **pide de una en una**: conecta el
+  USB que te dice, pulsa Enter, y le copia/renombra lo que le toca. Un USB
+  que ya pasó por aquí se reconoce solo (`.silo_unit.json`); uno nuevo se
+  elige de la lista de discos sin identificar. Hace falta el Maestro
+  conectado para copiar (si no está, también lo pide).
+- `silo --copiar 55 56` — solo esas unidades (aunque estén al día: sirve de
+  verificación rápida por `stat`).
+- `silo --renombrar` — solo propaga los **cambios de nombre** del Maestro
+  (carpetas y ficheros), sin copiar nada ni necesitar el Maestro.
+- `--purgar` — además borra de la copia lo que ya no le toca (pide BORRAR).
+- `--dry-run` — enseña lo que haría sin tocar nada.
+
+La clave es el **ID de negocio**: en Copia 2/3 las carpetas se llaman
+`<cubo>/<fecha …> [260015]`, en un espejo igual que en el Maestro. Escanea
+el Maestro (`silo`) antes de copiar para que la web tenga sus nombres y
+ficheros al día. Las unidades de copia no hace falta ponerlas en
+`config.json` (si están, el escaneo normal las salta).

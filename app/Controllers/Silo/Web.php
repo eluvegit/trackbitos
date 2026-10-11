@@ -13,6 +13,7 @@ use App\Models\SiloUbicacionModel;
 use App\Models\SiloUnidadBucketModel;
 use App\Models\SiloUnidadModel;
 use App\Models\SiloVocabularioModel;
+use App\Services\SiloCopiaService;
 use App\Services\SiloPropagacionService;
 use App\Services\SiloService;
 use CodeIgniter\Exceptions\PageNotFoundException;
@@ -178,7 +179,7 @@ class Web extends BaseController
     {
         $tipo  = (string) $this->request->getGet('tipo');
         $tipos = ['escaneo', 'ficheros_cambiados', 'id_duplicado', 'error_ingesta', 'hash_distinto', 'carpeta_desaparecida',
-            'carpeta_saltada', 'catalogo_mas_nuevo', 'catalogo_restaurado'];
+            'carpeta_saltada', 'catalogo_mas_nuevo', 'catalogo_restaurado', 'copia', 'copia_sobrante', 'copia_error'];
         $tipo  = in_array($tipo, $tipos, true) ? $tipo : null;
 
         $porUnidad = $this->eventoModel->ultimoEscaneoPorUnidad();
@@ -565,9 +566,19 @@ class Web extends BaseController
 
         // Estado del último escaneo pedido a cada unidad Maestro (nivel 1):
         // el resto de niveles no se escanean (no son Maestro, plan Silo §2).
+        // Las de copia (nivel 2/3 y espejos) enseñan en su lugar lo que les
+        // falta por recibir con `silo --copiar`.
         $tareasPorUnidad = [];
-        foreach ($porNivel[1] as $u) {
-            $tareasPorUnidad[$u['id']] = $this->tareaModel->ultimaDeUnidad((int) $u['id'], 'escaneo_maestro');
+        $copiaPorUnidad  = [];
+        $copia           = new SiloCopiaService();
+        foreach ($porNivel as $unidadesNivel) {
+            foreach ($unidadesNivel as $u) {
+                if ($copia->esDestino($u)) {
+                    $copiaPorUnidad[$u['id']] = $copia->pendiente($u);
+                } else {
+                    $tareasPorUnidad[$u['id']] = $this->tareaModel->ultimaDeUnidad((int) $u['id'], 'escaneo_maestro');
+                }
+            }
         }
 
         // Lo que ya está en el Maestro pero aún no cabe en ninguna unidad de
@@ -584,6 +595,7 @@ class Web extends BaseController
             'usadoPorUnidad'    => $usadoPorUnidad,
             'excedePorUnidad'   => $excedePorUnidad,
             'tareasPorUnidad'   => $tareasPorUnidad,
+            'copiaPorUnidad'    => $copiaPorUnidad,
             'pendientePorCopia' => $pendientePorCopia,
             'bucketsPorUnidad'  => $this->bucketsPorNivel($porNivel),
         ]);
@@ -603,8 +615,8 @@ class Web extends BaseController
             throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
         }
 
-        if ((int) $unidad['nivel'] !== 1) {
-            return redirect()->to(site_url('silo/unidades'))->with('error', 'Solo las unidades Maestro (nivel 1) se escanean.');
+        if ((int) $unidad['nivel'] !== 1 || $unidad['espejo_de'] !== null) {
+            return redirect()->to(site_url('silo/unidades'))->with('error', 'Solo las unidades Maestro (nivel 1, no espejos) se escanean.');
         }
 
         if ($this->tareaModel->pendienteDeUnidad($id, 'escaneo_maestro')) {
@@ -676,6 +688,9 @@ class Web extends BaseController
             $datos['ruta_montaje'],
             $datos['tipo_fisico']
         );
+        if ($datos['espejo_de'] !== null) {
+            $this->unidadModel->update($unidad['id'], ['espejo_de' => $datos['espejo_de']]);
+        }
 
         return redirect()->to(site_url('silo/unidades'))->with('success', "Unidad creada: nivel {$unidad['nivel']} #{$unidad['numero']}.");
     }
@@ -693,7 +708,7 @@ class Web extends BaseController
             throw PageNotFoundException::forPageNotFound('Unidad no encontrada');
         }
 
-        $datos = $this->datosUnidadDesdePost((int) $unidad['nivel']);
+        $datos = $this->datosUnidadDesdePost((int) $unidad['nivel'], $id);
         $datos['identificacion_fisica'] = trim((string) $this->request->getPost('identificacion_fisica')) ?: null;
 
         $this->unidadModel->update($id, $datos);
@@ -707,10 +722,20 @@ class Web extends BaseController
      * recién nacida) y actualizarUnidad() la sobrescribe después de
      * llamar a este método.
      *
-     * @return array{etiqueta: ?string, identificacion_fisica: null, tipo_fisico: ?string, agrupador: ?string, capacidad_bytes: ?int, ruta_montaje: ?string}
+     * @return array{etiqueta: ?string, identificacion_fisica: null, tipo_fisico: ?string, agrupador: ?string, capacidad_bytes: ?int, ruta_montaje: ?string, espejo_de: ?int}
      */
-    private function datosUnidadDesdePost(int $nivel): array
+    private function datosUnidadDesdePost(int $nivel, ?int $unidadId = null): array
     {
+        // Espejo: solo en nivel 1, y de un Maestro de verdad (no de otro
+        // espejo ni de sí misma).
+        $espejoDe = (int) $this->request->getPost('espejo_de') ?: null;
+        if ($espejoDe !== null) {
+            $maestro = $this->unidadModel->find($espejoDe);
+            if ($nivel !== 1 || !$maestro || (int) $maestro['nivel'] !== 1 || $maestro['espejo_de'] !== null || $espejoDe === $unidadId) {
+                $espejoDe = null;
+            }
+        }
+
         $etiqueta = trim((string) $this->request->getPost('etiqueta'));
 
         $tipoFisico = (string) $this->request->getPost('tipo_fisico');
@@ -744,6 +769,7 @@ class Web extends BaseController
             'agrupador'              => $nivel !== 1 && $agrupador !== '' ? $agrupador : null,
             'capacidad_bytes'        => $capacidadBytes,
             'ruta_montaje'           => $rutaMontaje !== '' ? $rutaMontaje : null,
+            'espejo_de'              => $espejoDe,
         ];
     }
 

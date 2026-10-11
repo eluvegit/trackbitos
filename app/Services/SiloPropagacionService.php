@@ -73,10 +73,16 @@ class SiloPropagacionService
         }
 
         $bucketAnio = $pieza['fecha'] ? substr($pieza['fecha'], 0, 4) : 'sin_fecha';
-        $this->asignarACopia($pieza, 2, $bucketAnio, "{$bucketAnio}/{$pieza['nombre_carpeta']}");
+        $this->asignarACopia($pieza, 2, $bucketAnio, $this->rutaEnCopia($bucketAnio, $pieza));
 
         $categoriaTexto = $this->categoriaBucket($pieza);
-        $this->asignarACopia($pieza, 3, $categoriaTexto, "{$categoriaTexto}/{$pieza['nombre_carpeta']}");
+        $this->asignarACopia($pieza, 3, $categoriaTexto, $this->rutaEnCopia($categoriaTexto, $pieza));
+    }
+
+    /** `{cubo}/{fecha … [id]}` — ver SiloService::nombreEnCopia(). */
+    private function rutaEnCopia(string $bucket, array $pieza): string
+    {
+        return $bucket . '/' . $this->silo->nombreEnCopia((string) $pieza['nombre_carpeta']);
     }
 
     /** Slug de la categoría de la pieza = bucket de Copia 3 ("sin_clasificar" si no tiene). */
@@ -151,6 +157,28 @@ class SiloPropagacionService
         }
 
         $bucketActual = strstr((string) $ubicacion['ruta_relativa'], '/', true);
+
+        // Aún no está físicamente en ningún USB (o hay que volver a
+        // copiarla): no hay nada que renombrar en disco, la ubicación se
+        // corrige directamente y el próximo `silo --copiar` ya la deja
+        // con el nombre bueno.
+        if ($ubicacion['copiado_en'] === null) {
+            if ($pendiente) {
+                $this->tareaModel->update($pendiente['id'], ['estado' => 'cancelada']);
+            }
+            if ($bucketActual === $bucket) {
+                $this->ubicacionModel->update($ubicacion['id'], ['ruta_relativa' => $rutaEsperada]);
+
+                return;
+            }
+            $destino = $this->unidadDestino((int) $ubicacion['copia'], $bucket, (int) ($pieza['tamano_bytes'] ?? 0));
+            $destino
+                ? $this->ubicacionModel->update($ubicacion['id'], ['unidad_id' => $destino['id'], 'ruta_relativa' => $rutaEsperada])
+                : $this->ubicacionModel->delete($ubicacion['id']); // sin sitio en su cubo nuevo: pendiente de almacenar
+
+            return;
+        }
+
         if ($bucketActual === $bucket) {
             $tipo      = 'renombrar_copia';
             $destinoId = (int) $ubicacion['unidad_id'];
@@ -214,7 +242,7 @@ class SiloPropagacionService
                 'pieza_id'      => $pieza['id'],
                 'unidad_id'     => $unidad['id'],
                 'copia'         => 3,
-                'ruta_relativa' => "{$bucket}/{$pieza['nombre_carpeta']}",
+                'ruta_relativa' => $this->rutaEnCopia($bucket, $pieza),
             ]);
             $colocadas++;
         }
@@ -321,7 +349,17 @@ class SiloPropagacionService
     {
         $plan = $this->calcularPlanNivel2();
 
-        $this->ubicacionModel->where('copia', 2)->delete();
+        // Las copias que ya están físicamente en un USB y siguen tocándole
+        // a ese mismo USB se conservan (con su `copiado_en`): rehacerlas
+        // obligaría a copiarlas otra vez. Las que cambian de USB se
+        // recrean pendientes; en el USB viejo quedan como sobrantes que
+        // `silo --copiar` avisa (y borra con --purgar).
+        $previas = [];
+        foreach ($this->ubicacionModel->where('copia', 2)->findAll() as $u) {
+            $previas[(int) $u['pieza_id']] = $u;
+        }
+        $conservadas = [];
+
         foreach ($this->unidadModel->where('nivel', 2)->findAll() as $u) {
             $this->unidadBucketModel->where('unidad_id', $u['id'])->delete();
         }
@@ -339,13 +377,29 @@ class SiloPropagacionService
                     : $this->piezaModel->where('YEAR(fecha) = ' . (int) $anio)->findAll();
 
                 foreach ($piezas as $pieza) {
+                    $ruta   = $this->rutaEnCopia($anio, $pieza);
+                    $previa = $previas[(int) $pieza['id']] ?? null;
+                    if ($previa && (int) $previa['unidad_id'] === (int) $run['unidad_id']) {
+                        $conservadas[(int) $previa['id']] = true;
+                        if ($previa['copiado_en'] === null && $previa['ruta_relativa'] !== $ruta) {
+                            $this->ubicacionModel->update($previa['id'], ['ruta_relativa' => $ruta]);
+                        }
+                        continue;
+                    }
+
                     $this->ubicacionModel->insert([
                         'pieza_id'      => $pieza['id'],
                         'unidad_id'     => $run['unidad_id'],
                         'copia'         => 2,
-                        'ruta_relativa' => "{$anio}/{$pieza['nombre_carpeta']}",
+                        'ruta_relativa' => $ruta,
                     ]);
                 }
+            }
+        }
+
+        foreach ($previas as $previa) {
+            if (!isset($conservadas[(int) $previa['id']])) {
+                $this->ubicacionModel->delete($previa['id']);
             }
         }
 

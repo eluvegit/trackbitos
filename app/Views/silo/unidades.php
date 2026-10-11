@@ -231,6 +231,7 @@
                  data-identificacion-fisica="<?= esc($u['identificacion_fisica'] ?? '', 'attr') ?>"
                  data-ruta-montaje="<?= esc($u['ruta_montaje'] ?? '', 'attr') ?>"
                  data-agrupador="<?= esc($u['agrupador'] ?? '', 'attr') ?>"
+                 data-espejo-de="<?= (int) ($u['espejo_de'] ?? 0) ?: '' ?>"
                  data-capacidad-valor="<?= esc($capForm['valor'], 'attr') ?>"
                  data-capacidad-unidad="<?= esc($capForm['unidad'], 'attr') ?>"
                  data-piezas="<?= (int) ($piezasPorUnidad[$u['id']] ?? 0) ?>"
@@ -276,6 +277,9 @@
                 <?php if ($u['ruta_montaje']): ?>
                     <div class="silo-tarjeta-ruta"><?= esc($u['ruta_montaje']) ?></div>
                 <?php endif; ?>
+                <?php if ($u['espejo_de'] !== null): ?>
+                    <div class="silo-tarjeta-detalle"><i class="bi bi-files"></i> espejo de la unidad #<?= (int) $u['espejo_de'] ?></div>
+                <?php endif; ?>
                 <?php if ($detalle !== ''): ?>
                     <div class="silo-tarjeta-detalle"><?= esc($detalle) ?></div>
                 <?php endif; ?>
@@ -284,7 +288,27 @@
                         <i class="bi bi-exclamation-triangle-fill"></i> excede su capacidad
                     </div>
                 <?php endif; ?>
-                <?php if ($nivel === 1): $tarea = $tareasPorUnidad[$u['id']] ?? null; ?>
+                <?php $copiaU = $copiaPorUnidad[$u['id']] ?? null; ?>
+                <?php if ($copiaU !== null): ?>
+                    <?php if ($copiaU['al_dia']): ?>
+                        <div class="silo-tarjeta-escaneo text-success"
+                             title="<?= $u['ultima_sincronizacion'] ? 'Última pasada de silo --copiar: ' . esc(silo_fecha_humana($u['ultima_sincronizacion']), 'attr') : '' ?>">
+                            <i class="bi bi-check-circle"></i> copia al día
+                        </div>
+                    <?php elseif ($u['espejo_de'] !== null): ?>
+                        <div class="silo-tarjeta-escaneo text-warning" title="El Maestro cambió desde la última vez: silo --copiar <?= (int) $u['id'] ?>">
+                            <i class="bi bi-hourglass-split"></i> por detrás del Maestro
+                        </div>
+                    <?php else: ?>
+                        <div class="silo-tarjeta-escaneo text-warning" title="Se hace con silo --copiar <?= (int) $u['id'] ?> (o --renombrar para solo los nombres)">
+                            <i class="bi bi-hourglass-split"></i>
+                            <?php if ($copiaU['piezas']): ?><?= (int) $copiaU['piezas'] ?> por copiar (<?= esc(silo_tamano_corto($copiaU['bytes'])) ?>)<?php endif; ?>
+                            <?php if ($copiaU['piezas'] && $copiaU['renombrar']): ?>·<?php endif; ?>
+                            <?php if ($copiaU['renombrar']): ?><?= (int) $copiaU['renombrar'] ?> por renombrar<?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($nivel === 1 && $u['espejo_de'] === null): $tarea = $tareasPorUnidad[$u['id']] ?? null; ?>
                     <?php if ($tarea && in_array($tarea['estado'], ['pendiente', 'en_curso'], true)): ?>
                         <div class="silo-tarjeta-escaneo text-warning">
                             <i class="bi bi-hourglass-split"></i> esperando agente
@@ -375,6 +399,19 @@
                         </div>
                     </div>
 
+                    <div class="mb-3" id="mu-grupo-espejo">
+                        <label class="form-label small text-muted mb-1">Espejo de</label>
+                        <select name="espejo_de" id="mu-espejo" class="form-select">
+                            <option value="">— Ninguno: es un Maestro (se escanea) —</option>
+                            <?php foreach ($porNivel[1] as $m): ?>
+                                <?php if ($m['espejo_de'] === null): ?>
+                                    <option value="<?= (int) $m['id'] ?>">#<?= (int) $m['id'] ?> <?= esc($m['etiqueta'] ?: 'Maestro #' . $m['numero']) ?></option>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Un espejo es una copia exacta del Maestro (mismos nombres). No se escanea: se rellena con <code>silo --copiar</code>.</div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label small text-muted mb-1">Ruta de montaje en esta máquina</label>
                         <input type="text" name="ruta_montaje" id="mu-ruta" class="form-control font-monospace" placeholder="ej. D:\Maestro">
@@ -431,10 +468,12 @@
             capacidadUnidad: document.getElementById('mu-capacidad-unidad'),
             agrupador: document.getElementById('mu-agrupador'),
             ruta: document.getElementById('mu-ruta'),
+            espejo: document.getElementById('mu-espejo'),
             identificacion: document.getElementById('mu-identificacion'),
             nivel: document.getElementById('mu-nivel'),
         };
         const grupoAgrupador = document.getElementById('mu-grupo-agrupador');
+        const grupoEspejo = document.getElementById('mu-grupo-espejo');
         const grupoIdentificacion = document.getElementById('mu-grupo-identificacion');
         const grupoEscaneo = document.getElementById('mu-grupo-escaneo');
         const accionesSecundarias = document.getElementById('mu-acciones-secundarias');
@@ -448,6 +487,7 @@
         function limpiarFormulario() {
             form.reset();
             document.querySelectorAll('#formUnidad input[name="tipo_fisico"]').forEach(r => r.checked = false);
+            Array.from(campos.espejo.options).forEach(o => o.disabled = false);
         }
 
         window.siloAbrirAlta = function (nivel) {
@@ -456,6 +496,7 @@
             form.action = "<?= site_url('silo/unidades/crear') ?>";
             campos.nivel.value = nivel;
             grupoAgrupador.style.display = nivel === 1 ? 'none' : '';
+            grupoEspejo.style.display = nivel === 1 ? '' : 'none';
             grupoIdentificacion.style.display = 'none'; // sin disco delante todavía, no tiene sentido pedirla al alta
             grupoEscaneo.style.display = 'none'; // unidad todavía sin crear, nada que escanear
             accionesSecundarias.style.display = 'none';
@@ -473,6 +514,8 @@
             campos.capacidadUnidad.value = d.capacidadUnidad || 'gb';
             campos.agrupador.value = d.agrupador || '';
             campos.ruta.value = d.rutaMontaje || '';
+            campos.espejo.value = d.espejoDe || '';
+            Array.from(campos.espejo.options).forEach(o => o.disabled = o.value !== '' && o.value === d.id);
             campos.identificacion.value = d.identificacionFisica || '';
             if (d.tipoFisico) {
                 const radio = document.getElementById('mu-tipo-' + d.tipoFisico);
@@ -480,8 +523,9 @@
             }
 
             grupoAgrupador.style.display = d.nivel === '1' ? 'none' : '';
+            grupoEspejo.style.display = d.nivel === '1' ? '' : 'none';
             grupoIdentificacion.style.display = '';
-            grupoEscaneo.style.display = d.nivel === '1' ? '' : 'none'; // solo el Maestro se escanea (plan Silo §2)
+            grupoEscaneo.style.display = d.nivel === '1' && !d.espejoDe ? '' : 'none'; // solo el Maestro se escanea (plan Silo §2), no sus espejos
             accionesSecundarias.style.display = '';
 
             btnDescargar.href = "<?= site_url('silo/unidades') ?>/" + d.id + "/fichero-control";

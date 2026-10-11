@@ -13,7 +13,7 @@ class SiloUbicacionModel extends Model
     protected $createdField  = 'fecha_registro';
     protected $updatedField  = '';
 
-    protected $allowedFields = ['pieza_id', 'unidad_id', 'copia', 'ruta_relativa'];
+    protected $allowedFields = ['pieza_id', 'unidad_id', 'copia', 'ruta_relativa', 'copiado_en'];
 
     protected $validationRules = [
         'pieza_id'      => 'required|is_natural_no_zero',
@@ -82,5 +82,33 @@ class SiloUbicacionModel extends Model
         $fila = $this->db->query($sql, [$copia])->getRowArray();
 
         return ['bytes' => (int) ($fila['bytes'] ?? 0), 'piezas' => (int) ($fila['piezas'] ?? 0)];
+    }
+
+    /**
+     * El Maestro cambió los ficheros de la pieza: sus Copias 2/3 ya
+     * copiadas dejan de estar al día y vuelven a contar como pendientes
+     * para `silo --copiar` (que solo trae lo que difiere).
+     */
+    public function marcarCopiasDesactualizadas(int $piezaId): void
+    {
+        $this->where('pieza_id', $piezaId)->whereIn('copia', [2, 3])->where('copiado_en IS NOT NULL')
+            ->set('copiado_en', null)->update();
+    }
+
+    /**
+     * Lo que le falta por recibir físicamente a una unidad de Copia 2/3:
+     * carpetas sin copiar (o con ficheros cambiados en el Maestro).
+     *
+     * @return array{piezas: int, bytes: int}
+     */
+    public function pendienteDeCopiarEnUnidad(int $unidadId): array
+    {
+        $fila = $this->select('COUNT(*) AS piezas, COALESCE(SUM(silo_piezas.tamano_bytes), 0) AS bytes')
+            ->join('silo_piezas', 'silo_piezas.id = silo_ubicaciones.pieza_id')
+            ->where('silo_ubicaciones.unidad_id', $unidadId)
+            ->where('silo_ubicaciones.copiado_en', null)
+            ->first();
+
+        return ['piezas' => (int) ($fila['piezas'] ?? 0), 'bytes' => (int) ($fila['bytes'] ?? 0)];
     }
 }

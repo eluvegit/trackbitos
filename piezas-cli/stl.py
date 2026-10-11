@@ -784,6 +784,110 @@ def cmd_placa(args) -> int:
 
 
 # --------------------------------------------------------------------------
+# sin-imagen
+# --------------------------------------------------------------------------
+
+NOMBRE_CARPETA_SIN_IMAGEN = "sin-imagen"
+
+
+def cmd_sin_imagen(args) -> int:
+    """
+    Los STL de todas las piezas que todavía no tienen foto (ningún render
+    en su versión para imprimir — el filtro "Sin imagen" del índice), en
+    una carpeta plana `sin-imagen/` lista para sacarles la foto. Antes había
+    que montar una placa con ellas solo para poder bajar los STL, y luego
+    borrarla: esto no crea nada en el servidor.
+
+    Misma caché que `placa`/`generar` (_asegurar_stl_en_biblioteca): lo ya
+    exportado con el mismo hash no vuelve a pasar por Blender. La carpeta
+    se rehace entera en cada vuelta — la anterior va a la papelera local —
+    para que no queden las que ya tienen foto de una pasada vieja.
+    """
+    config = cargar_config()
+    stl_cfg = cargar_stl_config()
+    blender_exe = exigir_blender(stl_cfg)
+    base_dir = Path(args.dir).resolve()
+    backup_dir = resolver_backup_dir(stl_cfg, base_dir)
+    escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
+
+    variantes = api_get(config, "/variantes").get("variantes", [])
+    if variantes and "tiene_imagen" not in variantes[0]:
+        raise RuntimeError(
+            "el servidor no dice qué piezas tienen imagen (falta 'tiene_imagen' en /variantes): "
+            "sube el Api.php nuevo a producción."
+        )
+
+    pendientes = [v for v in variantes if v.get("version_para_imprimir") and not v.get("tiene_imagen")]
+    if not pendientes:
+        print("\n  · todas las piezas con versión para imprimir ya tienen imagen.\n")
+        return 0
+
+    nodos = [{
+        "variante_id": v["id"],
+        "familia": v.get("familia_nombre"),
+        "variante": v["nombre"],
+        "categoria": v.get("categoria_nombre"),
+        "version": v["version_para_imprimir"],
+    } for v in pendientes]
+    hojas, avisos = _expandir_placa(config, nodos, como_anotado=False)
+
+    print(f"\n  {len(pendientes)} pieza(s) sin imagen ({len(hojas)} con geometría propia, compuestas ya expandidas).\n")
+
+    carpeta_salida = base_dir / NOMBRE_CARPETA_SIN_IMAGEN
+    purgar_papelera_entregas(base_dir)
+    if carpeta_salida.is_dir():
+        papelera = base_dir / NOMBRE_PAPELERA_ENTREGAS
+        papelera.mkdir(exist_ok=True)
+        shutil.move(str(carpeta_salida), str(papelera / f"{datetime.now():%Y%m%d-%H%M%S}-{NOMBRE_CARPETA_SIN_IMAGEN}"))
+    carpeta_salida.mkdir(parents=True)
+
+    faltantes, copiados, lista = [], 0, []
+    total = len(hojas)
+    for i, hoja in enumerate(hojas, 1):
+        etiqueta = f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}"
+        print(f"  [{i}/{total}] {etiqueta}...", end="", flush=True)
+
+        try:
+            carpeta_cache, resultado = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            faltantes.append(f"{etiqueta}: {e}")
+            print(f" ERROR: {e}")
+            continue
+
+        stls = sorted(carpeta_cache.glob("*.stl"))
+        if not stls:
+            faltantes.append(f"{etiqueta}: sin ninguna collection \"STL\" en el .blend.")
+            print(" sin STL")
+            continue
+
+        print(f" {len(stls)} STL" + (" (de la biblioteca)" if resultado == "omitida" else ""))
+        for stl in stls:
+            nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
+            shutil.copy2(stl, carpeta_salida / nombre_final)
+            copiados += 1
+            lista.append(nombre_final)
+
+    faltantes.extend(avisos)
+
+    (carpeta_salida / "sin-imagen.txt").write_text(
+        f"Piezas sin imagen — generado {datetime.now().isoformat(timespec='seconds')}\n\n"
+        + "\n".join(nombre_completo(v) + f" v{v['version_para_imprimir']['numero']:03d}" for v in pendientes)
+        + ("\n\nCon problema:\n" + "\n".join(faltantes) if faltantes else "") + "\n",
+        encoding="utf-8",
+    )
+
+    print(f"\n  STL de las piezas sin imagen en {carpeta_salida}\n")
+    print(f"  ✓ {copiados} STL")
+    if faltantes:
+        print(f"  ⚠ {len(faltantes)} con problema:")
+        for f in faltantes:
+            print(f"      - {f.splitlines()[0]}")
+    print()
+
+    return 0 if not faltantes else 1
+
+
+# --------------------------------------------------------------------------
 # revisar
 # --------------------------------------------------------------------------
 
@@ -965,6 +1069,12 @@ def main(argv: Optional[list] = None) -> int:
         help="Usa la versión anotada de cada componente en vez de la vigente, para reproducir la placa bit a bit.",
     )
     p.set_defaults(func=cmd_placa)
+
+    p = con_dir(subs.add_parser(
+        "sin-imagen", aliases=["si"],
+        help="STL de todas las piezas sin foto, en una carpeta plana — sin crear ninguna placa. (alias: si)",
+    ))
+    p.set_defaults(func=cmd_sin_imagen)
 
     p = con_dir(subs.add_parser(
         "revisar", aliases=["r"],
