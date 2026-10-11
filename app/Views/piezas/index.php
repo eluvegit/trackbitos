@@ -62,6 +62,19 @@
     #galeriaPiezas .galeria-tarjeta .badge {
         padding-inline: .45em;
     }
+    /* Nombre en hasta tres líneas, con alto fijo de tres: todas las tarjetas
+       miden lo mismo aunque el nombre ocupe una (mismo truco que
+       .nombre-pieza-galeria en galeria.php). Si aun así no cabe, el title
+       de la tarjeta lo da entero. */
+    #galeriaPiezas .galeria-tarjeta .nombre-tarjeta {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.2em;
+        height: 3.6em;
+        overflow-wrap: anywhere;
+    }
 
     /* En móvil el buscador se queda fijo abajo de la pantalla, siempre a
        mano para saltar a una pieza concreta sin volver arriba. En
@@ -532,7 +545,7 @@ $filtros = [
     // Marca de posición: aquí va el chip "Imprimir", que se pinta aparte.
     '@imprimir'   => null,
     'sin-validar' => ['Sin validar', 'bi-printer-fill', 'primary', 'Impresas y sin decir todavía si sirven'],
-    'no-sirve'    => ['No sirven', 'bi-x-circle-fill', 'danger', 'La última versión se descartó'],
+    'no-sirve'    => ['No sirven', 'bi-x-circle-fill', 'danger', 'La última versión se descartó y no hay ninguna validada'],
     'modificando' => ['Modificando', 'bi-pencil', 'secondary', 'Con trabajo encima todavía sin promocionar'],
     // Secondary y no dark: sobre el tema oscuro, btn-outline-dark pinta negro
     // sobre negro y del chip solo se veía flotando su contador.
@@ -561,7 +574,9 @@ $tokensDe = static function (array $v): array {
     if ($estado === 'impresa') {
         $tokens[] = 'sin-validar';
     }
-    if ($estado === 'descartada') {
+    // Con una validada detrás la pieza sí sirve, aunque la última versión
+    // (un intento de mejora) se descartara — mismo criterio que el badge.
+    if ($estado === 'descartada' && !$v['validada']) {
         $tokens[] = 'no-sirve';
     }
     if (!empty($v['trabajo_en_curso'])) {
@@ -610,7 +625,7 @@ $tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, 
         . ' data-buscar="' . $buscar . '" data-tokens="' . implode(' ', $tokensDe($v)) . '">'
         . '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '" class="d-block text-decoration-none text-body">'
         . $colFoto($v, 132)
-        . '<div class="small fw-medium mt-1 text-truncate">' . $nombre . '</div>'
+        . '<div class="small fw-medium mt-1 nombre-tarjeta" title="' . $nombre . '">' . $nombre . '</div>'
         . '</a>'
         . '<div class="d-flex flex-wrap justify-content-center align-items-center gap-1 mt-1">'
         . $tira . ' ' . $botonTareas($v, $familia, $conVariante)

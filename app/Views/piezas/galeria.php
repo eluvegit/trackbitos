@@ -276,7 +276,7 @@ foreach ($piezasTodas as $p) {
                                     <?php endif; ?>
                                 </div>
                                 <div class="card-body p-2">
-                                    <div class="small fw-semibold nombre-pieza-galeria">
+                                    <div class="small fw-semibold nombre-pieza-galeria" title="<?= esc($nombrePiezaPlano, 'attr') ?>">
                                         <a href="<?= site_url('piezas/variante/' . (int) $variante['id']) ?>"
                                             class="text-decoration-none text-body"><?= esc($p['familiaNombre']) ?><?php
                                             if ($apellido !== null): ?><span class="text-muted fw-normal"> - <?= esc($apellido) ?></span><?php

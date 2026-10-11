@@ -819,6 +819,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('pedido/(:num)/cargar-placa', 'Web::pedidoCargarACarrito/$1');
     $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');
     $routes->POST('pedido/(:num)/linea', 'PedidosController::agregarLinea/$1');
+    $routes->POST('pedido/(:num)/copiar-lineas', 'PedidosController::copiarLineas/$1');
+    $routes->POST('pedido/(:num)/reordenar-lineas', 'PedidosController::reordenarLineas/$1');
     $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
     $routes->POST('pedido-linea/(:num)/hecha', 'PedidosController::marcarHecha/$1');
     $routes->POST('pedido-linea/(:num)/editar', 'PedidosController::editarLinea/$1');

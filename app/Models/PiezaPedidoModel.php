@@ -28,7 +28,8 @@ class PiezaPedidoModel extends Model
             return null;
         }
 
-        $pedido['lineas'] = (new PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)->findAll();
+        $pedido['lineas'] = (new PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
 
         return $pedido;
     }

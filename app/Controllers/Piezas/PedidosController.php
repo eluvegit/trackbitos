@@ -150,11 +150,149 @@ class PedidosController extends BaseController
         // eso lo sigue juzgando quien mira la placa, no el sistema.
         $placas = (new \App\Models\PiezaPlacaModel())->where('pedido_id', $id)->orderBy('creado_en', 'DESC')->findAll();
 
+        // Destinos posibles para "copiar líneas a…": solo pedidos aún
+        // abiertos — copiar a uno hecho o cancelado no tiene sentido.
+        $pedidosAbiertos = (new PiezaPedidoModel())
+            ->whereIn('estado', ['nuevo', 'en_produccion'])
+            ->where('id !=', $id)
+            ->orderBy('creado_en', 'DESC')
+            ->findAll(30);
+
         return view('piezas/pedidos/ver', [
-            'pedido'  => $pedido,
-            'estados' => PiezaPedidoModel::ESTADOS,
-            'placas'  => $placas,
+            'pedido'          => $pedido,
+            'estados'         => PiezaPedidoModel::ESTADOS,
+            'placas'          => $placas,
+            'pedidosAbiertos' => $pedidosAbiertos,
+            'sugerencias'     => $this->sugerenciasParaPedido(array_column($pedido['lineas'], 'variante_id')),
         ]);
+    }
+
+    /**
+     * Piezas en marcha que aún no están en el pedido, para añadirlas de un
+     * toque desde la barra de abajo: las "Modificando" (sesión abierta o
+     * subida sin promocionar) y las "Sin empezar" (sin ninguna versión ni
+     * trabajo encima) — mismos criterios que los filtros del índice
+     * (Web::resumen), con el mismo PiezaSyncService para que no discrepen.
+     * Fuera las borradas y las de la nevera.
+     *
+     * @param array<int|string|null> $yaEnPedido variante_id de las líneas actuales
+     * @return list<array{variante_id: int, texto: string, foto: ?string, tipo: string}>
+     */
+    private function sugerenciasParaPedido(array $yaEnPedido): array
+    {
+        $excluir = array_flip(array_map('intval', array_filter($yaEnPedido)));
+
+        $variantes = (new PiezaVarianteModel())
+            ->select('piezas_variantes.*, piezas_familias.nombre AS familia_nombre')
+            ->join('piezas_familias', 'piezas_familias.id = piezas_variantes.familia_id')
+            ->where('piezas_variantes.borrado_en', null)
+            ->where('piezas_variantes.congelado_en', null)
+            ->where('piezas_familias.borrado_en', null)
+            ->findAll();
+
+        $conVersiones = array_flip(array_map('intval', array_column(
+            \Config\Database::connect()->table('piezas_versiones')->select('variante_id')->distinct()->get()->getResultArray(),
+            'variante_id'
+        )));
+
+        $sync = new \App\Services\PiezaSyncService();
+        $sugerencias = [];
+        foreach ($variantes as $variante) {
+            $id = (int) $variante['id'];
+            if (isset($excluir[$id])) {
+                continue;
+            }
+
+            $estado = $sync->estadoDeSincronizacion($id);
+            $modificando = $estado['sesion_abierta'] !== null || $estado['ultima_subida'] !== null;
+            if (!$modificando && isset($conVersiones[$id])) {
+                continue;
+            }
+
+            $sugerencias[] = [
+                'variante_id' => $id,
+                'texto'       => $variante['familia_nombre'] . ' · ' . $variante['nombre'],
+                'foto'        => $this->miniaturaDeVariante($variante),
+                'tipo'        => $modificando ? 'modificando' : 'sin-empezar',
+            ];
+        }
+
+        // Primero las que tienen trabajo encima (lo más probable de imprimir
+        // pronto), luego las sin empezar; dentro, por nombre.
+        usort($sugerencias, static fn($a, $b) => [$a['tipo'] !== 'modificando', $a['texto']] <=> [$b['tipo'] !== 'modificando', $b['texto']]);
+
+        return $sugerencias;
+    }
+
+    /**
+     * Copia las líneas marcadas a otro pedido (uno abierto o uno nuevo que
+     * nace aquí) — p. ej. lo que se quedó pendiente de una impresión o
+     * necesita rediseño, para seguirlo como tarea aparte. El pedido de
+     * origen no se toca. Cada copia lleva solo lo que faltaba (cantidad -
+     * completada, mínimo 1) y nace sin completar ni marcar como hecha.
+     */
+    public function copiarLineas(int $pedidoId)
+    {
+        $pedidoModel = new PiezaPedidoModel();
+        if (!$pedidoModel->find($pedidoId)) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+        }
+
+        $ids = array_filter(array_map('intval', (array) $this->request->getPost('lineas')));
+        $lineas = $ids
+            ? (new PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)->whereIn('id', $ids)
+                ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll()
+            : [];
+        if (!$lineas) {
+            return redirect()->back()->with('error', 'Marca al menos una línea para copiar.');
+        }
+
+        $destino = (string) $this->request->getPost('destino');
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        if ($destino === 'nuevo') {
+            $destinoId = $pedidoModel->insert([
+                'origen'    => 'manual',
+                'estado'    => 'nuevo',
+                'notas'     => 'Copiado del pedido #' . $pedidoId,
+                'creado_en' => date('Y-m-d H:i:s'),
+            ]);
+        } else {
+            $destinoId = (int) $destino;
+            $pedidoDestino = $pedidoModel->find($destinoId);
+            if (!$pedidoDestino || $destinoId === $pedidoId) {
+                $db->transRollback();
+
+                return redirect()->back()->with('error', 'Elige un pedido de destino válido.');
+            }
+        }
+
+        $lineaModel = new PiezaPedidoLineaModel();
+        $orden = $lineaModel->siguienteOrden($destinoId);
+        foreach ($lineas as $linea) {
+            $lineaModel->insert([
+                'pedido_id'           => $destinoId,
+                'orden'               => $orden++,
+                'variante_id'         => $linea['variante_id'],
+                'sku'                 => $linea['sku'],
+                'descripcion_libre'   => $linea['descripcion_libre'],
+                'cantidad'            => max(1, (int) $linea['cantidad'] - (int) $linea['cantidad_completada']),
+                'cantidad_completada' => 0,
+                'hecha'               => 0,
+                'notas'               => $linea['notas'],
+            ]);
+        }
+
+        $db->transComplete();
+        if (!$db->transStatus()) {
+            return redirect()->back()->with('error', 'No se pudieron copiar las líneas.');
+        }
+
+        $n = count($lineas);
+
+        return redirect()->to('/piezas/pedido/' . $destinoId)
+            ->with('success', $n . ($n === 1 ? ' línea copiada' : ' líneas copiadas') . ' desde el pedido #' . $pedidoId . '.');
     }
 
     /** Borrado duro: las líneas se van solas por el ON DELETE CASCADE. */
@@ -197,6 +335,7 @@ class PedidosController extends BaseController
         $lineaModel = new PiezaPedidoLineaModel();
         $lineaId = $lineaModel->insert([
             'pedido_id'         => $pedidoId,
+            'orden'             => $lineaModel->siguienteOrden($pedidoId),
             'variante_id'       => $variante['id'] ?? null,
             'sku'               => $variante['sku'] ?? null,
             'descripcion_libre' => $variante ? null : $descripcionLibre,
@@ -216,6 +355,26 @@ class PedidosController extends BaseController
         }
 
         return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', 'Línea añadida.');
+    }
+
+    /**
+     * Nuevo orden de las líneas tras arrastrarlas en la ficha: llega la
+     * lista de ids tal como quedan de arriba abajo. Solo se tocan las que
+     * son de este pedido; siempre por AJAX.
+     */
+    public function reordenarLineas(int $pedidoId)
+    {
+        if (!(new PiezaPedidoModel())->find($pedidoId)) {
+            return $this->fallo('Pedido no encontrado.', '/piezas/pedidos');
+        }
+
+        $ids = array_values(array_filter(array_map('intval', (array) $this->request->getPost('orden'))));
+        $builder = (new PiezaPedidoLineaModel())->builder();
+        foreach ($ids as $posicion => $lineaId) {
+            $builder->where('pedido_id', $pedidoId)->where('id', $lineaId)->update(['orden' => $posicion + 1]);
+        }
+
+        return $this->response->setJSON(['ok' => true]);
     }
 
     /** Cambia producto (o descripción libre), cantidad y notas de una línea existente. */
