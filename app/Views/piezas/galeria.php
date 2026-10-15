@@ -337,11 +337,15 @@ foreach ($piezasTodas as $p) {
             </div>
             <div class="modal-body">
                 <label class="form-label small mb-1" for="campoNombrePlaca">Nombre de la placa</label>
-                <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
-                    id="campoNombrePlaca" autocomplete="off"
-                    placeholder="Placa <?= esc(date('d/m/Y H:i'), 'attr') ?>">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text text-body-secondary" title="Se pone solo: el número de la placa">#nº</span>
+                    <input type="text" name="nombre" class="form-control form-control-sm" maxlength="140"
+                        id="campoNombrePlaca" autocomplete="off"
+                        placeholder="Placa <?= esc(date('d/m/Y H:i'), 'attr') ?>">
+                </div>
                 <div class="form-text">
-                    Para reconocerla en el histórico. Sugerido a partir de lo que lleva — cámbialo si quieres.
+                    Para reconocerla en el histórico. Delante se le pone su número (<code>#48 …</code>).
+                    Sugerido a partir de lo que lleva — cámbialo si quieres.
                 </div>
             </div>
             <div class="modal-footer py-2">

@@ -35,8 +35,14 @@ class PedidosController extends BaseController
 
             $fotos = [];
             $totalPiezas = 0;
+            // Mismas cifras que la cabecera de la ficha (refrescar() en
+            // pedidos/ver): unidades hechas y líneas listas para imprimir.
+            $piezasHechas = 0;
+            $lineasListas = 0;
             foreach ($lineas as $linea) {
                 $totalPiezas += (int) $linea['cantidad'];
+                $piezasHechas += (int) $linea['cantidad_completada'];
+                $lineasListas += (int) $linea['hecha'] ? 1 : 0;
                 if (!$linea['variante_id']) {
                     continue;
                 }
@@ -48,6 +54,8 @@ class PedidosController extends BaseController
 
             $pedido['numLineas'] = count($lineas);
             $pedido['totalPiezas'] = $totalPiezas;
+            $pedido['piezasHechas'] = $piezasHechas;
+            $pedido['lineasListas'] = $lineasListas;
             $pedido['fotos'] = $fotos;
         }
         unset($pedido);
@@ -233,6 +241,22 @@ class PedidosController extends BaseController
      */
     public function copiarLineas(int $pedidoId)
     {
+        return $this->trasladarLineas($pedidoId, false);
+    }
+
+    /**
+     * Como copiarLineas, pero las líneas marcadas se MUEVEN: salen de este
+     * pedido y pasan al destino tal cual (cantidad, completado y hecha
+     * incluidos), conservando su id — así nada que las referencie se rompe.
+     */
+    public function moverLineas(int $pedidoId)
+    {
+        return $this->trasladarLineas($pedidoId, true);
+    }
+
+    private function trasladarLineas(int $pedidoId, bool $mover)
+    {
+        $verbo       = $mover ? 'mover' : 'copiar';
         $pedidoModel = new PiezaPedidoModel();
         if (!$pedidoModel->find($pedidoId)) {
             return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
@@ -244,7 +268,7 @@ class PedidosController extends BaseController
                 ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll()
             : [];
         if (!$lineas) {
-            return redirect()->back()->with('error', 'Marca al menos una línea para copiar.');
+            return redirect()->back()->with('error', 'Marca al menos una línea para ' . $verbo . '.');
         }
 
         $destino = (string) $this->request->getPost('destino');
@@ -255,7 +279,7 @@ class PedidosController extends BaseController
             $destinoId = $pedidoModel->insert([
                 'origen'    => 'manual',
                 'estado'    => 'nuevo',
-                'notas'     => 'Copiado del pedido #' . $pedidoId,
+                'notas'     => ($mover ? 'Movido' : 'Copiado') . ' del pedido #' . $pedidoId,
                 'creado_en' => date('Y-m-d H:i:s'),
             ]);
         } else {
@@ -271,6 +295,10 @@ class PedidosController extends BaseController
         $lineaModel = new PiezaPedidoLineaModel();
         $orden = $lineaModel->siguienteOrden($destinoId);
         foreach ($lineas as $linea) {
+            if ($mover) {
+                $lineaModel->update($linea['id'], ['pedido_id' => $destinoId, 'orden' => $orden++]);
+                continue;
+            }
             $lineaModel->insert([
                 'pedido_id'           => $destinoId,
                 'orden'               => $orden++,
@@ -286,13 +314,14 @@ class PedidosController extends BaseController
 
         $db->transComplete();
         if (!$db->transStatus()) {
-            return redirect()->back()->with('error', 'No se pudieron copiar las líneas.');
+            return redirect()->back()->with('error', 'No se pudieron ' . $verbo . ' las líneas.');
         }
 
         $n = count($lineas);
 
         return redirect()->to('/piezas/pedido/' . $destinoId)
-            ->with('success', $n . ($n === 1 ? ' línea copiada' : ' líneas copiadas') . ' desde el pedido #' . $pedidoId . '.');
+            ->with('success', $n . ($n === 1 ? ' línea ' : ' líneas ') . ($mover ? 'movida' : 'copiada') . ($n === 1 ? '' : 's')
+                . ' desde el pedido #' . $pedidoId . '.');
     }
 
     /** Borrado duro: las líneas se van solas por el ON DELETE CASCADE. */

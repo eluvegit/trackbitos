@@ -20,7 +20,8 @@
     }
     .pedido-migas { font-size: .75rem; }
     .pedido-migas a { color: var(--bs-secondary-color); text-decoration: none; }
-    .pedido-titulo { font-size: 1.35rem; font-weight: 700; letter-spacing: -.01em; }
+    .pedido-nombre { font-size: 1.75rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; overflow-wrap: anywhere; }
+    .pedido-nombre-vacio { font-size: 1.1rem; font-weight: 500; color: var(--bs-tertiary-color); }
     .chip-estado {
         border: 0; border-radius: 999px; padding: .2rem .65rem; font-size: .8rem; font-weight: 600;
         display: inline-flex; align-items: center; gap: .3rem;
@@ -159,7 +160,7 @@
     </nav>
 
     <div class="d-flex align-items-center gap-2 mt-1">
-        <h1 class="pedido-titulo mb-0">Pedido #<?= (int) $pedido['id'] ?></h1>
+        <span class="text-body-secondary small text-nowrap">Pedido #<?= (int) $pedido['id'] ?></span>
 
         <?php // Estado detrás de un toque: se mira mucho, se cambia poco. ?>
         <div class="dropdown">
@@ -201,6 +202,16 @@
         </div>
     </div>
 
+    <?php // La referencia hace de nombre: es lo que dice de qué va el pedido.
+          // Sin ella, un toque para ponérsela (mismo modal que las notas). ?>
+    <?php if (!empty($pedido['referencia_externa'])): ?>
+        <h1 class="pedido-nombre mt-1 mb-0" role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" title="Editar referencia"><?= esc($pedido['referencia_externa']) ?></h1>
+    <?php else: ?>
+        <h1 class="pedido-nombre pedido-nombre-vacio mt-1 mb-0" role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido">
+            <i class="bi bi-pencil"></i> Ponle referencia
+        </h1>
+    <?php endif; ?>
+
     <?php // Rellenado por resumen() en el script, a partir de las propias líneas. ?>
     <div class="progress pedido-progreso mt-2"><div class="progress-bar bg-success" data-resumen-barra style="width: 0%"></div></div>
     <div class="pedido-cifras d-flex gap-3 mt-1">
@@ -229,9 +240,6 @@
 <div class="small text-body-secondary mt-2 d-flex flex-wrap gap-x-3 column-gap-3">
     <span class="text-capitalize"><i class="bi bi-box-arrow-in-down"></i> <?= esc($pedido['origen']) ?></span>
     <span><i class="bi bi-calendar3"></i> <?= $creado ? esc(date('d/m/Y H:i', $creado)) : '' ?></span>
-    <?php if ($pedido['referencia_externa']): ?>
-        <span class="font-monospace"><i class="bi bi-hash"></i><?= esc($pedido['referencia_externa']) ?></span>
-    <?php endif; ?>
 </div>
 <?php if ($pedido['notas']): ?>
     <div class="small mt-1" style="white-space: pre-line;" role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" title="Editar notas">
@@ -302,7 +310,7 @@
     <form id="form-copiar-lineas" method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/copiar-lineas') ?>"
         class="d-none align-items-center gap-2 flex-wrap" data-barra-copiar>
         <?= csrf_field() ?>
-        <span class="small text-nowrap"><strong data-contador-copiar>0</strong> sel. · copiar a</span>
+        <span class="small text-nowrap"><strong data-contador-copiar>0</strong> sel. · a</span>
         <select name="destino" class="form-select form-select-sm w-auto flex-grow-1" style="max-width: 16rem;">
             <option value="nuevo">un pedido nuevo</option>
             <?php foreach ($pedidosAbiertos as $abierto): ?>
@@ -314,6 +322,11 @@
         <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3" data-boton-copiar disabled
             title="Copia solo lo que falta (cantidad − completado); este pedido no cambia">
             <i class="bi bi-files"></i> Copiar
+        </button>
+        <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-boton-mover disabled
+            formaction="<?= site_url('piezas/pedido/' . $pedido['id'] . '/mover-lineas') ?>"
+            title="Saca las líneas de este pedido y las pasa al destino tal cual (con lo ya completado)">
+            <i class="bi bi-arrow-right-square"></i> Mover
         </button>
         <button type="button" class="btn btn-sm btn-link text-body-secondary px-1" data-seleccionar-todas>Todas</button>
     </form>
@@ -398,7 +411,7 @@
                 <label class="form-label small">Referencia (opcional)</label>
                 <input type="text" name="referencia_externa" class="form-control mb-2"
                     value="<?= esc($pedido['referencia_externa'] ?? '', 'attr') ?>"
-                    placeholder="nº de pedido, si viene de fuera" maxlength="50">
+                    placeholder="de qué va (o nº de pedido, si viene de fuera)" maxlength="50">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control" rows="3"><?= esc($pedido['notas'] ?? '') ?></textarea>
             </div>
@@ -499,6 +512,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var n = lista.querySelectorAll('[data-seleccion-copiar]:checked').length;
         document.querySelector('[data-contador-copiar]').textContent = n;
         document.querySelector('[data-boton-copiar]').disabled = n === 0;
+        document.querySelector('[data-boton-mover]').disabled = n === 0;
     }
     document.querySelector('[data-seleccionar-todas]').addEventListener('click', function () {
         var casillas = lista.querySelectorAll('[data-seleccion-copiar]');

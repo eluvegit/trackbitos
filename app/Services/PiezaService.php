@@ -791,6 +791,177 @@ class PiezaService
     }
 
     /**
+     * Variantes vivas de la misma pieza que descienden de esta (derivadas de
+     * alguna de sus versiones, o de una derivada de ella, y así hacia abajo).
+     * Son las candidatas a irse con ella al independizarla.
+     *
+     * @return array<int, array> id => variante
+     */
+    public function descendientesEnLaPieza(int $varianteId): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return [];
+        }
+
+        $hermanas = $this->varianteModel
+            ->where('familia_id', $variante['familia_id'])
+            ->where('borrado_en', null)
+            ->where('id !=', $varianteId)
+            ->where('origen_version_id IS NOT NULL')
+            ->findAll();
+
+        $descendientes = [];
+        $frontera      = [$varianteId];
+        while ($frontera !== []) {
+            $versiones = array_map('intval', array_column(
+                $this->versionModel->select('id')->whereIn('variante_id', $frontera)->findAll(), 'id'
+            ));
+            $frontera = [];
+            foreach ($hermanas as $h) {
+                if (!isset($descendientes[(int) $h['id']]) && in_array((int) $h['origen_version_id'], $versiones, true)) {
+                    $descendientes[(int) $h['id']] = $h;
+                    $frontera[] = (int) $h['id'];
+                }
+            }
+        }
+
+        return $descendientes;
+    }
+
+    /**
+     * "Independizar": saca una variante de su pieza a una pieza nueva, para
+     * que tenga entidad propia y derivar de ella un conjunto aparte. No copia
+     * nada: la variante se MUEVE (cambia familia_id) y se lleva su historial
+     * entero — versiones, ramas, SKU, existencias van por variante_id. Sigue
+     * anotada como derivada de la versión de la que salió (origen_version_id
+     * no se toca). En la pieza nueva pasa a llamarse "base".
+     *
+     * Con ella se van las descendientes que se elijan ($arrastrarIds) y sus
+     * referencias. Las referencias antiguas compartidas por toda la pieza
+     * (sin variante_id) se COPIAN, fichero incluido: la pieza vieja las
+     * sigue necesitando y purgar una no debe romper la otra.
+     *
+     * @param int[] $arrastrarIds descendientes que se van con ella
+     * @return array{familia: array, variante: array, arrastradas: int}
+     */
+    public function independizarVariante(int $varianteId, string $nombrePieza, ?int $categoriaId, array $arrastrarIds = []): array
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            throw new RuntimeException("Variante {$varianteId} no encontrada.");
+        }
+        if ($variante['borrado_en'] !== null) {
+            throw new RuntimeException('Esa variante está en la papelera.');
+        }
+        $familiaVieja = $this->familiaModel->find($variante['familia_id']);
+
+        $nombrePieza = trim($nombrePieza);
+        if ($nombrePieza === '') {
+            throw new RuntimeException('La pieza nueva necesita un nombre.');
+        }
+        if ($categoriaId !== null && !$this->categoriaModel->find($categoriaId)) {
+            throw new RuntimeException("Categoría {$categoriaId} no encontrada.");
+        }
+
+        // Solo descendientes de verdad: un id cualquiera del formulario no
+        // puede colar una variante ajena a esta línea.
+        $descendientes = $this->descendientesEnLaPieza($varianteId);
+        $arrastradas   = array_values(array_intersect_key(
+            $descendientes, array_flip(array_map('intval', $arrastrarIds))
+        ));
+        $moviendo = array_merge([$variante], $arrastradas);
+        $idsMoviendo = array_map(static fn($v) => (int) $v['id'], $moviendo);
+
+        $quedan = $this->varianteModel
+            ->where('familia_id', $variante['familia_id'])
+            ->where('borrado_en', null)
+            ->whereNotIn('id', $idsMoviendo)
+            ->countAllResults();
+        if ($quedan === 0) {
+            throw new RuntimeException(
+                'La pieza se quedaría sin ninguna variante: esto ya es, en la práctica, una pieza independiente. '
+                . 'Si lo que quieres es otro nombre, renombra la pieza.'
+            );
+        }
+
+        foreach ($moviendo as $v) {
+            if ($this->sesionModel->hayAbiertaParaVariante((int) $v['id'])) {
+                throw new RuntimeException(
+                    "La variante \"{$v['nombre']}\" tiene una sesión de trabajo sin cerrar. Súbela o ciérrala antes de independizar."
+                );
+            }
+            if ((int) $v['id'] !== $varianteId && mb_strtolower($v['nombre']) === mb_strtolower(self::VARIANTE_BASE)) {
+                throw new RuntimeException(
+                    "La descendiente \"{$v['nombre']}\" chocaría con la \"base\" de la pieza nueva. Renómbrala antes."
+                );
+            }
+        }
+
+        $referenciaModel = new PiezaReferenciaModel();
+        $compartidas     = $referenciaModel
+            ->where('familia_id', $variante['familia_id'])
+            ->where('variante_id', null)
+            ->findAll();
+
+        $almacen = new PiezaAlmacen();
+        $copiados = [];
+
+        try {
+            $familiaId = $this->transaccion('independizar la variante', function () use (
+                $nombrePieza, $categoriaId, $familiaVieja, $varianteId, $idsMoviendo,
+                $referenciaModel, $compartidas, $almacen, &$copiados
+            ) {
+                $familiaId = $this->insertarOFallar($this->familiaModel, [
+                    'nombre'             => $nombrePieza,
+                    'categoria_id'       => $categoriaId,
+                    'notas'              => $familiaVieja['notas'] ?? null,
+                    'visible_sterclicks' => $familiaVieja['visible_sterclicks'] ?? 0,
+                ]);
+
+                $db = db_connect();
+                $db->table('piezas_variantes')->whereIn('id', $idsMoviendo)->update(['familia_id' => $familiaId]);
+                $this->varianteModel->update($varianteId, ['nombre' => self::VARIANTE_BASE]);
+
+                $db->table('piezas_referencias')->whereIn('variante_id', $idsMoviendo)->update(['familia_id' => $familiaId]);
+
+                foreach ($compartidas as $ref) {
+                    $nuevaId = $this->insertarOFallar($referenciaModel, [
+                        'familia_id'   => $familiaId,
+                        'variante_id'  => null,
+                        'ruta_imagen'  => null,
+                        'hash_imagen'  => $ref['hash_imagen'],
+                        'tamano_bytes' => $ref['tamano_bytes'],
+                        'notas'        => $ref['notas'],
+                        'subida_en'    => $ref['subida_en'],
+                    ]);
+                    if (!empty($ref['ruta_imagen']) && $almacen->existe($ref['ruta_imagen'])) {
+                        $extension = pathinfo($ref['ruta_imagen'], PATHINFO_EXTENSION);
+                        $ruta      = $almacen->rutaReferencia($familiaId, $nuevaId, $extension);
+                        $almacen->copiar($ref['ruta_imagen'], $ruta);
+                        $copiados[] = $ruta;
+                        $referenciaModel->update($nuevaId, ['ruta_imagen' => $ruta]);
+                    }
+                }
+
+                return $familiaId;
+            });
+        } catch (Throwable $e) {
+            // La transacción deshace las filas, no los ficheros copiados.
+            foreach ($copiados as $ruta) {
+                $almacen->descartarEscritura($ruta);
+            }
+            throw $e;
+        }
+
+        return [
+            'familia'     => $this->familiaModel->find($familiaId),
+            'variante'    => $this->varianteModel->find($varianteId),
+            'arrastradas' => count($arrastradas),
+        ];
+    }
+
+    /**
      * "Compuesta de": anota que la versión de OTRA pieza estaba presente en
      * la escena de esta variante (un torso modelado con el brazo ya hecho
      * al lado, un "Mini playmobil" que es varias piezas de cuerpo juntas).

@@ -1319,6 +1319,11 @@ class Web extends BaseController
                 ->orderBy('p.creado_en', 'DESC')
                 ->get()->getResultArray(),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
+            // Para el modal "Independizar": a dónde puede ir y qué se lleva.
+            'categorias'    => $this->categoriaModel->ordenadas(),
+            'descendientes' => $this->servicio->descendientesEnLaPieza($id),
+            'hermanasVivas' => $this->varianteModel->where('familia_id', $variante['familia_id'])
+                ->where('borrado_en', null)->where('id !=', $id)->countAllResults(),
             'carrito'   => $this->carritoActual(),
             // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban
             // en la escena de esta variante. Puramente informativo.
@@ -1838,6 +1843,19 @@ class Web extends BaseController
      * de la web esa distinción dejó de significar nada real — ver la fusión
      * de los cajones Guardada/Lista en placas().
      */
+    /**
+     * El nombre de una placa empieza siempre por su id ("#48 Brazos, torso"),
+     * para encontrarla y citarla sin ambigüedad. Si ya traía un "#N" delante
+     * (lo escribió a mano, o viene de la placa de la que se reparte) se
+     * sustituye por el bueno en vez de acumular dos.
+     */
+    private function nombreDePlaca(int $id, string $nombre): string
+    {
+        $nombre = trim(preg_replace('/^#\d+\s*/', '', trim($nombre)));
+
+        return mb_substr('#' . $id . ($nombre === '' ? '' : ' ' . $nombre), 0, 150);
+    }
+
     private function registrarPlacaDesdeCarrito(array $carrito, ?string $nombre = null): array
     {
         $nombre = trim((string) $nombre);
@@ -1858,6 +1876,7 @@ class Web extends BaseController
 
         $placaId = $this->placaModel->insert($datos, true);
         if ($placaId) {
+            $this->placaModel->update($placaId, ['nombre' => $this->nombreDePlaca((int) $placaId, $nombre)]);
             foreach ($carrito as $versionId) {
                 $this->placaVersionModel->insert(['placa_id' => $placaId, 'version_id' => $versionId]);
             }
@@ -2263,7 +2282,7 @@ class Web extends BaseController
     public function placaRenombrar(int $id)
     {
         return $this->ejecutar(
-            fn() => $this->placaModel->update($id, ['nombre' => (string) $this->request->getPost('nombre')])
+            fn() => $this->placaModel->update($id, ['nombre' => $this->nombreDePlaca($id, (string) $this->request->getPost('nombre'))])
                 ? $this->placaModel->find($id)
                 : throw new RuntimeException('No se pudo renombrar la placa: ' . implode(' ', $this->placaModel->errors())),
             fn() => site_url('piezas/placas'),
@@ -2367,6 +2386,9 @@ class Web extends BaseController
                     'resina'          => $placa['resina'],
                     'temperatura'     => $placa['temperatura'],
                 ], true);
+                if ($nuevaId) {
+                    $this->placaModel->update($nuevaId, ['nombre' => $this->nombreDePlaca((int) $nuevaId, $placa['nombre'] . ' (parte)')]);
+                }
             }
 
             if ($cantidad >= (int) $fila['cantidad']) {
@@ -2635,7 +2657,7 @@ class Web extends BaseController
         $numeroCapas = trim((string) $this->request->getPost('numero_capas'));
 
         $datos = [
-            'nombre'       => trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'],
+            'nombre'       => $this->nombreDePlaca($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre']),
             'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
             'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
             'numero_capas' => $numeroCapas !== '' ? (int) $numeroCapas : null,
@@ -3539,6 +3561,29 @@ class Web extends BaseController
             ),
             fn($variante) => site_url('piezas/variante/' . $variante['id']),
             fn($variante) => 'Variante "' . $variante['nombre'] . '" derivada. Empieza su propia numeración desde v001.'
+        );
+    }
+
+    /**
+     * "Independizar": saca la variante a una pieza nueva (se mueve, no se
+     * copia) junto con las descendientes marcadas. Ver
+     * PiezaService::independizarVariante.
+     */
+    public function independizarVariante(int $varianteId)
+    {
+        $categoria = $this->request->getPost('categoria_id');
+
+        return $this->ejecutar(
+            fn() => $this->servicio->independizarVariante(
+                $varianteId,
+                (string) $this->request->getPost('nombre'),
+                $categoria === null || $categoria === '' ? null : (int) $categoria,
+                (array) ($this->request->getPost('arrastrar') ?? [])
+            ),
+            fn($r) => site_url('piezas/variante/' . $r['variante']['id']),
+            fn($r) => 'Ahora es la pieza "' . $r['familia']['nombre'] . '" (variante "base")'
+                . ($r['arrastradas'] ? ', con ' . $r['arrastradas'] . ' variante' . ($r['arrastradas'] === 1 ? '' : 's') . ' derivada' . ($r['arrastradas'] === 1 ? '' : 's') : '')
+                . '. Desde el script, vuelve a bajarla para que la carpeta coja el nombre nuevo.'
         );
     }
 

@@ -231,6 +231,12 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 data-bs-toggle="modal" data-bs-target="#modalSku">
                 <i class="bi bi-pencil"></i>
             </button>
+            <?php if ($hermanasVivas > 0): ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Independizar: sacar esta variante a una pieza propia"
+                    data-bs-toggle="modal" data-bs-target="#modalIndependizar">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            <?php endif; ?>
             <button type="submit" form="formBorrarVariante" class="btn btn-sm btn-outline-danger" title="Borrar esta variante">
                 <i class="bi bi-trash"></i>
             </button>
@@ -382,6 +388,57 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
         </div>
     </div>
 </div>
+
+<?php if ($hermanasVivas > 0): ?>
+<div class="modal fade" id="modalIndependizar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/independizar') ?>">
+            <?= csrf_field() ?>
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-box-arrow-right"></i> Independizar <?= esc($familia['nombre']) ?> / <?= esc($variante['nombre']) ?></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">
+                    La variante sale de <strong><?= esc($familia['nombre']) ?></strong> y pasa a ser una pieza propia,
+                    con su historial entero (versiones, SKU, existencias). Dentro de ella se llamará <code>base</code>.
+                    Sigue constando de qué versión se derivó.
+                </p>
+
+                <label class="form-label small mb-1">Nombre de la pieza nueva</label>
+                <input type="text" name="nombre" class="form-control form-control-sm mb-3"
+                    value="<?= esc(old('nombre', $variante['nombre']), 'attr') ?>" maxlength="150" required>
+
+                <label class="form-label small mb-1">Categoría</label>
+                <select name="categoria_id" class="form-select form-select-sm mb-3">
+                    <option value="">(sin categoría)</option>
+                    <?php foreach ($categorias as $c): ?>
+                        <option value="<?= (int) $c['id'] ?>" <?= (int) $c['id'] === (int) ($familia['categoria_id'] ?? 0) ? 'selected' : '' ?>>
+                            <?= esc($c['nombre']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <?php if ($descendientes): ?>
+                    <label class="form-label small mb-1">Derivadas de ella que se van también</label>
+                    <?php foreach ($descendientes as $d): ?>
+                        <div class="form-check small">
+                            <input class="form-check-input" type="checkbox" name="arrastrar[]" value="<?= (int) $d['id'] ?>"
+                                id="arrastrar<?= (int) $d['id'] ?>" checked>
+                            <label class="form-check-label" for="arrastrar<?= (int) $d['id'] ?>"><?= esc($d['nombre']) ?></label>
+                        </div>
+                    <?php endforeach; ?>
+                    <p class="small text-muted mt-1 mb-0">Las que desmarques se quedan en <?= esc($familia['nombre']) ?>.</p>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-sm btn-primary">Independizar</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php // Aparte de modalSku: las tareas son lo que más se toca de una pieza en curso y
       // compartir modal con nombre/SKU/enlace las escondía detrás del icono de lápiz. ?>

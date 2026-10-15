@@ -38,7 +38,7 @@
             <div class="modal-body">
                 <label class="form-label small">Referencia (opcional)</label>
                 <input type="text" name="referencia_externa" class="form-control form-control-sm mb-2"
-                    placeholder="nº de pedido, si viene de fuera" maxlength="50">
+                    placeholder="de qué va (o nº de pedido, si viene de fuera)" maxlength="50">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
                 <p class="text-muted small mt-2 mb-0">
@@ -107,11 +107,30 @@
                             </div>
                         <?php endif; ?>
                         <div class="card-body p-2">
-                            <div class="small fw-semibold">Pedido #<?= (int) $pedido['id'] ?></div>
+                            <?php if (!empty($pedido['referencia_externa'])): ?>
+                                <div class="fw-semibold text-truncate" title="<?= esc($pedido['referencia_externa'], 'attr') ?>"><?= esc($pedido['referencia_externa']) ?></div>
+                                <div class="text-muted" style="font-size: .75rem;">Pedido #<?= (int) $pedido['id'] ?></div>
+                            <?php else: ?>
+                                <div class="small fw-semibold">Pedido #<?= (int) $pedido['id'] ?></div>
+                            <?php endif; ?>
                             <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
                                 <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
-                                <span class="ms-auto"><?= $pedido['numLineas'] ?> pieza<?= $pedido['numLineas'] === 1 ? '' : 's' ?> · <?= $pedido['totalPiezas'] ?> ud.</span>
+                                <?php if ($pedido['numLineas']): ?>
+                                    <span class="ms-auto <?= $pedido['lineasListas'] === $pedido['numLineas'] ? 'text-success' : '' ?>"
+                                        title="Piezas listas para imprimir del total del pedido">
+                                        <strong><?= $pedido['lineasListas'] ?>/<?= $pedido['numLineas'] ?></strong> listas
+                                    </span>
+                                <?php else: ?>
+                                    <span class="ms-auto">sin piezas</span>
+                                <?php endif; ?>
                             </div>
+                            <?php if ($pedido['totalPiezas']): ?>
+                                <?php $pct = (int) round(min($pedido['piezasHechas'], $pedido['totalPiezas']) * 100 / $pedido['totalPiezas']); ?>
+                                <div class="d-flex align-items-center gap-2 mt-1" title="Unidades hechas del total">
+                                    <div class="progress flex-grow-1" style="height: 4px;"><div class="progress-bar bg-success" style="width: <?= $pct ?>%"></div></div>
+                                    <span class="text-muted text-nowrap" style="font-size: .7rem;"><?= $pedido['piezasHechas'] ?>/<?= $pedido['totalPiezas'] ?> ud.</span>
+                                </div>
+                            <?php endif; ?>
                             <?php if ($pedido['notas']): ?>
                                 <div class="text-muted text-truncate mt-1" style="font-size: .75rem;" title="<?= esc($pedido['notas'], 'attr') ?>">
                                     <?= esc($pedido['notas']) ?>

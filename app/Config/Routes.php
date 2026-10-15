@@ -742,6 +742,8 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('variante/(:num)/visibilidad', 'Web::toggleVisibilidadVariante/$1');
     $routes->POST('variante/(:num)/nevera', 'Web::toggleCongelarVariante/$1');
     $routes->POST('variante/(:num)/borrar', 'Web::borrarVariante/$1');
+    // Sacar la variante a una pieza nueva propia (se mueve, no se copia).
+    $routes->POST('variante/(:num)/independizar', 'Web::independizarVariante/$1');
     $routes->POST('variante/(:num)/restaurar', 'Web::restaurarVariante/$1');
     $routes->POST('variante/(:num)/promocionar', 'Web::promocionar/$1');
     $routes->POST('version/(:num)/impresa', 'Web::marcarImpresa/$1');
@@ -820,6 +822,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
     $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');
     $routes->POST('pedido/(:num)/linea', 'PedidosController::agregarLinea/$1');
     $routes->POST('pedido/(:num)/copiar-lineas', 'PedidosController::copiarLineas/$1');
+    $routes->POST('pedido/(:num)/mover-lineas', 'PedidosController::moverLineas/$1');
     $routes->POST('pedido/(:num)/reordenar-lineas', 'PedidosController::reordenarLineas/$1');
     $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
     $routes->POST('pedido-linea/(:num)/hecha', 'PedidosController::marcarHecha/$1');
