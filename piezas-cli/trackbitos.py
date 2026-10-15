@@ -1138,39 +1138,21 @@ def cmd_subir(args) -> int:
     if not blend:
         raise RuntimeError(f"no hay ningún .blend (o hay más de uno) en {directorio}. No se adivina cuál subir.")
 
-    # Confirmación tecleada (fase 34): antes de tocar la red, sin efectos
-    # secundarios todavía. El caso real que motivó esto fue una variante
-    # derivada ("pelo / anime") cuya primera descarga se etiquetaba mal como
-    # la variante de origen ("pelo / base") — eso ya está arreglado en el
-    # servidor, pero esto queda como red de seguridad para cualquier despiste
-    # de carpeta/fichero que el servidor no puede ver. Escribir el nombre a
-    # mano obliga a leerlo, no solo a pulsar Enter por costumbre.
+    # Confirmación (fase 34): antes de tocar la red, sin efectos secundarios
+    # todavía. Red de seguridad para despistes de carpeta/fichero que el
+    # servidor no puede ver. Antes obligaba a teclear el nombre; ahora basta
+    # con avisar en mayúsculas de qué pieza es y pedir una "y" (no Enter,
+    # que se pulsa por costumbre sin leer).
     identidad = sentinel.get("variante", "?")
 
-    # Tolerante a lo que no cambia de qué variante hablamos: mayúsculas,
-    # espacios de más y los espacios alrededor de la "/". Antes exigía el
-    # nombre calcado y un "brazos desnudos/base" cualquiera abortaba la
-    # subida sin decir qué esperaba ni dejar reintentar.
-    def _norm(s: str) -> str:
-        return " ".join(s.lower().replace("/", " / ").split())
-
-    print(f"\n{identidad} · rama {sentinel.get('rama', '?')}\n")
-    print(f"  Vas a subir {blend.name} a esta variante.")
-    print(f"  Para confirmarlo, escribe el nombre: {identidad}")
-    confirmado = False
-    for intento in range(2):
-        try:
-            tecleado = input("\n  > ").strip()
-        except EOFError:
-            tecleado = ""
-            break
-        if _norm(tecleado) == _norm(identidad):
-            confirmado = True
-            break
-        if intento == 0:
-            print(f"\n  ✗ Has escrito «{tecleado}» y toca «{identidad}». Otra vez:")
-    if not confirmado:
-        print("\n  ✗ El nombre no coincide. No se ha subido nada.\n")
+    print(f"\n  >>> {identidad.upper()} <<<")
+    print(f"  rama {sentinel.get('rama', '?')} · {blend.name}\n")
+    try:
+        respuesta_y = input("  ¿Subir a esta pieza? [y/N] ").strip().lower()
+    except EOFError:
+        respuesta_y = ""
+    if respuesta_y not in ("y", "yes"):
+        print("\n  ✗ No se ha subido nada.\n")
         return 1
 
     sesion_id = sentinel.get("sesion_id")
