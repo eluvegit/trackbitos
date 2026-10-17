@@ -170,8 +170,7 @@
     </div>
 <?php endif; ?>
 
-<?php if (!empty($destinos) || !empty($hayAlgoQueTraer)): ?>
-    <div class="row g-3">
+<div class="row g-3">
         <?php if (!empty($destinos)): ?>
             <div class="col-12 col-md-6">
                 <div class="accion-panel h-100">
@@ -200,7 +199,6 @@
             </div>
         <?php endif; ?>
 
-        <?php if (!empty($hayAlgoQueTraer)): ?>
             <div class="col-12 col-md-6">
                 <div class="accion-panel h-100">
                     <div class="titulo"><i class="bi bi-box-arrow-in-down"></i> Traer pieza aquí</div>
@@ -219,10 +217,9 @@
                         <input type="hidden" name="variante_id" data-traer-id>
                         <button type="submit" class="btn btn-sm btn-primary" data-traer-enviar disabled>Traer</button>
                     </form>
-                    <p class="text-muted small mb-0 mt-2">Trae toda su cantidad, esté en otro hueco o suelta sin asignar.</p>
+                    <p class="text-muted small mb-0 mt-2">La pieza pasa a vivir aquí, tenga unidades o no. Si estaba en otro hueco, sale de él.</p>
                 </div>
             </div>
-        <?php endif; ?>
     </div>
 
     <script>
@@ -264,7 +261,8 @@
                                     var texto = p.nombre.replace(/&/g, '&amp;').replace(/</g, '&lt;');
                                     return '<button type="button" class="list-group-item list-group-item-action py-1 small" '
                                         + 'data-traer-opcion data-id="' + p.id + '" data-nombre="' + texto + '">'
-                                        + texto + ' <span class="text-muted">(' + p.stock + ')</span></button>';
+                                        + texto + ' <span class="text-muted">(' + p.stock + ' uds.'
+                                        + (p.hueco ? ' · en ' + p.hueco.replace(/&/g, '&amp;').replace(/</g, '&lt;') : '') + ')</span></button>';
                                 }).join('')
                                 : '<div class="list-group-item py-1 small text-muted">Sin resultados</div>';
                             resultados.style.display = 'block';
@@ -287,6 +285,5 @@
             });
         })();
     </script>
-<?php endif; ?>
 
 <?= $this->endSection() ?>

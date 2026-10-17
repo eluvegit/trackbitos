@@ -114,102 +114,55 @@
 </div>
 
 <div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-geo-alt"></i> Dónde está</div>
-<?php
-    $suelto = 0;
-    foreach ($desglose as $d) {
-        if ($d['hueco'] === null) {
-            $suelto = (int) $d['stock'];
-        }
-    }
-?>
-<?php if (empty($desglose)): ?>
-    <p class="text-muted small mb-4">Sin ubicación asignada todavía.</p>
+<?php if (empty($huecosDisponibles)): ?>
+    <p class="text-muted small mb-4">
+        Sin hueco — crea estuches y huecos en
+        <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a> para poder colocarla.
+    </p>
 <?php else: ?>
-    <div class="d-flex flex-wrap gap-2 mb-2">
-        <?php foreach ($desglose as $d): ?>
-            <?php $h = $d['hueco']; ?>
-            <?php if ($h): ?>
-                <div class="d-flex align-items-center gap-1">
-                    <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
-                        class="badge rounded-pill text-bg-primary text-decoration-none">
-                        <i class="bi bi-geo-alt"></i> <?= esc($h['codigo']) ?> · <?= (int) $d['stock'] ?>
-                    </a>
-                    <?php
-                        $otrosHuecos = array_filter($huecosDisponibles, static fn (array $hd) => (int) $hd['hueco']['id'] !== (int) $h['hueco']['id']);
-                    ?>
-                    <?php if ($otrosHuecos !== []): ?>
-                        <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id'] . '/mover-pieza') ?>"
-                            class="d-flex align-items-center gap-1">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="variante_id" value="<?= $idVar ?>">
-                            <input type="hidden" name="volver" value="variante">
-                            <select name="destino_id" required class="form-select form-select-sm py-0" style="max-width: 8rem; font-size: .75rem;">
-                                <option value="">mover a…</option>
-                                <?php $estucheActual = null; ?>
-                                <?php foreach ($otrosHuecos as $hd): ?>
-                                    <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
-                                        <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
-                                        <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
-                                        <?php $estucheActual = (int) $hd['estuche']['id']; ?>
-                                    <?php endif; ?>
-                                    <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
-                                <?php endforeach; ?>
-                                <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-secondary py-0" title="Mover esta pieza a otro hueco">
-                                <i class="bi bi-arrow-right-circle"></i>
-                            </button>
-                        </form>
-                    <?php endif; ?>
-                </div>
-            <?php else: ?>
-                <span class="badge rounded-pill text-bg-warning">
-                    <i class="bi bi-exclamation-triangle"></i> Sin asignar · <?= (int) $d['stock'] ?>
-                </span>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </div>
-
-    <?php // Lo suelto (sin hueco) se puede mover de golpe: al hueco donde ya
-          // vive el resto (preseleccionado si todo lo asignado está en uno
-          // solo) o a cualquier otro que se elija — sin tener que dar de
-          // baja/alta a mano para reubicarlo. ?>
-    <?php if ($suelto > 0): ?>
-        <?php if (empty($huecosDisponibles)): ?>
-            <p class="text-muted small mb-4">
-                Hay piezas sin asignar — crea estuches y huecos en
-                <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a> para poder colocarlas.
-            </p>
+    <?php
+        $huecoActualId = $hueco ? (int) $hueco['hueco']['id'] : null;
+        $accion = $hueco
+            ? site_url('piezas/ubicaciones/huecos/' . $huecoActualId . '/mover-pieza')
+            : site_url('piezas/existencias/' . $idVar . '/asignar-sueltos');
+    ?>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
+        <?php if ($hueco): ?>
+            <a href="<?= site_url('piezas/ubicaciones/huecos/' . $huecoActualId) ?>"
+                class="badge rounded-pill text-bg-primary text-decoration-none">
+                <i class="bi bi-geo-alt"></i> <?= esc($hueco['codigo']) ?>
+            </a>
         <?php else: ?>
-            <form method="post" action="<?= site_url('piezas/existencias/' . $idVar . '/asignar-sueltos') ?>"
-                class="d-flex flex-wrap gap-2 align-items-center mb-4">
-                <?= csrf_field() ?>
-                <span class="text-muted small">
-                    <i class="bi bi-arrow-right-circle"></i> Mover lo sin asignar a
-                </span>
-                <select name="hueco_id" required class="form-select form-select-sm" style="max-width: 12rem;">
-                    <option value="">Elige hueco…</option>
-                    <?php $estucheActual = null; ?>
-                    <?php foreach ($huecosDisponibles as $hd): ?>
-                        <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
-                            <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
-                            <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
-                            <?php $estucheActual = (int) $hd['estuche']['id']; ?>
-                        <?php endif; ?>
-                        <option value="<?= (int) $hd['hueco']['id'] ?>"
-                            <?= $huecoSugerido === (int) $hd['hueco']['id'] ? 'selected' : '' ?>><?= esc($hd['codigo']) ?></option>
-                    <?php endforeach; ?>
-                    <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
-                </select>
-                <button type="submit" class="btn btn-sm btn-primary">Mover</button>
-                <?php if ($huecoSugerido !== null): ?>
-                    <span class="text-muted small">Preseleccionado: es donde ya está el resto de esta pieza.</span>
-                <?php endif; ?>
-            </form>
+            <span class="badge rounded-pill text-bg-warning">
+                <i class="bi bi-exclamation-triangle"></i> Sin hueco<?= $stock > 0 ? ' · ' . (int) $stock . ' sin colocar' : '' ?>
+            </span>
         <?php endif; ?>
-    <?php else: ?>
-        <div class="mb-4"></div>
-    <?php endif; ?>
+
+        <form method="post" action="<?= $accion ?>" class="d-flex align-items-center gap-1">
+            <?= csrf_field() ?>
+            <?php if ($hueco): ?>
+                <input type="hidden" name="variante_id" value="<?= $idVar ?>">
+                <input type="hidden" name="volver" value="variante">
+            <?php endif; ?>
+            <select name="<?= $hueco ? 'destino_id' : 'hueco_id' ?>" required class="form-select form-select-sm" style="max-width: 12rem;">
+                <option value=""><?= $hueco ? 'Mover a…' : 'Colocar en…' ?></option>
+                <?php $estucheActual = null; ?>
+                <?php foreach ($huecosDisponibles as $hd): ?>
+                    <?php if ((int) $hd['hueco']['id'] === $huecoActualId) continue; ?>
+                    <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
+                        <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+                        <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
+                        <?php $estucheActual = (int) $hd['estuche']['id']; ?>
+                    <?php endif; ?>
+                    <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                <?php endforeach; ?>
+                <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
+            </select>
+            <button type="submit" class="btn btn-sm <?= $hueco ? 'btn-outline-secondary' : 'btn-primary' ?>">
+                <?= $hueco ? 'Mover' : 'Colocar' ?>
+            </button>
+        </form>
+    </div>
 <?php endif; ?>
 
 <div class="small fw-semibold text-body-secondary mb-1"><i class="bi bi-clock-history"></i> Movimientos</div>

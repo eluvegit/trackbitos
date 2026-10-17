@@ -2571,10 +2571,8 @@ class Web extends BaseController
     }
 
     /**
-     * Para cada pieza servible de esta placa, a qué hueco le toca ir — fijo
-     * (piezas_variantes.hueco_predeterminado_id) o inferido si no hay uno
-     * fijado pero todo su stock ya vive en un único sitio (ver
-     * PiezaInventario::huecoUnicoDeVariante()). Es solo para ENSEÑAR y, si
+     * Para cada pieza servible de esta placa, cuál es su hueco
+     * (piezas_variantes.hueco_predeterminado_id). Es solo para ENSEÑAR y, si
      * falta, dejar elegirlo desde aquí — quien de verdad coloca el
      * movimiento al sincronizar es PiezaInventario::sincronizarPlaca().
      *
@@ -2607,12 +2605,7 @@ class Web extends BaseController
             }
 
             $varianteId = (int) $p['variante']['id'];
-            $huecoId    = $p['variante']['hueco_predeterminado_id'] ?? null;
-            $inferido   = false;
-            if ($huecoId === null) {
-                $huecoId  = $inventario->huecoUnicoDeVariante($varianteId);
-                $inferido = $huecoId !== null;
-            }
+            $huecoId    = isset($p['variante']['hueco_predeterminado_id']) ? (int) $p['variante']['hueco_predeterminado_id'] : null;
 
             $filas[] = [
                 'varianteId' => $varianteId,
@@ -2621,7 +2614,6 @@ class Web extends BaseController
                 'servible'   => $servible,
                 'huecoId'    => $huecoId,
                 'codigo'     => $huecoId ? ($codigoPorHuecoId[$huecoId] ?? '?') : null,
-                'inferido'   => $inferido,
             ];
         }
 
@@ -3279,7 +3271,6 @@ class Web extends BaseController
             'estado'   => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'hueco'    => $codigo($inventario->huecoDeVariante($id)),
             'sueltas'  => max(0, $inventario->stockPorHueco($id)[0] ?? 0),
-            'defecto'  => $codigo(isset($variante['hueco_predeterminado_id']) ? (int) $variante['hueco_predeterminado_id'] : null),
         ];
     }
 

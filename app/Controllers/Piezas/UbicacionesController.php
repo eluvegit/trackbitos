@@ -17,10 +17,9 @@ use App\Services\PiezaInventario;
  * real de guardado). El código rotulado es la unión de los dos, p. ej.
  * "E1H2" para el hueco H2 del estuche E1.
  *
- * El stock por hueco no es un contador propio: sale de agrupar
- * piezas_stock_movimientos por ubicacion_id (que apunta a piezas_huecos),
- * igual que el stock total ya sale de sumar sus deltas. Ver
- * App\Services\PiezaInventario.
+ * Qué hay en cada hueco sale del hueco de cada pieza
+ * (piezas_variantes.hueco_predeterminado_id), no del stock: una pieza a 0
+ * sigue en su hueco. Ver App\Services\PiezaInventario.
  */
 class UbicacionesController extends BaseController
 {
@@ -47,22 +46,8 @@ class UbicacionesController extends BaseController
     {
         $estuches = $this->estuches->ordenados();
 
-        // Stock por hueco de todos los estuches de una vez, y qué
-        // variantes aparecen en total, para resolver sus nombres en un
-        // único lote en vez de una consulta por hueco.
-        $huecosPorEstuche = [];
-        $stockPorHueco    = [];
-        $varianteIds      = [];
-        foreach ($estuches as $estuche) {
-            $huecosDelEstuche = $this->huecos->deEstuche((int) $estuche['id']);
-            $huecosPorEstuche[(int) $estuche['id']] = $huecosDelEstuche;
-
-            foreach ($huecosDelEstuche as $hueco) {
-                $stock = array_filter($this->inventario->stockDeHueco((int) $hueco['id']), static fn (int $n) => $n > 0);
-                $stockPorHueco[(int) $hueco['id']] = $stock;
-                $varianteIds = [...$varianteIds, ...array_keys($stock)];
-            }
-        }
+        [$piezasPorHueco, $stock] = $this->piezasPorHueco();
+        $varianteIds = array_keys($stock);
 
         $familias = [];
         foreach ($this->familias->findAll() as $fam) {
@@ -70,7 +55,6 @@ class UbicacionesController extends BaseController
         }
 
         $nombres = [];
-        $varianteIds = array_unique($varianteIds);
         if ($varianteIds !== []) {
             foreach ($this->variantes->whereIn('id', $varianteIds)->findAll() as $v) {
                 $familia = $familias[(int) $v['familia_id']] ?? null;
@@ -94,25 +78,21 @@ class UbicacionesController extends BaseController
         $filas = [];
         foreach ($estuches as $estuche) {
             $huecos = [];
-            foreach ($huecosPorEstuche[(int) $estuche['id']] as $hueco) {
-                $stock = $stockPorHueco[(int) $hueco['id']];
-
+            foreach ($this->huecos->deEstuche((int) $estuche['id']) as $hueco) {
                 $contenido = [];
-                foreach ($stock as $varianteId => $cantidad) {
-                    if (isset($nombres[$varianteId])) {
-                        $contenido[] = [
-                            'nombre' => $nombres[$varianteId],
-                            'stock'  => $cantidad,
-                            'img'    => $miniaturas[$varianteId] ?? null,
-                        ];
-                    }
+                foreach ($piezasPorHueco[(int) $hueco['id']] ?? [] as $varianteId) {
+                    $contenido[] = [
+                        'nombre' => $nombres[$varianteId],
+                        'stock'  => $stock[$varianteId],
+                        'img'    => $miniaturas[$varianteId] ?? null,
+                    ];
                 }
                 usort($contenido, static fn ($a, $b) => $a['nombre'] <=> $b['nombre']);
 
                 $huecos[] = [
                     'hueco'     => $hueco,
                     'codigo'    => PiezaHuecoModel::codigoCompleto($estuche, $hueco),
-                    'unidades'  => array_sum($stock),
+                    'unidades'  => array_sum(array_column($contenido, 'stock')),
                     'contenido' => $contenido,
                 ];
             }
@@ -173,15 +153,15 @@ class UbicacionesController extends BaseController
             }
         }
 
+        [$piezasPorHueco, $stock] = $this->piezasPorHueco();
+
         $porEstuche = [];
         foreach ($estuches as $e) {
             $huecos = [];
             foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
                 $piezas = [];
-                foreach ($this->inventario->stockDeHueco((int) $h['id']) as $varianteId => $n) {
-                    if ($n > 0 && isset($nombrePorVariante[$varianteId])) {
-                        $piezas[] = ['nombre' => $nombrePorVariante[$varianteId], 'img' => $miniaturas[$varianteId] ?? null];
-                    }
+                foreach ($piezasPorHueco[(int) $h['id']] ?? [] as $varianteId) {
+                    $piezas[] = ['nombre' => $nombrePorVariante[$varianteId], 'img' => $miniaturas[$varianteId] ?? null];
                 }
                 usort($piezas, static fn (array $a, array $b) => $a['nombre'] <=> $b['nombre']);
                 $huecos[] = ['codigo' => $h['codigo'], 'piezas' => $piezas];
@@ -189,39 +169,30 @@ class UbicacionesController extends BaseController
             $porEstuche[] = ['estuche' => $e, 'huecos' => $huecos];
         }
 
-        // El reverso del listado anterior: por pieza, en qué huecos vive
-        // (puede estar repartida en varios). "Sin asignar" cuenta como una
-        // ubicación más aquí, para que la pieza no desaparezca del listado
-        // solo porque parte de su stock aún no tiene hueco.
+        // El reverso del listado anterior: por pieza, en qué hueco vive.
+        // Lo que tiene stock sin hueco sale como "sin asignar", para que no
+        // desaparezca del listado.
         $porPieza = [];
-        foreach ($this->inventario->stockPorVarianteYHueco() as $varianteId => $porHueco) {
-            if (!isset($nombrePorVariante[$varianteId])) {
-                continue;   // variante borrada
+        foreach ($piezasPorHueco as $huecoId => $ids) {
+            foreach ($ids as $varianteId) {
+                $porPieza[] = [
+                    'nombre'     => $nombrePorVariante[$varianteId],
+                    'img'        => $miniaturas[$varianteId] ?? null,
+                    'codigos'    => [$codigoPorHuecoId[$huecoId] ?? '?'],
+                    'sinAsignar' => false,
+                ];
             }
-
-            $codigos = [];
-            $sinAsignar = false;
-            foreach ($porHueco as $huecoId => $n) {
-                if ($n <= 0) {
-                    continue;
-                }
-                if ($huecoId > 0) {
-                    $codigos[] = $codigoPorHuecoId[$huecoId] ?? '?';
-                } else {
-                    $sinAsignar = true;
-                }
+        }
+        $conHueco = array_merge([], ...array_values($piezasPorHueco));
+        foreach ($this->inventario->stockPorVariante() as $varianteId => $n) {
+            if ($n > 0 && isset($nombrePorVariante[$varianteId]) && !in_array($varianteId, $conHueco, true)) {
+                $porPieza[] = [
+                    'nombre'     => $nombrePorVariante[$varianteId],
+                    'img'        => $miniaturas[$varianteId] ?? null,
+                    'codigos'    => [],
+                    'sinAsignar' => true,
+                ];
             }
-            if ($codigos === [] && !$sinAsignar) {
-                continue;
-            }
-            sort($codigos);
-
-            $porPieza[] = [
-                'nombre'     => $nombrePorVariante[$varianteId],
-                'img'        => $miniaturas[$varianteId] ?? null,
-                'codigos'    => $codigos,
-                'sinAsignar' => $sinAsignar,
-            ];
         }
         usort($porPieza, static fn (array $a, array $b) => $a['nombre'] <=> $b['nombre']);
 
@@ -406,7 +377,8 @@ class UbicacionesController extends BaseController
         }
         $estuche = $this->estuches->find($hueco['estuche_id']);
 
-        $stock = array_filter($this->inventario->stockDeHueco($id), static fn (int $n) => $n !== 0);
+        $ids   = array_map(static fn (array $v) => (int) $v['id'], $this->inventario->variantesDeHueco($id));
+        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
 
         $familias = [];
         foreach ($this->familias->findAll() as $f) {
@@ -462,20 +434,6 @@ class UbicacionesController extends BaseController
         $destinos = $codigoPorHuecoId;
         unset($destinos[$id]);
 
-        // ¿Hay algo en todo el inventario que viva fuera de este hueco? Solo
-        // para decidir si se pinta el buscador de "traer pieza aquí" — el
-        // buscador en sí resuelve sus resultados por AJAX (buscarPieza()),
-        // no con un listado precargado.
-        $hayAlgoQueTraer = false;
-        foreach ($this->inventario->stockPorVarianteYHueco() as $porHueco) {
-            foreach ($porHueco as $huecoId => $n) {
-                if ($huecoId !== $id && $n > 0) {
-                    $hayAlgoQueTraer = true;
-                    break 2;
-                }
-            }
-        }
-
         return view('piezas/ubicaciones/hueco', [
             'hueco'    => $hueco,
             'estuche'  => $estuche,
@@ -483,15 +441,12 @@ class UbicacionesController extends BaseController
             'filas'    => $filas,
             'destinos' => $destinos,
             'destinosPorEstuche' => $destinosPorEstuche,
-            'hayAlgoQueTraer'    => $hayAlgoQueTraer,
         ]);
     }
 
     /**
-     * Búsqueda en vivo para "traer pieza aquí": piezas cuyo nombre/familia
-     * encaja y que tienen stock fuera de este hueco (en otro, o sin
-     * asignar) — igual patrón que Web::piezaBuscar() para la bitácora, pero
-     * filtrando por dónde vive el stock en vez de por versión imprimible.
+     * Búsqueda en vivo para "traer pieza aquí": cualquier pieza que no esté
+     * ya en este hueco, tenga stock o no, con dónde está ahora.
      */
     public function buscarPieza(int $id)
     {
@@ -512,38 +467,26 @@ class UbicacionesController extends BaseController
             ->orderBy('nombre')
             ->findAll(60);
 
-        $stockPorVarianteYHueco = $this->inventario->stockPorVarianteYHueco();
+        $variantes = array_values(array_filter($variantes, static fn (array $v) => (int) ($v['hueco_predeterminado_id'] ?? 0) !== $id));
+        $variantes = array_slice($variantes, 0, 15);
+        $stock     = $variantes === [] ? [] : $this->inventario->stockPorVariante(array_map(static fn (array $v) => (int) $v['id'], $variantes));
 
         $resultados = [];
         foreach ($variantes as $v) {
-            $vid   = (int) $v['id'];
-            $fuera = 0;
-            foreach ($stockPorVarianteYHueco[$vid] ?? [] as $huecoId => $n) {
-                if ($huecoId !== $id) {
-                    $fuera += $n;
-                }
-            }
-            if ($fuera <= 0) {
-                continue;
-            }
-
             $familia = $this->familias->find($v['familia_id']);
             $resultados[] = [
-                'id'     => $vid,
+                'id'     => (int) $v['id'],
                 'nombre' => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
-                'stock'  => $fuera,
+                'stock'  => $stock[(int) $v['id']] ?? 0,
+                'hueco'  => $v['hueco_predeterminado_id'] ? $this->codigoDeHueco((int) $v['hueco_predeterminado_id']) : null,
             ];
-
-            if (count($resultados) >= 15) {
-                break;
-            }
         }
 
         return $this->response->setJSON(['resultados' => $resultados]);
     }
 
     /**
-     * Mueve todo el stock de este hueco a otro — para fusionar dos huecos
+     * Mueve todas las piezas de este hueco a otro — para fusionar dos huecos
      * (se mueve y luego se borra el que queda vacío con "Borrar hueco") o
      * para corregir que algo se apuntó en el hueco equivocado.
      */
@@ -559,30 +502,25 @@ class UbicacionesController extends BaseController
 
         if (!$destino) {
             return redirect()->to(site_url('piezas/ubicaciones/huecos/' . $id))
-                ->with('error', 'Elige a qué hueco mover el stock.');
+                ->with('error', 'Elige a qué hueco mover las piezas.');
         }
         if ($destinoId === $id) {
             return redirect()->to(site_url('piezas/ubicaciones/huecos/' . $id))
                 ->with('error', 'El hueco de destino no puede ser el mismo.');
         }
 
-        $unidades = array_sum(array_map(static fn (int $n) => max(0, $n), $this->inventario->stockDeHueco($id)));
-        $movidos  = $this->inventario->moverStockDeHueco($id, $destinoId);
+        $movidas = $this->inventario->moverHueco($id, $destinoId);
 
-        $estDestino    = $this->estuches->find($destino['estuche_id']);
-        $codigoDestino = $estDestino ? PiezaHuecoModel::codigoCompleto($estDestino, $destino) : $destino['codigo'];
-
-        $mensaje = $movidos > 0
-            ? 'Movidas ' . $unidades . ' uds. a «' . $codigoDestino . '».'
+        $mensaje = $movidas > 0
+            ? 'Movidas ' . $movidas . ' piezas a «' . $this->codigoDeHueco($destinoId) . '».'
             : 'Ese hueco ya estaba vacío, nada que mover.';
 
         return redirect()->to(site_url('piezas/ubicaciones/huecos/' . $destinoId))->with('success', $mensaje);
     }
 
     /**
-     * Traslada UNA pieza (todo su stock en este hueco) a otro hueco — a
-     * diferencia de moverStock(), que mueve todo el contenido. Permite
-     * separar piezas que convivían en el mismo hueco.
+     * Lleva UNA pieza de este hueco a otro — a diferencia de moverStock(),
+     * que mueve todo el contenido. Funciona igual con o sin stock.
      */
     public function moverPieza(int $id)
     {
@@ -596,15 +534,12 @@ class UbicacionesController extends BaseController
             ? site_url('piezas/existencias/' . $varianteId)
             : site_url('piezas/ubicaciones/huecos/' . $id);
 
-        $hueco = $this->huecos->find($id);
-        if (!$hueco) {
+        if (!$this->huecos->find($id)) {
             return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese hueco no existe.');
         }
 
         $destinoId = (int) $this->request->getPost('destino_id');
-        $destino   = $destinoId > 0 ? $this->huecos->find($destinoId) : null;
-
-        if (!$destino) {
+        if ($destinoId <= 0 || !$this->huecos->find($destinoId)) {
             return redirect()->to($volver)->with('error', 'Elige a qué hueco mover la pieza.');
         }
         if ($destinoId === $id) {
@@ -615,38 +550,29 @@ class UbicacionesController extends BaseController
         if (!$variante) {
             return redirect()->to($volver)->with('error', 'Esa pieza no existe.');
         }
+        if ((int) ($variante['hueco_predeterminado_id'] ?? 0) !== $id) {
+            return redirect()->to($volver)->with('error', '«' . $this->nombreDe($variante) . '» no está en este hueco.');
+        }
 
-        $familia = $this->familias->find($variante['familia_id']);
-        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
-
-        $unidades = max(0, $this->inventario->stockDeHueco($id)[$varianteId] ?? 0);
-        $movidos  = $this->inventario->moverVarianteDeHueco($id, $destinoId, $varianteId);
-
-        $estDestino    = $this->estuches->find($destino['estuche_id']);
-        $codigoDestino = $estDestino ? PiezaHuecoModel::codigoCompleto($estDestino, $destino) : $destino['codigo'];
-
-        $mensaje = $movidos > 0
-            ? 'Movidas ' . $unidades . ' uds. de «' . $nombre . '» a «' . $codigoDestino . '».'
-            : '«' . $nombre . '» ya no tenía stock en este hueco, nada que mover.';
+        $this->inventario->colocarEnHueco($varianteId, $destinoId);
 
         // Al éxito, si no se viene de la ficha de la variante, se aterriza en
         // el hueco destino (para ver que ha llegado ahí) en vez de en el de
         // origen.
         $volverExito = $volverAVariante ? $volver : site_url('piezas/ubicaciones/huecos/' . $destinoId);
 
-        return redirect()->to($volverExito)->with('success', $mensaje);
+        return redirect()->to($volverExito)
+            ->with('success', '«' . $this->nombreDe($variante) . '» movida a «' . $this->codigoDeHueco($destinoId) . '».');
     }
 
     /**
-     * Trae a este hueco todo el stock de una pieza, esté donde esté (otro
-     * hueco, o sin asignar) — el "tirar" complementario a moverPieza(),
-     * pensado para cuando tienes el hueco delante y quieres meter ahí una
-     * pieza que ya existe en otro sitio.
+     * Trae a este hueco una pieza, esté donde esté (otro hueco, o sin
+     * asignar) y tenga stock o no — el "tirar" complementario a
+     * moverPieza(), para cuando tienes el hueco delante.
      */
     public function traerPieza(int $id)
     {
-        $hueco = $this->huecos->find($id);
-        if (!$hueco) {
+        if (!$this->huecos->find($id)) {
             return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese hueco no existe.');
         }
 
@@ -658,16 +584,13 @@ class UbicacionesController extends BaseController
             return redirect()->to($volver)->with('error', 'Elige qué pieza traer.');
         }
 
-        $familia = $this->familias->find($variante['familia_id']);
-        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+        if ((int) ($variante['hueco_predeterminado_id'] ?? 0) === $id) {
+            return redirect()->to($volver)->with('success', '«' . $this->nombreDe($variante) . '» ya estaba aquí.');
+        }
 
-        $movidos = $this->inventario->consolidarVarianteEnHueco($varianteId, $id);
+        $this->inventario->colocarEnHueco($varianteId, $id);
 
-        $mensaje = $movidos > 0
-            ? 'Traída «' . $nombre . '» a este hueco.'
-            : '«' . $nombre . '» ya estaba toda aquí (o no tiene stock en otro sitio).';
-
-        return redirect()->to($volver)->with('success', $mensaje);
+        return redirect()->to($volver)->with('success', 'Traída «' . $this->nombreDe($variante) . '» a este hueco.');
     }
 
     public function quitarPieza(int $id)
@@ -683,14 +606,46 @@ class UbicacionesController extends BaseController
         if (!$variante) {
             return redirect()->to($volver)->with('error', 'Esa pieza no existe.');
         }
+        if ((int) ($variante['hueco_predeterminado_id'] ?? 0) !== $id) {
+            return redirect()->to($volver)->with('error', '«' . $this->nombreDe($variante) . '» no estaba en este hueco.');
+        }
 
+        $this->inventario->colocarEnHueco($varianteId, null);
+
+        return redirect()->to($volver)->with('success', '«' . $this->nombreDe($variante) . '» quitada de este hueco: queda sin asignar.');
+    }
+
+    /**
+     * Las piezas (no borradas) que tienen hueco, agrupadas por hueco, y el
+     * stock de cada una (0 si no tiene movimientos).
+     *
+     * @return array{0: array<int, list<int>>, 1: array<int,int>}
+     */
+    private function piezasPorHueco(): array
+    {
+        $porHueco = [];
+        foreach ($this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id IS NOT NULL', null, false)->findAll() as $v) {
+            $porHueco[(int) $v['hueco_predeterminado_id']][] = (int) $v['id'];
+        }
+
+        $ids   = array_merge([], ...array_values($porHueco));
+        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
+
+        return [$porHueco, $stock];
+    }
+
+    private function nombreDe(array $variante): string
+    {
         $familia = $this->familias->find($variante['familia_id']);
-        $nombre  = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
 
-        $movidos = $this->inventario->quitarVarianteDeHueco($id, $varianteId);
+        return trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
+    }
 
-        return $movidos > 0
-            ? redirect()->to($volver)->with('success', '«' . $nombre . '» quitada de este hueco: queda sin asignar.')
-            : redirect()->to($volver)->with('error', '«' . $nombre . '» no estaba en este hueco.');
+    private function codigoDeHueco(int $huecoId): string
+    {
+        $hueco   = $this->huecos->find($huecoId);
+        $estuche = $hueco ? $this->estuches->find($hueco['estuche_id']) : null;
+
+        return $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : ($hueco['codigo'] ?? '?');
     }
 }

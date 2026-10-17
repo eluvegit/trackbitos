@@ -92,13 +92,7 @@ class PiezaInventario
                     $res['ajustes']++;
                 }
             } else {
-                // El hueco donde ya vive la pieza; si no está en ninguno, el
-                // hueco por defecto; si tampoco hay, queda sin asignar.
-                $huecoId = $this->movimientos->huecoDeVariante($varianteId);
-                if ($huecoId === null) {
-                    $variante = $this->variantes->find($varianteId);
-                    $huecoId  = $variante['hueco_predeterminado_id'] ?? null;
-                }
+                $huecoId = $this->huecoDeVariante($varianteId);
 
                 $this->movimientos->insert([
                     'variante_id'      => $varianteId,
@@ -133,10 +127,32 @@ class PiezaInventario
         return $n;
     }
 
-    /** Hueco donde vive la variante; una pieza solo puede estar en uno. */
+    /**
+     * El hueco de la pieza (piezas_variantes.hueco_predeterminado_id). Es un
+     * dato de la pieza, no sale del stock: sigue siendo suyo aunque esté a 0.
+     */
     public function huecoDeVariante(int $varianteId): ?int
     {
-        return $this->movimientos->huecoDeVariante($varianteId);
+        $variante = $this->variantes->find($varianteId);
+
+        return isset($variante['hueco_predeterminado_id']) ? (int) $variante['hueco_predeterminado_id'] : null;
+    }
+
+    /** @return list<array> variantes (no borradas) cuyo hueco es este */
+    public function variantesDeHueco(int $huecoId): array
+    {
+        return $this->variantes->where('hueco_predeterminado_id', $huecoId)->where('borrado_en', null)->findAll();
+    }
+
+    /**
+     * Mete la pieza en un hueco, o la saca (null), con o sin stock. Lleva
+     * sus altas al mismo sitio. Devuelve cuántas filas de movimiento tocó.
+     */
+    public function colocarEnHueco(int $varianteId, ?int $huecoId): int
+    {
+        $this->variantes->update($varianteId, ['hueco_predeterminado_id' => $huecoId]);
+
+        return $this->movimientos->colocarVariante($varianteId, $huecoId);
     }
 
     /** Un alta/baja/ajuste a mano. $delta con signo. Devuelve el id insertado. */
@@ -164,16 +180,6 @@ class PiezaInventario
     }
 
     /**
-     * Qué variantes hay en un hueco y cuánto de cada una.
-     *
-     * @return array<int,int>  varianteId => stock
-     */
-    public function stockDeHueco(int $huecoId): array
-    {
-        return $this->movimientos->stockDeHueco($huecoId);
-    }
-
-    /**
      * Stock de todas las variantes desglosado por hueco, en una sola
      * consulta (0 = sin asignar).
      *
@@ -184,64 +190,14 @@ class PiezaInventario
         return $this->movimientos->stockPorVarianteYHueco();
     }
 
-    /** Mueve todo el stock (todas las variantes) de un hueco a otro. Devuelve cuántos movimientos tocó. */
-    public function moverStockDeHueco(int $origenId, int $destinoId): int
+    /** Mueve todas las piezas de un hueco a otro. Devuelve cuántas piezas movió. */
+    public function moverHueco(int $origenId, int $destinoId): int
     {
-        return $this->movimientos->moverUbicacion($origenId, $destinoId);
-    }
+        $n = count($this->variantesDeHueco($origenId));
+        $this->variantes->where('hueco_predeterminado_id', $origenId)->set('hueco_predeterminado_id', $destinoId)->update();
+        $this->movimientos->moverUbicacion($origenId, $destinoId);
 
-    /** Traslada todo el stock de una variante concreta de un hueco a otro. */
-    public function moverVarianteDeHueco(int $origenId, int $destinoId, int $varianteId): int
-    {
-        return $this->movimientos->moverVarianteDeHueco($origenId, $destinoId, $varianteId);
-    }
-
-    /** Saca una variante de un hueco: queda sin asignar. Si era su hueco por defecto, se quita también. */
-    public function quitarVarianteDeHueco(int $huecoId, int $varianteId): int
-    {
-        $variante = $this->variantes->find($varianteId);
-        if ($variante && (int) ($variante['hueco_predeterminado_id'] ?? 0) === $huecoId) {
-            $this->variantes->update($varianteId, ['hueco_predeterminado_id' => null]);
-        }
-
-        return $this->movimientos->quitarVarianteDeHueco($huecoId, $varianteId);
-    }
-
-    /** Trae a un hueco todo el stock de una variante, esté donde esté. */
-    public function consolidarVarianteEnHueco(int $varianteId, int $huecoId): int
-    {
-        return $this->movimientos->consolidarVarianteEnHueco($varianteId, $huecoId);
-    }
-
-    /**
-     * Si todo el stock de una variante vive en un único hueco, ese hueco;
-     * si está repartida en varios (o no tiene nada), null.
-     */
-    public function huecoUnicoDeVariante(int $varianteId): ?int
-    {
-        return $this->movimientos->huecoUnicoDeVariante($varianteId);
-    }
-
-    /**
-     * Coloca en un hueco todo lo que de una variante estuviera "sin
-     * asignar". Devuelve cuántas filas de movimiento tocó.
-     */
-    public function asignarSinAsignar(int $varianteId, int $huecoId): int
-    {
-        return $this->movimientos->asignarSinAsignar($varianteId, $huecoId);
-    }
-
-    /**
-     * Fija (o quita, con $huecoId null) el hueco por defecto de una
-     * variante y, si se fija uno, coloca ahí lo que tuviera "sin asignar"
-     * (ver PiezaStockMovimientoModel::asignarSinAsignar()). Devuelve cuántas
-     * filas de movimiento tocó esa colocación.
-     */
-    public function fijarHuecoPredeterminado(int $varianteId, ?int $huecoId): int
-    {
-        $this->variantes->update($varianteId, ['hueco_predeterminado_id' => $huecoId]);
-
-        return $huecoId !== null ? $this->movimientos->asignarSinAsignar($varianteId, $huecoId) : 0;
+        return $n;
     }
 
     /** Historial completo de una variante, lo mas nuevo primero. */

@@ -327,7 +327,7 @@
 
             controles.innerHTML = datos.huecoId
                 ? '<a href="' + base + '/' + datos.huecoId + '" class="badge rounded-pill text-decoration-none text-bg-primary" '
-                    + 'title="Hueco por defecto de esta pieza"><i class="bi bi-geo-alt"></i> ' + codigo + '</a>'
+                    + 'title="Hueco de esta pieza"><i class="bi bi-geo-alt"></i> ' + codigo + '</a>'
                 : '<span class="text-muted small">Sin hueco fijado.</span>';
         }
 

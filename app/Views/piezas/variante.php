@@ -2028,7 +2028,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                     <i class="bi bi-boxes"></i> Existencias
                     <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>" class="ms-auto small fw-normal">Ver ficha de existencias</a>
                 </h6>
-                <div class="row row-cols-2 row-cols-md-4 g-2 text-center">
+                <div class="row row-cols-3 g-2 text-center">
                     <div class="col">
                         <div class="fs-6 fw-semibold text-<?= $colorStock ?>"><?= (int) $ex['stock'] ?></div>
                         <div class="text-muted small">uds. en stock</div>
@@ -2044,10 +2044,6 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                             <?php else: ?>—<?php endif; ?>
                         </div>
                         <div class="text-muted small">hueco</div>
-                    </div>
-                    <div class="col">
-                        <div class="fs-6 fw-semibold"><?= $ex['defecto'] ? esc($ex['defecto']['codigo']) : '—' ?></div>
-                        <div class="text-muted small">hueco por defecto</div>
                     </div>
                 </div>
                 <?php if ($ex['sueltas'] > 0): ?>

@@ -142,9 +142,8 @@ class ExistenciasController extends BaseController
         // render más reciente de cada variante (con versión o suelto).
         $imagenes = [];
         // "Dónde está", igual que la ficha de la variante pero resuelto en
-        // una sola pasada para toda la galería: los códigos de hueco donde
-        // hay stock de cada una, para verlo de un vistazo sin entrar pieza
-        // por pieza.
+        // una sola pasada para toda la galería: el código del hueco de cada
+        // una, para verlo de un vistazo sin entrar pieza por pieza.
         $ubicaciones = [];
         if ($vista === 'galeria' && $filas !== []) {
             $ids = array_map(static fn (array $f) => (int) $f['variante']['id'], $filas);
@@ -165,16 +164,9 @@ class ExistenciasController extends BaseController
                     $codigoPorHuecoId[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($est, $h);
                 }
             }
-            $stockPorVarianteYHueco = $this->inventario->stockPorVarianteYHueco();
-            foreach ($ids as $vid) {
-                $codigos = [];
-                foreach ($stockPorVarianteYHueco[$vid] ?? [] as $huecoId => $n) {
-                    if ($n > 0 && $huecoId > 0) {
-                        $codigos[] = $codigoPorHuecoId[$huecoId] ?? '?';
-                    }
-                }
-                sort($codigos);
-                $ubicaciones[$vid] = $codigos;
+            foreach ($filas as $f) {
+                $huecoId = (int) ($f['variante']['hueco_predeterminado_id'] ?? 0);
+                $ubicaciones[(int) $f['variante']['id']] = $huecoId > 0 ? [$codigoPorHuecoId[$huecoId] ?? '?'] : [];
             }
         }
 
@@ -221,21 +213,7 @@ class ExistenciasController extends BaseController
             }
         }
 
-        // Desglose por hueco (0 = sin asignar), con el código completo a
-        // mano para pintarlo sin otra vuelta a la base de datos. Las bajas
-        // a mano nunca se atan a un hueco (se descuentan del total y
-        // listo), así que el cubo "sin asignar" puede quedar en negativo:
-        // eso no es una ubicación real, no se pinta.
-        $desglose = [];
-        foreach ($this->inventario->stockPorHueco($id) as $huecoId => $n) {
-            if ($n <= 0) {
-                continue;
-            }
-            $desglose[] = [
-                'hueco'  => $huecoId > 0 ? ($huecosPorId[$huecoId] ?? null) : null,
-                'stock'  => $n,
-            ];
-        }
+        $huecoId = $this->inventario->huecoDeVariante($id);
 
         return view('piezas/existencias/variante', [
             'variante'   => $variante,
@@ -244,21 +222,14 @@ class ExistenciasController extends BaseController
             'minimo'     => $minimo,
             'estado'     => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'historial'  => $this->inventario->historialDeVariante($id),
-            'desglose'   => $desglose,
+            'hueco'      => $huecoId !== null ? ($huecosPorId[$huecoId] ?? null) : null,
             'huecosDisponibles' => $huecosDisponibles,
-            // Para preseleccionar en el formulario de "mover lo suelto": si
-            // todo el stock ya asignado vive en un único hueco, ese es el
-            // destino obvio; si no (repartido o sin nada asignado todavía),
-            // que elija a mano.
-            'huecoSugerido' => $this->inventario->huecoUnicoDeVariante($id),
         ]);
     }
 
     /**
-     * Mueve todo lo "sin asignar" (ubicacion_id NULL) de una variante a un
-     * hueco — para cuando se dio de alta suelto (a mano o desde una placa
-     * sin hueco por defecto) y luego se decide dónde va físicamente, sin
-     * tener que hacerlo movimiento a movimiento.
+     * Mete en un hueco una pieza que no tiene ninguno, tenga stock o no. Lo
+     * que estuviera sin asignar va con ella.
      */
     public function asignarSueltos(int $id)
     {
@@ -271,19 +242,16 @@ class ExistenciasController extends BaseController
 
         $huecoId = (int) $this->request->getPost('hueco_id') ?: null;
         if ($huecoId === null || !$this->huecos->find($huecoId)) {
-            return redirect()->to($volver)->with('error', 'Elige a qué hueco mover lo suelto.');
+            return redirect()->to($volver)->with('error', 'Elige en qué hueco va.');
         }
 
         if ($error = $this->errorOtroHueco($id, $huecoId)) {
             return redirect()->to($volver)->with('error', $error);
         }
 
-        $movidos = $this->inventario->asignarSinAsignar($id, $huecoId);
-        $mensaje = $movidos > 0
-            ? 'Colocado en el hueco elegido lo que estaba sin asignar.'
-            : 'No había nada sin asignar que mover.';
+        $this->inventario->colocarEnHueco($id, $huecoId);
 
-        return redirect()->to($volver)->with('success', $mensaje);
+        return redirect()->to($volver)->with('success', 'Pieza colocada en su hueco.');
     }
 
     /**
@@ -339,10 +307,13 @@ class ExistenciasController extends BaseController
         }
 
         if ($sentido === 'alta') {
+            $actual = $this->inventario->huecoDeVariante($varianteId);
             if ($huecoId === null) {
-                $huecoId = $this->inventario->huecoDeVariante($varianteId);
+                $huecoId = $actual;
             } elseif ($error = $this->errorOtroHueco($varianteId, $huecoId)) {
                 return redirect()->to($volver)->with('error', $error);
+            } elseif ($actual === null) {
+                $this->inventario->colocarEnHueco($varianteId, $huecoId);
             }
         }
 
@@ -357,11 +328,9 @@ class ExistenciasController extends BaseController
     }
 
     /**
-     * Fija (o quita) el hueco por defecto de una pieza: a dónde va
-     * automáticamente lo que salga de una placa suya a partir de ahora
-     * (App\Services\PiezaInventario::sincronizarPlaca()). Si ya había
-     * stock de esta pieza sin asignar —lo normal es que sea justo lo
-     * recién impreso, esperando destino—, se coloca ya mismo ahí.
+     * Fija (o quita) el hueco de una pieza desde la bitácora. Lo que salga
+     * de sus placas irá ahí (PiezaInventario::sincronizarPlaca()), y lo que
+     * tuviera sin asignar se coloca ya.
      */
     public function fijarHuecoPredeterminado(int $id)
     {
@@ -390,11 +359,9 @@ class ExistenciasController extends BaseController
                 : redirect()->back()->with('error', $mensaje);
         }
 
-        $movidos = $this->inventario->fijarHuecoPredeterminado($id, $huecoId);
+        $this->inventario->colocarEnHueco($id, $huecoId);
 
-        $mensaje = $huecoId === null
-            ? 'Hueco por defecto quitado.'
-            : 'Hueco por defecto fijado.' . ($movidos > 0 ? ' Se ha colocado ahí lo que tenía sin asignar.' : '');
+        $mensaje = $huecoId === null ? 'Hueco quitado.' : 'Hueco fijado.';
 
         if ($this->request->isAJAX()) {
             // El JS repinta solo la fila de esta variante (badge + botón

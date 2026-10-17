@@ -52,9 +52,8 @@ $colocacionHuecos = $colocacionHuecos ?? [];
     </div>
 
     <?php // Chuleta para ir a colocarlo físicamente (una vez sincronizado):
-          // a qué hueco va cada pieza servible. Fijo si la pieza ya tiene
-          // hueco por defecto, inferido si no pero todo su stock vive en
-          // un único sitio, o a elegir si es la primera vez que sale.
+          // a qué hueco va cada pieza servible: el suyo, o a elegir si
+          // todavía no tiene.
           // Ver Web::colocacionDePlaca(). ?>
     <?php if ($placa['inventario_sincronizado_en'] && !empty($colocacion)): ?>
         <div class="mt-3 pt-2 border-top">
@@ -73,21 +72,9 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                         <span class="d-flex align-items-center gap-1" data-colocacion-controles>
                             <?php if ($c['codigo']): ?>
                                 <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $c['huecoId']) ?>"
-                                    class="badge rounded-pill text-decoration-none <?= $c['inferido'] ? 'text-bg-warning' : 'text-bg-primary' ?>"
-                                    title="<?= $c['inferido'] ? 'Inferido: todo su stock actual vive aquí' : 'Hueco por defecto de esta pieza' ?>">
+                                    class="badge rounded-pill text-decoration-none text-bg-primary" title="Hueco de esta pieza">
                                     <i class="bi bi-geo-alt"></i> <?= esc($c['codigo']) ?>
                                 </a>
-                                <?php if ($c['inferido']): ?>
-                                    <form method="post" action="<?= site_url('piezas/existencias/' . $c['varianteId'] . '/hueco-defecto') ?>"
-                                        data-ajax-form="hueco-defecto">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="hueco_id" value="<?= (int) $c['huecoId'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                            title="Fijar este hueco como destino por defecto de esta pieza">
-                                            Fijar
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
                             <?php elseif (empty($colocacionHuecos)): ?>
                                 <span class="text-muted small">
                                     Sin ubicaciones todavía —
@@ -118,8 +105,8 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                 <?php endforeach; ?>
             </div>
             <p class="text-muted mt-2 mb-0" style="font-size: .72rem;">
-                Elegir un hueco aquí también lo fija como destino por defecto de esa pieza: la próxima vez
-                que salga de una placa, caerá ahí solo.
+                El hueco que elijas aquí pasa a ser el de esa pieza: la próxima vez que salga de una placa,
+                caerá ahí solo.
             </p>
         </div>
     <?php endif; ?>

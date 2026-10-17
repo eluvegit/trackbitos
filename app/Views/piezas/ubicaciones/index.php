@@ -156,7 +156,7 @@
                         <?php foreach ($f['huecos'] as $h): ?>
                             <div class="hueco-tile-wrap">
                                 <a href="<?= site_url('piezas/ubicaciones/huecos/' . (int) $h['hueco']['id']) ?>"
-                                    class="hueco-tile<?= $h['unidades'] > 0 ? ' con-stock' : '' ?>">
+                                    class="hueco-tile<?= $h['contenido'] !== [] ? ' con-stock' : '' ?>">
                                     <div class="cabecera">
                                         <span class="codigo"><?= esc($h['codigo']) ?></span>
                                     </div>

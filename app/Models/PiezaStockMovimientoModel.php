@@ -100,39 +100,6 @@ class PiezaStockMovimientoModel extends Model
         return $this->reparto([$varianteId])[$varianteId] ?? [];
     }
 
-    /** Hueco donde vive la variante (con stock > 0), o null si no está en ninguno. */
-    public function huecoDeVariante(int $varianteId): ?int
-    {
-        foreach ($this->stockPorHueco($varianteId) as $huecoId => $n) {
-            if ($huecoId > 0 && $n > 0) {
-                return $huecoId;
-            }
-        }
-
-        return null;
-    }
-
-    /** @return array<int,int>  varianteId => stock en ese hueco */
-    public function stockDeHueco(int $huecoId): array
-    {
-        $ids = array_map('intval', array_column(
-            $this->select('variante_id')->distinct()->where('ubicacion_id', $huecoId)->findAll(),
-            'variante_id'
-        ));
-        if ($ids === []) {
-            return [];
-        }
-
-        $mapa = [];
-        foreach ($this->reparto($ids) as $vid => $porHueco) {
-            if (isset($porHueco[$huecoId])) {
-                $mapa[$vid] = $porHueco[$huecoId];
-            }
-        }
-
-        return $mapa;
-    }
-
     /** @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock) */
     public function stockPorVarianteYHueco(): array
     {
@@ -140,47 +107,9 @@ class PiezaStockMovimientoModel extends Model
     }
 
     /**
-     * Si TODO el stock de una variante está en un único hueco, ese hueco —
-     * si no o está repartida en varios, null. Fallback de dónde colocar lo
-     * nuevo cuando la variante todavía no tiene hueco por defecto fijado
-     * (App\Services\PiezaInventario::sincronizarPlaca()): si ya vive en un
-     * sitio concreto, lo nuevo va ahí también; si está repartida o no tiene
-     * nada, no hay nada que inferir.
-     */
-    public function huecoUnicoDeVariante(int $varianteId): ?int
-    {
-        $conStock = array_filter(
-            $this->stockPorHueco($varianteId),
-            static fn (int $n, int $huecoId) => $n > 0 && $huecoId > 0,
-            ARRAY_FILTER_USE_BOTH
-        );
-
-        return count($conStock) === 1 ? array_key_first($conStock) : null;
-    }
-
-    /**
-     * Coloca en un hueco todo lo que de una variante estuviera "sin
-     * asignar" (ubicacion_id NULL) — para cuando se fija el hueco por
-     * defecto de una pieza y ya había stock suelto esperando destino
-     * (típicamente lo recién impreso de una placa). Devuelve cuántas
-     * filas de movimiento tocó. Las bajas (delta negativo) también quedan
-     * sin hueco pero no son stock esperando destino — se dejan fuera.
-     */
-    public function asignarSinAsignar(int $varianteId, int $huecoId): int
-    {
-        $n = $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->where('delta >', 0)->countAllResults(false);
-        if ($n > 0) {
-            $this->where('variante_id', $varianteId)->where('ubicacion_id', null)->where('delta >', 0)->set('ubicacion_id', $huecoId)->update();
-        }
-
-        return $n;
-    }
-
-    /**
      * Reasigna todos los movimientos de un hueco a otro — para fusionar dos
-     * huecos (mover y luego borrar el que queda vacío) o para corregir que
-     * algo se apuntó en el hueco equivocado. No toca las cantidades, solo
-     * la ubicación. Devuelve cuántas filas de movimiento tocó.
+     * huecos (mover y luego borrar el que queda vacío). No toca las
+     * cantidades, solo la ubicación. Devuelve cuántas filas tocó.
      */
     public function moverUbicacion(int $origenId, int $destinoId): int
     {
@@ -193,56 +122,23 @@ class PiezaStockMovimientoModel extends Model
     }
 
     /**
-     * Traslada TODO el stock de una variante concreta de un hueco a otro —
-     * como moverUbicacion, pero filtrado también por variante, para separar
-     * una pieza de un hueco que tiene varias sin tocar el resto.
+     * Pone todas las altas de una variante en un hueco (null = sin asignar).
+     * Las bajas no se tocan: no tienen ubicación, se restan del hueco de la
+     * pieza en reparto().
      */
-    public function moverVarianteDeHueco(int $origenId, int $destinoId, int $varianteId): int
+    public function colocarVariante(int $varianteId, ?int $huecoId): int
     {
-        $n = $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->countAllResults(false);
+        $q = function () use ($varianteId, $huecoId) {
+            $this->where('variante_id', $varianteId)->where('delta >', 0);
+
+            return $huecoId === null
+                ? $this->where('ubicacion_id IS NOT NULL', null, false)
+                : $this->groupStart()->where('ubicacion_id', null)->orWhere('ubicacion_id !=', $huecoId)->groupEnd();
+        };
+
+        $n = $q()->countAllResults();
         if ($n > 0) {
-            $this->where('ubicacion_id', $origenId)->where('variante_id', $varianteId)->set('ubicacion_id', $destinoId)->update();
-        }
-
-        return $n;
-    }
-
-    public function quitarVarianteDeHueco(int $huecoId, int $varianteId): int
-    {
-        $n = $this->where('ubicacion_id', $huecoId)->where('variante_id', $varianteId)->countAllResults(false);
-        if ($n > 0) {
-            $this->where('ubicacion_id', $huecoId)->where('variante_id', $varianteId)->set('ubicacion_id', null)->update();
-        }
-
-        return $n;
-    }
-
-    /**
-     * Trae TODO el stock de una variante a un hueco, sea cual sea su
-     * ubicación actual (otro hueco, o suelta) — el "tirar" complementario a
-     * moverVarianteDeHueco() (que "empuja" desde un hueco concreto). Las
-     * bajas a mano (delta negativo con ubicacion_id NULL) no se tocan: no
-     * representan una ubicación real, ver asignarSinAsignar().
-     */
-    public function consolidarVarianteEnHueco(int $varianteId, int $huecoId): int
-    {
-        $n = $this->where('variante_id', $varianteId)
-            ->groupStart()
-                ->where('ubicacion_id !=', $huecoId)
-                ->orWhere('ubicacion_id', null)
-            ->groupEnd()
-            ->where('delta >', 0)
-            ->countAllResults(false);
-
-        if ($n > 0) {
-            $this->where('variante_id', $varianteId)
-                ->groupStart()
-                    ->where('ubicacion_id !=', $huecoId)
-                    ->orWhere('ubicacion_id', null)
-                ->groupEnd()
-                ->where('delta >', 0)
-                ->set('ubicacion_id', $huecoId)
-                ->update();
+            $q()->set('ubicacion_id', $huecoId)->update();
         }
 
         return $n;
