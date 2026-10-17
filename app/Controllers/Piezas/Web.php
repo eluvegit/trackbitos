@@ -2586,11 +2586,12 @@ class Web extends BaseController
 
         $huecosDisponibles = [];
         $codigoPorHuecoId  = [];
+        $ocupados          = $inventario->huecosOcupados();
         foreach ($estucheModel->ordenados() as $est) {
             foreach ($huecoModel->deEstuche((int) $est['id']) as $h) {
                 $codigo = PiezaHuecoModel::codigoCompleto($est, $h);
                 $codigoPorHuecoId[(int) $h['id']] = $codigo;
-                $huecosDisponibles[] = ['estuche' => $est, 'hueco' => $h, 'codigo' => $codigo];
+                $huecosDisponibles[] = ['estuche' => $est, 'hueco' => $h, 'codigo' => $codigo, 'libre' => !isset($ocupados[(int) $h['id']])];
             }
         }
 

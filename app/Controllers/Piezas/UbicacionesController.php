@@ -418,13 +418,14 @@ class UbicacionesController extends BaseController
         // huecos cada uno, un <select> plano se vuelve interminable.
         $destinosPorEstuche = [];
         $codigoPorHuecoId   = [];
+        $ocupados           = $this->inventario->huecosOcupados();
         foreach ($this->estuches->ordenados() as $est) {
             $huecosDelEstuche = [];
             foreach ($this->huecos->deEstuche((int) $est['id']) as $h) {
                 $codigo = PiezaHuecoModel::codigoCompleto($est, $h);
                 $codigoPorHuecoId[(int) $h['id']] = $codigo;
                 if ((int) $h['id'] !== $id) {
-                    $huecosDelEstuche[] = ['id' => (int) $h['id'], 'codigo' => $codigo];
+                    $huecosDelEstuche[] = ['id' => (int) $h['id'], 'codigo' => $codigo, 'libre' => !isset($ocupados[(int) $h['id']])];
                 }
             }
             if ($huecosDelEstuche !== []) {

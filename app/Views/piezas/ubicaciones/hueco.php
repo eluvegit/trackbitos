@@ -153,7 +153,7 @@
                                             <?php foreach ($destinosPorEstuche as $grupo): ?>
                                                 <optgroup label="<?= esc($grupo['estuche']['codigo']) ?>">
                                                     <?php foreach ($grupo['huecos'] as $h): ?>
-                                                        <option value="<?= $h['id'] ?>"><?= esc($h['codigo']) ?></option>
+                                                        <option value="<?= $h['id'] ?>"><?= esc($h['codigo']) ?><?= $h['libre'] ? ' (libre)' : '' ?></option>
                                                     <?php endforeach; ?>
                                                 </optgroup>
                                             <?php endforeach; ?>
@@ -184,7 +184,7 @@
                             <?php foreach ($destinosPorEstuche as $grupo): ?>
                                 <optgroup label="<?= esc($grupo['estuche']['codigo']) ?>">
                                     <?php foreach ($grupo['huecos'] as $h): ?>
-                                        <option value="<?= $h['id'] ?>"><?= esc($h['codigo']) ?></option>
+                                        <option value="<?= $h['id'] ?>"><?= esc($h['codigo']) ?><?= $h['libre'] ? ' (libre)' : '' ?></option>
                                     <?php endforeach; ?>
                                 </optgroup>
                             <?php endforeach; ?>

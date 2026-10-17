@@ -58,12 +58,13 @@ Default DB driver is MySQLi (`app/Config/Database.php`); the `tests` group falls
 ### Auth & routing
 
 - Auth is handled by the `myth/auth` package. `app/Config/Auth.php` extends `Myth\Auth\Config\Auth`; `landingRoute` is `dashboard`.
-- Almost every route group in `app/Config/Routes.php` is protected with `['filter' => 'auth']`, which maps to `\Myth\Auth\Filters\LoginFilter` (aliased as `auth` in `app/Config/Filters.php`).
+- Two Myth\Auth groups: `admin` (whole site) and `inventario` (only its own read-only `inventario/...` section). Every route group in `app/Config/Routes.php` uses `['filter' => 'admin']` (`App\Filters\SoloAdmin`: not logged in → login; `inventario` user → redirected to `inventario`; no group → logged out). Only `cuenta` (own password) uses plain `auth`. New admin routes must use `admin`, never `auth`.
+- Registration is closed (`allowRegistration = false`); users are managed at `cuenta/usuarios` (`App\Controllers\Usuarios`). Myth's `strong_password` rule crashes on CI 4.7 — use `min_length[10]` instead.
 - `app/Filters/LoginFilter.php`, `PermissionFilter.php`, and `RoleFilter.php` extend a local `BaseFilter` and are available but not currently wired into routes/filter aliases beyond the Myth\Auth login filter.
 
 ### Routing conventions
 
-Routes are grouped per module in `app/Config/Routes.php`, mostly `$routes->group('modulename', ['filter' => 'auth'], function ($routes) {...})`. Nested resources use numeric segments in the path, e.g. Rodajes → Escenas: `rodajes/(:num)/escenas/edit/(:num)`. When a route pattern could match more than one handler, more specific patterns must be declared before more generic ones (see the comment in the Comidas `diario` group about ordering `seleccionar-tipo` / two-segment / one-segment routes).
+Routes are grouped per module in `app/Config/Routes.php`, mostly `$routes->group('modulename', ['filter' => 'admin'], function ($routes) {...})`. Nested resources use numeric segments in the path, e.g. Rodajes → Escenas: `rodajes/(:num)/escenas/edit/(:num)`. When a route pattern could match more than one handler, more specific patterns must be declared before more generic ones (see the comment in the Comidas `diario` group about ordering `seleccionar-tipo` / two-segment / one-segment routes).
 
 ### Helpers & Services
 

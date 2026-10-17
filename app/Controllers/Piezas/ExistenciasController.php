@@ -205,10 +205,11 @@ class ExistenciasController extends BaseController
         }
         $huecosDisponibles = [];
         $huecosPorId = [];
+        $ocupados = $this->inventario->huecosOcupados();
         foreach ($estuchesPorId as $estucheId => $e) {
             foreach ($this->huecos->deEstuche($estucheId) as $h) {
                 $codigo = PiezaHuecoModel::codigoCompleto($e, $h);
-                $huecosDisponibles[] = ['estuche' => $e, 'hueco' => $h, 'codigo' => $codigo];
+                $huecosDisponibles[] = ['estuche' => $e, 'hueco' => $h, 'codigo' => $codigo, 'libre' => !isset($ocupados[(int) $h['id']])];
                 $huecosPorId[(int) $h['id']] = ['hueco' => $h, 'codigo' => $codigo];
             }
         }

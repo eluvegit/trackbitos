@@ -5,44 +5,44 @@ use CodeIgniter\Router\RouteCollection;
 /**
  * @var RouteCollection $routes
  */
-$routes->GET('/', 'Home::index');
+$routes->GET('/', static fn () => redirect()->to(site_url('dashboard')));
 
-$routes->GET('dashboard', 'Dashboard::index', ['filter' => 'auth']);
-$routes->POST('dashboard/tarea-fijada', 'Dashboard::fijarTarea', ['filter' => 'auth']);
-$routes->POST('dashboard/tarea-fijada/(:num)/quitar', 'Dashboard::desfijarTarea/$1', ['filter' => 'auth']);
-$routes->GET('dashboard/tarea-buscar', 'Dashboard::buscarTarea', ['filter' => 'auth']);
+$routes->GET('dashboard', 'Dashboard::index', ['filter' => 'admin']);
+$routes->POST('dashboard/tarea-fijada', 'Dashboard::fijarTarea', ['filter' => 'admin']);
+$routes->POST('dashboard/tarea-fijada/(:num)/quitar', 'Dashboard::desfijarTarea/$1', ['filter' => 'admin']);
+$routes->GET('dashboard/tarea-buscar', 'Dashboard::buscarTarea', ['filter' => 'admin']);
 
 /* LENTILLAS */
 // Página principal de Lentillas
-$routes->GET('lentillas', 'Lentillas::index', ['filter' => 'auth']);
+$routes->GET('lentillas', 'Lentillas::index', ['filter' => 'admin']);
 
 // Compras
-$routes->match(['GET', 'POST'], 'lentillas/compras', 'Lentillas::compras', ['filter' => 'auth']);
-$routes->GET('lentillas/compras/editar/(:num)', 'Lentillas::editarCompra/$1', ['filter' => 'auth']);
-$routes->POST('lentillas/compras/actualizar/(:num)', 'Lentillas::actualizarCompra/$1', ['filter' => 'auth']);
-$routes->delete('lentillas/compras/eliminar/(:num)', 'Lentillas::eliminarCompra/$1', ['filter' => 'auth']);
+$routes->match(['GET', 'POST'], 'lentillas/compras', 'Lentillas::compras', ['filter' => 'admin']);
+$routes->GET('lentillas/compras/editar/(:num)', 'Lentillas::editarCompra/$1', ['filter' => 'admin']);
+$routes->POST('lentillas/compras/actualizar/(:num)', 'Lentillas::actualizarCompra/$1', ['filter' => 'admin']);
+$routes->delete('lentillas/compras/eliminar/(:num)', 'Lentillas::eliminarCompra/$1', ['filter' => 'admin']);
 
 // Inventario
-$routes->GET('lentillas/stock', 'Lentillas::stock', ['filter' => 'auth']);
-$routes->POST('lentillas/stock/actualizar', 'Lentillas::actualizarStock', ['filter' => 'auth']);
+$routes->GET('lentillas/stock', 'Lentillas::stock', ['filter' => 'admin']);
+$routes->POST('lentillas/stock/actualizar', 'Lentillas::actualizarStock', ['filter' => 'admin']);
 
 // Sustituciones (GET y POST en la misma acción)
-$routes->match(['GET', 'POST'], 'lentillas/sustituciones', 'Lentillas::sustituciones', ['filter' => 'auth']);
-$routes->GET('lentillas/sustituciones/editar/(:num)', 'Lentillas::editarSustitucion/$1', ['filter' => 'auth']);
-$routes->POST('lentillas/sustituciones/actualizar/(:num)', 'Lentillas::actualizarSustitucion/$1', ['filter' => 'auth']);
-$routes->POST('lentillas/sustituciones/eliminar/(:num)', 'Lentillas::eliminarSustitucion/$1', ['filter' => 'auth']);
+$routes->match(['GET', 'POST'], 'lentillas/sustituciones', 'Lentillas::sustituciones', ['filter' => 'admin']);
+$routes->GET('lentillas/sustituciones/editar/(:num)', 'Lentillas::editarSustitucion/$1', ['filter' => 'admin']);
+$routes->POST('lentillas/sustituciones/actualizar/(:num)', 'Lentillas::actualizarSustitucion/$1', ['filter' => 'admin']);
+$routes->POST('lentillas/sustituciones/eliminar/(:num)', 'Lentillas::eliminarSustitucion/$1', ['filter' => 'admin']);
 
 
 
 // Avisos
-$routes->match(['GET', 'POST'], 'lentillas/avisos', 'Lentillas::avisos', ['filter' => 'auth']);
-$routes->match(['GET', 'POST'], 'lentillas/avisos/crear', 'Lentillas::crearAviso', ['filter' => 'auth']);
-$routes->GET('lentillas/avisos/editar/(:num)', 'Lentillas::editarAviso/$1', ['filter' => 'auth']);
-$routes->POST('lentillas/avisos/actualizar/(:num)', 'Lentillas::actualizarAviso/$1', ['filter' => 'auth']);
-$routes->match(['GET', 'POST'], 'lentillas/avisos/eliminar/(:num)', 'Lentillas::eliminarAviso/$1', ['filter' => 'auth']);
+$routes->match(['GET', 'POST'], 'lentillas/avisos', 'Lentillas::avisos', ['filter' => 'admin']);
+$routes->match(['GET', 'POST'], 'lentillas/avisos/crear', 'Lentillas::crearAviso', ['filter' => 'admin']);
+$routes->GET('lentillas/avisos/editar/(:num)', 'Lentillas::editarAviso/$1', ['filter' => 'admin']);
+$routes->POST('lentillas/avisos/actualizar/(:num)', 'Lentillas::actualizarAviso/$1', ['filter' => 'admin']);
+$routes->match(['GET', 'POST'], 'lentillas/avisos/eliminar/(:num)', 'Lentillas::eliminarAviso/$1', ['filter' => 'admin']);
 
 // LECTURA
-$routes->group('reading', ['filter' => 'auth'], function ($routes) {
+$routes->group('reading', ['filter' => 'admin'], function ($routes) {
     $routes->GET('/', 'Reading::library');
     $routes->GET('nuevo', 'Reading::nuevoLibro');
     $routes->GET('buscar', 'Reading::buscarLibro');
@@ -57,7 +57,7 @@ $routes->group('reading', ['filter' => 'auth'], function ($routes) {
 });
 
 // COCHE
-$routes->group('coche', ['filter' => 'auth'], function ($routes) {
+$routes->group('coche', ['filter' => 'admin'], function ($routes) {
 
     $routes->GET('/', 'Coche::index');
 
@@ -88,7 +88,7 @@ $routes->group('coche', ['filter' => 'auth'], function ($routes) {
 });
 
 // Compras
-$routes->group('compras', ['filter' => 'auth'], function ($routes) {
+$routes->group('compras', ['filter' => 'admin'], function ($routes) {
     $routes->GET('/', 'Compras::index');
 
     // Supermercados
@@ -145,7 +145,7 @@ $routes->group('compras', ['filter' => 'auth'], function ($routes) {
 
 
 // GIMNASIO
-$routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
+$routes->group('gimnasio', ['filter' => 'admin'], function ($routes) {
     $routes->GET('', 'Gimnasio::index');
     $routes->GET('ejercicios', 'GimnasioEjercicios::index');
     $routes->GET('ejercicios/create', 'GimnasioEjercicios::create');
@@ -202,7 +202,7 @@ $routes->group('gimnasio', ['filter' => 'auth'], function ($routes) {
 
 
 // MESOCICLOS
-$routes->group('gimnasio', ['filter' => 'auth'], static function ($r) {
+$routes->group('gimnasio', ['filter' => 'admin'], static function ($r) {
     $r->GET('mesociclos',                                       'GimnasioMesociclos::index');
     $r->match(['GET', 'POST'],   'mesociclos/nuevo',             'GimnasioMesociclos::nuevo');
     $r->GET('mesociclos/(:num)',                                'GimnasioMesociclos::ver/$1');
@@ -225,7 +225,7 @@ $routes->group('gimnasio', ['filter' => 'auth'], static function ($r) {
 
 
 // --- API para AJAX del diario ---
-$routes->group('api', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comidas'], static function ($r) {
+$routes->group('api', ['filter' => 'admin', 'namespace' => 'App\Controllers\Comidas'], static function ($r) {
     // Buscador y detalle de alimentos
     $r->GET('alimentos', 'Diario::buscarAlimentos');       // /api/alimentos?q=...
     $r->GET('alimentos/(:num)', 'Diario::alimento/$1');    // /api/alimentos/{id}
@@ -239,7 +239,7 @@ $routes->group('api', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comid
 
 
 // === Rutas módulo Comidas (app/Config/Routes.php) ===
-$routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Comidas'], static function ($routes) {
+$routes->group('comidas', ['filter' => 'admin', 'namespace' => 'App\Controllers\Comidas'], static function ($routes) {
 
     // --- Diario ---
     $routes->group('diario', static function ($r) {
@@ -337,7 +337,7 @@ $routes->group('comidas', ['filter' => 'auth', 'namespace' => 'App\Controllers\C
 });
 
 
-$routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
+$routes->group('youtube', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/',                                'Youtube::index');
     $routes->match(['GET', 'POST'], 'crear',          'Youtube::crearLista');
 
@@ -362,7 +362,7 @@ $routes->group('youtube', ['filter' => 'auth'], static function ($routes) {
 
 // app/Config/Routes.php
 
-$routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
+$routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
 
     // ---- Proyectos de rodaje ----
     $routes->GET('/',                 'Rodajes::index');
@@ -397,7 +397,7 @@ $routes->group('rodajes', ['filter' => 'auth'], static function ($routes) {
 });
 
 
-$routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
+$routes->group('enlaces', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/', 'Enlaces::index');
     $routes->GET('buscar-resultados', 'Enlaces::buscarResultados'); // AJAX: solo la lista de resultados (búsqueda en vivo)
     $routes->GET('etiquetas-disponibles', 'Enlaces::etiquetasDisponibles');
@@ -455,7 +455,7 @@ $routes->group('enlaces', ['filter' => 'auth'], static function ($routes) {
 
 });
 
-$routes->group('journal', ['filter' => 'auth'], static function ($routes) {
+$routes->group('journal', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('', 'Journal::index');
     $routes->GET('grid', 'Journal::grid');
     $routes->GET('edit/(:num)', 'Journal::edit/$1');
@@ -500,7 +500,7 @@ $routes->group('journal', ['filter' => 'auth'], static function ($routes) {
 });
 
 // ---- Hogar: checklist rutinario de tareas por habitación ----
-$routes->group('hogar', ['filter' => 'auth'], static function ($routes) {
+$routes->group('hogar', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/', 'Hogar::index');
     $routes->GET('pendientes', 'Hogar::pendientes');
     $routes->GET('gestionar', 'Hogar::gestionar');
@@ -530,7 +530,7 @@ $routes->group('hogar', ['filter' => 'auth'], static function ($routes) {
 // 'idea' es un estado más del pipeline (idea -> planificacion -> ... ->
 // completado): no hay rutas ni controlador aparte para ideas, se crean y
 // gestionan igual que cualquier sesión.
-$routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
+$routes->group('sesiones', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/', 'Sesiones::index');
     $routes->GET('crear', 'Sesiones::create');
     $routes->POST('guardar', 'Sesiones::store');
@@ -566,7 +566,7 @@ $routes->group('sesiones', ['filter' => 'auth'], static function ($routes) {
 });
 
 // ---- Recordatorios: fechas de eventos recurrentes (ITV, DNI, vacunas, etc.) ----
-$routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) {
+$routes->group('recordatorios', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/', 'Recordatorios::index');
     $routes->GET('nuevo', 'Recordatorios::nuevo');
     $routes->POST('crear', 'Recordatorios::crear');
@@ -582,7 +582,7 @@ $routes->group('recordatorios', ['filter' => 'auth'], static function ($routes) 
 // (ver Braintogram::webhook / braintogram.webhookSecret en .env).
 $routes->POST('braintogram/webhook', 'Braintogram::webhook');
 
-$routes->group('braintogram', ['filter' => 'auth'], static function ($routes) {
+$routes->group('braintogram', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('/', 'Braintogram::index');
     $routes->GET('(:num)', 'Braintogram::ver/$1');
 });
@@ -605,7 +605,7 @@ $routes->group('buscapp/api', ['namespace' => 'App\Controllers\Buscapp'], static
     });
 });
 
-$routes->group('buscapp', ['filter' => 'auth', 'namespace' => 'App\Controllers\Buscapp'], static function ($routes) {
+$routes->group('buscapp', ['filter' => 'admin', 'namespace' => 'App\Controllers\Buscapp'], static function ($routes) {
     $routes->GET('/', 'Admin::index');
     $routes->GET('(:num)', 'Admin::ver/$1');
 });
@@ -684,7 +684,7 @@ $routes->group('piezas/sterclicks-api', ['filter' => 'sterclicksApi', 'namespace
 // Interfaz web (fase 6). Los ficheros NO se bajan desde aquí: quien toca el
 // disco es el script, que es el único que puede identificar la máquina
 // (spec 4.5) — esta web puede abrirse desde el móvil.
-$routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
+$routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\Piezas'], static function ($routes) {
     $routes->GET('/', 'Web::index');
     $routes->POST('familia', 'Web::crearFamilia');
     $routes->POST('variante', 'Web::crearVariante');
@@ -941,7 +941,7 @@ $routes->group('piezas', ['filter' => 'auth', 'namespace' => 'App\Controllers\Pi
 // ---- Silo: archivo de material fotográfico/vídeo resultante. Cara web
 // (sesión de navegador, filtro 'auth'); la API del agente .py va aparte
 // más abajo (silo/agente, sin sesión, token propio). ----
-$routes->group('silo', ['filter' => 'auth', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
+$routes->group('silo', ['filter' => 'admin', 'namespace' => 'App\Controllers\Silo'], static function ($routes) {
     $routes->GET('/', 'Web::index');
     $routes->GET('crear', 'Web::create');
     $routes->POST('crear', 'Web::store');
@@ -996,4 +996,14 @@ $routes->group('silo/agente', ['filter' => 'siloApi', 'namespace' => 'App\Contro
 $routes->group('cuenta', ['filter' => 'auth'], static function ($routes) {
     $routes->GET('/', 'AuthController::account', ['as' => 'account']);
     $routes->POST('password', 'AuthController::updatePassword');
+});
+
+// ---- Usuarios: alta y gestión de cuentas y grupos, solo admin ----
+$routes->group('cuenta/usuarios', ['filter' => 'admin'], static function ($routes) {
+    $routes->GET('/', 'Usuarios::index');
+    $routes->POST('crear', 'Usuarios::crear');
+    $routes->POST('(:num)/grupo', 'Usuarios::grupo/$1');
+    $routes->POST('(:num)/activo', 'Usuarios::activo/$1');
+    $routes->POST('(:num)/password', 'Usuarios::password/$1');
+    $routes->POST('(:num)/borrar', 'Usuarios::borrar/$1');
 });

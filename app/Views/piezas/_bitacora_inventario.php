@@ -93,7 +93,7 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                                                 <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
                                                 <?php $estucheActual = (int) $hd['estuche']['id']; ?>
                                             <?php endif; ?>
-                                            <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                                            <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?><?= $hd['libre'] ? ' (libre)' : '' ?></option>
                                         <?php endforeach; ?>
                                         <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
                                     </select>

@@ -144,6 +144,15 @@ class PiezaInventario
         return $this->variantes->where('hueco_predeterminado_id', $huecoId)->where('borrado_en', null)->findAll();
     }
 
+    /** @return array<int,true> ids de huecos con alguna pieza (no borrada) */
+    public function huecosOcupados(): array
+    {
+        $filas = $this->variantes->select('hueco_predeterminado_id')->distinct()
+            ->where('hueco_predeterminado_id IS NOT NULL')->where('borrado_en', null)->findAll();
+
+        return array_fill_keys(array_map(static fn (array $f) => (int) $f['hueco_predeterminado_id'], $filas), true);
+    }
+
     /**
      * Mete la pieza en un hueco, o la saca (null), con o sin stock. Lleva
      * sus altas al mismo sitio. Devuelve cuántas filas de movimiento tocó.

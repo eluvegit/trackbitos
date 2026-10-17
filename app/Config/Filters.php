@@ -39,6 +39,7 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
         'auth'          => \Myth\Auth\Filters\LoginFilter::class, // ← AÑADE ESTA
+        'admin'         => \App\Filters\SoloAdmin::class,
         'buscappApi'    => BuscappApiAuth::class,
         'piezasApi'     => PiezasApiAuth::class,
         'sterclicksApi' => SterclicksApiAuth::class,

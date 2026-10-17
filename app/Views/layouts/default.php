@@ -58,6 +58,11 @@
         <div class="collapse navbar-collapse" id="mainNavbar">
             <ul class="navbar-nav ms-auto">
                 <?php if (logged_in()): ?>
+                    <?php if (in_groups('admin')): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?= site_url('cuenta/usuarios') ?>">Usuarios</a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" href="<?= site_url('cuenta') ?>">Mi cuenta</a>
                     </li>

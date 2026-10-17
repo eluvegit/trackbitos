@@ -154,7 +154,7 @@
                         <optgroup label="<?= esc($hd['estuche']['codigo']) ?>">
                         <?php $estucheActual = (int) $hd['estuche']['id']; ?>
                     <?php endif; ?>
-                    <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                    <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?><?= $hd['libre'] ? ' (libre)' : '' ?></option>
                 <?php endforeach; ?>
                 <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
             </select>
@@ -266,7 +266,7 @@
                                     <optgroup label="<?= esc($hd['estuche']['codigo']) ?><?= $hd['estuche']['zona'] ? ' — ' . esc($hd['estuche']['zona']) : '' ?>">
                                     <?php $estucheActual = (int) $hd['estuche']['id']; ?>
                                 <?php endif; ?>
-                                <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?></option>
+                                <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?><?= $hd['libre'] ? ' (libre)' : '' ?></option>
                             <?php endforeach; ?>
                             </optgroup>
                         </select>
@@ -274,7 +274,12 @@
                 </div>
                 <div class="mb-1">
                     <label class="form-label small mb-1">Motivo</label>
-                    <textarea name="nota" rows="3" required class="form-control"
+                    <div class="d-flex flex-wrap gap-1 mb-2 d-none" data-mov-sugerencias>
+                        <?php foreach (['Se lo llevó Esther', 'Recuento por descuadre', 'Rotura', 'Se lleva a pintura'] as $sug): ?>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-mov-sugerencia><?= esc($sug) ?></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <textarea name="nota" rows="3" required class="form-control" data-mov-nota
                         placeholder="Por qué se da de alta / baja (rotura, regalo, recuento, prueba destructiva…)"></textarea>
                 </div>
             </div>
@@ -336,6 +341,16 @@
             // del total y los huecos existentes se quedan tal cual.
             if (huecoWrap) huecoWrap.classList.toggle('d-none', !esAlta);
             if (huecoSelect) huecoSelect.disabled = !esAlta;
+            if (sugerencias) sugerencias.classList.toggle('d-none', esAlta);
+        });
+
+        var sugerencias = modal.querySelector('[data-mov-sugerencias]');
+        var nota = modal.querySelector('[data-mov-nota]');
+        modal.querySelectorAll('[data-mov-sugerencia]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                nota.value = btn.textContent.trim();
+                nota.focus();
+            });
         });
     })();
 </script>
