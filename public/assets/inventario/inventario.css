@@ -53,6 +53,7 @@ button { font: inherit; color: inherit; }
     position: sticky;
     top: 0;
     height: 100vh;
+    height: 100dvh;
     width: 120px;
     flex: none;
     background: var(--tarjeta);
@@ -63,7 +64,11 @@ button { font: inherit; color: inherit; }
     gap: 28px;
     box-shadow: var(--sombra);
     z-index: 10;
+    overflow-y: auto;
+    scrollbar-width: none;
 }
+
+.inv-lateral::-webkit-scrollbar { display: none; }
 
 .inv-logo {
     width: 64px;
@@ -76,7 +81,7 @@ button { font: inherit; color: inherit; }
     font-size: 1.5rem;
 }
 
-.inv-menu { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.inv-menu { display: flex; flex-direction: column; gap: 14px; flex: 1 0 auto; }
 
 .inv-menu a,
 .inv-salir {
@@ -93,9 +98,11 @@ button { font: inherit; color: inherit; }
     transition: background .15s, color .15s;
 }
 
+/* Misma caja para los iconos de Bootstrap y los SVG de las guías,
+   para que todas las etiquetas queden a la misma altura */
 .inv-menu a i,
 .inv-menu a .icono-guia,
-.inv-salir i { font-size: 1.6rem; }
+.inv-salir i { font-size: 1.6rem; height: 1em; line-height: 1; }
 
 .inv-menu a:hover,
 .inv-salir:hover { color: var(--acento); }
@@ -121,12 +128,17 @@ button { font: inherit; color: inherit; }
 
 .inv-cabecera h1 {
     margin: 0;
+    min-width: 0;
+    line-height: 1.2;
     font-size: 1.9rem;
     font-weight: 600;
     display: flex;
     align-items: center;
     gap: 14px;
 }
+
+/* Junto al buscador el título no encoge (si no, el buscador lo tapaba) */
+.inv-cabecera:has(.inv-buscador) h1 { flex: none; }
 
 .inv-volver {
     width: 52px;
@@ -137,13 +149,14 @@ button { font: inherit; color: inherit; }
     display: grid;
     place-items: center;
     font-size: 1.3rem;
+    flex: none;
 }
 
 .inv-volver:hover { color: var(--acento); }
 
 .inv-usuario { display: flex; align-items: center; gap: 12px; }
 
-.inv-cabecera-derecha { display: flex; align-items: center; gap: 20px; }
+.inv-cabecera-derecha { display: flex; align-items: center; gap: 20px; flex: none; }
 
 .inv-tema {
     position: relative;
@@ -213,10 +226,12 @@ button { font: inherit; color: inherit; }
     font-size: .85rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s, background-color .15s;
 }
 
-.inv-chip:hover { border-color: var(--acento); color: var(--acento); }
+@media (hover: hover) {
+    .inv-chip:hover { border-color: var(--acento); color: var(--acento); }
+}
 
 .inv-chip.activo {
     background: var(--acento);
@@ -228,7 +243,8 @@ button { font: inherit; color: inherit; }
 
 .inv-botones {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* 3 columnas si caben de al menos 240px; si no, las que quepan (2 en tablet vertical) */
+    grid-template-columns: repeat(auto-fill, minmax(max(240px, calc((100% - 56px) / 3)), 1fr));
     gap: 28px;
     max-width: 1080px;
 }
@@ -246,13 +262,16 @@ button { font: inherit; color: inherit; }
     text-align: center;
     gap: 10px;
     padding: 28px;
-    transition: border-color .15s, transform .15s;
 }
 
-.inv-boton:hover { border-color: var(--acento); transform: translateY(-2px); }
+/* Sin transición ni desplazamiento en el hover: con fotos grandes dentro,
+   animar transform obligaba a repintar la tarjeta entera en cada fotograma. */
+@media (hover: hover) {
+    .inv-boton:hover { border-color: var(--acento); }
+}
 .inv-boton:active { transform: scale(.98); }
 
-.inv-boton strong { font-size: 1.35rem; font-weight: 600; }
+.inv-boton strong { font-size: 1.35rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .inv-boton > span:last-child { color: var(--gris); font-size: .9rem; }
 
 .inv-boton-icono {
@@ -275,12 +294,15 @@ button { font: inherit; color: inherit; }
     margin-bottom: 6px;
 }
 
-.inv-boton.con-foto { justify-content: flex-start; padding: 18px 18px 24px; }
+/* Con foto la tarjeta no es cuadrada: la foto tiene proporción fija y el
+   título debajo crece lo que necesite (si no, un título de dos líneas
+   aplastaba la foto en una franja). */
+.inv-boton.con-foto { aspect-ratio: auto; justify-content: flex-start; padding: 18px 18px 24px; }
 
 .inv-boton-foto {
     width: 100%;
-    flex: 1;
-    min-height: 0;
+    flex: none;
+    aspect-ratio: 4 / 3;
     border-radius: 16px;
     background: var(--fondo);
     overflow: hidden;
@@ -388,7 +410,7 @@ button { font: inherit; color: inherit; }
 
 .inv-pieza-datos { padding: 16px 6px 4px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 
-.inv-pieza-datos h3 { margin: 0; font-size: 1.05rem; font-weight: 600; line-height: 1.3; flex: 1; }
+.inv-pieza-datos h3 { margin: 0; font-size: 1.05rem; font-weight: 600; line-height: 1.3; flex: 1; overflow-wrap: anywhere; }
 
 .inv-codigo {
     align-self: flex-start;
@@ -469,7 +491,8 @@ button { font: inherit; color: inherit; }
 .inv-mini:disabled { cursor: default; }
 .inv-mini img { width: 100%; height: 100%; object-fit: cover; }
 
-.inv-hueco-nombre { flex: 1; font-weight: 500; line-height: 1.3; }
+.inv-hueco-nombre { flex: 1; min-width: 0; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.inv-hueco li .inv-stock { flex: none; }
 
 /* ---- Vacío ---- */
 
@@ -502,6 +525,7 @@ button { font: inherit; color: inherit; }
 .inv-visor img {
     max-width: 100%;
     max-height: calc(100vh - 220px);
+    max-height: calc(100dvh - 220px);
     object-fit: contain;
     border-radius: 16px;
     background: var(--fondo);
@@ -537,7 +561,46 @@ button { font: inherit; color: inherit; }
 
 @media (max-width: 1100px) {
     .inv-principal { padding: 28px 28px 56px; }
-    .inv-botones { gap: 20px; }
+    /* Tablet: siempre 3 columnas y tarjetas más bajas; cuadradas de 270px
+       ocupaban media pantalla con solo tres botones */
+    .inv-botones { gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .inv-boton { padding: 18px; gap: 8px; }
+    .inv-boton:not(.con-foto) { aspect-ratio: auto; min-height: 170px; }
+    .inv-boton.con-foto { padding: 12px 12px 16px; }
+    .inv-boton strong { font-size: 1.15rem; }
+    .inv-boton > span:last-child { font-size: .82rem; }
+    .inv-boton-icono { width: 64px; height: 64px; font-size: 1.8rem; border-radius: 20px; margin-bottom: 4px; }
+    .inv-boton-codigo { font-size: 3rem; }
+    .inv-piezas { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+    .inv-usuario-nombre { display: none; }
+    .inv-cabecera-derecha { gap: 14px; }
+    .inv-resultado { gap: 24px; }
+    .inv-resultado-datos h2 { font-size: 1.6rem; }
+    .inv-resultado-datos .inv-codigo.grande { font-size: 2.4rem; }
+}
+
+/* ---- Poca altura (móvil en horizontal, portátil pequeño): lateral compacto ---- */
+
+@media (min-width: 761px) and (max-height: 600px) {
+    .inv-lateral { padding: 14px 0; gap: 14px; }
+    .inv-logo { display: none; }
+    .inv-menu { gap: 6px; }
+    .inv-menu a, .inv-salir { padding: 8px 0 6px; }
+    .inv-menu a i, .inv-menu a .icono-guia, .inv-salir i { font-size: 1.3rem; }
+    .inv-principal { padding-top: 20px; }
+    .inv-cabecera { margin-bottom: 18px; }
+    .inv-boton:not(.con-foto) { aspect-ratio: auto; min-height: 180px; }
+}
+
+/* Móvil en horizontal: ni compacto cabe el lateral con textos; solo iconos
+   (el texto se oculta a la vista pero sigue ahí para lectores de pantalla) */
+@media (min-width: 761px) and (max-height: 450px) {
+    .inv-lateral { width: 72px; gap: 8px; padding: 10px 0; }
+    .inv-menu { gap: 4px; }
+    .inv-menu a, .inv-salir { width: 56px; padding: 10px 0; border-radius: 14px; }
+    .inv-menu a span, .inv-salir span {
+        position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
 }
 
 /* ---- Móvil: el lateral pasa a barra inferior ---- */
@@ -563,32 +626,64 @@ button { font: inherit; color: inherit; }
     }
 
     .inv-logo { display: none; }
-    .inv-menu { flex-direction: row; flex: 1; justify-content: space-around; gap: 4px; }
-    .inv-menu a, .inv-salir { width: auto; flex: 1; padding: 10px 6px 8px; }
+    .inv-lateral { overflow: visible; }
+    /* Con varias guías no caben todas: la barra se desliza en horizontal */
+    .inv-menu { flex-direction: row; flex: 1; min-width: 0; justify-content: flex-start; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+    .inv-menu::-webkit-scrollbar { display: none; }
+    .inv-menu a, .inv-salir { width: auto; flex: 1 0 64px; max-width: 96px; padding: 8px 4px 6px; border-radius: 14px; font-size: .68rem; }
+    .inv-menu a span, .inv-salir span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .inv-menu a i, .inv-menu a .icono-guia, .inv-salir i { font-size: 1.35rem; }
+    .inv-salir { flex: none; width: 64px; }
+    /* Si sobra ancho, los iconos se reparten (márgenes auto: si no caben y la
+       barra se desliza, valen 0 y no esconden el primero como haría space-around) */
+    .inv-menu a { margin: 0 auto; }
 
     .inv-principal { padding: 20px 16px 120px; }
-    .inv-cabecera h1 { font-size: 1.5rem; }
-    .inv-usuario-nombre { display: none; }
+    .inv-cabecera h1 { font-size: 1.4rem; gap: 10px; }
+    .inv-usuario { display: none; }
+    .inv-volver { width: 44px; height: 44px; border-radius: 14px; }
     .inv-cabecera:has(.inv-buscador) h1 { display: none; }
-    .inv-cabecera { gap: 10px; }
+    .inv-cabecera { gap: 10px; margin-bottom: 20px; }
     .inv-tema { width: 80px; padding: 0 11px; }
     .inv-tema::before { width: 36px; height: 36px; top: 6px; left: 6px; }
     :root[data-theme="dark"] .inv-tema::before { transform: translateX(32px); }
     .inv-avatar { width: 44px; height: 44px; }
 
-    .inv-botones { grid-template-columns: repeat(2, 1fr); gap: 14px; }
-    .inv-boton { padding: 16px; }
-    .inv-boton strong { font-size: 1.1rem; }
-    .inv-boton-icono { width: 72px; height: 72px; font-size: 2rem; border-radius: 22px; }
-    .inv-boton-codigo { font-size: 3rem; }
+    .inv-botones { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .inv-boton { padding: 14px; gap: 6px; border-radius: 18px; }
+    .inv-boton.con-foto { padding: 10px 10px 14px; }
+    .inv-boton strong { font-size: 1rem; }
+    .inv-boton > span:last-child { font-size: .78rem; }
+    .inv-boton-icono { width: 60px; height: 60px; font-size: 1.7rem; border-radius: 18px; margin-bottom: 4px; }
+    .inv-boton-codigo { font-size: 2.6rem; }
+    .inv-boton-foto { border-radius: 12px; font-size: 2rem; aspect-ratio: 1 / 1; }
+    /* Los botones sin foto (inicio, estuches) no necesitan ser cuadrados */
+    .inv-boton:not(.con-foto) { aspect-ratio: auto; min-height: 150px; }
 
     .inv-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 24px; padding: 0 16px 4px; scrollbar-width: none; }
     .inv-chips::-webkit-scrollbar { display: none; }
     .inv-chip { flex: none; }
 
-    .inv-piezas { grid-template-columns: repeat(2, 1fr); gap: 14px; }
-    .inv-codigo { font-size: 1.3rem; }
-    .inv-huecos { grid-template-columns: 1fr; }
+    .inv-piezas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .inv-pieza { padding: 10px; border-radius: 18px; }
+    .inv-pieza-foto { border-radius: 12px; }
+    .inv-pieza-datos { padding: 12px 4px 2px; }
+    .inv-pieza-datos h3 { font-size: .9rem; }
+    .inv-lupa { width: 34px; height: 34px; right: 6px; bottom: 6px; border-radius: 10px; font-size: .85rem; }
+    .inv-codigo { font-size: 1.3rem; padding: 2px 10px; }
+    .inv-codigo.sin { font-size: .75rem; padding: 6px 10px; }
+    .inv-stock strong { font-size: 1.25rem; }
+
+    .inv-huecos { grid-template-columns: 1fr; gap: 14px; }
+    .inv-hueco { padding: 16px; border-radius: 18px; }
+    .inv-mini { width: 60px; height: 60px; }
+    .inv-hueco li { gap: 10px; }
+
+    .inv-visor { padding: 12px; }
+    .inv-visor figure { padding: 10px; border-radius: 20px; }
+    .inv-visor img { max-height: calc(100dvh - 200px); }
+    .inv-visor figcaption { gap: 10px; padding: 12px 4px 2px; font-size: 1rem; }
+    .inv-visor-cerrar { top: 12px; right: 12px; width: 48px; height: 48px; font-size: 1.2rem; }
 }
 
 /* ---- Guías paso a paso ---- */
@@ -645,11 +740,28 @@ button { font: inherit; color: inherit; }
     font-weight: 500;
 }
 
-.inv-boton-texto:hover { border-color: var(--acento); color: var(--acento); }
+@media (hover: hover) {
+    .inv-boton-texto:hover { border-color: var(--acento); color: var(--acento); }
+}
 
 @media (max-width: 760px) {
     .inv-resultado { grid-template-columns: 1fr; gap: 18px; padding: 16px; }
     .inv-resultado-datos h2 { font-size: 1.5rem; }
     .inv-resultado-datos .inv-codigo.grande { font-size: 2.4rem; }
     .inv-pregunta { font-size: 1.25rem; }
+    .inv-migas { gap: 6px; margin-bottom: 20px; }
+    .inv-migas .inv-chip { padding: 8px 14px; font-size: .78rem; }
+    .inv-resultado-foto { aspect-ratio: auto; height: min(calc(100vw - 64px), 50vh); }
+    .inv-boton-texto { align-self: stretch; text-align: center; }
+}
+
+/* ---- Móvil muy estrecho (≤360px) ---- */
+
+@media (max-width: 360px) {
+    .inv-principal { padding-left: 12px; padding-right: 12px; }
+    .inv-chips { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
+    .inv-tema { width: 70px; }
+    .inv-tema::before { width: 32px; height: 32px; top: 8px; }
+    :root[data-theme="dark"] .inv-tema::before { transform: translateX(26px); }
+    .inv-boton-codigo { font-size: 2.2rem; }
 }
