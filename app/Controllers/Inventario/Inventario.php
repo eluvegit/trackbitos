@@ -67,7 +67,7 @@ class Inventario extends BaseController
     {
         $estuche = (new PiezaEstucheModel())->find($id);
         if (!$estuche) {
-            return redirect()->to(site_url('inventario/estuches'));
+            return redirect()->to(inventario_url('estuches'));
         }
 
         return $this->pintar('inventario/estuche', [
@@ -87,7 +87,7 @@ class Inventario extends BaseController
         $guias      = new PiezaGuias();
         $estructura = $guias->estructura($id);
         if (!$estructura || !$estructura['guia']['activa']) {
-            return redirect()->to(site_url('inventario'));
+            return redirect()->to(inventario_url());
         }
 
         $piezas = array_column($this->catalogo->piezas(), null, 'id');

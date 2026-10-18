@@ -5,7 +5,7 @@
 <?= $this->section('contenido') ?>
 <div class="inv-botones">
     <?php foreach ($categorias as $c): ?>
-        <a href="<?= site_url('inventario/buscar?cat=' . $c['id']) ?>" class="inv-boton con-foto">
+        <a href="<?= inventario_url('buscar?cat=' . $c['id']) ?>" class="inv-boton con-foto">
             <span class="inv-boton-foto">
                 <?php if ($c['img']): ?>
                     <img src="<?= esc($c['img'], 'attr') ?>" alt="" loading="lazy">

@@ -5,7 +5,7 @@
 <?= $this->section('contenido') ?>
 <div class="inv-botones">
     <?php foreach ($estuches as $e): ?>
-        <a href="<?= site_url('inventario/estuches/' . (int) $e['estuche']['id']) ?>" class="inv-boton">
+        <a href="<?= inventario_url('estuches/' . (int) $e['estuche']['id']) ?>" class="inv-boton">
             <span class="inv-boton-codigo"><?= esc($e['estuche']['codigo']) ?></span>
             <?php if (!empty($e['estuche']['zona'])): ?>
                 <strong><?= esc($e['estuche']['zona']) ?></strong>

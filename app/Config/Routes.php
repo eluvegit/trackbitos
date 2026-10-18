@@ -5,6 +5,38 @@ use CodeIgniter\Router\RouteCollection;
 /**
  * @var RouteCollection $routes
  */
+
+// ---- Inventario: sección de solo lectura para el grupo 'inventario' ----
+// Solo GET a propósito: aquí no se modifica nada. En el dominio principal
+// cuelga de /inventario (más abajo); en inventario.eluve.es (app.inventarioHost
+// en .env) va en la raíz y es lo ÚNICO que existe en ese host,
+// aparte del login/logout de Myth\Auth, que llega por auto-discovery.
+$opcionesInventario = ['filter' => 'inventario', 'namespace' => 'App\Controllers\Inventario'];
+$rutasInventario    = static function ($routes) {
+    $routes->GET('/', 'Inventario::index');
+    $routes->GET('buscar', 'Inventario::buscar');
+    $routes->GET('categorias', 'Inventario::categorias');
+    $routes->GET('estuches', 'Inventario::estuches');
+    $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
+    $routes->GET('guia/(:num)', 'Inventario::guia/$1');
+    $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
+};
+
+if (config('App')->esInventario()) {
+    $routes->group('', $opcionesInventario, $rutasInventario);
+
+    // Enlaces y marcadores antiguos con /inventario/... → misma ruta sin prefijo.
+    $quitarPrefijo = static function (string ...$segmentos) {
+        $query = service('request')->getUri()->getQuery();
+
+        return redirect()->to(site_url(implode('/', $segmentos)) . ($query !== '' ? '?' . $query : ''), 301);
+    };
+    $routes->GET('inventario', $quitarPrefijo);
+    $routes->GET('inventario/(:any)', $quitarPrefijo);
+
+    return;
+}
+
 $routes->GET('/', static fn () => redirect()->to(site_url('dashboard')));
 
 $routes->GET('dashboard', 'Dashboard::index', ['filter' => 'admin']);
@@ -1022,14 +1054,5 @@ $routes->group('cuenta/usuarios', ['filter' => 'admin'], static function ($route
     $routes->POST('(:num)/borrar', 'Usuarios::borrar/$1');
 });
 
-// ---- Inventario: sección de solo lectura para el grupo 'inventario' ----
-// Solo GET a propósito: aquí no se modifica nada.
-$routes->group('inventario', ['filter' => 'inventario', 'namespace' => 'App\Controllers\Inventario'], static function ($routes) {
-    $routes->GET('/', 'Inventario::index');
-    $routes->GET('buscar', 'Inventario::buscar');
-    $routes->GET('categorias', 'Inventario::categorias');
-    $routes->GET('estuches', 'Inventario::estuches');
-    $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
-    $routes->GET('guia/(:num)', 'Inventario::guia/$1');
-    $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
-});
+// Inventario en el dominio principal (rutas definidas arriba).
+$routes->group('inventario', $opcionesInventario, $rutasInventario);

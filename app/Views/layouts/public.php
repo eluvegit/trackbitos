@@ -19,7 +19,7 @@
     <!-- Navbar -->
     <?php $auth = service('authentication'); ?>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 mb-4">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="<?= config('App')->esInventario() ? inventario_url() : site_url('dashboard') ?>">
             <img src="<?= base_url('assets/images/logo-trackbitos-icon.png') ?>" alt="Trackbitos" class="logo-navbar">
             <span>Trackbitos</span>
         </a>

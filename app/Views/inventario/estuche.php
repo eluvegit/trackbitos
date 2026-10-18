@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/inventario') ?>
 
 <?= $this->section('titulo') ?>
-<a href="<?= site_url('inventario/estuches') ?>" class="inv-volver" aria-label="Volver a estuches"><i class="bi bi-arrow-left"></i></a>
+<a href="<?= inventario_url('estuches') ?>" class="inv-volver" aria-label="Volver a estuches"><i class="bi bi-arrow-left"></i></a>
 Estuche <?= esc($estuche['codigo']) ?>
 <?= $this->endSection() ?>
 

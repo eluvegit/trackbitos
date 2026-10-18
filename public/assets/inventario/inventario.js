@@ -21,15 +21,52 @@
         var codigo = visor.querySelector('[data-visor-codigo]');
         var stock  = visor.querySelector('[data-visor-stock]');
 
+        var turno = 0;
+
         var cerrar = function () {
             visor.hidden = true;
+            turno++;
             img.src = '';
+            img.removeAttribute('style');
+        };
+
+        // Se abre ya al tamaño final con la miniatura (que está cargada) y se
+        // cambia por la grande cuando termina de bajar: sin saltos de tamaño.
+        // La grande mide hasta 1600 px de lado; la miniatura, 400.
+        var abrir = function (boton) {
+            var grande = boton.dataset.grande;
+            var mini   = boton.querySelector('img');
+            var mio    = ++turno;
+
+            img.removeAttribute('style');
+            if (!mini || !mini.naturalWidth) {
+                img.src = grande;
+                return;
+            }
+
+            var ancho = mini.naturalWidth;
+            var alto  = mini.naturalHeight;
+            var lado  = Math.max(ancho, alto);
+            var tope  = lado >= 400 ? 1600 / lado : 1;
+            var cajaW = Math.min(900, window.innerWidth - 48) - 36;
+            var cajaH = window.innerHeight - 220;
+            var escala = Math.min(cajaW / ancho, cajaH / alto, tope);
+
+            img.style.width  = Math.round(ancho * escala) + 'px';
+            img.style.height = Math.round(alto * escala) + 'px';
+            img.src = mini.currentSrc || mini.src;
+
+            var carga = new Image();
+            carga.onload = function () {
+                if (mio === turno) img.src = grande;
+            };
+            carga.src = grande;
         };
 
         document.addEventListener('click', function (e) {
             var boton = e.target.closest('[data-foto]');
             if (boton && !boton.disabled && boton.dataset.grande) {
-                img.src = boton.dataset.grande;
+                abrir(boton);
                 nombre.textContent = boton.dataset.nombre;
                 codigo.textContent = boton.dataset.codigo;
                 codigo.classList.toggle('sin', boton.dataset.sinHueco === '1');

@@ -238,7 +238,7 @@ class InventarioCatalogo
             if (isset($fotos[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
                 continue;
             }
-            $respaldo    = site_url('inventario/imagen/' . (int) $r['id']);
+            $respaldo    = inventario_url('imagen/' . (int) $r['id']);
             $fotos[$vid] = [
                 't' => $publicas->url($r['hash_imagen'] ?? null, PiezaImagenesPublicas::MINIATURA) ?? $respaldo,
                 'v' => $publicas->url($r['hash_imagen'] ?? null, PiezaImagenesPublicas::VISTA) ?? $respaldo,

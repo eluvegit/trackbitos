@@ -90,6 +90,16 @@ class Auth extends \Myth\Auth\Config\Auth
      */
     public $viewLayout = 'App\Views\Auth\layout';
 
+    public function __construct()
+    {
+        parent::__construct();
+
+        // En el subdominio del TPV, login con la estética del TPV.
+        if (config('App')->esInventario()) {
+            $this->views['login'] = 'App\Views\Auth\login_inventario';
+        }
+    }
+
     /**
      * --------------------------------------------------------------------
      * Authentication

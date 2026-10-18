@@ -32,6 +32,32 @@ class App extends BaseConfig
     public array $allowedHostnames = [];
 
     /**
+     * Host del TPV de inventario (p. ej. 'inventario.eluve.es'), en .env:
+     * app.inventarioHost. Las peticiones que llegan por él sirven solo la
+     * sección de inventario, colgada de la raíz. Vacío = desactivado.
+     */
+    public string $inventarioHost = '';
+
+    public function __construct()
+    {
+        parent::__construct();
+
+        // .env es uno para los dos hosts, así que la baseURL del subdominio
+        // se decide por petición (y después de aplicar .env, para que gane).
+        if ($this->esInventario()) {
+            $this->baseURL = 'https://' . $this->inventarioHost . '/';
+        }
+    }
+
+    /** ¿La petición actual llega por el host del TPV de inventario? */
+    public function esInventario(): bool
+    {
+        $host = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);
+
+        return $this->inventarioHost !== '' && $host === strtolower($this->inventarioHost);
+    }
+
+    /**
      * --------------------------------------------------------------------------
      * Index File
      * --------------------------------------------------------------------------

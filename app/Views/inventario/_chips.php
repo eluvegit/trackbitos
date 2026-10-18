@@ -12,7 +12,7 @@
                 <?= esc($c['nombre']) ?>
             </button>
         <?php else: ?>
-            <a href="<?= site_url('inventario/buscar?cat=' . $c['id']) ?>" class="inv-chip"><?= esc($c['nombre']) ?></a>
+            <a href="<?= inventario_url('buscar?cat=' . $c['id']) ?>" class="inv-chip"><?= esc($c['nombre']) ?></a>
         <?php endif; ?>
     <?php endforeach; ?>
 </div>

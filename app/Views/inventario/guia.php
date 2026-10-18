@@ -3,7 +3,7 @@
 <?= $this->section('titulo') ?><?= esc($guia['nombre']) ?><?= $this->endSection() ?>
 
 <?= $this->section('contenido') ?>
-<?php $url = static fn (string $o) => site_url('inventario/guia/' . (int) $guia['id']) . ($o === '' ? '' : '?o=' . $o); ?>
+<?php $url = static fn (string $o) => inventario_url('guia/' . (int) $guia['id']) . ($o === '' ? '' : '?o=' . $o); ?>
 
 <nav class="inv-migas">
     <a href="<?= $url('') ?>" class="inv-chip <?= $migas === [] && !$resultado ? 'activo' : '' ?>"><i class="bi bi-arrow-counterclockwise"></i> Empezar</a>
