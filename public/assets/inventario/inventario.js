@@ -53,7 +53,6 @@
 
     var input       = buscador.querySelector('[data-buscar]');
     var limpiar     = buscador.querySelector('[data-limpiar]');
-    var sugerencias = buscador.querySelector('[data-sugerencias]');
     var chips       = document.querySelector('[data-chips]');
     var contador    = document.querySelector('[data-contador]');
     var vacio       = document.querySelector('[data-vacio]');
@@ -66,10 +65,6 @@
     piezas.forEach(function (p) { p._nombre = normalizar(p.dataset.nombre); });
 
     var catActiva = (chips && chips.querySelector('.activo')) ? chips.querySelector('.activo').dataset.cat : '0';
-
-    var escapar = function (t) {
-        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    };
 
     var aplicar = function () {
         var q = normalizar(input.value);
@@ -88,49 +83,15 @@
         vacio.hidden = visibles.length > 0;
         contador.textContent = visibles.length === 1 ? '1 pieza' : visibles.length + ' piezas';
 
-        pintarSugerencias(q ? visibles.slice(0, 6) : []);
-
         var url = new URL(window.location.href);
         input.value ? url.searchParams.set('q', input.value) : url.searchParams.delete('q');
         catActiva !== '0' ? url.searchParams.set('cat', catActiva) : url.searchParams.delete('cat');
         history.replaceState(null, '', url);
     };
 
-    var pintarSugerencias = function (lista) {
-        if (!lista.length || document.activeElement !== input) {
-            sugerencias.hidden = true;
-            return;
-        }
-        sugerencias.innerHTML = lista.map(function (p, i) {
-            var foto = p.querySelector('.inv-pieza-foto img');
-            var cod  = p.querySelector('.inv-codigo');
-            return '<button type="button" data-ir="' + i + '">'
-                + (foto ? '<img src="' + escapar(foto.getAttribute('src')) + '" alt="">' : '<span class="hueco-img"></span>')
-                + '<span>' + escapar(p.dataset.nombre) + '</span>'
-                + '<span class="sug-codigo' + (cod && cod.classList.contains('sin') ? ' sin' : '') + '">'
-                + escapar(cod ? cod.textContent : '') + '</span></button>';
-        }).join('');
-        sugerencias._lista = lista;
-        sugerencias.hidden = false;
-    };
-
-    sugerencias.addEventListener('mousedown', function (e) {
-        var b = e.target.closest('[data-ir]');
-        if (!b) return;
-        e.preventDefault();
-        var pieza = sugerencias._lista[+b.dataset.ir];
-        input.value = pieza.dataset.nombre;
-        sugerencias.hidden = true;
-        aplicar();
-        sugerencias.hidden = true;
-        pieza.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-
     input.addEventListener('input', aplicar);
-    input.addEventListener('focus', aplicar);
-    input.addEventListener('blur', function () { setTimeout(function () { sugerencias.hidden = true; }, 150); });
     input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { sugerencias.hidden = true; input.blur(); }
+        if (e.key === 'Enter') input.blur();
     });
 
     limpiar.addEventListener('click', function () {
@@ -151,4 +112,6 @@
     }
 
     aplicar();
+
+    if (window.matchMedia('(pointer: fine)').matches && !input.value) input.focus();
 })();

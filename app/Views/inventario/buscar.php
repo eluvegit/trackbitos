@@ -2,14 +2,16 @@
 
 <?= $this->section('titulo') ?>Buscar<?= $this->endSection() ?>
 
-<?= $this->section('contenido') ?>
+<?= $this->section('cabecera') ?>
 <div class="inv-buscador" data-buscador>
     <i class="bi bi-search"></i>
-    <input type="search" placeholder="Escribe el nombre de la pieza…" value="<?= esc($q, 'attr') ?>"
-        autocomplete="off" data-buscar autofocus>
+    <input type="search" placeholder="Buscar pieza…" value="<?= esc($q, 'attr') ?>"
+        autocomplete="off" enterkeyhint="search" data-buscar>
     <button type="button" class="inv-limpiar" data-limpiar aria-label="Borrar" hidden><i class="bi bi-x-circle-fill"></i></button>
-    <div class="inv-sugerencias" data-sugerencias hidden></div>
 </div>
+<?= $this->endSection() ?>
+
+<?= $this->section('contenido') ?>
 
 <?= view('inventario/_chips', ['categorias' => $categorias, 'modo' => 'filtro', 'activa' => $cat]) ?>
 

@@ -867,6 +867,20 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // "E1H2" = hueco H2 del estuche E1). 'crear' y 'huecos' son literales y
     // van antes que el patrón numérico, mismo criterio que 'movimiento'
     // arriba.
+    // Guías del TPV de inventario (p. ej. "Guía de brazos"): pasos,
+    // opciones y qué pieza sale de cada combinación. Ver App\Services\PiezaGuias.
+    $routes->GET('guias', 'GuiasController::index');
+    $routes->POST('guias/crear', 'GuiasController::crear');
+    $routes->POST('guias/pasos/(:num)/opciones/crear', 'GuiasController::crearOpcion/$1');
+    $routes->POST('guias/(paso|opcion)/(:num)/renombrar', 'GuiasController::renombrar/$1/$2');
+    $routes->POST('guias/(paso|opcion)/(:num)/(subir|bajar)', 'GuiasController::mover/$1/$2/$3');
+    $routes->POST('guias/(paso|opcion)/(:num)/borrar', 'GuiasController::borrarElemento/$1/$2');
+    $routes->POST('guias/(:num)/actualizar', 'GuiasController::actualizar/$1');
+    $routes->POST('guias/(:num)/borrar', 'GuiasController::borrar/$1');
+    $routes->POST('guias/(:num)/pasos/crear', 'GuiasController::crearPaso/$1');
+    $routes->POST('guias/(:num)/resultados', 'GuiasController::resultados/$1');
+    $routes->GET('guias/(:num)', 'GuiasController::editar/$1');
+
     $routes->GET('ubicaciones', 'UbicacionesController::index');
     $routes->GET('ubicaciones/imprimir', 'UbicacionesController::imprimir');
     $routes->POST('ubicaciones/crear', 'UbicacionesController::crear');
@@ -1016,5 +1030,6 @@ $routes->group('inventario', ['filter' => 'inventario', 'namespace' => 'App\Cont
     $routes->GET('categorias', 'Inventario::categorias');
     $routes->GET('estuches', 'Inventario::estuches');
     $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
+    $routes->GET('guia/(:num)', 'Inventario::guia/$1');
     $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
 });

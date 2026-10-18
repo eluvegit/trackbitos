@@ -20,7 +20,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=3" rel="stylesheet">
+    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=8" rel="stylesheet">
 </head>
 <body>
 <div class="inv-app">
@@ -35,6 +35,12 @@
                     <span><?= $texto ?></span>
                 </a>
             <?php endforeach; ?>
+            <?php foreach ($guias ?? [] as $g): ?>
+                <a href="<?= site_url('inventario/guia/' . (int) $g['id']) ?>" class="<?= $seccion === 'guia-' . $g['id'] ? 'activo' : '' ?>">
+                    <?= icono_guia($g['icono']) ?>
+                    <span><?= esc($g['nombre']) ?></span>
+                </a>
+            <?php endforeach; ?>
         </nav>
         <a href="<?= site_url('logout') ?>" class="inv-salir" title="Cerrar sesión">
             <i class="bi bi-box-arrow-right"></i>
@@ -45,6 +51,7 @@
     <main class="inv-principal">
         <header class="inv-cabecera">
             <h1><?= $this->renderSection('titulo') ?></h1>
+            <?= $this->renderSection('cabecera') ?>
             <div class="inv-cabecera-derecha">
                 <button type="button" class="inv-tema" data-tema aria-label="Cambiar entre modo claro y oscuro">
                     <i class="bi bi-sun"></i>
@@ -75,7 +82,7 @@
     </figure>
 </div>
 
-<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=3"></script>
+<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=4"></script>
 <?= $this->renderSection('scripts') ?>
 </body>
 </html>
