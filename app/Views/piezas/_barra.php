@@ -88,6 +88,9 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
     <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary<?= $activa('ubicaciones') ?>" title="Ubicaciones: dónde está guardada cada pieza">
         <i class="bi bi-geo-alt"></i>
     </a>
+    <a href="<?= site_url('inventario') ?>" target="_blank" class="btn btn-sm btn-outline-secondary" title="TPV inventario: la vista de consulta del usuario de inventario (se abre en otra pestaña)">
+        <i class="bi bi-shop" style="color: #ef5b5b;"></i>
+    </a>
     <div class="btn-group">
         <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary<?= $activa('pedidos') ?>" title="Pedidos">
             <i class="bi bi-cart-check"></i>

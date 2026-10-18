@@ -40,6 +40,7 @@ class Filters extends BaseFilters
         'performance'   => PerformanceMetrics::class,
         'auth'          => \Myth\Auth\Filters\LoginFilter::class, // ← AÑADE ESTA
         'admin'         => \App\Filters\SoloAdmin::class,
+        'inventario'    => \App\Filters\SoloInventario::class,
         'buscappApi'    => BuscappApiAuth::class,
         'piezasApi'     => PiezasApiAuth::class,
         'sterclicksApi' => SterclicksApiAuth::class,

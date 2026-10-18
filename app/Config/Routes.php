@@ -1007,3 +1007,14 @@ $routes->group('cuenta/usuarios', ['filter' => 'admin'], static function ($route
     $routes->POST('(:num)/password', 'Usuarios::password/$1');
     $routes->POST('(:num)/borrar', 'Usuarios::borrar/$1');
 });
+
+// ---- Inventario: sección de solo lectura para el grupo 'inventario' ----
+// Solo GET a propósito: aquí no se modifica nada.
+$routes->group('inventario', ['filter' => 'inventario', 'namespace' => 'App\Controllers\Inventario'], static function ($routes) {
+    $routes->GET('/', 'Inventario::index');
+    $routes->GET('buscar', 'Inventario::buscar');
+    $routes->GET('categorias', 'Inventario::categorias');
+    $routes->GET('estuches', 'Inventario::estuches');
+    $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
+    $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
+});
