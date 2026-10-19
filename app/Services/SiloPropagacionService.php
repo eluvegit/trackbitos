@@ -250,20 +250,63 @@ class SiloPropagacionService
         return ['colocadas' => $colocadas, 'pendientes' => count($pendientes) - $colocadas];
     }
 
+    /** Por encima de esto la búsqueda óptima (2^n estados) se dispara: se reparte en orden de alta. */
+    private const MAX_UNIDADES_OPTIMO = 12;
+
+    /**
+     * Una unidad de Nivel 3 cambia de categoría al editarla: el reparto
+     * busca por `silo_unidad_buckets`, no por la columna `agrupador`, así
+     * que hay que rehacer su bucket. Sus Copias 3 de la categoría vieja
+     * dejan de tocarle (las ya copiadas quedan en el USB como sobrantes que
+     * `silo --copiar` avisa y `--purgar` borra), y repartirCopia3() coloca
+     * lo pendiente — lo de la categoría nueva en esta unidad, y lo que ha
+     * salido de aquí en otra de su categoría si la hay.
+     *
+     * @return array{colocadas: int, pendientes: int}
+     */
+    public function cambiarCategoriaNivel3(int $unidadId, ?string $categoria): array
+    {
+        $this->unidadBucketModel->where('unidad_id', $unidadId)->delete();
+        if ($categoria !== null && $categoria !== '') {
+            $this->unidadBucketModel->asignarBucket($unidadId, $categoria);
+        }
+
+        $ubicaciones = $this->ubicacionModel->where('unidad_id', $unidadId)->where('copia', 3)->findAll();
+        foreach ($ubicaciones as $u) {
+            $pendiente = $this->tareaModel->reubicacionPendienteDeUbicacion((int) $u['id']);
+            if ($pendiente) {
+                $this->tareaModel->update($pendiente['id'], ['estado' => 'cancelada']);
+            }
+            $this->ubicacionModel->delete($u['id']);
+        }
+
+        return $this->repartirCopia3();
+    }
+
     /**
      * Reparto de Nivel 2 usando **únicamente las unidades ya dadas de alta**
      * con capacidad conocida (petición 2026-09-05: nada de inventar una
-     * capacidad uniforme — cada USB real tiene la suya). Se recorren en el
-     * orden en que se dieron de alta (`numero` ASC) y se van llenando con
-     * años **consecutivos** mientras quepan; en cuanto uno no cabe, esa
-     * unidad se cierra (aunque le sobre sitio) y se pasa a la siguiente —
-     * un año **nunca se fragmenta** entre dos unidades. Posibles estados
-     * por tramo: `ok` (cupo bien), `excede` (una unidad real ya asignada,
-     * pero el año no cabe entero en ella: hace falta una de más capacidad
-     * solo para eso) o `sin_unidad` (no quedan más unidades dadas de alta:
-     * hace falta registrar más). "sin fecha" entra en el mismo recorrido
-     * (ordena primero, como el año 0) sin trato especial. Puro cálculo, no
-     * toca la BD — ver aplicarPlanNivel2() para materializarlo de verdad.
+     * capacidad uniforme — cada USB real tiene la suya). Cada unidad recibe
+     * un tramo de años **consecutivos** y un año **nunca se fragmenta**
+     * entre dos unidades.
+     *
+     * Desde 2026-10-19 no se rellenan en orden de alta sino en el orden de
+     * unidades que mejor encaja los tramos (búsqueda exacta, programación
+     * dinámica sobre año × unidades ya usadas). Criterios, por prioridad:
+     *   1. Que quede guardado el máximo de bytes (lo mínimo pendiente).
+     *   2. Que haya que recopiar lo mínimo: un año ya copiado físicamente en
+     *      un USB prefiere seguir en ese USB.
+     *   3. Que sobren los mínimos huecos: la capacidad total de las unidades
+     *      usadas es la mínima, así las que no hacen falta quedan enteras
+     *      libres en vez de varias medio vacías.
+     * Con más de MAX_UNIDADES_OPTIMO unidades se vuelve al relleno en orden
+     * de alta (planNivel2EnOrdenDeAlta()).
+     *
+     * Estados por tramo: `ok`, `excede` (el año no cabe entero en ninguna
+     * unidad: hace falta una de más capacidad solo para eso) o `sin_unidad`
+     * (cabría, pero no queda ninguna unidad libre donde meterlo: dar de alta
+     * más). "sin fecha" ordena primero, como el año 0. Puro cálculo, no toca
+     * la BD — ver aplicarPlanNivel2() para materializarlo de verdad.
      *
      * @return array<int, array{unidad_id: ?int, anios: string[], bytes: int, estado: string}>
      */
@@ -280,6 +323,125 @@ class SiloPropagacionService
             ->orderBy('anio', 'ASC')
             ->findAll();
 
+        if (count($unidades) > self::MAX_UNIDADES_OPTIMO) {
+            return $this->planNivel2EnOrdenDeAlta($unidades, $filas);
+        }
+
+        $n      = count($unidades);
+        $y      = count($filas);
+        $total  = 1 << $n;
+        $cap    = array_map(static fn ($u) => (int) $u['capacidad_bytes'], $unidades);
+        $maxCap = $cap === [] ? 0 : max($cap);
+
+        $claves = [];
+        $bytes  = [];
+        $pref   = [0];
+        foreach ($filas as $k => $fila) {
+            $claves[$k] = ((int) $fila['anio']) === 0 ? 'sin_fecha' : (string) ((int) $fila['anio']);
+            $bytes[$k]  = (int) $fila['bytes'];
+            $pref[]     = $pref[$k] + $bytes[$k];
+        }
+
+        // recopia[u][k]: bytes del año k ya copiados en OTRO USB que habría
+        // que volver a copiar si el año k va a la unidad u.
+        $copiados = $this->ubicacionModel->bytesCopiadosNivel2PorAnio();
+        $recopia  = [];
+        foreach ($unidades as $u => $unidad) {
+            foreach ($filas as $k => $fila) {
+                $delAnio         = $copiados[(int) $fila['anio']] ?? [];
+                $recopia[$u][$k] =array_sum($delAnio) - ($delAnio[(int) $unidad['id']] ?? 0);
+            }
+        }
+
+        // Mejor resultado desde el año i con las unidades de `mask` ya
+        // usadas, en arrays planos (índice i*total+mask) para no gastar
+        // memoria: guardado (máx), recopia (mín), capacidad usada (mín) y
+        // la elección (unidad, último año del tramo; -1 = año pendiente).
+        $guardado = $recop = $capUsada = $elU = $elJ = [];
+        for ($mask = 0; $mask < $total; $mask++) {
+            $idx = $y * $total + $mask;
+            $guardado[$idx] = $recop[$idx] = $capUsada[$idx] = 0;
+            $elU[$idx]      = $elJ[$idx] = -1;
+        }
+
+        for ($i = $y - 1; $i >= 0; $i--) {
+            for ($mask = 0; $mask < $total; $mask++) {
+                // Opción base: el año i se queda pendiente.
+                $sig   = ($i + 1) * $total + $mask;
+                $bG    = $guardado[$sig];
+                $bR    = $recop[$sig];
+                $bC    = $capUsada[$sig];
+                $bU    = $bJ = -1;
+
+                for ($u = 0; $u < $n; $u++) {
+                    if ($mask & (1 << $u)) {
+                        continue;
+                    }
+                    $re = 0;
+                    for ($j = $i; $j < $y; $j++) {
+                        $tramo = $pref[$j + 1] - $pref[$i];
+                        if ($tramo > $cap[$u]) {
+                            break;
+                        }
+                        $re  += $recopia[$u][$j];
+                        $sig  = ($j + 1) * $total + ($mask | (1 << $u));
+                        $g    = $guardado[$sig] + $tramo;
+                        $r    = $recop[$sig] + $re;
+                        $c    = $capUsada[$sig] + $cap[$u];
+
+                        if ($g > $bG || ($g === $bG && ($r < $bR || ($r === $bR && $c < $bC)))) {
+                            [$bG, $bR, $bC, $bU, $bJ] = [$g, $r, $c, $u, $j];
+                        }
+                    }
+                }
+
+                $idx            = $i * $total + $mask;
+                $guardado[$idx] = $bG;
+                $recop[$idx]    = $bR;
+                $capUsada[$idx] = $bC;
+                $elU[$idx]      = $bU;
+                $elJ[$idx]      = $bJ;
+            }
+        }
+
+        $planes = [];
+        for ($i = 0, $mask = 0; $i < $y;) {
+            $idx = $i * $total + $mask;
+            if ($elU[$idx] === -1) {
+                $planes[] = [
+                    'unidad_id' => null,
+                    'anios'     => [$claves[$i]],
+                    'bytes'     => $bytes[$i],
+                    'estado'    => $n > 0 && $bytes[$i] > $maxCap ? 'excede' : 'sin_unidad',
+                ];
+                $i++;
+
+                continue;
+            }
+
+            [$u, $j]  = [$elU[$idx], $elJ[$idx]];
+            $planes[] = [
+                'unidad_id' => (int) $unidades[$u]['id'],
+                'anios'     => array_slice($claves, $i, $j - $i + 1),
+                'bytes'     => $pref[$j + 1] - $pref[$i],
+                'estado'    => 'ok',
+            ];
+            $mask |= 1 << $u;
+            $i     = $j + 1;
+        }
+
+        return $planes;
+    }
+
+    /**
+     * Reparto antiguo (hasta 2026-10-19): recorre las unidades en orden de
+     * alta llenándolas de años consecutivos mientras quepan; en cuanto uno
+     * no cabe la cierra (aunque le sobre sitio) y pasa a la siguiente. Solo
+     * se usa ya como respaldo cuando hay demasiadas unidades para la
+     * búsqueda óptima de calcularPlanNivel2().
+     */
+    private function planNivel2EnOrdenDeAlta(array $unidades, array $filas): array
+    {
         $planes = [];
         $indice = 0;
         $run    = $this->abrirRunNivel2($unidades, $indice);

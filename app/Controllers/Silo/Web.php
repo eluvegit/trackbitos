@@ -218,6 +218,12 @@ class Web extends BaseController
         ]);
     }
 
+    /** Ayuda/wiki del Silo: procesos, comandos y conceptos, con buscador. Estática. */
+    public function ayuda()
+    {
+        return view('silo/ayuda');
+    }
+
     /** "Mi PC": todas las unidades como discos del explorador, para entrar en cada una. */
     public function miPc()
     {
@@ -712,6 +718,17 @@ class Web extends BaseController
         $datos['identificacion_fisica'] = trim((string) $this->request->getPost('identificacion_fisica')) ?: null;
 
         $this->unidadModel->update($id, $datos);
+
+        // Nivel 3 con otra categoría: el reparto va por silo_unidad_buckets,
+        // no por `agrupador`, así que hay que rehacerlo para esta unidad.
+        if ((int) $unidad['nivel'] === 3 && ($unidad['agrupador'] ?? null) !== $datos['agrupador']) {
+            $copia3 = $this->propagacion->cambiarCategoriaNivel3($id, $datos['agrupador']);
+
+            return redirect()->to(site_url('silo/unidades'))->with('success',
+                'Unidad actualizada. Categoría cambiada: ' . $copia3['colocadas'] . ' carpeta(s) colocada(s) en Nivel 3'
+                . ($copia3['pendientes'] > 0 ? ", {$copia3['pendientes']} pendiente(s)" : '')
+                . '. Lo que ya estaba copiado de la categoría anterior queda como sobrante en el USB (silo --copiar --purgar).');
+        }
 
         return redirect()->to(site_url('silo/unidades'))->with('success', 'Unidad actualizada.');
     }

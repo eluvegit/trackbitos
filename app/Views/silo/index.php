@@ -25,6 +25,7 @@
                 <span class="badge rounded-pill text-bg-warning position-absolute top-0 start-100 translate-middle" style="font-size: .55rem;"><?= (int) $tareasPendientes ?></span>
             <?php endif; ?>
         </a>
+        <a href="<?= site_url('silo/ayuda') ?>" title="Ayuda"><i class="bi bi-question-circle"></i></a>
         <a href="<?= site_url('silo/crear') ?>" class="text-success" title="Nueva pieza"><i class="bi bi-plus-circle"></i></a>
     </span>
 </div>

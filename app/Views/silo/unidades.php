@@ -157,6 +157,9 @@
             <a href="<?= site_url('silo/mi-pc') ?>" class="text-decoration-none ms-1 text-muted fs-6" title="Mi PC">
                 <i class="bi bi-pc-display"></i>
             </a>
+            <a href="<?= site_url('silo/ayuda#como-recalcular') ?>" class="text-decoration-none ms-1 text-muted fs-6" title="Ayuda: unidades y reparto">
+                <i class="bi bi-question-circle"></i>
+            </a>
         </h1>
     </div>
     <!-- "Recalcular reparto" recoloca las copias automáticas entre las
@@ -198,8 +201,17 @@
         <h6 class="silo-seccion-titulo"><?= esc(mb_strtoupper($nivelInfo[$nivel]['titulo'])) ?></h6>
         <span class="silo-seccion-sub"><?= esc(mb_strtoupper($nivelInfo[$nivel]['sub'])) ?></span>
         <div class="silo-seccion-linea"></div>
+        <?php if ($nivel === 2): ?>
+            <!-- Solo cambia cómo se ven las tarjetas (en el navegador), no el reparto. -->
+            <div class="btn-group btn-group-sm" role="group" aria-label="Ordenar unidades">
+                <input type="radio" class="btn-check" name="silo-orden-n2" id="silo-orden-alta" value="alta" autocomplete="off" checked>
+                <label class="btn btn-outline-secondary" for="silo-orden-alta" title="Por orden en que se dieron de alta"><i class="bi bi-sort-numeric-down"></i> Añadida</label>
+                <input type="radio" class="btn-check" name="silo-orden-n2" id="silo-orden-cronologico" value="cronologico" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="silo-orden-cronologico" title="Por el primer año que guarda cada unidad"><i class="bi bi-calendar3"></i> Cronológico</label>
+            </div>
+        <?php endif; ?>
     </div>
-    <div class="silo-fila-unidades silo-nivel silo-n<?= $nivel ?>">
+    <div class="silo-fila-unidades silo-nivel silo-n<?= $nivel ?>" data-fila-nivel="<?= $nivel ?>">
         <?php foreach ($porNivel[$nivel] as $u): ?>
             <?php
                 $cap = silo_capacidad_partes($u['capacidad_bytes'] ? (int) $u['capacidad_bytes'] : null);
@@ -212,6 +224,15 @@
                     ? ($bucketsTexto !== '' ? $bucketsTexto : ($u['agrupador'] ?? ''))
                     : trim((string) ($u['identificacion_fisica'] ?? ''));
                 $excede = $excedePorUnidad[$u['id']] ?? false;
+
+                // Primer año que guarda (para el orden cronológico): "sin
+                // fecha" va primero, como en el reparto; sin años, al final.
+                $primerAnio = '';
+                if ($nivel === 2 && $bucketsTexto !== '') {
+                    $primerAnio = str_contains($bucketsTexto, 'sin_fecha')
+                        ? '0'
+                        : (preg_match('/\d{4}/', $bucketsTexto, $m) ? $m[0] : '');
+                }
 
                 // Ocupado / libre reales: el "reparto" llena las unidades
                 // pero no decía cuánto pesa ya cada una — $usado es la suma
@@ -226,6 +247,7 @@
                  data-id="<?= (int) $u['id'] ?>"
                  data-nivel="<?= (int) $nivel ?>"
                  data-numero="<?= (int) $u['numero'] ?>"
+                 data-primer-anio="<?= esc($primerAnio, 'attr') ?>"
                  data-etiqueta="<?= esc($u['etiqueta'] ?? '', 'attr') ?>"
                  data-tipo-fisico="<?= esc($u['tipo_fisico'] ?? '', 'attr') ?>"
                  data-identificacion-fisica="<?= esc($u['identificacion_fisica'] ?? '', 'attr') ?>"
@@ -547,6 +569,36 @@
 
             modal.show();
         };
+
+        // Orden de las tarjetas de Nivel 2: por alta (`numero`) o por el
+        // primer año que guardan. Las tarjetas de "pendiente" y "añadir"
+        // se quedan siempre al final. La elección se recuerda en este navegador.
+        const filaN2 = document.querySelector('[data-fila-nivel="2"]');
+        const CLAVE_ORDEN = 'silo.unidades.ordenN2';
+
+        function ordenarN2(modo) {
+            const tarjetas = Array.from(filaN2.querySelectorAll('.silo-tarjeta-unidad'));
+            const anio = t => t.dataset.primerAnio === '' ? Infinity : parseInt(t.dataset.primerAnio, 10);
+            const numero = t => parseInt(t.dataset.numero, 10);
+            tarjetas.sort((a, b) => modo === 'cronologico'
+                ? (anio(a) - anio(b)) || (numero(a) - numero(b))
+                : numero(a) - numero(b));
+            const primeraFija = filaN2.querySelector(':scope > :not(.silo-tarjeta-unidad)');
+            tarjetas.forEach(t => filaN2.insertBefore(t, primeraFija));
+        }
+
+        if (filaN2) {
+            let modo = 'alta';
+            try { modo = localStorage.getItem(CLAVE_ORDEN) || 'alta'; } catch (e) {}
+            const radio = document.querySelector(`input[name="silo-orden-n2"][value="${modo}"]`);
+            if (radio) radio.checked = true;
+            ordenarN2(modo);
+
+            document.querySelectorAll('input[name="silo-orden-n2"]').forEach(r => r.addEventListener('change', function () {
+                ordenarN2(this.value);
+                try { localStorage.setItem(CLAVE_ORDEN, this.value); } catch (e) {}
+            }));
+        }
     });
 </script>
 

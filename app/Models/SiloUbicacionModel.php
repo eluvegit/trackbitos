@@ -65,6 +65,30 @@ class SiloUbicacionModel extends Model
     }
 
     /**
+     * Bytes de Copia 2 que ya están físicamente copiados, por año (0 = sin
+     * fecha) y unidad — para que el reparto óptimo de Nivel 2 prefiera no
+     * mover de USB lo que ya está copiado.
+     *
+     * @return array<int, array<int, int>> [anio][unidad_id] => bytes
+     */
+    public function bytesCopiadosNivel2PorAnio(): array
+    {
+        $filas = $this->select('COALESCE(YEAR(silo_piezas.fecha), 0) AS anio, silo_ubicaciones.unidad_id, SUM(silo_piezas.tamano_bytes) AS bytes')
+            ->join('silo_piezas', 'silo_piezas.id = silo_ubicaciones.pieza_id')
+            ->where('silo_ubicaciones.copia', 2)
+            ->where('silo_ubicaciones.copiado_en IS NOT NULL')
+            ->groupBy(['anio', 'silo_ubicaciones.unidad_id'])
+            ->findAll();
+
+        $porAnio = [];
+        foreach ($filas as $f) {
+            $porAnio[(int) $f['anio']][(int) $f['unidad_id']] = (int) $f['bytes'];
+        }
+
+        return $porAnio;
+    }
+
+    /**
      * Piezas que ya viven en Nivel 1 (Copia 1) pero todavía no tienen sitio
      * en la copia indicada (2 = por año, 3 = por categoría) — lo que queda
      * "pendiente de almacenar" ahora que el reparto no inventa unidades.

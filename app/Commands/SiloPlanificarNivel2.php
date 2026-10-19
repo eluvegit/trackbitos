@@ -8,8 +8,9 @@ use CodeIgniter\CLI\CLI;
 /**
  * Reparte los años de Nivel 2 entre las unidades **ya dadas de alta** (cada
  * una con su capacidad real, no una capacidad uniforme inventada — petición
- * 2026-09-05): agrupa años consecutivos hasta llenar cada unidad en el
- * orden en que se registraron, sin fragmentar nunca un año entre dos (ver
+ * 2026-09-05): agrupa años consecutivos en cada unidad, eligiendo el orden
+ * de unidades que menos deja pendiente, menos recopia y menos huecos deja,
+ * sin fragmentar nunca un año entre dos (ver
  * SiloPropagacionService::calcularPlanNivel2()). Sin --aplicar es solo un
  * informe (no toca la BD); con --aplicar reconstruye qué buckets tiene cada
  * unidad y las ubicaciones de copia 2 — no borra ni crea unidades, así que
@@ -46,8 +47,8 @@ class SiloPlanificarNivel2 extends BaseCommand
             $anios = $silo->comprimirAnios($run['anios']);
 
             [$color, $marca] = match ($run['estado']) {
-                'excede'     => ['red', ' -- EXCEDE la capacidad de esa unidad, hace falta una mayor solo para esto'],
-                'sin_unidad' => ['red', ' -- SIN UNIDAD: da de alta más unidades de Nivel 2'],
+                'excede'     => ['red', ' -- EXCEDE la capacidad de todas las unidades, hace falta una mayor solo para esto'],
+                'sin_unidad' => ['red', ' -- SIN UNIDAD libre donde quepa: da de alta más unidades de Nivel 2'],
                 default      => ['green', ''],
             };
 

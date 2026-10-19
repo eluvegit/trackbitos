@@ -999,6 +999,7 @@ $routes->group('silo', ['filter' => 'admin', 'namespace' => 'App\Controllers\Sil
     $routes->POST('vocabulario/renombrar/(:num)', 'Web::renombrarVocabulario/$1');
     $routes->POST('vocabulario/(:num)/borrar', 'Web::borrarVocabulario/$1');
 
+    $routes->GET('ayuda', 'Web::ayuda');
     $routes->GET('mi-pc', 'Web::miPc');
     $routes->GET('ranking', 'Web::ranking');
     $routes->GET('datos-faltan', 'Web::datosFaltan');

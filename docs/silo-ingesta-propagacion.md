@@ -176,12 +176,16 @@ uniforme pedida por formulario): eso no reflejaba los USB que el usuario realmen
 
 - `SiloPropagacionService::calcularPlanNivel2()` — cálculo puro (no toca BD): suma bytes
   por año (`silo_piezas`, agrupado por `YEAR(fecha)`, "sin fecha" entra en el mismo
-  recorrido como año `0`, sin trato especial) y va rellenando las unidades registradas en
-  orden mientras quepan años consecutivos; en cuanto uno no cabe, cierra la unidad actual
-  (aunque le sobre sitio) y pasa a la siguiente. Tres estados por tramo: `ok`, `excede` (la
-  unidad que tocaba existe pero el año no cabe entero en ella — hace falta una de más
-  capacidad solo para eso) y `sin_unidad` (se acabaron las unidades registradas — hace
-  falta dar de alta más).
+  recorrido como año `0`, sin trato especial) y asigna a cada unidad un tramo de años
+  consecutivos. Desde 2026-10-19 **no** rellena en orden de alta: busca (programación
+  dinámica exacta sobre año × unidades usadas) el orden de unidades que, por prioridad,
+  (1) deja menos bytes pendientes, (2) obliga a recopiar menos (un año ya copiado en un USB
+  prefiere quedarse en él) y (3) deja menos huecos (mínima capacidad total de las unidades
+  usadas; las sobrantes quedan enteras libres). Con más de 12 unidades vuelve al relleno en
+  orden de alta. Tres estados por tramo: `ok`, `excede` (el año no cabe entero en ninguna
+  unidad — hace falta una de más capacidad solo para eso; ya no se mete a la fuerza en una
+  unidad, queda pendiente) y `sin_unidad` (cabría, pero no queda unidad libre — hace falta
+  dar de alta más).
 - `SiloPropagacionService::aplicarPlanNivel2()` — materializa el cálculo **sobre las
   unidades ya existentes**: no borra ni crea ninguna (a diferencia del primer intento), así
   que identificación física/ruta de montaje/etiqueta puestas a mano se conservan siempre.
