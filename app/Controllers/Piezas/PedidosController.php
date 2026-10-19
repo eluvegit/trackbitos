@@ -88,6 +88,7 @@ class PedidosController extends BaseController
             'estado'             => 'nuevo',
             'referencia_externa' => trim((string) $this->request->getPost('referencia_externa')) ?: null,
             'notas'              => trim((string) $this->request->getPost('notas')) ?: null,
+            'fecha_entrega'      => $this->fechaEntregaDelPost(),
             'creado_en'          => date('Y-m-d H:i:s'),
         ]);
 
@@ -512,10 +513,58 @@ class PedidosController extends BaseController
         $model->update($id, [
             'referencia_externa' => trim((string) $this->request->getPost('referencia_externa')) ?: null,
             'notas'              => trim((string) $this->request->getPost('notas')) ?: null,
+            'fecha_entrega'      => $this->fechaEntregaDelPost(),
             'actualizado_en'     => date('Y-m-d H:i:s'),
         ]);
 
         return redirect()->to('/piezas/pedido/' . $id)->with('success', 'Pedido actualizado.');
+    }
+
+    /** Fecha de entrega del formulario (input type=date): Y-m-d válida o null. */
+    private function fechaEntregaDelPost(): ?string
+    {
+        $fecha = trim((string) $this->request->getPost('fecha_entrega'));
+        $dt = \DateTime::createFromFormat('Y-m-d', $fecha);
+
+        return $dt && $dt->format('Y-m-d') === $fecha ? $fecha : null;
+    }
+
+    /**
+     * Pone o quita la estrella de prioridad. Por AJAX (tablero y ficha)
+     * responde JSON con el valor nuevo; sin AJAX, vuelve a donde estaba.
+     */
+    public function alternarPrioridad(int $id)
+    {
+        $model = new PiezaPedidoModel();
+        $pedido = $model->find($id);
+        if (!$pedido) {
+            return $this->fallo('Pedido no encontrado.', '/piezas/pedidos');
+        }
+
+        $prioritario = (int) $pedido['prioritario'] ? 0 : 1;
+        $model->update($id, ['prioritario' => $prioritario]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'prioritario' => (bool) $prioritario]);
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Orden manual de los pedidos dentro de una columna del tablero (se
+     * arrastran las tarjetas). Recibe los ids de esa columna en su orden
+     * nuevo; los de otras columnas no se tocan.
+     */
+    public function reordenar()
+    {
+        $ids = array_values(array_filter(array_map('intval', (array) $this->request->getPost('orden'))));
+        $builder = (new PiezaPedidoModel())->builder();
+        foreach ($ids as $posicion => $pedidoId) {
+            $builder->where('id', $pedidoId)->update(['orden' => $posicion + 1]);
+        }
+
+        return $this->response->setJSON(['ok' => true]);
     }
 
     public function cambiarEstado(int $id)

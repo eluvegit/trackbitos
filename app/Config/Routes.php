@@ -847,6 +847,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // SterclicksApi::pedidos) y los de alta manual, aquí mismo.
     $routes->GET('pedidos', 'PedidosController::index');
     $routes->POST('pedido', 'PedidosController::crear');
+    $routes->POST('pedidos/reordenar', 'PedidosController::reordenar');
+    $routes->POST('pedido/(:num)/prioridad', 'PedidosController::alternarPrioridad/$1');
     $routes->GET('pedido/(:num)', 'PedidosController::ver/$1');
     $routes->POST('pedido/(:num)/datos', 'PedidosController::editarDatos/$1');
     $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');

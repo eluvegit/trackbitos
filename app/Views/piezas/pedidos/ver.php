@@ -179,6 +179,14 @@
         </div>
 
         <div class="ms-auto d-flex gap-1">
+            <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/prioridad') ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm rounded-circle <?= (int) $pedido['prioritario'] ? 'btn-warning' : 'btn-outline-secondary' ?>"
+                    style="width: 32px; height: 32px; padding: 0;"
+                    title="<?= (int) $pedido['prioritario'] ? 'Quitar prioridad' : 'Marcar como prioritario (sale arriba en el tablero)' ?>">
+                    <i class="bi <?= (int) $pedido['prioritario'] ? 'bi-star-fill' : 'bi-star' ?>"></i>
+                </button>
+            </form>
             <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/cargar-placa') ?>">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-success btn-sm rounded-pill px-3" title="Añade a la placa actual el STL de cada pieza de este pedido">
@@ -191,7 +199,7 @@
                     <i class="bi bi-three-dots"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow">
-                    <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalDatosPedido"><i class="bi bi-pencil me-2"></i>Referencia y notas</button></li>
+                    <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalDatosPedido"><i class="bi bi-pencil me-2"></i>Referencia, entrega y notas</button></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="<?= site_url('piezas/galeria') ?>"><i class="bi bi-grid-3x3-gap me-2"></i>Galería</a></li>
                     <li><a class="dropdown-item" href="<?= site_url('piezas/placas') ?>"><i class="bi bi-printer me-2"></i>Placas</a></li>
@@ -240,6 +248,14 @@
 <div class="small text-body-secondary mt-2 d-flex flex-wrap gap-x-3 column-gap-3">
     <span class="text-capitalize"><i class="bi bi-box-arrow-in-down"></i> <?= esc($pedido['origen']) ?></span>
     <span><i class="bi bi-calendar3"></i> <?= $creado ? esc(date('d/m/Y H:i', $creado)) : '' ?></span>
+    <?php if (!empty($pedido['fecha_entrega'])): ?>
+        <?php $entrega = \App\Models\PiezaPedidoModel::entrega($pedido); ?>
+        <span class="<?= $entrega['clase'] ?>" role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" title="Fecha de entrega">
+            <i class="bi bi-truck"></i> Entrega <?= esc($entrega['texto']) ?>
+        </span>
+    <?php else: ?>
+        <span role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" class="text-body-tertiary"><i class="bi bi-truck"></i> Sin fecha de entrega</span>
+    <?php endif; ?>
 </div>
 <?php if ($pedido['notas']): ?>
     <div class="small mt-1" style="white-space: pre-line;" role="button" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" title="Editar notas">
@@ -412,6 +428,8 @@
                 <input type="text" name="referencia_externa" class="form-control mb-2"
                     value="<?= esc($pedido['referencia_externa'] ?? '', 'attr') ?>"
                     placeholder="de qué va (o nº de pedido, si viene de fuera)" maxlength="50">
+                <label class="form-label small">Fecha de entrega (opcional)</label>
+                <input type="date" name="fecha_entrega" class="form-control mb-2" value="<?= esc($pedido['fecha_entrega'] ?? '', 'attr') ?>">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control" rows="3"><?= esc($pedido['notas'] ?? '') ?></textarea>
             </div>
