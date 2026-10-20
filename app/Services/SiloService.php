@@ -405,6 +405,10 @@ class SiloService
      * final entre corchetes para que el explorador ordene por fecha —
      * `260015 20030603 Recuerdos, …` → `20030603 Recuerdos, … [260015]`. El
      * agente reconcilia por ese `[id]`, nunca por el nombre completo.
+     *
+     * La fecha se completa siempre a 8 cifras con `00` (`202308` →
+     * `20230800`): el Explorador de Windows ordena los números por valor, y
+     * un `202308` suelto salía antes que cualquier `2007…`.
      */
     public function nombreEnCopia(string $nombreCarpeta): string
     {
@@ -413,7 +417,13 @@ class SiloService
             return '[' . $nombreCarpeta . ']';
         }
 
-        return $m[2] . ' [' . $m[1] . ']';
+        $resto = preg_replace_callback(
+            '/^(\d{4}|\d{6})(?=\s|$)/',
+            static fn ($f) => str_pad($f[1], 8, '0'),
+            $m[2]
+        );
+
+        return $resto . ' [' . $m[1] . ']';
     }
 
     /**

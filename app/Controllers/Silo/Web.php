@@ -262,6 +262,11 @@ class Web extends BaseController
         $plan   = $this->propagacion->aplicarPlanNivel2();
         $copia3 = $this->propagacion->repartirCopia3();
 
+        // Lo ya copiado cuyo nombre en el USB ya no es el que toca (p. ej.
+        // la fecha completada a 8 cifras) queda como corrección
+        // renombrar_copia para `silo --renombrar`.
+        $this->propagacion->propagarTodo();
+
         $partes = [];
 
         if ($plan === []) {

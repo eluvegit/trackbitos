@@ -204,6 +204,29 @@ uniforme pedida por formulario): eso no reflejaba los USB que el usuario realmen
   combinadas): puede agrupar varios. Nivel 3 sigue usando `agrupador` sin cambios. La web
   (`/silo/unidades`, `/silo/mi-pc`) muestra los buckets de la tabla nueva en vez de
   `agrupador` cuando los hay.
+
+**Reparto de Nivel 3 con varias categorías por unidad (2026-10-19)**: antes una unidad de
+Nivel 3 solo recibía la categoría escrita en «Año o categoría»; sin ella no recibía nada
+(un disco de 500 GB sin categoría se quedaba vacío). Ahora hay dos tipos de unidad:
+
+- **Con categoría puesta a mano** (`agrupador` relleno): se respeta, solo recibe esa
+  categoría, en orden de alta si hay varias (como antes). Esas categorías quedan fuera del
+  reparto automático.
+- **Automática** (sin `agrupador` y con capacidad): `calcularPlanNivel3()` le asigna
+  **varias categorías enteras**, nunca partiendo una entre dos unidades. A diferencia de
+  Nivel 2 no hay orden ni tramos consecutivos: es empaquetar categorías en discos. Búsqueda
+  exacta (programación dinámica sobre unidad × subconjunto de categorías colocadas, 3^n),
+  mismos criterios que Nivel 2: máximo guardado, mínimo a recopiar, mínimos huecos. Con más
+  de 12 categorías, de mayor a menor en la primera unidad donde quepa. Sin capacidad no
+  entra en el reparto.
+- `aplicarPlanNivel3()` reconstruye buckets y ubicaciones de copia 3 **solo de las unidades
+  automáticas**, conservando lo ya copiado que sigue en su USB. `repartirCopia3()` (botón
+  "Recalcular reparto" y cambio de categoría de una unidad) lo llama primero y después
+  coloca lo pendiente de las categorías puestas a mano.
+- `php spark silo:planificar-nivel3 [--aplicar]` — informe / aplicar, como el de Nivel 2.
+- Una ingesta nueva (`propagarPieza()`) va a la unidad que ya tenga su categoría si cabe;
+  una categoría nueva queda pendiente hasta el próximo "Recalcular reparto".
+
 - Cuando exista Fase 3, un recálculo que reasigne piezas a otra unidad implicará mover
   ficheros de verdad, así que a partir de ahí debería pasar por el flujo de reorganización
   con aprobación humana (más abajo), no ser una reconstrucción libre como ahora.
@@ -226,6 +249,12 @@ más abajo).
 Maestro:    260015 20030603 Recuerdos, University Day, yo, de la universidad
 Copia año:  20030603 Recuerdos, University Day, yo, de la universidad [260015]
 ```
+
+**Fecha siempre a 8 cifras (2026-10-19)**: si el Maestro solo tiene mes o año
+(`202308`, `2023`), en la copia se completa con `00` (`20230800`, `20230000`). El
+Explorador de Windows ordena los números por valor, y un `202308` suelto salía antes que
+cualquier `2007…`. Lo ya copiado con el nombre viejo queda como `renombrar_copia` al pulsar
+"Recalcular reparto" (o `spark silo:propagar`) y se aplica con `silo --renombrar`.
 
 Con la fecha en primera posición, el propio explorador de archivos (Windows/Finder, orden
 alfabético normal) ordena las carpetas de una unidad Año/Temática cronológicamente sin que

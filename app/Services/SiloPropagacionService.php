@@ -19,7 +19,9 @@ use App\Models\SiloVocabularioModel;
  *
  * Simplificación consciente de esta primera pasada: agrupa Nivel 3 solo
  * por categoría (una carpeta de nivel), no por categoría/persona/tema
- * anidado como describe el diseño completo.
+ * anidado como describe el diseño completo. Una unidad de Nivel 3 con
+ * categoría puesta a mano solo recibe esa; las que no tienen categoría
+ * reciben varias categorías enteras del reparto (calcularPlanNivel3()).
  *
  * "Año abierto/cerrado" (§2) NO es un estado ni un filtro que programar
  * aquí — es solo una forma de razonar sobre cadencia de backup/verificación
@@ -215,16 +217,19 @@ class SiloPropagacionService
     }
 
     /**
-     * Recoloca la Copia 3 (por categoría) de las piezas que quedaron
-     * pendientes por no haber unidad de Nivel 3 con sitio — a llamar cuando
-     * se den de alta más unidades y se pulse "Recalcular reparto". Solo usa
-     * unidades de Nivel 3 **ya existentes** cuyo bucket case con la
-     * categoría de la pieza; nunca crea ninguna.
+     * Recoloca la Copia 3 (por categoría) — a llamar cuando se den de alta
+     * más unidades y se pulse "Recalcular reparto". Primero reparte las
+     * categorías entre las unidades automáticas (aplicarPlanNivel3()) y
+     * después coloca lo pendiente en las unidades de Nivel 3 **ya
+     * existentes** cuyo bucket case con la categoría de la pieza; nunca crea
+     * ninguna.
      *
      * @return array{colocadas: int, pendientes: int}
      */
     public function repartirCopia3(): array
     {
+        $colocadasPlan = $this->aplicarPlanNivel3();
+
         $pendientes = $this->piezaModel
             ->where('EXISTS (SELECT 1 FROM silo_ubicaciones uc1 WHERE uc1.pieza_id = silo_piezas.id AND uc1.copia = 1)', null, false)
             ->where('NOT EXISTS (SELECT 1 FROM silo_ubicaciones uc3 WHERE uc3.pieza_id = silo_piezas.id AND uc3.copia = 3)', null, false)
@@ -247,7 +252,342 @@ class SiloPropagacionService
             $colocadas++;
         }
 
-        return ['colocadas' => $colocadas, 'pendientes' => count($pendientes) - $colocadas];
+        return ['colocadas' => $colocadasPlan + $colocadas, 'pendientes' => count($pendientes) - $colocadas];
+    }
+
+    /** Por encima de esto la búsqueda óptima de Nivel 3 (3^n estados) se dispara: se reparte de mayor a menor. */
+    private const MAX_CATEGORIAS_OPTIMO = 12;
+
+    /**
+     * Unidades de Nivel 3 **automáticas**: sin categoría puesta a mano y con
+     * capacidad conocida. El reparto les asigna categorías enteras
+     * (calcularPlanNivel3()); las que tienen categoría puesta a mano se
+     * respetan y solo reciben esa.
+     */
+    private function unidadesNivel3Auto(): array
+    {
+        return $this->unidadModel->where('nivel', 3)
+            ->groupStart()->where('agrupador', null)->orWhere('agrupador', '')->groupEnd()
+            ->where('capacidad_bytes IS NOT NULL')
+            ->orderBy('numero', 'ASC')
+            ->findAll();
+    }
+
+    /**
+     * Piezas que viven en Nivel 1 agrupadas por su bucket de Copia 3,
+     * quitando las categorías que ya tienen una unidad puesta a mano.
+     *
+     * @return array<string, array[]> bucket => piezas
+     */
+    private function piezasNivel1PorCategoriaAuto(): array
+    {
+        $manuales = [];
+        foreach ($this->unidadModel->where('nivel', 3)->where('agrupador IS NOT NULL')->where("agrupador <> ''")->findAll() as $u) {
+            $manuales[$u['agrupador']] = true;
+        }
+
+        $piezas = $this->piezaModel
+            ->where('EXISTS (SELECT 1 FROM silo_ubicaciones uc1 WHERE uc1.pieza_id = silo_piezas.id AND uc1.copia = 1)', null, false)
+            ->findAll();
+
+        $porCategoria = [];
+        foreach ($piezas as $pieza) {
+            $bucket = $this->categoriaBucket($pieza);
+            if (!isset($manuales[$bucket])) {
+                $porCategoria[$bucket][] = $pieza;
+            }
+        }
+
+        return $porCategoria;
+    }
+
+    /**
+     * Reparto de Nivel 3 entre las unidades automáticas, como el de Nivel 2
+     * pero sin orden: cada unidad recibe **varias categorías enteras** que
+     * quepan en su capacidad, y una categoría **nunca se parte** entre dos
+     * unidades. Búsqueda exacta (programación dinámica sobre unidad ×
+     * categorías ya colocadas), mismos criterios por prioridad:
+     *   1. Que quede guardado el máximo de bytes (lo mínimo pendiente).
+     *   2. Que haya que recopiar lo mínimo: una categoría ya copiada en un
+     *      USB prefiere seguir en ese USB.
+     *   3. Que sobren los mínimos huecos (capacidad total usada mínima).
+     * Con más de MAX_CATEGORIAS_OPTIMO categorías se reparte de mayor a
+     * menor en la primera unidad donde quepa.
+     *
+     * Estados como en Nivel 2: `ok`, `excede` (la categoría sola no cabe en
+     * ninguna unidad automática) o `sin_unidad`. Puro cálculo, no toca la BD.
+     *
+     * @return array<int, array{unidad_id: ?int, categorias: string[], bytes: int, estado: string}>
+     */
+    public function calcularPlanNivel3(): array
+    {
+        $unidades = $this->unidadesNivel3Auto();
+        $porCat   = $this->piezasNivel1PorCategoriaAuto();
+
+        $bytesCat = [];
+        $catDe    = [];
+        $tamDe    = [];
+        foreach ($porCat as $bucket => $piezas) {
+            $bytesCat[$bucket] = 0;
+            foreach ($piezas as $p) {
+                $bytesCat[$bucket]    += (int) ($p['tamano_bytes'] ?? 0);
+                $catDe[(int) $p['id']] = $bucket;
+                $tamDe[(int) $p['id']] = (int) ($p['tamano_bytes'] ?? 0);
+            }
+        }
+        arsort($bytesCat);
+
+        $claves = array_map('strval', array_keys($bytesCat));
+        $bytes  = array_values($bytesCat);
+        $n      = count($unidades);
+        $c      = count($claves);
+        $cap    = array_map(static fn ($u) => (int) $u['capacidad_bytes'], $unidades);
+        $maxCap = $cap === [] ? 0 : max($cap);
+
+        // recopia[u][k]: bytes de la categoría k ya copiados en OTRO USB que
+        // habría que volver a copiar si la categoría k va a la unidad u.
+        $indiceCat = array_flip($claves);
+        $copiados  = [];
+        $filas     = $this->ubicacionModel->select('pieza_id, unidad_id')
+            ->where('copia', 3)->where('copiado_en IS NOT NULL')->findAll();
+        foreach ($filas as $f) {
+            $bucket = $catDe[(int) $f['pieza_id']] ?? null;
+            if ($bucket !== null) {
+                $k = $indiceCat[$bucket];
+                $copiados[$k][(int) $f['unidad_id']] = ($copiados[$k][(int) $f['unidad_id']] ?? 0)
+                    + $tamDe[(int) $f['pieza_id']];
+            }
+        }
+
+        $recopia = [];
+        foreach ($unidades as $u => $unidad) {
+            for ($k = 0; $k < $c; $k++) {
+                $deCat           = $copiados[$k] ?? [];
+                $recopia[$u][$k] = array_sum($deCat) - ($deCat[(int) $unidad['id']] ?? 0);
+            }
+        }
+
+        $asignacion = $c > self::MAX_CATEGORIAS_OPTIMO
+            ? $this->planNivel3DeMayorAMenor($cap, $bytes)
+            : $this->planNivel3Optimo($cap, $bytes, $recopia);
+
+        $planes   = [];
+        $colocada = [];
+        foreach ($asignacion as $u => $ks) {
+            if ($ks === []) {
+                continue;
+            }
+            $planes[] = [
+                'unidad_id'  => (int) $unidades[$u]['id'],
+                'categorias' => array_map(static fn ($k) => $claves[$k], $ks),
+                'bytes'      => array_sum(array_map(static fn ($k) => $bytes[$k], $ks)),
+                'estado'     => 'ok',
+            ];
+            foreach ($ks as $k) {
+                $colocada[$k] = true;
+            }
+        }
+        for ($k = 0; $k < $c; $k++) {
+            if (!isset($colocada[$k])) {
+                $planes[] = [
+                    'unidad_id'  => null,
+                    'categorias' => [$claves[$k]],
+                    'bytes'      => $bytes[$k],
+                    'estado'     => $n > 0 && $bytes[$k] > $maxCap ? 'excede' : 'sin_unidad',
+                ];
+            }
+        }
+
+        return $planes;
+    }
+
+    /**
+     * Búsqueda exacta de calcularPlanNivel3(): mejor resultado desde la
+     * unidad u con las categorías de `mask` ya colocadas, probando cada
+     * subconjunto de las libres que quepa en u (o dejar u sin usar).
+     *
+     * @param int[]   $cap     capacidad por unidad
+     * @param int[]   $bytes   bytes por categoría
+     * @param int[][] $recopia [unidad][categoría] => bytes a recopiar
+     * @return array<int, int[]> unidad => índices de categoría
+     */
+    private function planNivel3Optimo(array $cap, array $bytes, array $recopia): array
+    {
+        $n     = count($cap);
+        $c     = count($bytes);
+        $total = 1 << $c;
+        $lleno = $total - 1;
+
+        // Bytes y recopia de cada subconjunto de categorías.
+        $sumB = array_fill(0, $total, 0);
+        $sumR = array_fill(0, $n, array_fill(0, $total, 0));
+        for ($s = 1; $s < $total; $s++) {
+            $k        = (int) log($s & -$s, 2);
+            $resto    = $s & ($s - 1);
+            $sumB[$s] = $sumB[$resto] + $bytes[$k];
+            for ($u = 0; $u < $n; $u++) {
+                $sumR[$u][$s] = $sumR[$u][$resto] + $recopia[$u][$k];
+            }
+        }
+
+        $guardado = $recop = $capUsada = $el = [];
+        for ($mask = 0; $mask < $total; $mask++) {
+            $idx = $n * $total + $mask;
+            $guardado[$idx] = $recop[$idx] = $capUsada[$idx] = $el[$idx] = 0;
+        }
+
+        for ($u = $n - 1; $u >= 0; $u--) {
+            for ($mask = 0; $mask < $total; $mask++) {
+                // Opción base: la unidad u se queda sin usar.
+                $sig = ($u + 1) * $total + $mask;
+                $bG  = $guardado[$sig];
+                $bR  = $recop[$sig];
+                $bC  = $capUsada[$sig];
+                $bS  = 0;
+
+                $libres = $lleno & ~$mask;
+                for ($s = $libres; $s > 0; $s = ($s - 1) & $libres) {
+                    if ($sumB[$s] > $cap[$u]) {
+                        continue;
+                    }
+                    $sig = ($u + 1) * $total + ($mask | $s);
+                    $g   = $guardado[$sig] + $sumB[$s];
+                    $r   = $recop[$sig] + $sumR[$u][$s];
+                    $cc  = $capUsada[$sig] + $cap[$u];
+
+                    if ($g > $bG || ($g === $bG && ($r < $bR || ($r === $bR && $cc < $bC)))) {
+                        [$bG, $bR, $bC, $bS] = [$g, $r, $cc, $s];
+                    }
+                }
+
+                $idx            = $u * $total + $mask;
+                $guardado[$idx] = $bG;
+                $recop[$idx]    = $bR;
+                $capUsada[$idx] = $bC;
+                $el[$idx]       = $bS;
+            }
+        }
+
+        $asignacion = [];
+        for ($u = 0, $mask = 0; $u < $n; $u++) {
+            $s              = $el[$u * $total + $mask];
+            $asignacion[$u] = [];
+            for ($k = 0; $k < $c; $k++) {
+                if ($s & (1 << $k)) {
+                    $asignacion[$u][] = $k;
+                }
+            }
+            $mask |= $s;
+        }
+
+        return $asignacion;
+    }
+
+    /**
+     * Respaldo de calcularPlanNivel3() con demasiadas categorías: de mayor a
+     * menor, cada una en la primera unidad (orden de alta) donde quepa.
+     *
+     * @param int[] $cap
+     * @param int[] $bytes ya ordenados de mayor a menor
+     * @return array<int, int[]>
+     */
+    private function planNivel3DeMayorAMenor(array $cap, array $bytes): array
+    {
+        $libre      = $cap;
+        $asignacion = array_fill(0, count($cap), []);
+        foreach ($bytes as $k => $b) {
+            foreach ($libre as $u => $l) {
+                if ($b <= $l) {
+                    $asignacion[$u][] = $k;
+                    $libre[$u]       -= $b;
+                    break;
+                }
+            }
+        }
+
+        return $asignacion;
+    }
+
+    /**
+     * Materializa calcularPlanNivel3() sobre las unidades automáticas, como
+     * aplicarPlanNivel2(): rehace sus buckets y las ubicaciones de Copia 3.
+     * Lo ya copiado que sigue tocándole al mismo USB se conserva; lo que
+     * cambia de USB se recrea pendiente (en el viejo queda como sobrante
+     * para `silo --copiar --purgar`). Las unidades con categoría puesta a
+     * mano no se tocan.
+     *
+     * @return int ubicaciones de Copia 3 nuevas
+     */
+    public function aplicarPlanNivel3(): int
+    {
+        $auto = array_map(static fn ($u) => (int) $u['id'], $this->unidadesNivel3Auto());
+        $plan = $this->calcularPlanNivel3();
+
+        $previas = [];
+        if ($auto !== []) {
+            foreach ($this->ubicacionModel->where('copia', 3)->whereIn('unidad_id', $auto)->findAll() as $u) {
+                $previas[(int) $u['pieza_id']] = $u;
+            }
+            $this->unidadBucketModel->whereIn('unidad_id', $auto)->delete();
+        }
+
+        // Piezas con Copia 3 en una unidad que no es automática (p. ej. una
+        // corrección mover_copia sin hacer): no se duplican.
+        $fuera = [];
+        foreach ($this->ubicacionModel->where('copia', 3)->findAll() as $u) {
+            if (!in_array((int) $u['unidad_id'], $auto, true)) {
+                $fuera[(int) $u['pieza_id']] = true;
+            }
+        }
+
+        $porCat      = $this->piezasNivel1PorCategoriaAuto();
+        $conservadas = [];
+        $nuevas      = 0;
+
+        foreach ($plan as $run) {
+            if ($run['unidad_id'] === null) {
+                continue; // sin_unidad / excede: queda pendiente.
+            }
+
+            foreach ($run['categorias'] as $categoria) {
+                $this->unidadBucketModel->asignarBucket($run['unidad_id'], $categoria);
+
+                foreach ($porCat[$categoria] ?? [] as $pieza) {
+                    if (isset($fuera[(int) $pieza['id']])) {
+                        continue;
+                    }
+                    $ruta   = $this->rutaEnCopia($categoria, $pieza);
+                    $previa = $previas[(int) $pieza['id']] ?? null;
+                    if ($previa && (int) $previa['unidad_id'] === (int) $run['unidad_id']) {
+                        $conservadas[(int) $previa['id']] = true;
+                        if ($previa['copiado_en'] === null && $previa['ruta_relativa'] !== $ruta) {
+                            $this->ubicacionModel->update($previa['id'], ['ruta_relativa' => $ruta]);
+                        }
+                        continue;
+                    }
+
+                    $this->ubicacionModel->insert([
+                        'pieza_id'      => $pieza['id'],
+                        'unidad_id'     => $run['unidad_id'],
+                        'copia'         => 3,
+                        'ruta_relativa' => $ruta,
+                    ]);
+                    $nuevas++;
+                }
+            }
+        }
+
+        foreach ($previas as $previa) {
+            if (!isset($conservadas[(int) $previa['id']])) {
+                $pendiente = $this->tareaModel->reubicacionPendienteDeUbicacion((int) $previa['id']);
+                if ($pendiente) {
+                    $this->tareaModel->update($pendiente['id'], ['estado' => 'cancelada']);
+                }
+                $this->ubicacionModel->delete($previa['id']);
+            }
+        }
+
+        return $nuevas;
     }
 
     /** Por encima de esto la búsqueda óptima (2^n estados) se dispara: se reparte en orden de alta. */

@@ -306,7 +306,7 @@
             <ol>
                 <li><?= $pag('silo/unidades', 'Unidades') ?> → «Añadir unidad» en <b>Nivel Año</b> o <b>Nivel Temática</b>.</li>
                 <li>Pon la <b>capacidad real</b> (64 GB, 128 GB…): sin ella no entra en el reparto de años.</li>
-                <li>Nivel 3: en «Año o categoría» escribe <b>la categoría</b> que va a guardar (p. ej. <code>Viajes</code>). Nivel 2: déjalo vacío; los años se los asigna el reparto.</li>
+                <li>Nivel 2: deja vacío «Año o categoría»; los años se los asigna el reparto. Nivel 3: déjalo vacío para que el reparto le asigne varias categorías, o escribe una (p. ej. <code>Viajes</code>) si quieres que guarde solo esa.</li>
                 <li>Pulsa <a href="#como-recalcular">Recalcular reparto</a> y después <code>silo --copiar</code>.</li>
             </ol>
             <div class="ayuda-ojo">No hace falta añadir los USB a <code>config.json</code>: <code>silo --copiar</code> los reconoce solo por su <code>.silo_unit.json</code>. Uno recién estrenado lo eliges de la lista de discos la primera vez.</div>
@@ -503,13 +503,14 @@ USB tema: recuerdos/20030603 Recuerdos, University Day [260015]</div>
             <div class="ayuda-ojo">El año en curso sigue creciendo: si se llena su USB, el próximo «Recalcular reparto» puede moverlo a otro.</div>
         </article>
 
-        <article class="ayuda-ficha" id="reparto-n3" data-claves="reparto nivel 3 tematica categoria usb como se reparte">
+        <article class="ayuda-ficha" id="reparto-n3" data-claves="reparto nivel 3 tematica categoria usb disco como se reparte varias categorias automatico">
             <h3><i class="bi bi-bookmarks"></i> Reparto por temática (Nivel 3) <a class="ayuda-ancla" href="#reparto-n3">#</a></h3>
-            <p class="ayuda-corto">Cada USB de Nivel 3 es de una categoría. Cada carpeta va al de su categoría, si cabe.</p>
+            <p class="ayuda-corto">Cada disco de Nivel 3 guarda una o varias categorías enteras. Una categoría nunca se parte entre dos discos.</p>
             <ul>
-                <li>La categoría del USB se pone en «Año o categoría», al darlo de alta o editándolo. Si la cambias, lo copiado de la categoría anterior queda como sobrante en el USB (<code>silo --copiar --purgar</code>).</li>
-                <li>Si una categoría tiene varios USB, los llena en orden de alta.</li>
-                <li>Si no hay USB de esa categoría, o están llenos, la carpeta queda <a href="#pendiente">pendiente</a>.</li>
+                <li><b>Sin categoría puesta</b> (deja vacío «Año o categoría» y pon la capacidad): el reparto le asigna <b>varias categorías</b> que quepan, eligiendo la mejor combinación igual que en <a href="#reparto-n2">Nivel 2</a> (lo mínimo pendiente, lo mínimo a recopiar, los mínimos huecos). Sin capacidad no entra en el reparto.</li>
+                <li><b>Con categoría puesta</b> (p. ej. <code>Viajes</code>): ese disco solo recibe esa categoría, y esa categoría ya no va a los discos automáticos. Si una categoría tiene varios, los llena en orden de alta.</li>
+                <li>Si cambias la categoría de un disco, lo copiado de antes queda como sobrante en el USB (<code>silo --copiar --purgar</code>).</li>
+                <li>Si una categoría no cabe en ningún disco, sus carpetas quedan <a href="#pendiente">pendientes</a>.</li>
             </ul>
         </article>
 
@@ -601,6 +602,7 @@ USB tema: recuerdos/20030603 Recuerdos, University Day [260015]</div>
             <h3><i class="bi bi-hdd-network"></i> Comandos del servidor (<code>php spark</code>) <a class="ayuda-ancla" href="#cmd-spark">#</a></h3>
             <p class="ayuda-corto">Se ejecutan en la carpeta de la web. Casi nunca hacen falta: la web y el agente ya lo hacen solos.</p>
             <?= $cmd('php spark silo:planificar-nivel2', 'Enseña el reparto por años. --aplicar = botón «Recalcular reparto».') ?>
+            <?= $cmd('php spark silo:planificar-nivel3', 'Enseña el reparto por temática. --aplicar = botón «Recalcular reparto» (solo Nivel 3).') ?>
             <?= $cmd('php spark silo:propagar', 'Recalcula las copias 2 y 3 de todo el catálogo (tras una migración o un arreglo).') ?>
             <?= $cmd('php spark silo:restaurar <ruta>', 'Restaura desde un .catalogo.sql.gz. --si para no preguntar.') ?>
             <?= $cmd('php spark silo:reclasificar-ficheros', 'Vuelve a decidir foto/vídeo/otro por extensión. --dry-run para ensayar.') ?>
