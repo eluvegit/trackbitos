@@ -20,6 +20,7 @@ $rutasInventario    = static function ($routes) {
     $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
     $routes->GET('guia/(:num)', 'Inventario::guia/$1');
     $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
+    $routes->GET('ayuda', 'Inventario::ayuda');
 };
 
 if (config('App')->esInventario()) {

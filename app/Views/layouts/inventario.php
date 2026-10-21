@@ -20,7 +20,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=18" rel="stylesheet">
+    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=19" rel="stylesheet">
 </head>
 <body>
 <div class="inv-app">
@@ -41,11 +41,17 @@
                     <span><?= esc($g['nombre']) ?></span>
                 </a>
             <?php endforeach; ?>
+            <a href="<?= inventario_url('ayuda') ?>" class="<?= $seccion === 'ayuda' ? 'activo' : '' ?>">
+                <i class="bi bi-question-circle"></i>
+                <span>Ayuda</span>
+            </a>
         </nav>
-        <a href="<?= site_url('logout') ?>" class="inv-salir" title="Cerrar sesión">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Salir</span>
-        </a>
+        <?php if ($usuario): ?>
+            <a href="<?= site_url('logout') ?>" class="inv-salir" title="Cerrar sesión">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Salir</span>
+            </a>
+        <?php endif; ?>
     </aside>
 
     <main class="inv-principal">
