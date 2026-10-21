@@ -63,6 +63,14 @@ class Inventario extends BaseController
         ]);
     }
 
+    public function ayuda()
+    {
+        return $this->pintar('inventario/ayuda', [
+            'seccion' => 'ayuda',
+            'total'   => count($this->catalogo->piezas()),
+        ]);
+    }
+
     public function estuche(int $id)
     {
         $estuche = (new PiezaEstucheModel())->find($id);
