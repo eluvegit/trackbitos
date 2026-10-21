@@ -533,6 +533,15 @@ $textoBuscable = static function (array $familia): string {
 };
 
 /**
+ * Lo que debe encontrar el buscador de UNA variante: el nombre de la pieza
+ * más el suyo y su SKU, sin los de sus hermanas — buscar "nazareno" solo
+ * debe enseñar la variante Nazareno, no las diez de Piernas.
+ */
+$textoBuscableVariante = static function (array $familia, array $v): string {
+    return mb_strtolower(implode(' ', [$familia['nombre'], $v['nombre'], $v['sku'] ?? '']));
+};
+
+/**
  * Los filtros son las preguntas que uno se hace de verdad mirando esto
  * ("¿qué tengo pendiente de imprimir?", "¿qué se ha descartado?"), no una
  * lista de los estados internos.
@@ -866,7 +875,7 @@ foreach ($grupos as $grupo) {
                 <?php if (count($variantes) > 1): ?>
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
-                        <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
+                        <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= esc($textoBuscableVariante($familia, $v), 'attr') ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
                             <td class="pe-0 col-ojo" style="width: 1%;"><?= $botonOjo(site_url('piezas/variante/' . (int) $v['id'] . '/visibilidad'), !empty($v['visible_sterclicks'])) ?></td>
                             <td style="width: 48px;"><?= $colFoto($v) ?></td>
                             <td class="ps-4">
@@ -936,10 +945,9 @@ foreach ($grupos as $grupo) {
                 <?php else: ?>
                     <div class="d-flex flex-wrap gap-3">
                         <?php foreach ($grupo['piezas'] as $familia): ?>
-                            <?php $buscar = esc($textoBuscable($familia), 'attr'); ?>
                             <?php $conVariante = count($familia['variantes']) > 1; ?>
                             <?php foreach ($familia['variantes'] as $v): ?>
-                                <?= $tarjetaGaleria($v, $familia, $conVariante, $buscar) ?>
+                                <?= $tarjetaGaleria($v, $familia, $conVariante, esc($textoBuscableVariante($familia, $v), 'attr')) ?>
                             <?php endforeach; ?>
                         <?php endforeach; ?>
                     </div>
@@ -1672,13 +1680,13 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         var encontradas = 0;
         var recortando = q !== '' || filtro !== '';
 
-        // Filas de pieza (una por familia) y de variante (subfilas, cuando
-        // hay más de una): comparten el mismo data-buscar, así que la
-        // búsqueda las muestra/oculta juntas. Los tokens sí son propios de
-        // cada fila — la de la pieza lleva la unión de los de sus variantes,
-        // para que aparezca la cabecera cuando encaja cualquiera de ellas.
-        // También las tarjetas de la cuadrícula ([data-tarjeta]): mismo
-        // data-buscar/data-tokens, así el recorte vale para las dos vistas.
+        // Filas de pieza (una por familia), de variante (subfilas, cuando
+        // hay más de una) y tarjetas de la cuadrícula ([data-tarjeta]). Cada
+        // variante (subfila o tarjeta) lleva su propio data-buscar y sus
+        // tokens, así que se recorta sola: buscar "nazareno" no arrastra a
+        // sus hermanas. La fila de la pieza lleva la unión de las dos cosas,
+        // pero si tiene subfilas se ve solo cuando queda alguna de ellas
+        // (abajo) — nunca una cabecera sin variantes debajo.
         document.querySelectorAll('[data-pieza], [data-subpieza], [data-tarjeta]').forEach(function (fila) {
             var visible = fila.getAttribute('data-buscar').indexOf(q) !== -1;
 
@@ -1687,8 +1695,21 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
             }
 
             fila.classList.toggle('d-none', !visible);
-            if ((fila.hasAttribute('data-pieza') || fila.hasAttribute('data-tarjeta')) && visible) encontradas++;
         });
+
+        document.querySelectorAll('[data-pieza]').forEach(function (fila) {
+            var sub = fila.nextElementSibling;
+            var tieneSubfilas = false;
+            var algunaVisible = false;
+            while (sub && sub.hasAttribute('data-subpieza')) {
+                tieneSubfilas = true;
+                if (!sub.classList.contains('d-none')) algunaVisible = true;
+                sub = sub.nextElementSibling;
+            }
+            if (tieneSubfilas) fila.classList.toggle('d-none', !algunaVisible);
+        });
+
+        encontradas = document.querySelectorAll('[data-pieza]:not(.d-none), [data-tarjeta]:not(.d-none)').length;
 
         // Grupos de categoría de la cuadrícula: mismo trato que los tbody de
         // la tabla — mientras se recorta se abren todos y se esconde el que
