@@ -761,6 +761,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
 
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.
+    $routes->GET('ayuda', 'Web::ayuda');
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('estadisticas', 'Web::estadisticas');

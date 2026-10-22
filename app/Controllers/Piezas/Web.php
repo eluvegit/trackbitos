@@ -1950,6 +1950,11 @@ class Web extends BaseController
      * disponible) para poder decidir de un vistazo si merece la pena
      * "cargar en la placa actual".
      */
+    public function ayuda()
+    {
+        return view('piezas/ayuda');
+    }
+
     public function placas()
     {
         $placas = $this->placaModel->orderBy('creado_en', 'DESC')->findAll();
