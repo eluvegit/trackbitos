@@ -1675,8 +1675,12 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
     var sinResultados = document.getElementById('sinResultados');
     var filtro = '';
 
+    function sinTildes(t) {
+        return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
     function aplicarFiltros() {
-        var q = buscador ? buscador.value.trim().toLowerCase() : '';
+        var q = buscador ? sinTildes(buscador.value.trim()) : '';
         var encontradas = 0;
         var recortando = q !== '' || filtro !== '';
 
@@ -1688,7 +1692,7 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
         // pero si tiene subfilas se ve solo cuando queda alguna de ellas
         // (abajo) — nunca una cabecera sin variantes debajo.
         document.querySelectorAll('[data-pieza], [data-subpieza], [data-tarjeta]').forEach(function (fila) {
-            var visible = fila.getAttribute('data-buscar').indexOf(q) !== -1;
+            var visible = sinTildes(fila.getAttribute('data-buscar')).indexOf(q) !== -1;
 
             if (visible && filtro !== '') {
                 visible = (fila.getAttribute('data-tokens') || '').split(' ').indexOf(filtro) !== -1;

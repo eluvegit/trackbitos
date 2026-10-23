@@ -462,16 +462,20 @@ foreach ($piezasTodas as $p) {
     var filtroImagen = '';
     var filtroPlaca = '';
 
+    function sinTildes(t) {
+        return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
     function aplicarFiltrosGaleria() {
         // El texto entra en la misma pasada que los tres facetados, no en una
         // suya aparte: dos recorridos independientes se pisarían el uno al
         // otro (el segundo volvería a enseñar lo que el primero escondió).
-        var q = buscador ? buscador.value.trim().toLowerCase() : '';
+        var q = buscador ? sinTildes(buscador.value.trim()) : '';
         var recortando = q !== '' || filtroEstado !== '' || filtroImagen !== '' || filtroPlaca !== '';
         var encontradas = 0;
 
         document.querySelectorAll('[data-tarjeta]').forEach(function (tarjeta) {
-            var visible = (q === '' || (tarjeta.getAttribute('data-buscar') || '').indexOf(q) !== -1)
+            var visible = (q === '' || sinTildes(tarjeta.getAttribute('data-buscar')).indexOf(q) !== -1)
                 && (filtroEstado === '' || tarjeta.getAttribute('data-estado') === filtroEstado)
                 && (filtroImagen === '' || tarjeta.getAttribute('data-imagen') === filtroImagen)
                 && (filtroPlaca === '' || tarjeta.getAttribute('data-placa') === filtroPlaca);
