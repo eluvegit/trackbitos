@@ -263,6 +263,8 @@
     </div>
 <?php endif; ?>
 
+<?= view('piezas/pedidos/_referencias', ['pedido' => $pedido, 'imagenes' => $imagenes]) ?>
+
 <?php // ================= Líneas ================= ?>
 <div class="lista-barra">
     <h6>Piezas <span class="text-body-secondary fw-normal" data-resumen-lineas><?= count($pedido['lineas']) ?></span></h6>

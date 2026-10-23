@@ -14,6 +14,7 @@ use App\Models\PiezaMaquinaModel;
 use App\Models\PiezaPedidoLineaModel;
 use App\Models\PiezaPedidoModel;
 use App\Models\PiezaPlacaEnlaceModel;
+use App\Models\PiezaPedidoImagenModel;
 use App\Models\PiezaPlacaImagenModel;
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaPruebaModel;
@@ -135,6 +136,7 @@ class Web extends BaseController
     private PiezaPlacaPruebaModel $placaPruebaModel;
     private PiezaPlacaEnlaceModel $placaEnlaceModel;
     private PiezaPlacaImagenModel $placaImagenModel;
+    private PiezaPedidoImagenModel $pedidoImagenModel;
     private PiezaPlacaVersionImagenModel $placaVersionImagenModel;
     private PiezaService $servicio;
     private PiezaSyncService $sync;
@@ -168,6 +170,7 @@ class Web extends BaseController
         $this->placaPruebaModel = new PiezaPlacaPruebaModel();
         $this->placaEnlaceModel = new PiezaPlacaEnlaceModel();
         $this->placaImagenModel = new PiezaPlacaImagenModel();
+        $this->pedidoImagenModel = new PiezaPedidoImagenModel();
         $this->placaVersionImagenModel = new PiezaPlacaVersionImagenModel();
         $this->servicio         = new PiezaService();
         $this->sync             = new PiezaSyncService();
@@ -3930,6 +3933,92 @@ class Web extends BaseController
     public function imagenPlaca(int $id)
     {
         $imagen = $this->placaImagenModel->find($id);
+        if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return $this->servirImagen(
+            $this->almacen->absoluta($imagen['ruta_imagen']),
+            $imagen['hash_imagen']
+        );
+    }
+
+    /**
+     * Imágenes de referencia de un pedido: lo que manda el cliente cuando aún
+     * no hay pieza en el catálogo a la que colgárselas. Varias de golpe (el
+     * input es múltiple, y también llegan pegadas del portapapeles), cada
+     * una con el mismo alta en dos pasos que las fotos de una placa.
+     */
+    public function subirImagenesPedido(int $pedidoId)
+    {
+        if (!(new PiezaPedidoModel())->find($pedidoId)) {
+            return redirect()->to(site_url('piezas/pedidos'))->with('error', 'Ese pedido ya no existe.');
+        }
+
+        return $this->ejecutar(
+            function () use ($pedidoId) {
+                $ficheros = array_values(array_filter(
+                    $this->request->getFileMultiple('imagenes') ?? [],
+                    fn($f) => $f && $f->getError() !== UPLOAD_ERR_NO_FILE
+                ));
+                if (!$ficheros) {
+                    throw new RuntimeException('No ha llegado ninguna imagen.');
+                }
+
+                // Todas validadas antes de guardar ninguna: o entran todas o
+                // ninguna, sin dejar medio lote subido por una que no valía.
+                $extensiones = array_map(fn($f) => $this->validarImagen($f), $ficheros);
+
+                foreach ($ficheros as $i => $fichero) {
+                    $id = $this->pedidoImagenModel->insert([
+                        'pedido_id'   => $pedidoId,
+                        'ruta_imagen' => '',
+                        'orden'       => $this->pedidoImagenModel->siguienteOrden($pedidoId),
+                        'subida_en'   => date('Y-m-d H:i:s'),
+                    ], true);
+                    if (!$id) {
+                        throw new RuntimeException('No se pudo registrar la imagen: ' . implode(' ', $this->pedidoImagenModel->errors()));
+                    }
+
+                    $ruta = $this->almacen->rutaPedidoImagen($pedidoId, $id, $extensiones[$i]);
+                    $this->almacen->guardar($fichero->getTempName(), $ruta);
+                    $hash = $this->almacen->hash($ruta);
+
+                    $this->pedidoImagenModel->update($id, [
+                        'ruta_imagen'  => $ruta,
+                        'hash_imagen'  => $hash,
+                        'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                    ]);
+
+                    $this->publicarCopias($ruta, $hash);
+                }
+
+                return count($ficheros);
+            },
+            fn() => site_url('piezas/pedido/' . $pedidoId) . '#referencias',
+            fn(int $n) => $n === 1 ? 'Imagen de referencia añadida.' : "{$n} imágenes de referencia añadidas."
+        );
+    }
+
+    public function borrarImagenPedido(int $id)
+    {
+        $imagen = $this->pedidoImagenModel->find($id);
+        if (!$imagen) {
+            return redirect()->to(site_url('piezas/pedidos'))->with('error', 'Esa imagen ya no existe.');
+        }
+
+        // Como las de placa: el fichero se aparta a la papelera, el registro se quita.
+        $this->almacen->aPapelera($imagen['ruta_imagen']);
+        $this->publicas->retirar($imagen['hash_imagen'] ?? null);
+        $this->pedidoImagenModel->delete($id);
+
+        return redirect()->to(site_url('piezas/pedido/' . (int) $imagen['pedido_id']) . '#referencias')
+            ->with('success', 'Imagen apartada a la papelera.');
+    }
+
+    public function imagenPedido(int $id)
+    {
+        $imagen = $this->pedidoImagenModel->find($id);
         if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }

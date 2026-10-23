@@ -4,11 +4,13 @@ namespace App\Controllers\Piezas;
 
 use App\Controllers\BaseController;
 use App\Models\PiezaFamiliaModel;
+use App\Models\PiezaPedidoImagenModel;
 use App\Models\PiezaPedidoLineaModel;
 use App\Models\PiezaPedidoModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaVarianteModel;
+use App\Services\PiezaAlmacen;
 use App\Services\PiezaImagenesPublicas;
 
 /**
@@ -28,6 +30,7 @@ class PedidosController extends BaseController
     {
         $lineaModel = new PiezaPedidoLineaModel();
         $varianteModel = new PiezaVarianteModel();
+        $imagenModel = new PiezaPedidoImagenModel();
 
         $pedidos = (new PiezaPedidoModel())->recientes();
         foreach ($pedidos as &$pedido) {
@@ -50,6 +53,12 @@ class PedidosController extends BaseController
                 if ($variante && ($foto = $this->miniaturaDeVariante($variante))) {
                     $fotos[] = $foto;
                 }
+            }
+
+            // Las referencias del cliente detrás de las de las piezas: son lo
+            // único que enseña un pedido cuyas piezas aún no existen.
+            foreach ($imagenModel->dePedido((int) $pedido['id']) as $imagen) {
+                $fotos[] = imagen_pieza($imagen, 'pedido-imagen');
             }
 
             $pedido['numLineas'] = count($lineas);
@@ -171,6 +180,7 @@ class PedidosController extends BaseController
             'pedido'          => $pedido,
             'estados'         => PiezaPedidoModel::ESTADOS,
             'placas'          => $placas,
+            'imagenes'        => (new PiezaPedidoImagenModel())->dePedido($id),
             'pedidosAbiertos' => $pedidosAbiertos,
             'sugerencias'     => $this->sugerenciasParaPedido(array_column($pedido['lineas'], 'variante_id')),
         ]);
@@ -332,6 +342,17 @@ class PedidosController extends BaseController
         if (!$model->find($id)) {
             return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
         }
+
+        // Las imágenes de referencia, a la papelera como cuando se borra una
+        // suelta: la FK se llevaría los registros, pero no los ficheros.
+        $imagenModel = new PiezaPedidoImagenModel();
+        $almacen = new PiezaAlmacen();
+        $publicas = new PiezaImagenesPublicas();
+        foreach ($imagenModel->dePedido($id) as $imagen) {
+            $almacen->aPapelera($imagen['ruta_imagen']);
+            $publicas->retirar($imagen['hash_imagen'] ?? null);
+        }
+        $imagenModel->where('pedido_id', $id)->delete();
 
         $model->delete($id);
 

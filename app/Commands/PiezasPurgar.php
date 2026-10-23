@@ -2,6 +2,7 @@
 
 namespace App\Commands;
 
+use App\Models\PiezaPedidoImagenModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
 use App\Services\PiezaAlmacen;
@@ -88,7 +89,8 @@ class PiezasPurgar extends BaseCommand
     {
         $hashes = array_merge(
             array_column((new PiezaRenderModel())->select('hash_imagen')->findAll(), 'hash_imagen'),
-            array_column((new PiezaReferenciaModel())->select('hash_imagen')->findAll(), 'hash_imagen')
+            array_column((new PiezaReferenciaModel())->select('hash_imagen')->findAll(), 'hash_imagen'),
+            array_column((new PiezaPedidoImagenModel())->select('hash_imagen')->findAll(), 'hash_imagen')
         );
 
         $retiradas = (new PiezaImagenesPublicas())->retirarHuerfanas(array_filter($hashes));

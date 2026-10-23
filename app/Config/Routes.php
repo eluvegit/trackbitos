@@ -865,6 +865,13 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('pedido-linea/(:num)/borrar', 'PedidosController::borrarLinea/$1');
     $routes->GET('pedido-variante-buscar', 'PedidosController::buscarVariante');
 
+    // Imágenes de referencia del pedido (lo que manda el cliente, antes de
+    // que exista la pieza): alta y baja inmediatas, igual que las fotos de
+    // una placa — en Web porque es donde vive la plomería de imágenes.
+    $routes->POST('pedido/(:num)/imagen', 'Web::subirImagenesPedido/$1');
+    $routes->POST('pedido-imagen/(:num)/borrar', 'Web::borrarImagenPedido/$1');
+    $routes->GET('pedido-imagen/(:num)/imagen', 'Web::imagenPedido/$1');
+
     // Pendientes de crear: subtareas sin marcar de una tarea de Journal
     // (spec: journal es el punto de entrada, esto es una vista filtrada
     // encima, ver PendientesController).
