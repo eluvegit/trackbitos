@@ -21,5 +21,12 @@
         <strong>Estuches</strong>
         <span><?= (int) $estuches ?> estuches</span>
     </a>
+    <?php foreach ($guias as $g): ?>
+        <a href="<?= inventario_url('guia/' . (int) $g['id']) ?>" class="inv-boton">
+            <span class="inv-boton-icono"><?= icono_guia($g['icono']) ?></span>
+            <strong><?= esc($g['nombre']) ?></strong>
+            <span>Encuéntrala paso a paso</span>
+        </a>
+    <?php endforeach; ?>
 </div>
 <?= $this->endSection() ?>

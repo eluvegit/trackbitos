@@ -70,6 +70,8 @@
                 nombre.textContent = boton.dataset.nombre;
                 codigo.textContent = boton.dataset.codigo;
                 codigo.classList.toggle('sin', boton.dataset.sinHueco === '1');
+                // Con hueco, el código lleva al estuche (salvo dentro del propio estuche)
+                boton.dataset.huecoUrl ? codigo.setAttribute('href', boton.dataset.huecoUrl) : codigo.removeAttribute('href');
                 stock.textContent = boton.dataset.stock + ' uds.';
                 visor.hidden = false;
                 return;
@@ -84,7 +86,7 @@
         });
     }
 
-    // ---- Buscador: filtra por nombre y categoría mientras se escribe ----
+    // ---- Buscador: filtra por nombre (o código de hueco) y categoría mientras se escribe ----
     var buscador = document.querySelector('[data-buscador]');
     if (!buscador) return;
 
@@ -94,24 +96,41 @@
     var contador    = document.querySelector('[data-contador]');
     var vacio       = document.querySelector('[data-vacio]');
     var piezas      = Array.prototype.slice.call(document.querySelectorAll('[data-pieza]'));
+    var botonStock  = document.querySelector('[data-solo-stock]');
+    var soloStock   = !!(botonStock && botonStock.classList.contains('activo'));
 
     var normalizar = function (texto) {
         return texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
     };
 
-    piezas.forEach(function (p) { p._nombre = normalizar(p.dataset.nombre); });
+    piezas.forEach(function (p) {
+        p._nombre = normalizar(p.dataset.nombre);
+        p._codigo = normalizar(p.dataset.codigo || '');
+    });
+
+    // "E1H2" (o "e1 h2") es ese hueco; "E1" todo el estuche. Tras lo escrito
+    // no puede seguir otra cifra: "E1" no es "E10H2" ni "E1H1" es "E1H10".
+    // A medio escribir ("E1H") sí vale cualquier cifra detrás.
+    var esCifra = function (c) { return c !== '' && c >= '0' && c <= '9'; };
+    var esDeHueco = function (codigo, q) {
+        return codigo !== '' && codigo.indexOf(q) === 0
+            && !(esCifra(q.charAt(q.length - 1)) && esCifra(codigo.charAt(q.length)));
+    };
 
     var catActiva = (chips && chips.querySelector('.activo')) ? chips.querySelector('.activo').dataset.cat : '0';
 
     var aplicar = function () {
         var q = normalizar(input.value);
         var palabras = q ? q.split(/\s+/) : [];
+        var compacto = q.replace(/\s+/g, '');
         var visibles = [];
 
         piezas.forEach(function (p) {
             var okCat = catActiva === '0' || p.dataset.cat === catActiva;
-            var okTexto = palabras.every(function (w) { return p._nombre.indexOf(w) !== -1; });
-            var ver = okCat && okTexto;
+            var okTexto = palabras.every(function (w) { return p._nombre.indexOf(w) !== -1; })
+                || (compacto !== '' && esDeHueco(p._codigo, compacto));
+            var okStock = !soloStock || p.dataset.stock !== '0';
+            var ver = okCat && okTexto && okStock;
             p.hidden = !ver;
             if (ver) visibles.push(p);
         });
@@ -123,6 +142,7 @@
         var url = new URL(window.location.href);
         input.value ? url.searchParams.set('q', input.value) : url.searchParams.delete('q');
         catActiva !== '0' ? url.searchParams.set('cat', catActiva) : url.searchParams.delete('cat');
+        soloStock ? url.searchParams.set('stock', '1') : url.searchParams.delete('stock');
         history.replaceState(null, '', url);
     };
 
@@ -144,6 +164,15 @@
             chips.querySelectorAll('.activo').forEach(function (c) { c.classList.remove('activo'); });
             chip.classList.add('activo');
             catActiva = chip.dataset.cat;
+            aplicar();
+        });
+    }
+
+    if (botonStock) {
+        botonStock.addEventListener('click', function () {
+            soloStock = !soloStock;
+            botonStock.classList.toggle('activo', soloStock);
+            botonStock.setAttribute('aria-pressed', soloStock ? 'true' : 'false');
             aplicar();
         });
     }

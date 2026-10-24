@@ -1066,3 +1066,23 @@ html { scroll-behavior: smooth; }
     .ay-ficha-ejemplo { max-width: 220px; }
     .ay-leyenda > div { grid-template-columns: 1fr; gap: 6px; }
 }
+
+/* ---- Buscar: contador + interruptor "Solo con stock" ---- */
+
+.inv-contador-fila { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; }
+.inv-contador-fila .inv-contador { margin: 0; }
+.inv-interruptor { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); }
+
+/* ---- El código de hueco lleva a su estuche ---- */
+
+a.inv-codigo[href] { text-decoration: none; cursor: pointer; transition: background-color .15s; }
+a.inv-codigo .bi { font-size: .55em; vertical-align: .35em; opacity: .7; }
+a.inv-codigo:not([href]) .bi { display: none; }
+@media (hover: hover) {
+    a.inv-codigo[href]:hover { background: var(--acento); color: #fff; }
+}
+
+/* Hueco al que se llega desde una pieza (estuches/3#E1H2) */
+.inv-hueco { scroll-margin-top: 24px; }
+.inv-hueco:target { box-shadow: 0 0 0 4px var(--acento), var(--sombra); opacity: 1; animation: inv-latido 1.2s ease-out 2; }
+@keyframes inv-latido { 50% { box-shadow: 0 0 0 10px var(--acento-suave), var(--sombra); } }

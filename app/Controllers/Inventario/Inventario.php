@@ -44,6 +44,7 @@ class Inventario extends BaseController
             'piezas'     => $this->catalogo->piezas(),
             'cat'        => $cat > 0 ? $cat : null,
             'q'          => trim((string) $this->request->getGet('q')),
+            'soloStock'  => $this->request->getGet('stock') === '1',
         ]);
     }
 

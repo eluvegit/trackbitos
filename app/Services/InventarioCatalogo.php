@@ -23,7 +23,7 @@ class InventarioCatalogo
     private ?array $piezas = null;
 
     /**
-     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, img:?string, img_grande:?string}>
+     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, estuche_id:?int, img:?string, img_grande:?string}>
      */
     public function piezas(): array
     {
@@ -58,7 +58,7 @@ class InventarioCatalogo
 
         $ids    = array_keys($variantes);
         $stock  = (new PiezaInventario())->stockPorVariante($ids);
-        $codigo = $this->codigosDeHueco();
+        $huecos = $this->codigosDeHueco();
         $fotos  = $this->fotos($ids);
 
         $piezas = [];
@@ -71,7 +71,8 @@ class InventarioCatalogo
                 'categoria_id' => $familia['categoria_id'] !== null ? (int) $familia['categoria_id'] : null,
                 'stock'        => max(0, $stock[$id] ?? 0),
                 'hueco_id'     => $huecoId,
-                'codigo'       => $huecoId !== null ? ($codigo[$huecoId] ?? null) : null,
+                'codigo'       => $huecos[$huecoId]['codigo'] ?? null,
+                'estuche_id'   => $huecos[$huecoId]['estuche_id'] ?? null,
                 'img'          => $fotos[$id]['t'] ?? null,
                 'img_grande'   => $fotos[$id]['v'] ?? null,
             ];
@@ -208,14 +209,14 @@ class InventarioCatalogo
         return $porHueco;
     }
 
-    /** @return array<int,string> huecoId => "E1H2" */
+    /** @return array<int, array{codigo:string, estuche_id:int}> huecoId => "E1H2" y su estuche */
     private function codigosDeHueco(): array
     {
         $huecos = new PiezaHuecoModel();
         $mapa   = [];
         foreach ((new PiezaEstucheModel())->ordenados() as $e) {
             foreach ($huecos->deEstuche((int) $e['id']) as $h) {
-                $mapa[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($e, $h);
+                $mapa[(int) $h['id']] = ['codigo' => PiezaHuecoModel::codigoCompleto($e, $h), 'estuche_id' => (int) $e['id']];
             }
         }
 

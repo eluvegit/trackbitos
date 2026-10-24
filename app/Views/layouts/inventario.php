@@ -1,7 +1,8 @@
 <?php
     $seccion = $seccion ?? '';
     $menu = [
-        'buscar'     => ['Buscar', 'bi-search', inventario_url('buscar')],
+        'inicio'     => ['Inicio', 'bi-house-door', inventario_url()],
+        'buscar'    => ['Buscar', 'bi-search', inventario_url('buscar')],
         'categorias' => ['Categorías', 'bi-grid', inventario_url('categorias')],
         'estuches'   => ['Estuches', 'bi-archive', inventario_url('estuches')],
     ];
@@ -20,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=19" rel="stylesheet">
+    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=20" rel="stylesheet">
 </head>
 <body>
 <div class="inv-app">
@@ -81,14 +82,14 @@
     <figure>
         <img src="" alt="" data-visor-img>
         <figcaption>
-            <span class="inv-codigo grande" data-visor-codigo></span>
+            <a class="inv-codigo grande" data-visor-codigo></a>
             <strong data-visor-nombre></strong>
             <span data-visor-stock></span>
         </figcaption>
     </figure>
 </div>
 
-<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=5"></script>
+<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=7"></script>
 <?= $this->renderSection('scripts') ?>
 </body>
 </html>

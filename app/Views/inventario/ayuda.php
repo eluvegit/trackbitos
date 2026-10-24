@@ -24,7 +24,7 @@
 
 <section class="ay-bloque" id="inicio">
     <header><span class="ay-num">1</span><h2>La pantalla de inicio</h2></header>
-    <p>Al pulsar el <strong>círculo rojo</strong> de arriba del menú vuelves siempre al inicio. Desde ahí tienes tres caminos:</p>
+    <p>Con la <strong>casa</strong> (<i class="bi bi-house-door"></i> Inicio) del menú vuelves siempre al inicio. Desde ahí tienes tres caminos:</p>
     <div class="ay-tarjetas">
         <a href="<?= inventario_url('buscar') ?>" class="ay-tarjeta">
             <i class="bi bi-search"></i>
@@ -53,6 +53,8 @@
         <li>Debajo verás <strong>cuántas piezas</strong> coinciden. Para empezar de nuevo, borra el texto con la <i class="bi bi-x-circle-fill"></i>.</li>
     </ol>
     <p class="ay-nota"><i class="bi bi-lightbulb"></i> Puedes combinar las dos cosas: elige una categoría y luego escribe para afinar dentro de ella.</p>
+    <p class="ay-nota"><i class="bi bi-lightbulb"></i> También puedes escribir el <strong>código de un hueco</strong>, como <em>E1H2</em>, para ver lo que hay dentro; con solo <em>E1</em> salen todas las piezas de ese estuche.</p>
+    <p class="ay-nota"><i class="bi bi-lightbulb"></i> Pulsa <strong>Solo con stock</strong> para esconder las piezas que no tienen unidades. Y si pulsas el <strong>código</strong> de una pieza (el recuadro rojo) se abre su estuche con el hueco marcado.</p>
 </section>
 
 <section class="ay-bloque" id="categorias">

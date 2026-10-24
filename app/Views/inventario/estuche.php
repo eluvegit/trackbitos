@@ -12,7 +12,7 @@ Estuche <?= esc($estuche['codigo']) ?>
 
 <div class="inv-huecos">
     <?php foreach ($huecos as $h): ?>
-        <section class="inv-hueco <?= $h['piezas'] === [] ? 'vacio' : '' ?>">
+        <section class="inv-hueco <?= $h['piezas'] === [] ? 'vacio' : '' ?>" id="<?= esc($h['codigo'], 'attr') ?>">
             <header>
                 <span class="inv-codigo grande"><?= esc($h['codigo']) ?></span>
                 <?php if ($h['piezas'] !== []): ?>

@@ -22,7 +22,7 @@
 </nav>
 
 <?php if ($resultado): ?>
-    <?php $p = $resultado; $codigo = $p['codigo'] ?? null; ?>
+    <?php $p = $resultado; $codigo = $p['codigo'] ?? null; $enlace = inventario_hueco_url($p); ?>
     <div class="inv-resultado">
         <button type="button" class="inv-resultado-foto" data-foto
             data-grande="<?= esc($p['img_grande'] ?? '', 'attr') ?>"
@@ -30,6 +30,7 @@
             data-codigo="<?= esc($codigo ?? 'Sin ubicación', 'attr') ?>"
             data-stock="<?= (int) $p['stock'] ?>"
             data-sin-hueco="<?= $codigo ? '0' : '1' ?>"
+            data-hueco-url="<?= esc($enlace ?? '', 'attr') ?>"
             <?= $p['img'] ? '' : 'disabled' ?>>
             <?php if ($p['img_grande'] ?? $p['img']): ?>
                 <img src="<?= esc($p['img_grande'] ?? $p['img'], 'attr') ?>" alt="">
@@ -41,7 +42,11 @@
         <div class="inv-resultado-datos">
             <span class="inv-resultado-etiqueta"><i class="bi bi-check-circle-fill"></i> Tu pieza es</span>
             <h2><?= esc($p['nombre']) ?></h2>
-            <span class="inv-codigo grande <?= $codigo ? '' : 'sin' ?>"><?= esc($codigo ?? 'Sin ubicación') ?></span>
+            <?php if ($enlace): ?>
+                <a href="<?= esc($enlace, 'attr') ?>" class="inv-codigo grande" title="Ver en el estuche"><?= esc($codigo) ?> <i class="bi bi-box-arrow-up-right"></i></a>
+            <?php else: ?>
+                <span class="inv-codigo grande sin">Sin ubicación</span>
+            <?php endif; ?>
             <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.</span>
             <a href="<?= $url('') ?>" class="inv-boton-texto"><i class="bi bi-arrow-counterclockwise"></i> Elegir otra</a>
         </div>
