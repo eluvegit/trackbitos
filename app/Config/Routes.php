@@ -941,6 +941,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');
     $routes->POST('carrito/vaciar', 'Web::carritoVaciar');
+    $routes->POST('carrito/actualizar/(:num)', 'Web::carritoActualizar/$1');
+    $routes->POST('carrito/actualizar-todas', 'Web::carritoActualizarTodas');
     // Desde el modal que pregunta el nombre de la placa (fase 57: ya no
     // genera ningún zip, los STL se generan aparte; fase 59: era la única
     // forma de crear una placa, "Guardar para después" se quitó por
@@ -980,6 +982,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->GET('pieza-buscar', 'Web::piezaBuscar');
     $routes->POST('placa/(:num)/pieza/agregar', 'Web::bitacoraPiezaAgregar/$1');
     $routes->POST('placa/(:num)/pieza/(:num)/quitar', 'Web::bitacoraPiezaQuitar/$1/$2');
+    $routes->POST('placa/(:num)/pieza/(:num)/actualizar', 'Web::bitacoraPiezaActualizar/$1/$2');
+    $routes->POST('placa/(:num)/actualizar-versiones', 'Web::bitacoraActualizarVersiones/$1');
 
     // Fotos de la plataforma del laminador (fase 43): de dónde partía la
     // impresión. Alta y baja inmediatas, fuera del guardado general de la

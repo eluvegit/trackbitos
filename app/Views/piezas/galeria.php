@@ -44,6 +44,14 @@
 
     <div class="d-flex gap-2 <?= empty($carrito) ? 'd-none' : '' ?>" id="cabeceraCarrito">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="botonVaciarPlaca">Vaciar placa</button>
+        <?php // Piezas de la placa con una versión más nueva (arreglada tras verla
+              // fallar en el laminador): las pasa todas a la última de golpe. ?>
+        <?php if (!empty($desfasadas)): ?>
+            <button type="button" class="btn btn-sm btn-outline-info" id="botonActualizarVersiones"
+                title="Pasa las piezas de la placa a su última versión para imprimir">
+                <i class="bi bi-arrow-up-circle"></i> Actualizar versiones (<?= count($desfasadas) ?>)
+            </button>
+        <?php endif; ?>
         <?php // Antes bajaba el zip de los STL; ya no (fase 57, se generan en
               // local aparte) — ahora solo pregunta con qué nombre quieres
               // encontrar la placa luego. ?>
@@ -96,7 +104,8 @@ foreach ($piezasTodas as $p) {
     if (!$p['miniatura']) {
         $cuentaSinImagen++;
     }
-    $cuentaPlaca[in_array((int) $p['version']['id'], $carrito, true) ? 'en' : 'fuera']++;
+    $enPlaca = in_array((int) $p['version']['id'], $carrito, true) || isset($desfasadas[(int) $p['variante']['id']]);
+    $cuentaPlaca[$enPlaca ? 'en' : 'fuera']++;
 }
 ?>
 
@@ -213,6 +222,8 @@ foreach ($piezasTodas as $p) {
                             $version  = $p['version'];
                             $esValidada = $version['estado'] === 'validada';
                             $enCarrito = in_array((int) $version['id'], $carrito, true);
+                            // En la placa, pero con una versión anterior a la que enseña la tarjeta.
+                            $desfasada = !$enCarrito && isset($desfasadas[(int) $variante['id']]);
                             $stls      = (int) ($p['stls'] ?? 0);
                             // Lo mismo que busca el índice y en el mismo formato (en
                             // minúsculas, ya montado desde PHP): quien escribe "copa" aquí
@@ -238,7 +249,7 @@ foreach ($piezasTodas as $p) {
                             $nombrePiezaPlano = $p['familiaNombre'] . ($apellido !== null ? ' - ' . $apellido : '');
                         ?>
                         <div class="col" data-tarjeta data-estado="<?= esc($version['estado'], 'attr') ?>"
-                            data-imagen="<?= $p['miniatura'] ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito ? 'en' : 'fuera' ?>"
+                            data-imagen="<?= $p['miniatura'] ? 'con' : 'sin' ?>" data-placa="<?= $enCarrito || $desfasada ? 'en' : 'fuera' ?>"
                             data-buscar="<?= esc($buscable, 'attr') ?>"
                             data-nombre-pieza="<?= esc($nombrePiezaPlano, 'attr') ?>"
                             data-version-tarjeta="<?= (int) $version['id'] ?>">
@@ -305,7 +316,18 @@ foreach ($piezasTodas as $p) {
 
                                     <?php // Botón único con estado, movido por fetch() (fase 32): un
                                           // <form> con recarga completa perdía el filtro en el que
-                                          // estabas trabajando cada vez que añadías una pieza. ?>
+                                          // estabas trabajando cada vez que añadías una pieza.
+                                          // Si en la placa está una versión vieja de esta pieza,
+                                          // el botón la cambia por esta en vez de añadir otra. ?>
+                                    <?php if ($desfasada): ?>
+                                    <button type="button" class="btn btn-sm w-100 py-0 mt-1 btn-outline-info"
+                                        data-actualizar-carrito data-vieja-id="<?= (int) $desfasadas[(int) $variante['id']] ?>"
+                                        data-version-id="<?= (int) $version['id'] ?>" data-en-carrito="1"
+                                        title="En la placa está una versión anterior">
+                                        <i class="bi bi-arrow-up-circle"></i>
+                                        Actualizar a v<?= sprintf('%03d', (int) $version['numero']) ?>
+                                    </button>
+                                    <?php else: ?>
                                     <button type="button" class="btn btn-sm w-100 py-0 mt-1
                                         <?= $enCarrito ? 'btn-success' : 'btn-outline-warning' ?>"
                                         data-carrito-boton data-version-id="<?= (int) $version['id'] ?>"
@@ -313,6 +335,7 @@ foreach ($piezasTodas as $p) {
                                         <i class="bi <?= $enCarrito ? 'bi-check-lg' : 'bi-plus-lg' ?>"></i>
                                         <?= $enCarrito ? 'En la placa' : 'Añadir a la placa' ?>
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -620,6 +643,68 @@ foreach ($piezasTodas as $p) {
         });
     });
 
+    // ---- Piezas de la placa con una versión más nueva ---------------------
+    // La tarjeta enseña la última versión para imprimir; si en la placa está
+    // una anterior, su botón la cambia en vez de añadir otra. Una vez
+    // cambiada, el botón pasa a ser el normal de "En la placa".
+    function convertirEnBotonPlaca(boton) {
+        boton.removeAttribute('data-actualizar-carrito');
+        boton.removeAttribute('title');
+        boton.setAttribute('data-carrito-boton', '');
+        boton.classList.remove('btn-outline-info');
+        var icono = boton.querySelector('i');
+        if (icono) icono.className = 'bi';
+    }
+
+    var botonActualizarVersiones = document.getElementById('botonActualizarVersiones');
+
+    function pintarBotonActualizarVersiones() {
+        if (!botonActualizarVersiones) return;
+        var quedan = document.querySelectorAll('[data-actualizar-carrito]').length;
+        botonActualizarVersiones.classList.toggle('d-none', quedan === 0);
+        botonActualizarVersiones.lastChild.textContent = ' Actualizar versiones (' + quedan + ')';
+    }
+
+    document.addEventListener('click', function (e) {
+        var boton = e.target.closest('[data-actualizar-carrito]');
+        if (!boton) return;
+
+        boton.disabled = true;
+        llamadaPlaca(baseCarrito + 'actualizar/' + boton.getAttribute('data-vieja-id')).then(function (datos) {
+            boton.disabled = false;
+            if (!datos.ok) {
+                alert(datos.mensaje || 'No se pudo actualizar la pieza.');
+                return;
+            }
+            convertirEnBotonPlaca(boton);
+            pintarBotonPlaca(boton, true);
+            actualizarContadorPlaca(datos.total);
+            pintarBotonActualizarVersiones();
+        }).catch(function () {
+            boton.disabled = false;
+            alert('No se pudo hablar con el servidor.');
+        });
+    });
+
+    if (botonActualizarVersiones) {
+        botonActualizarVersiones.addEventListener('click', function () {
+            botonActualizarVersiones.disabled = true;
+            llamadaPlaca(baseCarrito + 'actualizar-todas').then(function (datos) {
+                botonActualizarVersiones.disabled = false;
+                if (!datos.ok) return;
+                document.querySelectorAll('[data-actualizar-carrito]').forEach(function (b) {
+                    convertirEnBotonPlaca(b);
+                    pintarBotonPlaca(b, true);
+                });
+                actualizarContadorPlaca(datos.total);
+                pintarBotonActualizarVersiones();
+            }).catch(function () {
+                botonActualizarVersiones.disabled = false;
+                alert('No se pudo hablar con el servidor.');
+            });
+        });
+    }
+
     var botonVaciar = document.getElementById('botonVaciarPlaca');
     if (botonVaciar) {
         botonVaciar.addEventListener('click', function () {
@@ -627,6 +712,8 @@ foreach ($piezasTodas as $p) {
 
             llamadaPlaca(baseCarrito + 'vaciar').then(function (datos) {
                 if (!datos.ok) return;
+                document.querySelectorAll('[data-actualizar-carrito]').forEach(convertirEnBotonPlaca);
+                pintarBotonActualizarVersiones();
                 document.querySelectorAll('[data-carrito-boton]').forEach(function (b) {
                     pintarBotonPlaca(b, false);
                 });

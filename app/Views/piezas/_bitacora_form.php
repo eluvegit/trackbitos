@@ -189,6 +189,14 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                     <i class="bi bi-info-circle"></i>
                 </span>
             <?php endif; ?>
+            <?php // Piezas arregladas y promocionadas después de meterlas aquí. Vacío
+                  // en una placa impresa: ahí no se ofrece cambiar versiones. ?>
+            <?php if (!empty($versionesNuevas)): ?>
+                <button type="button" class="btn btn-sm btn-outline-info py-0 ms-2" data-actualizar-versiones
+                    title="Pasa todas las piezas de esta placa a su última versión para imprimir">
+                    <i class="bi bi-arrow-up-circle"></i> Actualizar todas (<?= count($versionesNuevas) ?>)
+                </button>
+            <?php endif; ?>
         </div>
         <?php if (empty($piezas)): ?>
             <p class="text-muted small mt-2">Ninguna de esas versiones existe ya.</p>
@@ -227,6 +235,13 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                                             <?= esc($p['familia']['nombre']) ?> - <?= esc($p['variante']['nombre']) ?>
                                             <span class="text-muted">· v<?= sprintf('%03d', (int) $p['version']['numero']) ?></span>
                                         </a>
+                                        <?php if (isset($versionesNuevas[$filaId])): ?>
+                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-1 ms-1" data-actualizar-pieza
+                                                data-fila="<?= $filaId ?>" style="font-size: .7rem;"
+                                                title="Hay una versión más nueva: cambiar esta pieza a ella">
+                                                <i class="bi bi-arrow-up-circle"></i> v<?= sprintf('%03d', (int) $versionesNuevas[$filaId]['numero']) ?>
+                                            </button>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <span class="text-muted">(esa pieza ya no existe)</span>
                                     <?php endif; ?>

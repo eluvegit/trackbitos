@@ -52,20 +52,21 @@ $claseLomo = $resumen['veredicto']
                 <span class="ms-auto"><?= count($lista) ?> pieza<?= count($lista) === 1 ? '' : 's' ?></span>
             </div>
 
-            <?php // Procedencia: de qué placa se repite/reparte, y de qué pedido salió,
+            <?php // Procedencia: de qué placa se repite/reparte, y de qué pedidos salió,
                   // si sale de alguno — solo dato, ningún cálculo detrás. ?>
-            <?php if ($placa['origen_placa_id'] || $placa['pedido_id']): ?>
+            <?php $pedidosDeLaPlaca = $pedidosPorPlaca[(int) $placa['id']] ?? []; ?>
+            <?php if ($placa['origen_placa_id'] || $pedidosDeLaPlaca): ?>
                 <div class="text-muted text-truncate" style="font-size: .7rem;">
                     <?php if ($placa['origen_placa_id']): ?>
                         <i class="bi bi-signpost-split"></i>
                         <?= esc($origenNombres[(int) $placa['origen_placa_id']] ?? 'placa borrada') ?>
                     <?php endif; ?>
-                    <?php if ($placa['pedido_id']): ?>
-                        <a href="<?= site_url('piezas/pedido/' . (int) $placa['pedido_id']) ?>"
+                    <?php foreach ($pedidosDeLaPlaca as $pedidoId): ?>
+                        <a href="<?= site_url('piezas/pedido/' . $pedidoId) ?>"
                             class="text-decoration-none text-muted" onclick="event.stopPropagation()">
-                            <i class="bi bi-cart-check"></i> Pedido #<?= (int) $placa['pedido_id'] ?>
+                            <i class="bi bi-cart-check"></i> Pedido #<?= $pedidoId ?>
                         </a>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
 

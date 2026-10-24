@@ -38,7 +38,7 @@ class PiezaPlacaModel extends Model
         'notas', 'conclusiones',
         'resina', 'temperatura', 'veredicto',
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
-        'origen_placa_id', 'es_reparto', 'descargada_en', 'pedido_id',
+        'origen_placa_id', 'es_reparto', 'descargada_en',
         'inventario_sincronizado_en',
     ];
 

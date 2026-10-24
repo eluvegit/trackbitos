@@ -298,6 +298,27 @@
             });
         }
 
+        // Pasar piezas a su última versión para imprimir: una suelta o todas.
+        // Mismo patrón que quitar — contra el servidor al momento y recarga.
+        raiz.addEventListener('click', function (e) {
+            var boton = e.target.closest('[data-actualizar-pieza], [data-actualizar-versiones]');
+            if (!boton) return;
+
+            var url = boton.hasAttribute('data-actualizar-pieza')
+                ? '<?= site_url('piezas/placa') ?>/' + placaId + '/pieza/' + boton.getAttribute('data-fila') + '/actualizar'
+                : '<?= site_url('piezas/placa') ?>/' + placaId + '/actualizar-versiones';
+
+            boton.disabled = true;
+            llamada(url, {}).then(function (r) {
+                if (!r.ok) {
+                    boton.disabled = false;
+                    alert(r.datos.mensaje || 'No se pudo actualizar.');
+                    return;
+                }
+                recargarFormulario();
+            });
+        });
+
         raiz.addEventListener('click', function (e) {
             var boton = e.target.closest('[data-quitar-pieza]');
             if (!boton) return;

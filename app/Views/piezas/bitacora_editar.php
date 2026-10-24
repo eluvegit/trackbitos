@@ -74,6 +74,7 @@
                 <i class="bi bi-camera"></i> Fotos de la plataforma (laminador)
             </div>
 
+            <div data-fotos-lista>
             <?php if (empty($imagenes)): ?>
                 <p class="text-muted small mb-2">
                     Sin fotos todavía (captura del laminador: orientación, soportes, desde dónde partía).
@@ -99,16 +100,21 @@
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+            </div>
 
-            <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center mb-3"
-                action="<?= site_url('piezas/placa/' . $idPlaca . '/imagen') ?>">
+            <?php // Se sube sola al elegirla, al soltarla encima de esta columna o al
+                  // pegarla (Ctrl+V) en cualquier parte de la página, como las
+                  // referencias de un pedido. Va por fetch y sin recargar: la
+                  // bitácora de al lado puede tener cambios sin guardar. ?>
+            <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center mb-1"
+                action="<?= site_url('piezas/placa/' . $idPlaca . '/imagen') ?>" data-fotos-form>
                 <?= csrf_field() ?>
                 <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp"
-                    class="form-control form-control-sm" style="max-width: 220px;" required>
+                    class="form-control form-control-sm" style="max-width: 220px;" data-fotos-input>
                 <input type="text" name="notas" class="form-control form-control-sm" maxlength="150"
                     placeholder="Nota (opcional)" style="max-width: 180px;">
-                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-upload"></i> Subir foto</button>
             </form>
+            <p class="small text-body-tertiary mb-3" data-fotos-estado>Elige, arrastra aquí o pega (Ctrl+V) una captura: se guarda sola.</p>
 
             <?= $this->include('piezas/_bitacora_reparto') ?>
         </div>
@@ -116,5 +122,88 @@
 </div>
 
 <?= $this->include('piezas/_bitacora_js') ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var columna = document.getElementById('fotos');
+    var form = columna.querySelector('[data-fotos-form]');
+    var input = form.querySelector('[data-fotos-input]');
+    var estado = columna.querySelector('[data-fotos-estado]');
+    var textoEstado = estado.textContent;
+    var subiendo = false;
+
+    // Una a una (el servidor recibe una por petición). Al terminar se
+    // repinta solo la lista de fotos, sacada de la propia página recién
+    // pedida, para no tocar nada del formulario de la bitácora.
+    function subir(ficheros) {
+        var imagenes = [].filter.call(ficheros || [], function (f) { return /^image\//.test(f.type); });
+        if (!imagenes.length || subiendo) return;
+        subiendo = true;
+
+        var errores = [];
+        function siguiente(i) {
+            if (i >= imagenes.length) {
+                fetch(window.location.href, { credentials: 'same-origin' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (html) {
+                        var nueva = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-fotos-lista]');
+                        if (nueva) columna.querySelector('[data-fotos-lista]').innerHTML = nueva.innerHTML;
+                    })
+                    .finally(function () {
+                        subiendo = false;
+                        input.value = '';
+                        form.querySelector('[name="notas"]').value = '';
+                        estado.textContent = errores.length ? errores.join(' ') : textoEstado;
+                        estado.classList.toggle('text-danger', errores.length > 0);
+                    });
+                return;
+            }
+
+            estado.classList.remove('text-danger');
+            estado.textContent = 'Subiendo' + (imagenes.length > 1 ? ' ' + (i + 1) + '/' + imagenes.length : '') + '…';
+            var datos = new FormData(form);
+            datos.set('imagen', imagenes[i], imagenes[i].name || 'captura.png');
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: datos
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { if (!d.ok) errores.push(d.mensaje || 'No se pudo subir.'); })
+                .catch(function () { errores.push('No se pudo hablar con el servidor.'); })
+                .finally(function () { siguiente(i + 1); });
+        }
+        siguiente(0);
+    }
+
+    input.addEventListener('change', function () { subir(input.files); });
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+        columna.addEventListener(ev, function (e) {
+            if (!e.dataTransfer || [].indexOf.call(e.dataTransfer.types, 'Files') < 0) return;
+            e.preventDefault();
+            columna.classList.add('bg-body-secondary');
+        });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+        columna.addEventListener(ev, function () { columna.classList.remove('bg-body-secondary'); });
+    });
+    columna.addEventListener('drop', function (e) {
+        if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+        e.preventDefault();
+        subir(e.dataTransfer.files);
+    });
+
+    // Pegar en cualquier parte de la página, salvo mientras se escribe en un
+    // campo (ahí el Ctrl+V es para el texto) — igual que en los pedidos.
+    document.addEventListener('paste', function (e) {
+        var destino = e.target;
+        if (destino.closest && destino.closest('input, textarea, select, [contenteditable]')) return;
+        var ficheros = e.clipboardData ? e.clipboardData.files : [];
+        if (ficheros.length) { e.preventDefault(); subir(ficheros); }
+    });
+});
+</script>
 
 <?= $this->endSection() ?>

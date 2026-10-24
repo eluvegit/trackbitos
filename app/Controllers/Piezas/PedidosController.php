@@ -166,7 +166,11 @@ class PedidosController extends BaseController
         // Qué placas se han marcado como "de este pedido" (a mano, al cargar
         // piezas a la placa desde aquí) — solo dato, sin cuadrar cantidades:
         // eso lo sigue juzgando quien mira la placa, no el sistema.
-        $placas = (new \App\Models\PiezaPlacaModel())->where('pedido_id', $id)->orderBy('creado_en', 'DESC')->findAll();
+        $placas = (new \App\Models\PiezaPlacaModel())
+            ->select('piezas_placas.*')
+            ->join('piezas_placa_pedidos pp', 'pp.placa_id = piezas_placas.id')
+            ->where('pp.pedido_id', $id)
+            ->orderBy('piezas_placas.creado_en', 'DESC')->findAll();
 
         // Destinos posibles para "copiar líneas a…": solo pedidos aún
         // abiertos — copiar a uno hecho o cancelado no tiene sentido.

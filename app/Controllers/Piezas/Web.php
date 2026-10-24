@@ -80,14 +80,15 @@ class Web extends BaseController
     private const SESION_CARRITO_ORIGEN = 'piezas_carrito_origen';
 
     /**
-     * De qué pedido de sterclicks salió lo que hay ahora en la placa actual,
-     * cuando se cargó desde "Cargar piezas a la placa" en la ficha de un
-     * pedido. Mismo espíritu que SESION_CARRITO_ORIGEN: no es contenido, es
-     * procedencia, y solo sirve para que la placa que se registre a
-     * continuación quede enlazada a ese pedido — sin ningún cálculo de
-     * cuánto del pedido cubre, eso se sigue juzgando a mano.
+     * De qué pedidos de sterclicks salió lo que hay ahora en la placa actual,
+     * cargados con "Cargar a la placa" desde la ficha de cada pedido — una
+     * lista, porque cargar un pedido se suma a lo que ya hubiera. Mismo
+     * espíritu que SESION_CARRITO_ORIGEN: no es contenido, es procedencia, y
+     * solo sirve para que la placa que se registre a continuación quede
+     * enlazada a esos pedidos — sin ningún cálculo de cuánto de cada pedido
+     * cubre, eso se sigue juzgando a mano.
      */
-    private const SESION_CARRITO_PEDIDO_ORIGEN = 'piezas_carrito_pedido_origen';
+    private const SESION_CARRITO_PEDIDOS_ORIGEN = 'piezas_carrito_pedidos_origen';
 
     /**
      * Un año y `immutable`: el navegador no vuelve a preguntar por una imagen
@@ -1710,12 +1711,21 @@ class Web extends BaseController
         // tarjeta, y es lo que se busca de un vistazo en una parrilla.
         usort($piezas, fn($a, $b) => [$a['familiaNombre'], $a['variante']['nombre']] <=> [$b['familiaNombre'], $b['variante']['nombre']]);
 
+        // Por variante, para que su tarjeta ofrezca "actualizar" en vez de
+        // "añadir": la versión vieja está en la placa, la que enseña la
+        // tarjeta (la nueva) no. variante_id => id de la versión vieja.
+        $desfasadas = [];
+        foreach ($this->carritoDesfasadas() as $viejaId => $nueva) {
+            $desfasadas[(int) $nueva['variante_id']] = $viejaId;
+        }
+
         return view('piezas/galeria', [
             // Filas de una variante suelta (no piezas con `variantes` dentro)
             // y ya ordenadas alfabéticamente: sin el reordenado por madurez,
             // que es cosa del índice.
             'grupos'  => $this->agruparPorCategoria($piezas, false),
             'carrito' => $this->carritoActual(),
+            'desfasadas' => $desfasadas,
         ]);
     }
 
@@ -1803,13 +1813,71 @@ class Web extends BaseController
         // Vaciar es empezar de cero: lo que se monte a partir de ahora ya no
         // repite ninguna placa vieja ni sigue enlazado a un pedido anterior.
         session()->remove(self::SESION_CARRITO_ORIGEN);
-        session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
+        session()->remove(self::SESION_CARRITO_PEDIDOS_ORIGEN);
 
         if ($this->request->isAJAX()) {
             return $this->response->setJSON(['ok' => true, 'total' => 0]);
         }
 
         return redirect()->to(site_url('piezas/galeria'))->with('success', 'Placa vaciada.');
+    }
+
+    /**
+     * Piezas de la placa actual que tienen una versión para imprimir más
+     * nueva que la que se metió (se arregló tras verla fallar en el
+     * laminador y se promocionó otra).
+     *
+     * @return array<int, array> id de la versión en la placa => versión nueva
+     */
+    private function carritoDesfasadas(): array
+    {
+        $carrito = $this->carritoActual();
+        if ($carrito === []) {
+            return [];
+        }
+
+        $nuevas = [];
+        foreach ($this->versionModel->whereIn('id', $carrito)->findAll() as $version) {
+            if ($nueva = $this->versionMasNuevaQue($version)) {
+                $nuevas[(int) $version['id']] = $nueva;
+            }
+        }
+
+        return $nuevas;
+    }
+
+    /** @param array<int, int> $cambios id viejo => id nuevo */
+    private function carritoSustituir(array $cambios): void
+    {
+        $this->carritoGuardar(array_map(static fn(int $id) => $cambios[$id] ?? $id, $this->carritoActual()));
+    }
+
+    /** Cambia una pieza de la placa actual a su última versión para imprimir. */
+    public function carritoActualizar(int $versionId)
+    {
+        $nueva = $this->carritoDesfasadas()[$versionId] ?? null;
+        if ($nueva) {
+            $this->carritoSustituir([$versionId => (int) $nueva['id']]);
+        }
+
+        return $this->response->setJSON([
+            'ok'      => true,
+            'nuevaId' => $nueva ? (int) $nueva['id'] : $versionId,
+            'total'   => count($this->carritoActual()),
+        ]);
+    }
+
+    /** Lo mismo que carritoActualizar(), con todas las piezas de la placa actual. */
+    public function carritoActualizarTodas()
+    {
+        $cambios = array_map(static fn(array $v) => (int) $v['id'], $this->carritoDesfasadas());
+        $this->carritoSustituir($cambios);
+
+        return $this->response->setJSON([
+            'ok'      => true,
+            'cambios' => $cambios,
+            'total'   => count($this->carritoActual()),
+        ]);
     }
 
     /**
@@ -1871,15 +1939,13 @@ class Web extends BaseController
         $datos = ['nombre' => $nombre, 'descargada_en' => null]
             + $this->herenciaDeLaPlacaAnterior();
 
-        $pedidoId = (int) session(self::SESION_CARRITO_PEDIDO_ORIGEN);
-        if ($pedidoId) {
-            $datos['pedido_id'] = $pedidoId;
-            session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
-        }
+        $pedidoIds = (array) session(self::SESION_CARRITO_PEDIDOS_ORIGEN);
+        session()->remove(self::SESION_CARRITO_PEDIDOS_ORIGEN);
 
         $placaId = $this->placaModel->insert($datos, true);
         if ($placaId) {
             $this->placaModel->update($placaId, ['nombre' => $this->nombreDePlaca((int) $placaId, $nombre)]);
+            (new \App\Models\PiezaPlacaPedidoModel())->enlazar((int) $placaId, $pedidoIds);
             foreach ($carrito as $versionId) {
                 $this->placaVersionModel->insert(['placa_id' => $placaId, 'version_id' => $versionId]);
             }
@@ -2085,6 +2151,7 @@ class Web extends BaseController
             'piezas'             => $piezas,
             'resumenes'          => $resumenes,
             'origenNombres'      => $origenNombres,
+            'pedidosPorPlaca'    => (new \App\Models\PiezaPlacaPedidoModel())->porPlaca(),
             'cuadrosPorPlaca'    => $cuadrosPorPlaca,
             'gruposReparto'      => $gruposReparto,
             'nombresPlacas'      => $nombresPlacas,
@@ -2180,8 +2247,8 @@ class Web extends BaseController
         // quedaron sin responder, que es la razón habitual de repetirla.
         session()->set(self::SESION_CARRITO_ORIGEN, $id);
         // Repetir una placa entera es un ciclo aparte del de un pedido: si
-        // había uno pendiente de antes, ya no aplica a esta tanda.
-        session()->remove(self::SESION_CARRITO_PEDIDO_ORIGEN);
+        // había alguno pendiente de antes, ya no aplica a esta tanda.
+        session()->remove(self::SESION_CARRITO_PEDIDOS_ORIGEN);
 
         $aviso = 'Cargada en la placa actual: "' . $placa['nombre'] . '".';
         if (trim((string) $placa['conclusiones']) !== '') {
@@ -2197,9 +2264,10 @@ class Web extends BaseController
      * imprimir (validada; si no, la más reciente en borrador/impresa —
      * misma cascada que galeria()) y la añade, tenga STL o no: el flujo es
      * montar la placa y generar los STL que falten en local después. Se
-     * cuentan aparte las que van sin STL para avisar. Sustituye la placa
-     * actual en vez de sumarse a ella, igual que placaCargar(), para no
-     * mezclar sin darse cuenta con lo que hubiera antes.
+     * cuentan aparte las que van sin STL para avisar. Se SUMA a lo que ya
+     * hubiera en la placa (lo elegido en galería, otros pedidos): una tanda
+     * suele juntar piezas de varios sitios. Al contrario que placaCargar(),
+     * que repite una placa tal cual y por eso sí sustituye.
      */
     public function pedidoCargarACarrito(int $pedidoId)
     {
@@ -2225,19 +2293,32 @@ class Web extends BaseController
             $versionIds[] = (int) $version['id'];
         }
 
-        $this->carritoGuardar(array_values(array_unique($versionIds)));
-        session()->remove(self::SESION_CARRITO_ORIGEN);
-        // Igual que placaCargar() con SESION_CARRITO_ORIGEN: se recuerda de
-        // qué pedido sale esto para que la placa que se registre a
-        // continuación quede enlazada, sin ningún cálculo de cobertura.
-        session()->set(self::SESION_CARRITO_PEDIDO_ORIGEN, $pedidoId);
-
         if ($versionIds === []) {
             return redirect()->to(site_url('piezas/pedido/' . $pedidoId))
                 ->with('error', 'Ninguna línea de este pedido tiene una versión para imprimir.');
         }
 
-        $aviso = count(array_unique($versionIds)) . ' pieza(s) cargada(s) en la placa actual.';
+        $carrito = $this->carritoActual();
+        $pedidos = (array) session(self::SESION_CARRITO_PEDIDOS_ORIGEN);
+        if ($carrito === []) {
+            // Placa vacía (aunque no se pulsara "Vaciar", p. ej. quitando una
+            // a una): lo que quedara apuntado de antes ya no es de esta tanda.
+            session()->remove(self::SESION_CARRITO_ORIGEN);
+            $pedidos = [];
+        }
+
+        $nuevas = array_values(array_diff(array_unique($versionIds), $carrito));
+        $this->carritoGuardar(array_merge($carrito, $nuevas));
+        // Igual que placaCargar() con SESION_CARRITO_ORIGEN: se recuerda de
+        // qué pedidos sale esto para que la placa que se registre a
+        // continuación quede enlazada a todos, sin ningún cálculo de cobertura.
+        $pedidos[] = $pedidoId;
+        session()->set(self::SESION_CARRITO_PEDIDOS_ORIGEN, array_values(array_unique(array_map('intval', $pedidos))));
+
+        $yaEstaban = count(array_unique($versionIds)) - count($nuevas);
+        $aviso = count($nuevas) . ' pieza(s) añadida(s) a la placa actual'
+            . ($yaEstaban > 0 ? ' (' . $yaEstaban . ' ya estaban)' : '')
+            . '. Ahora lleva ' . (count($carrito) + count($nuevas)) . '.';
         if ($sinStl > 0) {
             $aviso .= ' ' . $sinStl . ' sin STL todavía (genéralos en local).';
         }
@@ -2264,6 +2345,19 @@ class Web extends BaseController
         return $this->versionModel->where('variante_id', $varianteId)
             ->whereIn('estado', ['validada', 'borrador', 'impresa'])
             ->orderBy('numero', 'DESC')->first();
+    }
+
+    /**
+     * La versión para imprimir de la misma variante, si es más nueva que
+     * esta: lo que pasa cuando una pieza ya está en una placa, se ve en el
+     * laminador que falla, se arregla y se promociona otra — la placa sigue
+     * apuntando a la vieja. Null si ya es la última.
+     */
+    private function versionMasNuevaQue(array $version): ?array
+    {
+        $ultima = $this->versionParaImprimir((int) $version['variante_id']);
+
+        return $ultima && (int) $ultima['numero'] > (int) $version['numero'] ? $ultima : null;
     }
 
     /**
@@ -2389,13 +2483,14 @@ class Web extends BaseController
                     'origen_placa_id' => $id,
                     'es_reparto'      => 1,
                     'descargada_en'   => $placa['descargada_en'],
-                    'pedido_id'       => $placa['pedido_id'],
                     'exposicion'      => $placa['exposicion'],
                     'resina'          => $placa['resina'],
                     'temperatura'     => $placa['temperatura'],
                 ], true);
                 if ($nuevaId) {
                     $this->placaModel->update($nuevaId, ['nombre' => $this->nombreDePlaca((int) $nuevaId, $placa['nombre'] . ' (parte)')]);
+                    $placaPedidos = new \App\Models\PiezaPlacaPedidoModel();
+                    $placaPedidos->enlazar((int) $nuevaId, $placaPedidos->deLaPlaca($id));
                 }
             }
 
@@ -2575,7 +2670,31 @@ class Web extends BaseController
             // sincronizada, así que la vista lo enseña solo entonces.
             'colocacion'       => $colocacion['filas'],
             'colocacionHuecos' => $colocacion['huecosDisponibles'],
+            'versionesNuevas'  => $this->versionesNuevasDeLaPlaca($placa, $piezas),
         ];
+    }
+
+    /**
+     * Qué filas de la placa tienen una versión para imprimir más nueva que la
+     * que llevan, para ofrecer "actualizar". Vacío si ya está impresa: ahí no
+     * se ofrece.
+     *
+     * @return array<int, array> fila_id => versión nueva
+     */
+    private function versionesNuevasDeLaPlaca(array $placa, array $piezas): array
+    {
+        if ($placa['impresa_en']) {
+            return [];
+        }
+
+        $nuevas = [];
+        foreach ($piezas as $p) {
+            if ($nueva = $this->versionMasNuevaQue($p['version'])) {
+                $nuevas[(int) $p['fila']['id']] = $nueva;
+            }
+        }
+
+        return $nuevas;
     }
 
     /**
@@ -2985,6 +3104,90 @@ class Web extends BaseController
         $this->placaVersionModel->delete($filaId);
 
         return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Pasa una pieza de la placa a la última versión para imprimir de su
+     * variante. Solo en placas sin imprimir: en una impresa lo que salió fue
+     * la versión vieja, y cambiarla falsearía el registro.
+     */
+    public function bitacoraPiezaActualizar(int $id, int $filaId)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.']);
+        }
+        if ($placa['impresa_en']) {
+            return $this->response->setStatusCode(409)->setJSON(['ok' => false, 'mensaje' => 'Esta placa ya está impresa: sus versiones no se cambian.']);
+        }
+
+        $fila = $this->placaVersionModel->where('placa_id', $id)->find($filaId);
+        if (!$fila) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa pieza ya no está en esta placa.']);
+        }
+
+        $cambio = $this->actualizarFilaDePlaca($fila);
+
+        return $this->response->setJSON(['ok' => true, 'cambio' => $cambio]);
+    }
+
+    /** Lo mismo que bitacoraPiezaActualizar(), para todas las piezas de la placa a la vez. */
+    public function bitacoraActualizarVersiones(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.']);
+        }
+        if ($placa['impresa_en']) {
+            return $this->response->setStatusCode(409)->setJSON(['ok' => false, 'mensaje' => 'Esta placa ya está impresa: sus versiones no se cambian.']);
+        }
+
+        $cambios = [];
+        foreach ($this->placaVersionModel->where('placa_id', $id)->orderBy('id')->findAll() as $fila) {
+            // Releída: una fusión anterior en esta misma vuelta puede haberla borrado.
+            $fila = $this->placaVersionModel->find((int) $fila['id']);
+            if ($fila && ($cambio = $this->actualizarFilaDePlaca($fila)) !== null) {
+                $cambios[] = $cambio;
+            }
+        }
+
+        return $this->response->setJSON(['ok' => true, 'cambios' => $cambios]);
+    }
+
+    /**
+     * Cambia la versión de una fila de placa a la última para imprimir. Se
+     * cambia la fila en sitio, así conserva copias, fallidas, notas y
+     * capturas. Si la versión nueva ya tenía su propia fila en la placa, se
+     * juntan sumando — mismo criterio que placaDeshacerReparto().
+     *
+     * @return string|null "v003 → v004", o null si ya estaba al día
+     */
+    private function actualizarFilaDePlaca(array $fila): ?string
+    {
+        $version = $this->versionModel->find((int) $fila['version_id']);
+        $nueva = $version ? $this->versionMasNuevaQue($version) : null;
+        if (!$nueva) {
+            return null;
+        }
+
+        $gemela = $this->placaVersionModel->where('placa_id', $fila['placa_id'])
+            ->where('version_id', $nueva['id'])->first();
+
+        if ($gemela) {
+            $notas = array_filter([trim((string) $gemela['notas']), trim((string) $fila['notas'])], 'strlen');
+            $this->placaVersionModel->update((int) $gemela['id'], [
+                'cantidad' => (int) $gemela['cantidad'] + (int) $fila['cantidad'],
+                'fallidas' => (int) ($gemela['fallidas'] ?? 0) + (int) ($fila['fallidas'] ?? 0),
+                'notas'    => mb_substr(implode(' · ', array_unique($notas)), 0, 500) ?: null,
+            ]);
+            $this->placaVersionImagenModel->where('placa_version_id', $fila['id'])
+                ->set(['placa_version_id' => $gemela['id']])->update();
+            $this->placaVersionModel->delete((int) $fila['id']);
+        } else {
+            $this->placaVersionModel->update((int) $fila['id'], ['version_id' => $nueva['id']]);
+        }
+
+        return sprintf('v%03d → v%03d', (int) $version['numero'], (int) $nueva['numero']);
     }
 
     /**

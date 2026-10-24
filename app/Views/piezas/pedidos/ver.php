@@ -189,7 +189,7 @@
             </form>
             <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/cargar-placa') ?>">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-success btn-sm rounded-pill px-3" title="Añade a la placa actual el STL de cada pieza de este pedido">
+                <button type="submit" class="btn btn-success btn-sm rounded-pill px-3" title="Suma a la placa actual el STL de cada pieza de este pedido, sin quitar lo que ya lleve">
                     <i class="bi bi-printer"></i><span class="d-none d-sm-inline"> Cargar a la placa</span>
                 </button>
             </form>

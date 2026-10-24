@@ -134,18 +134,19 @@ $claseLomo = $resumen['veredicto']
         </div>
 
         <?php // Procedencia y familia de reparto: igual que en la tarjeta compacta. ?>
-        <?php if ($placa['origen_placa_id'] || $placa['pedido_id'] || $grupo): ?>
+        <?php $pedidosDeLaPlaca = $pedidosPorPlaca[(int) $placa['id']] ?? []; ?>
+        <?php if ($placa['origen_placa_id'] || $pedidosDeLaPlaca || $grupo): ?>
             <div class="text-muted small mt-1">
                 <?php if ($placa['origen_placa_id']): ?>
                     <i class="bi bi-signpost-split"></i>
                     <?= esc($origenNombres[(int) $placa['origen_placa_id']] ?? 'placa borrada') ?>
                 <?php endif; ?>
-                <?php if ($placa['pedido_id']): ?>
-                    <a href="<?= site_url('piezas/pedido/' . (int) $placa['pedido_id']) ?>"
+                <?php foreach ($pedidosDeLaPlaca as $pedidoId): ?>
+                    <a href="<?= site_url('piezas/pedido/' . $pedidoId) ?>"
                         class="text-decoration-none text-muted" onclick="event.stopPropagation()">
-                        <i class="bi bi-cart-check"></i> Pedido #<?= (int) $placa['pedido_id'] ?>
+                        <i class="bi bi-cart-check"></i> Pedido #<?= $pedidoId ?>
                     </a>
-                <?php endif; ?>
+                <?php endforeach; ?>
                 <?php if ($grupo): ?>
                     <?php
                         $tono = ($grupo['raiz'] * 47) % 360;
