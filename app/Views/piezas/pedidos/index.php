@@ -85,20 +85,46 @@
     .lista-pedidos .sortable-ghost { opacity: .35; }
     .lista-pedidos .sortable-chosen > .card { box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important; }
     .lista-pedidos.arrastrable .card { cursor: grab; }
+
+    /* Móvil: una fase cada vez, elegida en la barra de pestañas fija. */
+    #pestanas-estados { top: 0; z-index: 1020; background: var(--bs-body-bg); margin: 0 -12px; padding: 6px 12px; }
+    #pestanas-estados .nav-link { padding: .35rem .25rem; font-size: .8rem; white-space: nowrap; color: var(--bs-body-color); }
+    #pestanas-estados .nav-link.active { color: #fff; }
+    #pestanas-estados .nav-link .badge { font-size: .65rem; }
+    /* Escritorio sin "Hecho": las tres que quedan se reparten el ancho. */
+    @media (min-width: 1200px) {
+        #tablero-pedidos.sin-hechos > .columna-pedidos { flex: 0 0 auto; width: 33.333%; }
+    }
 </style>
 
+<?php // Solo en móvil: sustituye a las columnas apiladas. ?>
+<nav class="nav nav-pills nav-fill flex-nowrap gap-1 sticky-top d-md-none mb-2" id="pestanas-estados">
+    <?php $cortos = ['para_impresion' => 'Para imp.']; ?>
+    <?php foreach ($columnas as $estado => $columna): ?>
+        <button type="button" class="nav-link" data-pestana="<?= esc($estado) ?>" data-color="<?= $coloresColumna[$estado] ?>">
+            <?= esc($cortos[$estado] ?? $columna['titulo']) ?>
+            <span class="badge rounded-pill bg-body-secondary text-body-secondary border"><?= $columna['total'] ?></span>
+        </button>
+    <?php endforeach; ?>
+</nav>
+
 <div class="d-flex flex-wrap gap-2 mb-3" id="filtro-estados">
-    <button type="button" class="btn btn-sm rounded-pill btn-dark" data-filtro="">
+    <button type="button" class="btn btn-sm rounded-pill btn-dark d-none d-md-inline-block" data-filtro="">
         Todos
     </button>
     <?php foreach ($columnas as $estado => $columna): ?>
-        <button type="button" class="btn btn-sm rounded-pill btn-outline-<?= $coloresColumna[$estado] ?>" data-filtro="<?= esc($estado) ?>">
+        <button type="button" class="btn btn-sm rounded-pill btn-outline-<?= $coloresColumna[$estado] ?> d-none d-md-inline-block" data-filtro="<?= esc($estado) ?>">
             <?= esc($columna['titulo']) ?> <span class="badge bg-body-secondary text-body-secondary border"><?= $columna['total'] ?></span>
         </button>
     <?php endforeach; ?>
 
     <?php // Manual: el orden arrastrado a mano. Por entrega: lo que vence antes arriba (sin tocar el orden guardado). ?>
-    <div class="btn-group btn-group-sm ms-auto" role="group" id="modo-orden" title="Cómo ordenar dentro de cada columna (las de estrella siempre arriba)">
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-md-auto" id="ocultar-hechos" aria-pressed="false"
+        title="Quitar la columna Hecho del tablero">
+        <i class="bi bi-eye-slash"></i> <span>Ocultar hechos</span>
+    </button>
+
+    <div class="btn-group btn-group-sm ms-auto ms-md-0" role="group" id="modo-orden" title="Cómo ordenar dentro de cada columna (las de estrella siempre arriba)">
         <button type="button" class="btn btn-outline-secondary" data-orden="manual"><i class="bi bi-arrows-move"></i> Manual</button>
         <button type="button" class="btn btn-outline-secondary" data-orden="entrega"><i class="bi bi-truck"></i> Por entrega</button>
     </div>
@@ -107,7 +133,7 @@
 <div class="row g-3" id="tablero-pedidos">
     <?php foreach ($columnas as $estado => $columna): ?>
         <div class="col-12 col-md-6 col-xl-3 columna-pedidos" data-columna="<?= esc($estado) ?>">
-            <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="d-none d-md-flex align-items-center gap-2 mb-2">
                 <span class="badge text-bg-<?= $coloresColumna[$estado] ?>">&nbsp;</span>
                 <span class="fw-semibold"><?= esc($columna['titulo']) ?></span>
                 <span class="badge bg-body-secondary text-body-secondary border ms-auto"><?= $columna['total'] ?></span>
@@ -138,22 +164,103 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const botones = Array.from(document.querySelectorAll('#filtro-estados [data-filtro]'));
+        const pestanas = Array.from(document.querySelectorAll('#pestanas-estados [data-pestana]'));
         const columnas = Array.from(document.querySelectorAll('#tablero-pedidos .columna-pedidos'));
+        const tablero = document.getElementById('tablero-pedidos');
+        const botonOcultar = document.getElementById('ocultar-hechos');
+        const movil = window.matchMedia('(max-width: 767.98px)');
 
-        function aplicar(filtro) {
+        function leer(clave, porDefecto) {
+            try { return localStorage.getItem(clave) ?? porDefecto; } catch (e) { return porDefecto; }
+        }
+        function guardar(clave, valor) {
+            try { localStorage.setItem(clave, valor); } catch (e) {}
+        }
+
+        // Escritorio: filtro de las píldoras ('' = todas). Móvil: una sola
+        // pestaña. "Ocultar hechos" quita Hecho de "todas" y de las pestañas;
+        // pulsar la píldora Hecho a propósito la sigue enseñando.
+        var filtro = '';
+        var pestana = leer('pedidos.pestana', 'en_produccion');
+        var ocultarHechos = leer('pedidos.ocultarHechos', '0') === '1';
+        var arrastrando = false;
+
+        function pestanasVisibles() {
+            return pestanas.filter(function (p) { return !p.classList.contains('d-none'); });
+        }
+
+        function aplicar() {
+            pestanas.forEach(function (p) {
+                p.classList.toggle('d-none', ocultarHechos && p.dataset.pestana === 'completado');
+            });
+            if (!pestanasVisibles().some(function (p) { return p.dataset.pestana === pestana; })) {
+                pestana = 'en_produccion';
+            }
+
             columnas.forEach(function (col) {
-                col.classList.toggle('d-none', filtro !== '' && col.dataset.columna !== filtro);
+                var estado = col.dataset.columna;
+                var visible = movil.matches
+                    ? estado === pestana
+                    : (filtro === '' ? !(ocultarHechos && estado === 'completado') : estado === filtro);
+                col.classList.toggle('d-none', !visible);
             });
             botones.forEach(function (btn) {
                 btn.classList.toggle('active', btn.dataset.filtro === filtro);
             });
+            pestanas.forEach(function (p) {
+                var activa = p.dataset.pestana === pestana;
+                p.classList.toggle('active', activa);
+                p.classList.toggle('text-bg-' + p.dataset.color, activa);
+            });
+
+            tablero.classList.toggle('sin-hechos', !movil.matches && filtro === '' && ocultarHechos);
+            botonOcultar.classList.toggle('active', ocultarHechos);
+            botonOcultar.setAttribute('aria-pressed', ocultarHechos ? 'true' : 'false');
+            botonOcultar.querySelector('i').className = 'bi ' + (ocultarHechos ? 'bi-eye' : 'bi-eye-slash');
+            botonOcultar.querySelector('span').textContent = ocultarHechos ? 'Mostrar hechos' : 'Ocultar hechos';
+        }
+
+        function irAPestana(estado) {
+            pestana = estado;
+            guardar('pedidos.pestana', estado);
+            aplicar();
         }
 
         botones.forEach(function (btn) {
-            btn.addEventListener('click', function () { aplicar(btn.dataset.filtro); });
+            btn.addEventListener('click', function () { filtro = btn.dataset.filtro; aplicar(); });
         });
+        pestanas.forEach(function (p) {
+            p.addEventListener('click', function () { irAPestana(p.dataset.pestana); });
+        });
+        botonOcultar.addEventListener('click', function () {
+            ocultarHechos = !ocultarHechos;
+            guardar('pedidos.ocultarHechos', ocultarHechos ? '1' : '0');
+            aplicar();
+        });
+        movil.addEventListener('change', aplicar);
 
-        aplicar('');
+        // Deslizar a los lados cambia de pestaña (no mientras se arrastra
+        // una tarjeta para reordenar).
+        var toque = null;
+        tablero.addEventListener('touchstart', function (e) {
+            toque = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+        }, { passive: true });
+        tablero.addEventListener('touchend', function (e) {
+            if (!toque || arrastrando || !movil.matches) return;
+            var dx = e.changedTouches[0].clientX - toque.x;
+            var dy = e.changedTouches[0].clientY - toque.y;
+            toque = null;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
+            var visibles = pestanasVisibles();
+            var i = visibles.findIndex(function (p) { return p.dataset.pestana === pestana; });
+            var destino = visibles[i + (dx < 0 ? 1 : -1)];
+            if (destino) {
+                irAPestana(destino.dataset.pestana);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, { passive: true });
+
+        aplicar();
 
         // ---- "Hecho" a trozos: la siguiente tanda llega sola al asomar el
         // botón (o al pulsarlo) ----
@@ -261,7 +368,9 @@
                 onMove: function (evt) {
                     return evt.related.dataset.prioritario === evt.dragged.dataset.prioritario;
                 },
+                onStart: function () { arrastrando = true; },
                 onEnd: function (evt) {
+                    arrastrando = false;
                     if (evt.oldIndex === evt.newIndex) return;
                     recordarManual();
                     guardarOrden(lista);
