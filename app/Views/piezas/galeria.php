@@ -55,6 +55,13 @@
         <?php // Antes bajaba el zip de los STL; ya no (fase 57, se generan en
               // local aparte) — ahora solo pregunta con qué nombre quieres
               // encontrar la placa luego. ?>
+        <?php // Bajar los STL sin crear placa: copia `stl s <ids>` para pegarlo
+              // en la terminal — nada queda en el histórico ni cuenta. ?>
+        <button type="button" class="btn btn-sm btn-outline-success" id="botonComandoStl"
+            data-url="<?= site_url('piezas/carrito/comando-stl') ?>"
+            title="Copia el comando de stl.py que genera los STL de estas piezas, sin crear ninguna placa">
+            <i class="bi bi-clipboard"></i> <span>Solo STL</span>
+        </button>
         <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNombrePlaca">
             <i class="bi bi-journal-plus"></i> Crear placa (<span id="contadorPlaca"><?= count($carrito) ?></span>)
         </button>
@@ -702,6 +709,29 @@ foreach ($piezasTodas as $p) {
                 botonActualizarVersiones.disabled = false;
                 alert('No se pudo hablar con el servidor.');
             });
+        });
+    }
+
+    var botonComandoStl = document.getElementById('botonComandoStl');
+    if (botonComandoStl) {
+        botonComandoStl.addEventListener('click', function () {
+            var texto = botonComandoStl.querySelector('span');
+            fetch(botonComandoStl.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) { return r.json(); })
+                .then(function (datos) {
+                    if (!datos.ok) return;
+                    var copiar = navigator.clipboard
+                        ? navigator.clipboard.writeText(datos.comando)
+                        : Promise.reject();
+                    copiar.then(function () {
+                        texto.textContent = 'Copiado (' + datos.total + ')';
+                        setTimeout(function () { texto.textContent = 'Solo STL'; }, 2000);
+                    }).catch(function () {
+                        prompt('Copia el comando:', datos.comando);
+                    });
+                }).catch(function () {
+                    alert('No se pudo hablar con el servidor.');
+                });
         });
     }
 

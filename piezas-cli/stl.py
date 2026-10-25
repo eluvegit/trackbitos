@@ -888,6 +888,117 @@ def cmd_sin_imagen(args) -> int:
 
 
 # --------------------------------------------------------------------------
+# sueltas
+# --------------------------------------------------------------------------
+
+NOMBRE_CARPETA_SUELTAS = "sueltas"
+
+
+def cmd_sueltas(args) -> int:
+    """
+    Los STL de unas versiones concretas (las del carrito de la galería), en
+    una carpeta plana `sueltas/`, sin crear ninguna placa. El comando lo
+    copia ya montado el botón "Solo STL" del carrito: antes había que crear
+    la placa, hacer `stl p` y borrarla después para que no contase.
+
+    Recibe ids de VERSIÓN (no de variante), que es lo que guarda el carrito:
+    así sale exactamente lo que se ve en él, aunque se haya fijado una
+    versión vieja. Misma caché y misma carpeta rehecha que `sin-imagen`.
+    """
+    ids = []
+    for trozo in args.versiones:
+        for parte in str(trozo).split(","):
+            parte = parte.strip().lstrip("#")
+            if not parte:
+                continue
+            if not parte.isdigit():
+                raise RuntimeError(f"\"{parte}\" no es un id de versión.")
+            ids.append(int(parte))
+    if not ids:
+        raise RuntimeError("no se ha indicado ninguna versión.")
+
+    config = cargar_config()
+    stl_cfg = cargar_stl_config()
+    blender_exe = exigir_blender(stl_cfg)
+    base_dir = Path(args.dir).resolve()
+    backup_dir = resolver_backup_dir(stl_cfg, base_dir)
+    escala = float(stl_cfg.get("escala") or DEFAULT_ESCALA)
+
+    respuesta = api_get(config, "/versiones?ids=" + ",".join(str(i) for i in ids))
+    filas = respuesta.get("versiones", [])
+    no_encontradas = respuesta.get("no_encontradas", [])
+    if not filas:
+        print("\n  · ninguna de esas versiones existe ya, no hay nada que exportar.\n")
+        return 1
+
+    nodos = [{
+        "variante_id": f["variante_id"],
+        "familia": f["familia"],
+        "variante": f["variante"],
+        "categoria": f["categoria"],
+        "version": {"id": f["version_id"], "hash_blend": f["hash_blend"], "numero": f["numero"], "estado": f["estado"]},
+    } for f in filas]
+    hojas, avisos = _expandir_placa(config, nodos, como_anotado=False)
+
+    print(f"\n  {len(filas)} pieza(s) ({len(hojas)} con geometría propia, compuestas ya expandidas).\n")
+
+    carpeta_salida = base_dir / NOMBRE_CARPETA_SUELTAS
+    purgar_papelera_entregas(base_dir)
+    if carpeta_salida.is_dir():
+        papelera = base_dir / NOMBRE_PAPELERA_ENTREGAS
+        papelera.mkdir(exist_ok=True)
+        shutil.move(str(carpeta_salida), str(papelera / f"{datetime.now():%Y%m%d-%H%M%S}-{NOMBRE_CARPETA_SUELTAS}"))
+    carpeta_salida.mkdir(parents=True)
+
+    faltantes, copiados, bitacora = [], 0, []
+    total = len(hojas)
+    for i, hoja in enumerate(hojas, 1):
+        etiqueta = f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}"
+        print(f"  [{i}/{total}] {etiqueta}...", end="", flush=True)
+
+        try:
+            carpeta_cache, resultado = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            faltantes.append(f"{etiqueta}: {e}")
+            print(f" ERROR: {e}")
+            continue
+
+        stls = sorted(carpeta_cache.glob("*.stl"))
+        if not stls:
+            faltantes.append(f"{etiqueta}: sin ninguna collection \"STL\" en el .blend.")
+            print(" sin STL")
+            continue
+
+        print(f" {len(stls)} STL" + (" (de la biblioteca)" if resultado == "omitida" else ""))
+        for stl in stls:
+            nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
+            shutil.copy2(stl, carpeta_salida / nombre_final)
+            copiados += 1
+            bitacora.append(f"{nombre_final}\n    de: {etiqueta} ({hoja['version']['estado']})")
+
+    faltantes.extend(avisos)
+    faltantes.extend(f"versión {i}: ya no existe en el servidor." for i in no_encontradas)
+
+    (carpeta_salida / "sueltas.txt").write_text(
+        f"STL sueltos (sin placa) — generado {datetime.now().isoformat(timespec='seconds')}\n"
+        f"Versiones: {', '.join(str(i) for i in ids)}\n\n"
+        + "\n".join(bitacora)
+        + ("\n\nCon problema:\n" + "\n".join(faltantes) if faltantes else "") + "\n",
+        encoding="utf-8",
+    )
+
+    print(f"\n  STL sueltos en {carpeta_salida}\n")
+    print(f"  ✓ {copiados} STL")
+    if faltantes:
+        print(f"  ⚠ {len(faltantes)} con problema:")
+        for f in faltantes:
+            print(f"      - {f.splitlines()[0]}")
+    print()
+
+    return 0 if not faltantes else 1
+
+
+# --------------------------------------------------------------------------
 # revisar
 # --------------------------------------------------------------------------
 
@@ -1075,6 +1186,13 @@ def main(argv: Optional[list] = None) -> int:
         help="STL de todas las piezas sin foto, en una carpeta plana — sin crear ninguna placa. (alias: si)",
     ))
     p.set_defaults(func=cmd_sin_imagen)
+
+    p = con_dir(subs.add_parser(
+        "sueltas", aliases=["s"],
+        help="STL de unas versiones concretas (el botón \"Solo STL\" del carrito copia el comando) — sin crear ninguna placa. (alias: s)",
+    ))
+    p.add_argument("versiones", nargs="+", help="Ids de versión, separados por espacios o comas.")
+    p.set_defaults(func=cmd_sueltas)
 
     p = con_dir(subs.add_parser(
         "revisar", aliases=["r"],

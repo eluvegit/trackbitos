@@ -30,6 +30,7 @@ $nombre = $textoCatalogo ?: ($linea['descripcion_libre'] ?: 'Pieza borrada');
     data-url-editar="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/editar') ?>"
     data-url-borrar="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/borrar') ?>"
     data-url-hecha="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/hecha') ?>"
+    data-url-crear="<?= $linea['variante_id'] ? '' : site_url('piezas/pedido-linea/' . $linea['id'] . '/crear-pieza') ?>"
     data-url-variante="<?= $linea['variante_id'] ? site_url('piezas/variante/' . $linea['variante_id']) : '' ?>">
 
     <?php // Solo en modo "Ordenar" / "Seleccionar" (clases en #lista-lineas). ?>
@@ -69,6 +70,12 @@ $nombre = $textoCatalogo ?: ($linea['descripcion_libre'] ?: 'Pieza borrada');
                     <i class="bi <?= $hecha ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
                     <?= $hecha ? 'Lista' : 'Preparar' ?>
                 </button>
+                <?php if (!$linea['variante_id']): ?>
+                    <button type="button" class="chip-hecha chip-crear" data-chip-crear
+                        title="Darla de alta en el catálogo (nueva o derivada de otra)">
+                        <i class="bi bi-plus-circle"></i> Crear pieza
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
     </div>

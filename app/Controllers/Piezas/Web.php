@@ -1901,6 +1901,24 @@ class Web extends BaseController
     }
 
     /**
+     * El comando de stl.py que baja los STL de lo que lleva el carrito sin
+     * crear ninguna placa (`stl s`): lo copia al portapapeles el botón
+     * "Solo STL". Se pide al servidor y no se monta en el navegador porque
+     * el carrito vive en la sesión — puede llevar versiones que la galería
+     * no pinta (filtradas, o ya no validadas).
+     */
+    public function carritoComandoStl()
+    {
+        $carrito = $this->carritoActual();
+
+        return $this->response->setJSON([
+            'ok'      => $carrito !== [],
+            'comando' => $carrito === [] ? '' : 'stl s ' . implode(' ', $carrito),
+            'total'   => count($carrito),
+        ]);
+    }
+
+    /**
      * Queda registrada sola, con fecha y qué llevaba (fase 36): así hay
      * histórico sin depender de acordarse de guardar nada, y desde
      * /piezas/placas se puede volver a cargar la misma combinación o borrar

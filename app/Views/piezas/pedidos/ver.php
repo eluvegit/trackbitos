@@ -69,6 +69,7 @@
     }
     .chip-hecha .bi { font-size: .95rem; }
     .chip-hecha.activo { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+    .chip-crear { border-color: var(--bs-success-border-subtle); color: var(--bs-success-text-emphasis); }
 
     .linea-stepper {
         flex: 0 0 auto; display: flex; align-items: center;
@@ -154,10 +155,16 @@
 
 <?php // ================= Cabecera ================= ?>
 <header class="pedido-cabecera">
-    <nav class="pedido-migas">
-        <a href="<?= site_url('piezas') ?>">Piezas</a> <span class="text-body-tertiary">/</span>
-        <a href="<?= site_url('piezas/pedidos') ?>">Pedidos</a>
-    </nav>
+    <div class="d-flex align-items-center gap-2">
+        <nav class="pedido-migas">
+            <a href="<?= site_url('piezas') ?>">Piezas</a> <span class="text-body-tertiary">/</span>
+            <a href="<?= site_url('piezas/pedidos') ?>">Pedidos</a>
+        </nav>
+        <?php // Las migas se quedan pequeñas para el pulgar: volver, también a la derecha. ?>
+        <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-auto" title="Volver al tablero de pedidos">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
 
     <div class="d-flex align-items-center gap-2 mt-1">
         <span class="text-body-secondary small text-nowrap">Pedido #<?= (int) $pedido['id'] ?></span>
@@ -414,6 +421,51 @@
                 <button type="button" class="btn btn-link text-danger ms-auto" data-panel-borrar><i class="bi bi-trash"></i> Borrar</button>
             </div>
         </form>
+
+        <?php // Solo en piezas futuras: darla de alta en el catálogo y que la
+              // línea pase a apuntar a ella. Form aparte (no se anidan forms). ?>
+        <div class="border-top mt-4 pt-3 d-none" data-panel-crear>
+            <button type="button" class="btn btn-success rounded-pill w-100" data-panel-crear-abrir>
+                <i class="bi bi-plus-circle"></i> Crear esta pieza en el catálogo
+            </button>
+            <form id="form-crear-pieza" method="post" action="" class="d-none">
+                <?= csrf_field() ?>
+                <div class="btn-group btn-group-sm w-100 mb-3" role="group">
+                    <input type="radio" class="btn-check" name="modo" id="crearModoNueva" value="nueva" checked>
+                    <label class="btn btn-outline-secondary" for="crearModoNueva">Pieza nueva</label>
+                    <input type="radio" class="btn-check" name="modo" id="crearModoDerivada" value="derivada">
+                    <label class="btn btn-outline-secondary" for="crearModoDerivada">Derivada de otra</label>
+                </div>
+
+                <div class="d-none" data-crear-bloque-derivada>
+                    <label class="form-label small text-body-secondary mb-1">Deriva de…</label>
+                    <div class="position-relative mb-1">
+                        <input type="text" class="form-control" data-buscador-origen autocomplete="off" placeholder="Buscar pieza del catálogo…">
+                        <input type="hidden" name="origen_variante_id" data-crear-origen value="">
+                        <div class="list-group shadow resultados-busqueda hacia-abajo d-none" data-resultados-origen></div>
+                    </div>
+                    <p class="small text-body-secondary mb-2">Será una variante nueva de esa pieza, arrancando de su última versión.</p>
+                </div>
+
+                <label class="form-label small text-body-secondary mb-1" data-crear-etiqueta-nombre>Nombre</label>
+                <input type="text" name="nombre" class="form-control mb-2" maxlength="150" required data-crear-nombre>
+
+                <div data-crear-bloque-categoria>
+                    <label class="form-label small text-body-secondary mb-1">Categoría</label>
+                    <select name="categoria_id" class="form-select mb-2">
+                        <option value="">— sin clasificar —</option>
+                        <?php foreach ($categorias as $c): ?>
+                            <option value="<?= (int) $c['id'] ?>"><?= esc($c['nombre']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <label class="form-label small text-body-secondary mb-1">Notas de la pieza (opcional)</label>
+                <textarea name="notas" class="form-control mb-3" rows="2"></textarea>
+
+                <button type="submit" class="btn btn-success rounded-pill px-4"><i class="bi bi-check-lg"></i> Crear y enlazar</button>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -575,6 +627,13 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         if (lista.classList.contains('modo-ordenar')) return;
+
+        // "Crear pieza" de una futura: el panel, ya con el alta abierta.
+        if (e.target.closest('[data-chip-crear]')) {
+            e.stopPropagation();
+            abrirPanel(linea, true);
+            return;
+        }
 
         // Chip "Lista para imprimir": cambio optimista, se deshace si falla.
         var chip = e.target.closest('[data-chip-hecha]');
@@ -740,9 +799,82 @@ document.addEventListener('DOMContentLoaded', function () {
         ajustarDescripcion();
     }, false);
 
-    function abrirPanel(linea) {
+    // ---- Crear pieza desde una futura (dentro del mismo panel) ----
+    var bloqueCrear = panelEl.querySelector('[data-panel-crear]');
+    var botonCrearAbrir = bloqueCrear.querySelector('[data-panel-crear-abrir]');
+    var formCrear = document.getElementById('form-crear-pieza');
+    var cajaOrigen = formCrear.querySelector('[data-buscador-origen]');
+    var origenCrear = formCrear.querySelector('[data-crear-origen]');
+    var nombreCrear = formCrear.querySelector('[data-crear-nombre]');
+
+    function pintarModoCrear() {
+        var derivada = formCrear.modo.value === 'derivada';
+        formCrear.querySelector('[data-crear-bloque-derivada]').classList.toggle('d-none', !derivada);
+        formCrear.querySelector('[data-crear-bloque-categoria]').classList.toggle('d-none', derivada);
+        formCrear.querySelector('[data-crear-etiqueta-nombre]').textContent = derivada ? 'Nombre de la variante' : 'Nombre';
+    }
+    formCrear.querySelectorAll('input[name=modo]').forEach(function (r) { r.addEventListener('change', pintarModoCrear); });
+
+    function mostrarFormCrear(abierto) {
+        formCrear.classList.toggle('d-none', !abierto);
+        botonCrearAbrir.classList.toggle('d-none', abierto);
+        formPanel.classList.toggle('d-none', abierto);
+        document.getElementById('panelLineaTitulo').textContent = abierto ? 'Crear pieza' : 'Editar pieza';
+        if (abierto) nombreCrear.focus();
+    }
+    botonCrearAbrir.addEventListener('click', function () { mostrarFormCrear(true); });
+
+    cajaOrigen._alEscribir = function () { origenCrear.value = ''; };
+    buscador(cajaOrigen, formCrear.querySelector('[data-resultados-origen]'), function (v) {
+        origenCrear.value = v.variante_id;
+        cajaOrigen.value = v.texto;
+    }, false);
+
+    formCrear.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!lineaEnPanel) return;
+        if (formCrear.modo.value === 'derivada' && !origenCrear.value) {
+            alert('Elige de qué pieza deriva.');
+            cajaOrigen.focus();
+            return;
+        }
+        var linea = lineaEnPanel;
+        var boton = formCrear.querySelector('[type=submit]');
+        boton.disabled = true;
+        post(formCrear.action, new FormData(formCrear))
+            .then(function (d) {
+                if (!d.ok) { fallo(d, 'No se pudo crear la pieza.'); return; }
+                reemplazarLinea(linea.dataset.lineaId, d.rowHtml);
+                panel.hide();
+                avisar(d.mensaje, d.urlVariante);
+            })
+            .catch(function () { alert('No se pudo conectar con el servidor.'); })
+            .finally(function () { boton.disabled = false; });
+    });
+
+    // Aviso bajo la cabecera, con enlace a la pieza recién creada.
+    function avisar(mensaje, url) {
+        var caja = document.createElement('div');
+        caja.className = 'alert alert-success alert-dismissible fade show py-2 small mt-2 mb-0';
+        caja.innerHTML = escapar(mensaje)
+            + (url ? ' <a href="' + escapar(url) + '" class="alert-link">Abrir la pieza</a>' : '')
+            + '<button type="button" class="btn-close btn-sm py-2" data-bs-dismiss="alert"></button>';
+        document.querySelector('.pedido-cabecera').after(caja);
+        caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function abrirPanel(linea, crear) {
         lineaEnPanel = linea;
         var d = linea.dataset;
+
+        bloqueCrear.classList.toggle('d-none', !d.urlCrear);
+        formCrear.reset();
+        formCrear.action = d.urlCrear || '';
+        origenCrear.value = '';
+        nombreCrear.value = d.descripcion;
+        pintarModoCrear();
+        mostrarFormCrear(!!(crear && d.urlCrear));
+
         formPanel.action = d.urlEditar;
         variantePanel.value = d.varianteId !== '0' ? d.varianteId : '';
         cajaPanel.value = d.textoCatalogo;

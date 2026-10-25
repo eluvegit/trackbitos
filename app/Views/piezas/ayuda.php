@@ -299,6 +299,7 @@
             <p>Saca los STL directamente del <code>.blend</code> con Blender, sin exportar a mano:</p>
             <?= $cmd('stl g "pieza"', 'Una sola pieza, para probar un .blend recién preparado.') ?>
             <?= $cmd('stl p 12', 'Todos los STL de la placa 12 en una carpeta plana, listos para ChituBox.') ?>
+            <?= $cmd('stl s 31 47 52', 'Los STL de lo que llevas en el carrito, sin crear placa. El botón «Solo STL» de la galería copia este comando ya hecho.') ?>
             <details>
                 <summary>Más comandos de stl</summary>
                 <?= $cmd('stl b', 'Biblioteca: copia local de STL + .blend de todo el catálogo (incremental).') ?>
@@ -473,6 +474,7 @@
                 <li>Arrastra para reordenar; la <b>prioridad</b> los sube arriba. La fecha de entrega se pone roja cuando vence.</li>
                 <li>En cada línea, marca cuántas llevas hechas o la línea entera como hecha. Se pueden copiar o mover líneas a otro pedido.</li>
                 <li><b>Cargar a la placa</b> mete todas sus piezas en el carrito, tengan STL o no.</li>
+                <li>Una pieza <b>futura</b> tiene botón <b>Crear pieza</b>: la da de alta como pieza nueva o derivada de otra, y la línea pasa a apuntar a ella.</li>
             </ul>
             <p class="pa-corto mb-0">El <i class="bi bi-eye"></i> de al lado enseña el último pedido sin salir de donde estás.</p>
         </article>
@@ -555,6 +557,7 @@
                 <tr><td><code>p</code> placa</td><td>STL de una placa (id o nombre). <code>--como-anotado</code> para repetirla idéntica.</td></tr>
                 <tr><td><code>b</code> biblioteca</td><td>Copia local de todo. <code>--sin-blend</code></td></tr>
                 <tr><td><code>si</code> sin-imagen</td><td>STL de las piezas sin foto.</td></tr>
+                <tr><td><code>s</code> sueltas</td><td>STL de unas versiones (ids del carrito), sin placa.</td></tr>
                 <tr><td><code>r</code> revisar</td><td>Compara el .blend con lo subido.</td></tr>
             </table>
             <p class="pa-corto mb-0">Necesita Blender instalado. Su configuración (<code>stl.config.json</code>) es propia de cada ordenador.</p>

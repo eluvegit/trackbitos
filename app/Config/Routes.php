@@ -676,6 +676,9 @@ $routes->group('piezas/api', ['filter' => 'piezasApi', 'namespace' => 'App\Contr
     // este grupo — no debe competir con un patrón numérico.
     $routes->GET('placas', 'Api::placas');
     $routes->GET('placa/(:num)', 'Api::placa/$1');
+    // stl.py `sueltas`: lo mismo que una placa, con las versiones del
+    // carrito (?ids=...) y sin crear ninguna.
+    $routes->GET('versiones', 'Api::versiones');
 
     // Sesiones de trabajo y ficheros
     $routes->POST('variante/(:num)/sesion/abrir', 'Api::abrirSesion/$1');
@@ -864,6 +867,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('pedido-linea/(:num)/completada', 'PedidosController::ajustarCompletada/$1');
     $routes->POST('pedido-linea/(:num)/hecha', 'PedidosController::marcarHecha/$1');
     $routes->POST('pedido-linea/(:num)/editar', 'PedidosController::editarLinea/$1');
+    // Pieza futura -> catálogo (nueva o derivada de otra), y la línea apunta a ella.
+    $routes->POST('pedido-linea/(:num)/crear-pieza', 'PedidosController::crearPiezaDesdeLinea/$1');
     $routes->POST('pedido-linea/(:num)/borrar', 'PedidosController::borrarLinea/$1');
     $routes->GET('pedido-variante-buscar', 'PedidosController::buscarVariante');
 
@@ -949,6 +954,9 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // forma de crear una placa, "Guardar para después" se quitó por
     // redundante).
     $routes->POST('carrito/crear-placa', 'Web::carritoCrearPlaca');
+    // "Solo STL": el comando `stl s <ids>` con lo que lleva el carrito,
+    // para bajar los STL sin crear (y luego borrar) una placa.
+    $routes->GET('carrito/comando-stl', 'Web::carritoComandoStl');
 
     // Histórico de placas (fase 36): cada creación queda anotada sola, con
     // qué llevaba, para poder reimprimir la misma combinación o solo mirar

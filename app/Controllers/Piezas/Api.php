@@ -319,9 +319,6 @@ class Api extends BaseController
     /** @return array<int, array> una fila por versión de la placa, en el orden en que se añadieron */
     private function versionesDePlaca(int $placaId): array
     {
-        $categorias   = array_column((new PiezaCategoriaModel())->findAll(), 'nombre', 'id');
-        $familiaModel = new PiezaFamiliaModel();
-
         $lista = [];
         foreach ($this->placaVersionModel->where('placa_id', $placaId)->orderBy('id')->findAll() as $fila) {
             $version = $this->versionModel->find($fila['version_id']);
@@ -329,37 +326,77 @@ class Api extends BaseController
                 continue; // versión purgada (invariante 6): la fila ya no aporta nada al CLI
             }
 
-            $variante    = $this->varianteModel->find($version['variante_id']);
-            $familia     = $variante ? $familiaModel->find($variante['familia_id']) : null;
-            $categoriaId = $familia['categoria_id'] ?? null;
-
-            $stls = [];
-            foreach ($this->servicio->stlsDe((int) $version['id']) as $stl) {
-                $stls[] = [
-                    'nombre'     => $stl['nombre'],
-                    'hash'       => $stl['hash_stl'],
-                    'disponible' => $this->almacen->existe($stl['ruta_stl']),
-                ];
-            }
-
-            $lista[] = [
-                'version_id'  => (int) $version['id'],
-                // Añadido para stl.py `placa`: hace falta para pedir
-                // /variante/(:num)/composicion y expandir recursivamente si
-                // esta pieza es compuesta (decisión 11 del plan .blend->STL).
-                'variante_id' => (int) $version['variante_id'],
-                'familia'     => $familia['nombre'] ?? null,
-                'variante'    => $variante['nombre'] ?? null,
-                'categoria'   => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
-                'numero'      => (int) $version['numero'],
-                'estado'      => $version['estado'],
-                'cantidad'    => (int) $fila['cantidad'],
-                'hash_blend'  => $version['hash_blend'],
-                'stls'        => $stls,
-            ];
+            $lista[] = $this->filaDeVersion($version, (int) $fila['cantidad']);
         }
 
         return $lista;
+    }
+
+    /**
+     * Las versiones sueltas que se le pidan (`?ids=12,34,56`), con el mismo
+     * formato que las filas de /placa/(:num): stl.py `sueltas` las baja como
+     * una placa, pero sin crear ninguna — el comando lo copia el botón
+     * "Solo STL" del carrito. Las que ya no existan (purgadas) se omiten y
+     * van aparte en `no_encontradas`, para que el CLI avise.
+     */
+    public function versiones()
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', explode(',', (string) $this->request->getGet('ids'))),
+            static fn(int $id) => $id > 0
+        )));
+
+        $lista = [];
+        $noEncontradas = [];
+        foreach ($ids as $id) {
+            $version = $this->versionModel->find($id);
+            if (!$version) {
+                $noEncontradas[] = $id;
+                continue;
+            }
+            $lista[] = $this->filaDeVersion($version, 1);
+        }
+
+        return $this->response->setJSON([
+            'ok'             => true,
+            'versiones'      => $lista,
+            'no_encontradas' => $noEncontradas,
+        ]);
+    }
+
+    private function filaDeVersion(array $version, int $cantidad): array
+    {
+        static $categorias = null;
+        $categorias ??= array_column((new PiezaCategoriaModel())->findAll(), 'nombre', 'id');
+
+        $variante    = $this->varianteModel->find($version['variante_id']);
+        $familia     = $variante ? (new PiezaFamiliaModel())->find($variante['familia_id']) : null;
+        $categoriaId = $familia['categoria_id'] ?? null;
+
+        $stls = [];
+        foreach ($this->servicio->stlsDe((int) $version['id']) as $stl) {
+            $stls[] = [
+                'nombre'     => $stl['nombre'],
+                'hash'       => $stl['hash_stl'],
+                'disponible' => $this->almacen->existe($stl['ruta_stl']),
+            ];
+        }
+
+        return [
+            'version_id'  => (int) $version['id'],
+            // Añadido para stl.py `placa`: hace falta para pedir
+            // /variante/(:num)/composicion y expandir recursivamente si
+            // esta pieza es compuesta (decisión 11 del plan .blend->STL).
+            'variante_id' => (int) $version['variante_id'],
+            'familia'     => $familia['nombre'] ?? null,
+            'variante'    => $variante['nombre'] ?? null,
+            'categoria'   => $categoriaId !== null ? ($categorias[(int) $categoriaId] ?? null) : null,
+            'numero'      => (int) $version['numero'],
+            'estado'      => $version['estado'],
+            'cantidad'    => $cantidad,
+            'hash_blend'  => $version['hash_blend'],
+            'stls'        => $stls,
+        ];
     }
 
     /**

@@ -10,8 +10,10 @@ use App\Models\PiezaPedidoModel;
 use App\Models\PiezaReferenciaModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaVarianteModel;
+use App\Models\PiezaVersionModel;
 use App\Services\PiezaAlmacen;
 use App\Services\PiezaImagenesPublicas;
+use App\Services\PiezaService;
 
 /**
  * Vista web de los pedidos: los entrantes desde sterclicks (recibidos por
@@ -230,6 +232,8 @@ class PedidosController extends BaseController
             'imagenes'        => (new PiezaPedidoImagenModel())->dePedido($id),
             'pedidosAbiertos' => $pedidosAbiertos,
             'sugerencias'     => $this->sugerenciasParaPedido(array_column($pedido['lineas'], 'variante_id')),
+            // Para "Crear pieza" desde una línea futura.
+            'categorias'      => (new \App\Models\PiezaCategoriaModel())->ordenadas(),
         ]);
     }
 
@@ -516,6 +520,79 @@ class PedidosController extends BaseController
         }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', 'Línea actualizada.');
+    }
+
+    /**
+     * Pasa una pieza futura (línea con solo descripción) al catálogo y deja
+     * la línea apuntando a ella. Dos caminos, los mismos que ya hay en
+     * Piezas: pieza nueva (PiezaService::crearFamilia, con su variante base)
+     * o derivada de otra — variante nueva de esa pieza que arranca de su
+     * última versión (derivarVariante), o vacía si aún no tiene ninguna.
+     */
+    public function crearPiezaDesdeLinea(int $lineaId)
+    {
+        $lineaModel = new PiezaPedidoLineaModel();
+        $linea = $lineaModel->find($lineaId);
+        if (!$linea) {
+            return $this->fallo('Línea no encontrada.', '/piezas/pedidos');
+        }
+        if ($linea['variante_id']) {
+            return $this->fallo('Esta línea ya es una pieza del catálogo.');
+        }
+
+        $nombre = trim((string) $this->request->getPost('nombre'));
+        if ($nombre === '') {
+            return $this->fallo('Ponle nombre a la pieza.');
+        }
+        $notas = trim((string) $this->request->getPost('notas')) ?: null;
+        $servicio = new PiezaService();
+
+        try {
+            if ($this->request->getPost('modo') === 'derivada') {
+                $origen = (new PiezaVarianteModel())->find((int) $this->request->getPost('origen_variante_id'));
+                if (!$origen || $origen['borrado_en']) {
+                    return $this->fallo('Elige de qué pieza deriva.');
+                }
+                $version = $this->versionDeOrigen((int) $origen['id']);
+                $variante = $version
+                    ? $servicio->derivarVariante((int) $version['id'], $nombre, $notas)
+                    : $servicio->crearVariante((int) $origen['familia_id'], $nombre, $notas);
+            } else {
+                $categoria = (int) $this->request->getPost('categoria_id') ?: null;
+                $variante = $servicio->crearFamilia($nombre, $notas, $categoria)['variante'];
+            }
+        } catch (\RuntimeException $e) {
+            return $this->fallo($e->getMessage());
+        }
+
+        $lineaModel->update($lineaId, [
+            'variante_id'       => $variante['id'],
+            'sku'               => $variante['sku'] ?? null,
+            'descripcion_libre' => null,
+        ]);
+
+        $mensaje = 'Pieza creada y enlazada a la línea.';
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'ok'          => true,
+                'mensaje'     => $mensaje,
+                'urlVariante' => site_url('piezas/variante/' . $variante['id']),
+                'rowHtml'     => view('piezas/pedidos/_linea_fila', ['linea' => $this->enriquecerLinea($lineaModel->find($lineaId))]),
+            ]);
+        }
+
+        return redirect()->to('/piezas/pedido/' . $linea['pedido_id'])->with('success', $mensaje);
+    }
+
+    /** De qué versión parte una derivada: la última validada o, si no hay, la última no descartada. */
+    private function versionDeOrigen(int $varianteId): ?array
+    {
+        $versionModel = new PiezaVersionModel();
+
+        return $versionModel->where('variante_id', $varianteId)->where('estado', 'validada')
+                ->orderBy('numero', 'DESC')->first()
+            ?? $versionModel->where('variante_id', $varianteId)->where('estado !=', 'descartada')
+                ->orderBy('numero', 'DESC')->first();
     }
 
     public function borrarLinea(int $lineaId)
