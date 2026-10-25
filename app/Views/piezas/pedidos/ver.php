@@ -3,9 +3,9 @@
 <?= $this->include('piezas/_nav') ?>
 
 <?php
-    $etiquetas = ['nuevo' => 'Pendiente', 'en_produccion' => 'Produciendo', 'completado' => 'Hecho', 'cancelado' => 'Cancelado'];
-    $colores   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'completado' => 'success', 'cancelado' => 'secondary'];
-    $iconos    = ['nuevo' => 'bi-inbox', 'en_produccion' => 'bi-gear', 'completado' => 'bi-check2-circle', 'cancelado' => 'bi-x-circle'];
+    $etiquetas = ['nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
+    $colores   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'para_impresion' => 'info', 'completado' => 'success'];
+    $iconos    = ['nuevo' => 'bi-inbox', 'en_produccion' => 'bi-vector-pen', 'para_impresion' => 'bi-printer', 'completado' => 'bi-check2-circle'];
     $estadoActual = $pedido['estado'];
     $creado = strtotime($pedido['creado_en']);
 ?>
@@ -584,7 +584,11 @@ document.addEventListener('DOMContentLoaded', function () {
             pintarChip(linea, chip, marcar);
             chip.disabled = true;
             post(linea.dataset.urlHecha, marcar ? { hecha: 1 } : {})
-                .then(function (d) { if (!d.ok) { pintarChip(linea, chip, !marcar); fallo(d, 'No se pudo actualizar.'); } })
+                .then(function (d) {
+                    if (!d.ok) { pintarChip(linea, chip, !marcar); fallo(d, 'No se pudo actualizar.'); return; }
+                    // Era la última por preparar: el pedido ha cambiado de estado.
+                    if (d.recargar) location.reload();
+                })
                 .catch(function () { pintarChip(linea, chip, !marcar); alert('No se pudo conectar con el servidor.'); })
                 .finally(function () { chip.disabled = false; });
             return;

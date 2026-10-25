@@ -469,7 +469,7 @@
             <h3><i class="bi bi-cart-check"></i> Pedidos <a class="pa-ancla" href="#como-pedido">#</a></h3>
             <p><?= $pag('piezas/pedidos', 'Pedidos') ?> (<i class="bi bi-cart-check"></i>) entran solos desde <b>sterclicks</b> o se dan de alta a mano.</p>
             <ul>
-                <li>Estados: <b>nuevo → en producción → completado</b> (o cancelado).</li>
+                <li>Estados: <b>nuevo → diseñando → para impresión → hecho</b>.</li>
                 <li>Arrastra para reordenar; la <b>prioridad</b> los sube arriba. La fecha de entrega se pone roja cuando vence.</li>
                 <li>En cada línea, marca cuántas llevas hechas o la línea entera como hecha. Se pueden copiar o mover líneas a otro pedido.</li>
                 <li><b>Cargar a la placa</b> mete todas sus piezas en el carrito, tengan STL o no.</li>

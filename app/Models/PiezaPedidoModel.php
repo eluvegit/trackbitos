@@ -10,7 +10,12 @@ class PiezaPedidoModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
-    public const ESTADOS = ['nuevo', 'en_produccion', 'completado', 'cancelado'];
+    // Fases del pedido: nuevo -> diseñando (clave histórica en_produccion)
+    // -> para impresión -> hecho.
+    public const ESTADOS = ['nuevo', 'en_produccion', 'para_impresion', 'completado'];
+
+    // Los que aún no están hechos.
+    public const ABIERTOS = ['nuevo', 'en_produccion', 'para_impresion'];
 
     protected $allowedFields = [
         'origen', 'estado', 'orden', 'prioritario', 'fecha_entrega', 'referencia_externa', 'notas',
@@ -19,7 +24,7 @@ class PiezaPedidoModel extends Model
 
     protected $validationRules = [
         'origen' => 'required|max_length[30]',
-        'estado' => 'permit_empty|in_list[nuevo,en_produccion,completado,cancelado]',
+        'estado' => 'permit_empty|in_list[nuevo,en_produccion,para_impresion,completado]',
         'fecha_entrega' => 'permit_empty|valid_date[Y-m-d]',
     ];
 
@@ -39,8 +44,8 @@ class PiezaPedidoModel extends Model
     /**
      * Cómo pintar la fecha de entrega de un pedido: texto corto ("hoy",
      * "mañana", "en 3 días", "hace 2 días", dd/mm) y clase de color. Solo
-     * avisa en rojo/ámbar mientras el pedido sigue abierto; uno hecho o
-     * cancelado la muestra apagada. Null si no tiene fecha.
+     * avisa en rojo/ámbar mientras el pedido sigue abierto; uno hecho la
+     * muestra apagada. Null si no tiene fecha.
      *
      * @return array{texto: string, clase: string, vencido: bool}|null
      */
@@ -63,7 +68,7 @@ class PiezaPedidoModel extends Model
             default      => $fechaCorta,
         };
 
-        $abierto = in_array($pedido['estado'] ?? '', ['nuevo', 'en_produccion'], true);
+        $abierto = in_array($pedido['estado'] ?? '', self::ABIERTOS, true);
         $clase = match (true) {
             !$abierto  => 'text-body-secondary',
             $dias <= 0 => 'text-danger fw-semibold',
@@ -83,5 +88,24 @@ class PiezaPedidoModel extends Model
     {
         return $this->orderBy('prioritario', 'DESC')->orderBy('orden', 'ASC')
             ->orderBy('creado_en', 'DESC')->findAll($limite);
+    }
+
+    /** Todos los que aún no están hechos, en el orden del tablero. */
+    public function abiertos(): array
+    {
+        return $this->whereIn('estado', self::ABIERTOS)
+            ->orderBy('prioritario', 'DESC')->orderBy('orden', 'ASC')
+            ->orderBy('creado_en', 'DESC')->findAll();
+    }
+
+    /**
+     * Columna "Hecho" a trozos: se acumulan sin fin, así que el tablero trae
+     * los últimos terminados (actualizado_en) y el resto se pide al bajar.
+     */
+    public function hechos(int $limite, int $desde = 0): array
+    {
+        return $this->where('estado', 'completado')
+            ->orderBy('actualizado_en', 'DESC')->orderBy('id', 'DESC')
+            ->findAll($limite, $desde);
     }
 }

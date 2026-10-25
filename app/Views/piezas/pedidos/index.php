@@ -64,10 +64,10 @@
 
 <?php
     $coloresColumna = [
-        'nuevo'         => 'primary',
-        'en_produccion' => 'warning',
-        'completado'    => 'success',
-        'cancelado'     => 'secondary',
+        'nuevo'          => 'primary',
+        'en_produccion'  => 'warning',
+        'para_impresion' => 'info',
+        'completado'     => 'success',
     ];
 ?>
 
@@ -93,7 +93,7 @@
     </button>
     <?php foreach ($columnas as $estado => $columna): ?>
         <button type="button" class="btn btn-sm rounded-pill btn-outline-<?= $coloresColumna[$estado] ?>" data-filtro="<?= esc($estado) ?>">
-            <?= esc($columna['titulo']) ?> <span class="badge bg-body-secondary text-body-secondary border"><?= count($columna['pedidos']) ?></span>
+            <?= esc($columna['titulo']) ?> <span class="badge bg-body-secondary text-body-secondary border"><?= $columna['total'] ?></span>
         </button>
     <?php endforeach; ?>
 
@@ -110,76 +110,26 @@
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge text-bg-<?= $coloresColumna[$estado] ?>">&nbsp;</span>
                 <span class="fw-semibold"><?= esc($columna['titulo']) ?></span>
-                <span class="badge bg-body-secondary text-body-secondary border ms-auto"><?= count($columna['pedidos']) ?></span>
+                <span class="badge bg-body-secondary text-body-secondary border ms-auto"><?= $columna['total'] ?></span>
             </div>
 
             <?php if (empty($columna['pedidos'])): ?>
                 <p class="text-muted small">Nada aquí.</p>
             <?php endif; ?>
 
-            <div class="d-flex flex-column gap-2 lista-pedidos" data-columna="<?= esc($estado) ?>">
+            <?php // "Hecho" va por fecha de terminado y a trozos: sin arrastre ni estrella. ?>
+            <div class="d-flex flex-column gap-2 <?= $estado === 'completado' ? 'lista-hechos' : 'lista-pedidos' ?>" data-columna="<?= esc($estado) ?>">
                 <?php foreach ($columna['pedidos'] as $pedido): ?>
-                    <?php
-                        $fecha = strtotime($pedido['creado_en']);
-                        $prioritario = (bool) (int) $pedido['prioritario'];
-                        $entrega = \App\Models\PiezaPedidoModel::entrega($pedido);
-                    ?>
-                    <div class="tarjeta-pedido <?= $prioritario ? 'prioritario' : '' ?>" data-id="<?= (int) $pedido['id'] ?>"
-                        data-prioritario="<?= $prioritario ? 1 : 0 ?>" data-entrega="<?= esc($pedido['fecha_entrega'] ?? '', 'attr') ?>">
-                    <button type="button" class="btn-estrella" data-estrella
-                        title="<?= $prioritario ? 'Quitar prioridad' : 'Marcar como prioritario' ?>">
-                        <i class="bi <?= $prioritario ? 'bi-star-fill' : 'bi-star' ?>"></i>
-                    </button>
-                    <a href="<?= site_url('piezas/pedido/' . $pedido['id']) ?>" class="card shadow-sm text-decoration-none text-body"
-                        style="cursor: pointer" title="Ver pedido #<?= $pedido['id'] ?>">
-                        <?php if ($pedido['fotos']): ?>
-                            <div class="d-flex" style="gap: 2px; height: 64px; overflow: hidden; background: rgba(127,127,127,.15);">
-                                <?php foreach (array_slice($pedido['fotos'], 0, 4) as $foto): ?>
-                                    <img src="<?= $foto ?>" loading="lazy" alt=""
-                                        style="flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; display: block;">
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                        <div class="card-body p-2">
-                            <?php if (!empty($pedido['referencia_externa'])): ?>
-                                <div class="fw-semibold text-truncate pe-4" title="<?= esc($pedido['referencia_externa'], 'attr') ?>"><?= esc($pedido['referencia_externa']) ?></div>
-                                <div class="text-muted" style="font-size: .75rem;">Pedido #<?= (int) $pedido['id'] ?></div>
-                            <?php else: ?>
-                                <div class="small fw-semibold pe-4">Pedido #<?= (int) $pedido['id'] ?></div>
-                            <?php endif; ?>
-                            <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">
-                                <span><?= $fecha ? esc(date('d/m H:i', $fecha)) : '' ?></span>
-                                <?php if ($pedido['numLineas']): ?>
-                                    <span class="ms-auto <?= $pedido['lineasListas'] === $pedido['numLineas'] ? 'text-success' : '' ?>"
-                                        title="Piezas listas para imprimir del total del pedido">
-                                        <strong><?= $pedido['lineasListas'] ?>/<?= $pedido['numLineas'] ?></strong> listas
-                                    </span>
-                                <?php else: ?>
-                                    <span class="ms-auto">sin piezas</span>
-                                <?php endif; ?>
-                            </div>
-                            <?php if ($entrega): ?>
-                                <div class="<?= $entrega['clase'] ?>" style="font-size: .75rem;" title="Fecha de entrega: <?= esc(date('d/m/Y', strtotime($pedido['fecha_entrega'])), 'attr') ?>">
-                                    <i class="bi <?= $entrega['vencido'] ? 'bi-exclamation-triangle' : 'bi-truck' ?>"></i> Entrega <?= esc($entrega['texto']) ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($pedido['totalPiezas']): ?>
-                                <?php $pct = (int) round(min($pedido['piezasHechas'], $pedido['totalPiezas']) * 100 / $pedido['totalPiezas']); ?>
-                                <div class="d-flex align-items-center gap-2 mt-1" title="Unidades hechas del total">
-                                    <div class="progress flex-grow-1" style="height: 4px;"><div class="progress-bar bg-success" style="width: <?= $pct ?>%"></div></div>
-                                    <span class="text-muted text-nowrap" style="font-size: .7rem;"><?= $pedido['piezasHechas'] ?>/<?= $pedido['totalPiezas'] ?> ud.</span>
-                                </div>
-                            <?php endif; ?>
-                            <?php if ($pedido['notas']): ?>
-                                <div class="text-muted text-truncate mt-1" style="font-size: .75rem;" title="<?= esc($pedido['notas'], 'attr') ?>">
-                                    <?= esc($pedido['notas']) ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </a>
-                    </div>
+                    <?= view('piezas/pedidos/_tarjeta', ['pedido' => $pedido]) ?>
                 <?php endforeach; ?>
             </div>
+
+            <?php if ($estado === 'completado' && $columna['total'] > count($columna['pedidos'])): ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-2" id="cargar-mas-hechos"
+                    data-desde="<?= count($columna['pedidos']) ?>">
+                    <i class="bi bi-arrow-down-circle"></i> Cargar más
+                </button>
+            <?php endif; ?>
         </div>
     <?php endforeach; ?>
 </div>
@@ -204,6 +154,43 @@
         });
 
         aplicar('');
+
+        // ---- "Hecho" a trozos: la siguiente tanda llega sola al asomar el
+        // botón (o al pulsarlo) ----
+        var botonMas = document.getElementById('cargar-mas-hechos');
+        if (botonMas) {
+            var listaHechos = document.querySelector('#tablero-pedidos .lista-hechos');
+            var cargando = false;
+            var observador = null;
+            function cargarMas() {
+                if (cargando) return;
+                cargando = true;
+                botonMas.disabled = true;
+                fetch('<?= site_url('piezas/pedidos/hechos') ?>?desde=' + botonMas.dataset.desde, {
+                    credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d.ok) throw d;
+                        listaHechos.insertAdjacentHTML('beforeend', d.html);
+                        botonMas.dataset.desde = listaHechos.querySelectorAll(':scope > .tarjeta-pedido').length;
+                        if (!d.quedan) {
+                            if (observador) observador.disconnect();
+                            botonMas.remove();
+                        }
+                    })
+                    .catch(function () { alert('No se pudieron cargar más pedidos.'); })
+                    .finally(function () { cargando = false; botonMas.disabled = false; });
+            }
+            botonMas.addEventListener('click', cargarMas);
+            if ('IntersectionObserver' in window) {
+                observador = new IntersectionObserver(function (entradas) {
+                    // Oculto por el filtro de columnas no cuenta como visible.
+                    if (entradas[0].isIntersecting && botonMas.offsetParent) cargarMas();
+                }, { rootMargin: '200px' });
+                observador.observe(botonMas);
+            }
+        }
 
         // ---- Estrella y orden ----
         var CSRF_NOMBRE = '<?= csrf_token() ?>';

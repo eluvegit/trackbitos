@@ -848,6 +848,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // Pedidos: los entrantes desde sterclicks (recibidos por
     // SterclicksApi::pedidos) y los de alta manual, aquí mismo.
     $routes->GET('pedidos', 'PedidosController::index');
+    $routes->GET('pedidos/hechos', 'PedidosController::masHechos');
     $routes->POST('pedido', 'PedidosController::crear');
     $routes->POST('pedidos/reordenar', 'PedidosController::reordenar');
     $routes->POST('pedido/(:num)/prioridad', 'PedidosController::alternarPrioridad/$1');

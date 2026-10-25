@@ -26,13 +26,68 @@ class PedidosController extends BaseController
 {
     protected $helpers = ['url', 'form', 'piezas_imagenes'];
 
+    // Cuántos de "Hecho" trae el tablero de golpe; el resto, al bajar.
+    private const HECHOS_POR_TANDA = 15;
+
     public function index()
+    {
+        $pedidoModel = new PiezaPedidoModel();
+
+        // Tablero por estado, mismo orden que el flujo real: recién llegado ->
+        // diseñando -> para impresión -> hecho.
+        $columnas = [
+            'nuevo'          => ['titulo' => 'Nuevos', 'pedidos' => []],
+            'en_produccion'  => ['titulo' => 'Diseñando', 'pedidos' => []],
+            'para_impresion' => ['titulo' => 'Para impresión', 'pedidos' => []],
+            'completado'     => ['titulo' => 'Hecho', 'pedidos' => []],
+        ];
+        foreach ($this->paraTarjetas($pedidoModel->abiertos()) as $pedido) {
+            $columnas[$pedido['estado']]['pedidos'][] = $pedido;
+        }
+        $columnas['completado']['pedidos'] = $this->paraTarjetas($pedidoModel->hechos(self::HECHOS_POR_TANDA));
+        foreach ($columnas as $estado => &$columna) {
+            $columna['total'] = $estado === 'completado'
+                ? $pedidoModel->where('estado', 'completado')->countAllResults()
+                : count($columna['pedidos']);
+        }
+        unset($columna);
+
+        return view('piezas/pedidos/index', ['columnas' => $columnas, 'estados' => PiezaPedidoModel::ESTADOS]);
+    }
+
+    /**
+     * Siguiente tanda de la columna "Hecho" (el "cargar más" del tablero):
+     * HTML de las tarjetas ya pintadas y si quedan más por pedir.
+     */
+    public function masHechos()
+    {
+        $desde = max(0, (int) $this->request->getGet('desde'));
+        $pedidoModel = new PiezaPedidoModel();
+        $pedidos = $this->paraTarjetas($pedidoModel->hechos(self::HECHOS_POR_TANDA, $desde));
+
+        $html = '';
+        foreach ($pedidos as $pedido) {
+            $html .= view('piezas/pedidos/_tarjeta', ['pedido' => $pedido]);
+        }
+        $total = $pedidoModel->where('estado', 'completado')->countAllResults();
+
+        return $this->response->setJSON([
+            'ok'     => true,
+            'html'   => $html,
+            'quedan' => $desde + count($pedidos) < $total,
+        ]);
+    }
+
+    /**
+     * Lo que pinta cada tarjeta del tablero además de la fila del pedido:
+     * miniaturas, piezas hechas y líneas listas.
+     */
+    private function paraTarjetas(array $pedidos): array
     {
         $lineaModel = new PiezaPedidoLineaModel();
         $varianteModel = new PiezaVarianteModel();
         $imagenModel = new PiezaPedidoImagenModel();
 
-        $pedidos = (new PiezaPedidoModel())->recientes();
         foreach ($pedidos as &$pedido) {
             $lineas = $lineaModel->where('pedido_id', $pedido['id'])->findAll();
 
@@ -69,19 +124,7 @@ class PedidosController extends BaseController
         }
         unset($pedido);
 
-        // Tablero por estado, mismo orden que el flujo real: recién llegado ->
-        // en producción -> hecho, con cancelados aparte al final.
-        $columnas = [
-            'nuevo'         => ['titulo' => 'Pendientes', 'pedidos' => []],
-            'en_produccion' => ['titulo' => 'Produciendo', 'pedidos' => []],
-            'completado'    => ['titulo' => 'Hecho', 'pedidos' => []],
-            'cancelado'     => ['titulo' => 'Cancelados', 'pedidos' => []],
-        ];
-        foreach ($pedidos as $pedido) {
-            $columnas[$pedido['estado']]['pedidos'][] = $pedido;
-        }
-
-        return view('piezas/pedidos/index', ['columnas' => $columnas, 'estados' => PiezaPedidoModel::ESTADOS]);
+        return $pedidos;
     }
 
     /**
@@ -173,9 +216,9 @@ class PedidosController extends BaseController
             ->orderBy('piezas_placas.creado_en', 'DESC')->findAll();
 
         // Destinos posibles para "copiar líneas a…": solo pedidos aún
-        // abiertos — copiar a uno hecho o cancelado no tiene sentido.
+        // abiertos — copiar a uno hecho no tiene sentido.
         $pedidosAbiertos = (new PiezaPedidoModel())
-            ->whereIn('estado', ['nuevo', 'en_produccion'])
+            ->whereIn('estado', PiezaPedidoModel::ABIERTOS)
             ->where('id !=', $id)
             ->orderBy('creado_en', 'DESC')
             ->findAll(30);
@@ -658,19 +701,52 @@ class PedidosController extends BaseController
         }
 
         $lineaModel->update($lineaId, ['hecha' => $this->request->getPost('hecha') ? 1 : 0]);
+        $paraImpresion = $this->pasarAParaImpresionSiProcede((int) $linea['pedido_id']);
+        if ($paraImpresion) {
+            session()->setFlashdata('success', 'Todas las líneas están listas: el pedido pasa a "Para impresión".');
+        }
 
         if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['ok' => true]);
+            return $this->response->setJSON(['ok' => true, 'recargar' => $paraImpresion]);
         }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);
     }
 
     /**
+     * Si todas las líneas del pedido están marcadas como listas (preparadas
+     * para imprimir), el pedido pasa a "para impresión" solo. Únicamente
+     * avanza desde nuevo/diseñando: uno ya hecho no retrocede, y desmarcar
+     * una línea después no lo devuelve atrás. Devuelve si lo ha cambiado.
+     */
+    private function pasarAParaImpresionSiProcede(int $pedidoId): bool
+    {
+        $pedidoModel = new PiezaPedidoModel();
+        $pedido = $pedidoModel->find($pedidoId);
+        if (!$pedido || !in_array($pedido['estado'], ['nuevo', 'en_produccion'], true)) {
+            return false;
+        }
+
+        $lineas = (new PiezaPedidoLineaModel())->where('pedido_id', $pedidoId)->findAll();
+        if ($lineas === []) {
+            return false;
+        }
+        foreach ($lineas as $linea) {
+            if (empty($linea['hecha'])) {
+                return false;
+            }
+        }
+
+        $pedidoModel->update($pedidoId, ['estado' => 'para_impresion', 'actualizado_en' => date('Y-m-d H:i:s')]);
+
+        return true;
+    }
+
+    /**
      * Si todas las líneas del pedido ya tienen su cantidad completada, el
      * pedido pasa a "completado" solo, sin esperar a que alguien cambie el
-     * estado a mano — da igual en qué estado estuviera (incluso cancelado),
-     * salvo que ya estuviera completado.
+     * estado a mano — da igual en qué fase estuviera, salvo que ya
+     * estuviera completado.
      */
     private function autocompletarPedidoSiProcede(int $pedidoId): void
     {

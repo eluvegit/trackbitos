@@ -2056,11 +2056,11 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
         </div>
 
         <?php
-        $etiquetasPedido = ['nuevo' => 'Pendiente', 'en_produccion' => 'Produciendo', 'completado' => 'Hecho', 'cancelado' => 'Cancelado'];
-        $coloresPedido   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'completado' => 'success', 'cancelado' => 'secondary'];
+        $etiquetasPedido = ['nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
+        $coloresPedido   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'para_impresion' => 'info', 'completado' => 'success'];
         $porServir = 0;
         foreach ($pedidosDeLaPieza as $pl) {
-            if (in_array($pl['estado'], ['nuevo', 'en_produccion'], true)) {
+            if (in_array($pl['estado'], \App\Models\PiezaPedidoModel::ABIERTOS, true)) {
                 $porServir += max(0, (int) $pl['cantidad'] - (int) $pl['cantidad_completada']);
             }
         }
