@@ -1322,6 +1322,9 @@ class Web extends BaseController
                 ->where('l.variante_id', $id)
                 ->orderBy('p.creado_en', 'DESC')
                 ->get()->getResultArray(),
+            // Para el modal de referencia: imágenes de esos mismos pedidos,
+            // que se pueden copiar como referencia sin volver a subirlas.
+            'imagenesDePedidos' => $this->imagenesDePedidosDe($id),
             'familias'  => $this->familiaModel->orderBy('nombre', 'ASC')->findAll(),
             // Para el modal "Independizar": a dónde puede ir y qué se lleva.
             'categorias'    => $this->categoriaModel->ordenadas(),
@@ -4050,6 +4053,105 @@ class Web extends BaseController
             },
             fn() => site_url('piezas/variante/' . $varianteId),
             fn() => 'Referencia añadida.'
+        );
+    }
+
+    /**
+     * Imágenes de referencia de los pedidos donde esta variante va como
+     * línea directa (`piezas_pedidos_lineas.variante_id`), cada una con
+     * `ya_copiada` si su hash ya está entre las referencias de la variante.
+     */
+    private function imagenesDePedidosDe(int $varianteId): array
+    {
+        $imagenes = $this->pedidoImagenModel
+            ->select('piezas_pedido_imagenes.*')
+            ->whereIn('pedido_id', static function ($b) use ($varianteId) {
+                return $b->select('pedido_id')->from('piezas_pedidos_lineas')->where('variante_id', $varianteId);
+            })
+            ->orderBy('pedido_id', 'DESC')->orderBy('orden')->orderBy('id')
+            ->findAll();
+        if (!$imagenes) {
+            return [];
+        }
+
+        $variante = $this->varianteModel->find($varianteId);
+        $hashes = array_filter(array_column(
+            $this->referenciaModel->deVariante((int) $variante['familia_id'], $varianteId),
+            'hash_imagen'
+        ));
+        foreach ($imagenes as &$imagen) {
+            $imagen['ya_copiada'] = in_array($imagen['hash_imagen'], $hashes, true);
+        }
+        unset($imagen);
+
+        return $imagenes;
+    }
+
+    /**
+     * Copia (no enlaza) imágenes de un pedido como referencias de la
+     * variante, solo de pedidos donde la variante va como línea directa.
+     * Copia por lo mismo que PendientesController::copiarReferencias: la
+     * imagen del pedido se puede borrar en cualquier momento y la
+     * referencia de la pieza tiene que seguir existiendo. Las que ya están
+     * (mismo hash) se saltan, para no duplicarlas por darle dos veces.
+     */
+    public function copiarReferenciasDePedido(int $varianteId)
+    {
+        $variante = $this->varianteModel->find($varianteId);
+        if (!$variante) {
+            return redirect()->to(site_url('piezas'))->with('error', 'Esa variante no existe.');
+        }
+
+        $familiaId = (int) $variante['familia_id'];
+        $ids       = array_map('intval', (array) $this->request->getPost('imagenes'));
+
+        return $this->ejecutar(
+            function () use ($familiaId, $varianteId, $ids) {
+                $disponibles = array_column($this->imagenesDePedidosDe($varianteId), null, 'id');
+                $elegidas    = array_intersect_key($disponibles, array_flip($ids));
+                if (!$elegidas) {
+                    throw new RuntimeException('No has elegido ninguna imagen de sus pedidos.');
+                }
+
+                $copiadas = 0;
+                foreach ($elegidas as $imagen) {
+                    if ($imagen['ya_copiada'] || !$this->almacen->existe($imagen['ruta_imagen'])) {
+                        continue;
+                    }
+
+                    $id = $this->referenciaModel->insert([
+                        'familia_id'  => $familiaId,
+                        'variante_id' => $varianteId,
+                        'ruta_imagen' => '',
+                        'notas'       => trim('Desde pedido #' . (int) $imagen['pedido_id'] . ' ' . ($imagen['notas'] ?? '')),
+                        'subida_en'   => date('Y-m-d H:i:s'),
+                    ], true);
+                    if (!$id) {
+                        throw new RuntimeException('No se pudo registrar la referencia: ' . implode(' ', $this->referenciaModel->errors()));
+                    }
+
+                    $extension = pathinfo($imagen['ruta_imagen'], PATHINFO_EXTENSION);
+                    $ruta = $this->almacen->rutaReferencia($familiaId, $id, $extension);
+                    $this->almacen->copiar($imagen['ruta_imagen'], $ruta);
+
+                    $this->referenciaModel->update($id, [
+                        'ruta_imagen'  => $ruta,
+                        'hash_imagen'  => $imagen['hash_imagen'],
+                        'tamano_bytes' => filesize($this->almacen->absoluta($ruta)),
+                    ]);
+
+                    $this->publicarCopias($ruta, $imagen['hash_imagen']);
+                    $copiadas++;
+                }
+
+                return $copiadas;
+            },
+            fn() => site_url('piezas/variante/' . $varianteId),
+            fn(int $n) => match ($n) {
+                0       => 'Esas imágenes ya estaban entre las referencias.',
+                1       => 'Referencia copiada del pedido.',
+                default => "{$n} referencias copiadas del pedido.",
+            }
         );
     }
 

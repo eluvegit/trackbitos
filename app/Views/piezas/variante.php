@@ -1634,7 +1634,8 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
         <!-- Alta de referencia -->
         <div class="modal fade" id="modalReferencia" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content" method="post" enctype="multipart/form-data"
+                <div class="modal-content">
+                <form method="post" enctype="multipart/form-data"
                     action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/referencia') ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="volver_a_variante" value="<?= (int) $variante['id'] ?>">
@@ -1657,10 +1658,40 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                         <button class="btn btn-sm btn-primary">Subir</button>
                     </div>
                 </form>
+
+                <?php if (!empty($imagenesDePedidos)): ?>
+                    <!-- O copiarla de un pedido donde esta variante va como línea directa:
+                         form aparte (sin multipart) para que no lo coja el progreso de subida. -->
+                    <form method="post" class="border-top"
+                        action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/referencia-desde-pedido') ?>">
+                        <?= csrf_field() ?>
+                        <div class="modal-body">
+                            <label class="form-label small mb-1">O cópiala de sus pedidos</label>
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <?php foreach ($imagenesDePedidos as $img): ?>
+                                    <label class="position-relative <?= $img['ya_copiada'] ? 'opacity-50' : '' ?>" style="width: 72px; cursor: pointer;"
+                                        title="<?= $img['ya_copiada'] ? 'Ya está entre las referencias' : esc('Pedido #' . (int) $img['pedido_id'] . ($img['notas'] ? ' — ' . $img['notas'] : '')) ?>">
+                                        <img src="<?= imagen_pieza($img, 'pedido-imagen') ?>"
+                                            class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
+                                            alt="Imagen del pedido" loading="lazy">
+                                        <input type="checkbox" name="imagenes[]" value="<?= (int) $img['id'] ?>"
+                                            class="form-check-input position-absolute top-0 start-0 m-1"
+                                            <?= $img['ya_copiada'] ? 'disabled' : '' ?>>
+                                        <span class="badge text-bg-dark position-absolute bottom-0 end-0 m-1 fw-normal opacity-75" style="font-size: .6rem;">#<?= (int) $img['pedido_id'] ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="text-end">
+                                <button class="btn btn-sm btn-outline-primary">Copiar elegidas</button>
+                            </div>
+                        </div>
+                    </form>
+                <?php endif; ?>
+                </div>
             </div>
         </div>
 
-        <!-- Renders sueltos: de esta variante pero sin versión concreta todavía
+        <!-- Renders sueltos:de esta variante pero sin versión concreta todavía
              (fase 31) -- útil sobre todo antes de la primera promoción, cuando
              no hay ninguna versión a la que colgar una foto de progreso. Los
              renders que sí son de una versión se ven en su historial, arriba. -->

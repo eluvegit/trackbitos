@@ -809,6 +809,9 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // promoción). A diferencia del .blend, se suben y se sirven desde
     // aquí mismo (excepción documentada en la cabecera de Web.php).
     $routes->POST('variante/(:num)/referencia', 'Web::subirReferencia/$1');
+    // Copia como referencia alguna imagen de un pedido donde esta variante
+    // va como línea directa (no la sube otra vez desde el disco).
+    $routes->POST('variante/(:num)/referencia-desde-pedido', 'Web::copiarReferenciasDePedido/$1');
     $routes->POST('referencia/(:num)/borrar', 'Web::borrarReferencia/$1');
     $routes->GET('referencia/(:num)/imagen', 'Web::imagenReferencia/$1');
     $routes->POST('variante/(:num)/render', 'Web::subirRender/$1');
