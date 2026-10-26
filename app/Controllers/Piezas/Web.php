@@ -599,46 +599,159 @@ class Web extends BaseController
         usort($pesanVariante, $porPeso);
         usort($pesanFamilia, $porPeso);
 
+        $periodos = ['30' => '30 días', '90' => '90 días', '365' => '1 año', 'todo' => 'Todo'];
+        $periodo  = (string) $this->request->getGet('periodo');
+        if (!isset($periodos[$periodo])) {
+            $periodo = 'todo';
+        }
+        $desde = $periodo === 'todo' ? null : date('Y-m-d 00:00:00', strtotime('-' . $periodo . ' days'));
+
+        $impresas = $this->rankingUnidadesImpresas($desde);
+        $gastadas = $this->rankingGastadas($desde);
+
         return view('piezas/estadisticas', [
-            'total'         => $this->almacen->tamanoTotal(),
-            'totalPapelera' => $this->almacen->tamanoPapelera(),
-            'pesanVariante' => array_slice($pesanVariante, 0, 20),
-            'pesanFamilia'  => array_slice($pesanFamilia, 0, 20),
-            'topImpresas'   => $this->rankingUnidadesImpresas(),
+            'total'          => $this->almacen->tamanoTotal(),
+            'totalPapelera'  => $this->almacen->tamanoPapelera(),
+            'pesanVariante'  => array_slice($pesanVariante, 0, 20),
+            'pesanFamilia'   => array_slice($pesanFamilia, 0, 20),
+            'topImpresas'    => $impresas['filas'],
+            'totalImpresas'  => $impresas['total'],
+            'topFallos'      => $impresas['fallos'],
+            'totalFallidas'  => $impresas['fallidas'],
+            'topGastadas'    => $gastadas['filas'],
+            'totalGastadas'  => $gastadas['gastadas'],
+            'stockTotal'     => $gastadas['stock'],
+            'periodos'       => $periodos,
+            'periodo'        => $periodo,
         ]);
+    }
+
+    /**
+     * Nombre visible de cada variante cuya pieza no está en la papelera. El
+     * nombre de la variante solo se añade si distingue algo (misma regla que
+     * la galería y el índice).
+     *
+     * @param list<int> $varianteIds
+     * @return array<int,string>
+     */
+    private function nombresDeVariantes(array $varianteIds): array
+    {
+        if ($varianteIds === []) {
+            return [];
+        }
+        $familias = array_column($this->familiaModel->where('borrado_en', null)->findAll(), 'nombre', 'id');
+
+        $vivasPorFamilia = [];
+        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
+            $vivasPorFamilia[(int) $v['familia_id']] = ($vivasPorFamilia[(int) $v['familia_id']] ?? 0) + 1;
+        }
+
+        $nombres = [];
+        foreach ($this->varianteModel->whereIn('id', $varianteIds)->findAll() as $v) {
+            $familiaId = (int) $v['familia_id'];
+            if (!isset($familias[$familiaId])) {
+                continue;
+            }
+            $mostrar = $v['nombre'] !== PiezaService::VARIANTE_BASE || ($vivasPorFamilia[$familiaId] ?? 0) > 1;
+            $nombres[(int) $v['id']] = $familias[$familiaId] . ($mostrar ? ' · ' . $v['nombre'] : '');
+        }
+
+        return $nombres;
+    }
+
+    /**
+     * Lo que se gasta: bajas de existencias (delta < 0) por variante, frente
+     * a lo que entró en el mismo periodo (impresiones servibles + altas a
+     * mano) y el stock que queda hoy. Top 20 por unidades gastadas.
+     *
+     * @return array{filas: list<array>, gastadas: int, stock: int}
+     */
+    private function rankingGastadas(?string $desde): array
+    {
+        $movimientos = new \App\Models\PiezaStockMovimientoModel();
+        $stock = $movimientos->stockPorVariante();
+
+        $q = $movimientos->select('variante_id, delta, creado_en');
+        if ($desde !== null) {
+            $q->where('creado_en >=', $desde);
+        }
+
+        $acum = [];
+        foreach ($q->findAll() as $m) {
+            $id = (int) $m['variante_id'];
+            $acum[$id] ??= ['gastadas' => 0, 'entradas' => 0, 'ultima' => null];
+            if ((int) $m['delta'] < 0) {
+                $acum[$id]['gastadas'] -= (int) $m['delta'];
+                if ($acum[$id]['ultima'] === null || $m['creado_en'] > $acum[$id]['ultima']) {
+                    $acum[$id]['ultima'] = $m['creado_en'];
+                }
+            } else {
+                $acum[$id]['entradas'] += (int) $m['delta'];
+            }
+        }
+        $acum = array_filter($acum, static fn($a) => $a['gastadas'] > 0);
+        $nombres = $this->nombresDeVariantes(array_keys($acum));
+
+        $filas = [];
+        $totalGastadas = 0;
+        foreach ($acum as $id => $datos) {
+            if (!isset($nombres[$id])) {
+                continue;
+            }
+            $totalGastadas += $datos['gastadas'];
+            $filas[] = [
+                'nombre'   => $nombres[$id],
+                'url'      => site_url('piezas/existencias/' . $id),
+                'gastadas' => $datos['gastadas'],
+                'entradas' => $datos['entradas'],
+                'stock'    => $stock[$id] ?? 0,
+                'ultima'   => $datos['ultima'],
+            ];
+        }
+        usort(
+            $filas,
+            static fn($a, $b) => ($b['gastadas'] <=> $a['gastadas'])
+                ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
+        );
+
+        return [
+            'filas'    => array_slice($filas, 0, 20),
+            'gastadas' => $totalGastadas,
+            'stock'    => array_sum(array_map(static fn($n) => max(0, $n), $stock)),
+        ];
     }
 
     /**
      * Ranking de variantes por copias físicas impresas: la suma de la
      * `cantidad` de cada versión que ha ido en una placa ya marcada como
-     * impresa (`piezas_placas.impresa_en`), agrupada por variante — cada
-     * acabado es una tirada distinta. No mira el estado de la versión
-     * —cuenta lo que se mandó a la impresora de verdad, no lo que se juzgó
-     * después—. Una placa nacida de un reparto lleva sus propias filas (al
-     * dividir se mueven, no se duplican), así que sumar todas las placas
-     * impresas no cuenta dos veces la misma copia. Top 20.
+     * impresa (`piezas_placas.impresa_en`), agrupada por variante. Cuenta lo
+     * que se mandó a la impresora, no lo que se juzgó después. Una placa de
+     * reparto lleva sus propias filas (se mueven, no se duplican). Top 20.
      *
-     * @return list<array{nombre: string, url: string, unidades: int, placas: int, ultima: ?string}>
+     * También devuelve los fallos: las `fallidas` de esas mismas filas,
+     * ordenadas por unidades fallidas y luego por tasa.
+     *
+     * @return array{filas: list<array>, total: int, fallos: list<array>, fallidas: int}
      */
-    private function rankingUnidadesImpresas(): array
+    private function rankingUnidadesImpresas(?string $desde): array
     {
-        $fechaPlaca = array_column(
-            $this->placaModel->where('impresa_en IS NOT NULL')->findAll(),
-            'impresa_en',
-            'id'
-        );
+        $vacio = ['filas' => [], 'total' => 0, 'fallos' => [], 'fallidas' => 0];
+        $q = $this->placaModel->where('impresa_en IS NOT NULL');
+        if ($desde !== null) {
+            $q->where('impresa_en >=', $desde);
+        }
+        $fechaPlaca = array_column($q->findAll(), 'impresa_en', 'id');
         if ($fechaPlaca === []) {
-            return [];
+            return $vacio;
         }
 
         $filasVersion = $this->placaVersionModel
             ->whereIn('placa_id', array_keys($fechaPlaca))
             ->findAll();
         if ($filasVersion === []) {
-            return [];
+            return $vacio;
         }
 
-        // version_id -> variante_id -> variante (viva o no) y familia (solo vivas).
         $varianteDeVersion = array_column(
             $this->versionModel
                 ->whereIn('id', array_values(array_unique(array_column($filasVersion, 'version_id'))))
@@ -646,38 +759,26 @@ class Web extends BaseController
             'variante_id',
             'id'
         );
-        $variantes = array_column(
-            $this->varianteModel
-                ->whereIn('id', array_values(array_unique($varianteDeVersion)) ?: [0])
-                ->findAll(),
-            null,
-            'id'
-        );
-        $familias = array_column(
-            $this->familiaModel->where('borrado_en', null)->findAll(),
-            null,
-            'id'
-        );
-
-        // Cuántas variantes vivas tiene cada familia: el nombre de la
-        // variante solo se enseña si distingue algo (misma regla que la
-        // galería y el índice — con una sola "base" no dice nada).
-        $vivasPorFamilia = [];
-        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
-            $vivasPorFamilia[(int) $v['familia_id']] = ($vivasPorFamilia[(int) $v['familia_id']] ?? 0) + 1;
-        }
+        $nombres = $this->nombresDeVariantes(array_values(array_unique(array_map('intval', $varianteDeVersion))));
 
         $acum = [];
         foreach ($filasVersion as $fila) {
-            $varianteId = $varianteDeVersion[$fila['version_id']] ?? null;
-            $variante   = $varianteId !== null ? ($variantes[$varianteId] ?? null) : null;
+            $varianteId = (int) ($varianteDeVersion[$fila['version_id']] ?? 0);
             // Versión huérfana o pieza en la papelera: fuera del ranking.
-            if ($variante === null || !isset($familias[$variante['familia_id']])) {
+            if (!isset($nombres[$varianteId])) {
                 continue;
             }
 
-            $acum[$varianteId] ??= ['unidades' => 0, 'placas' => [], 'ultima' => null];
+            $acum[$varianteId] ??= ['unidades' => 0, 'fallidas' => 0, 'placas' => [], 'placasFallo' => [], 'ultima' => null, 'ultimoFallo' => null];
             $acum[$varianteId]['unidades'] += max(1, (int) $fila['cantidad']);
+            if ((int) $fila['fallidas'] > 0) {
+                $acum[$varianteId]['fallidas'] += (int) $fila['fallidas'];
+                $acum[$varianteId]['placasFallo'][(int) $fila['placa_id']] = true;
+                $fechaFallo = $fechaPlaca[$fila['placa_id']] ?? null;
+                if ($fechaFallo !== null && $fechaFallo > (string) $acum[$varianteId]['ultimoFallo']) {
+                    $acum[$varianteId]['ultimoFallo'] = $fechaFallo;
+                }
+            }
             $acum[$varianteId]['placas'][(int) $fila['placa_id']] = true;
 
             $fecha = $fechaPlaca[$fila['placa_id']] ?? null;
@@ -687,13 +788,21 @@ class Web extends BaseController
         }
 
         $ranking = [];
+        $fallos  = [];
         foreach ($acum as $varianteId => $datos) {
-            $variante  = $variantes[$varianteId];
-            $familiaId = (int) $variante['familia_id'];
-            $mostrar   = $variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
-                || ($vivasPorFamilia[$familiaId] ?? 0) > 1;
+            if ($datos['fallidas'] > 0) {
+                $fallos[] = [
+                    'nombre'   => $nombres[$varianteId],
+                    'url'      => site_url('piezas/variante/' . $varianteId),
+                    'fallidas' => $datos['fallidas'],
+                    'unidades' => $datos['unidades'],
+                    'tasa'     => (int) round($datos['fallidas'] / $datos['unidades'] * 100),
+                    'placas'   => count($datos['placasFallo']),
+                    'ultima'   => $datos['ultimoFallo'],
+                ];
+            }
             $ranking[] = [
-                'nombre'   => $familias[$familiaId]['nombre'] . ($mostrar ? ' · ' . $variante['nombre'] : ''),
+                'nombre'   => $nombres[$varianteId],
                 'url'      => site_url('piezas/variante/' . $varianteId),
                 'unidades' => $datos['unidades'],
                 'placas'   => count($datos['placas']),
@@ -706,7 +815,14 @@ class Web extends BaseController
                 ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
         );
 
-        return array_slice($ranking, 0, 20);
+        usort($fallos, static fn($a, $b) => ($b['fallidas'] <=> $a['fallidas']) ?: ($b['tasa'] <=> $a['tasa']));
+
+        return [
+            'filas'    => array_slice($ranking, 0, 20),
+            'total'    => array_sum(array_column($ranking, 'unidades')),
+            'fallos'   => array_slice($fallos, 0, 20),
+            'fallidas' => array_sum(array_column($fallos, 'fallidas')),
+        ];
     }
 
     /**
