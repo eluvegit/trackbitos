@@ -40,6 +40,7 @@ class PiezaPlacaModel extends Model
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
         'origen_placa_id', 'es_reparto', 'descargada_en',
         'inventario_sincronizado_en',
+        'enviada_en', 'enviada_a',
     ];
 
     protected $validationRules = [

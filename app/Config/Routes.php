@@ -984,6 +984,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // la fase 50 (se quitó la versión imprimible: solo la editable).
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
+    $routes->GET('placa/(:num)/enviar', 'Web::placaEnviarForm/$1');
+    $routes->POST('placa/(:num)/enviar', 'Web::placaEnviar/$1');
 
     // Añadir/quitar piezas sueltas de una bitácora ya guardada, sin rehacer
     // la placa entera: hasta ahora la única forma de corregir un olvido era

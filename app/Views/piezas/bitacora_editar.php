@@ -37,6 +37,9 @@
     <span class="text-muted fw-normal">#<?= $idPlaca ?></span>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Editar</strong>
+    <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="btn btn-sm btn-outline-primary ms-auto">
+        <i class="bi bi-send"></i> Enviar placa<?= $placa['enviada_en'] ? ' <i class="bi bi-check2" title="Ya enviada"></i>' : '' ?>
+    </a>
 </h5>
 
 <?php if (session('error')): ?>

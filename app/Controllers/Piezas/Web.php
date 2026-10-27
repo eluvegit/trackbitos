@@ -623,7 +623,76 @@ class Web extends BaseController
             'stockTotal'     => $gastadas['stock'],
             'periodos'       => $periodos,
             'periodo'        => $periodo,
+            'evolucion'      => $this->evolucionImpresiones($desde),
         ]);
+    }
+
+    private function evolucionImpresiones(?string $desde): array
+    {
+        $q = $this->placaModel->select('id, impresa_en')->where('impresa_en IS NOT NULL');
+        if ($desde !== null) {
+            $q->where('impresa_en >=', $desde);
+        }
+        $fechaPlaca = array_column($q->orderBy('impresa_en')->findAll(), 'impresa_en', 'id');
+        if ($fechaPlaca === []) {
+            return ['agrupado' => null, 'etiquetas' => [], 'placas' => [], 'buenas' => [], 'fallidas' => []];
+        }
+
+        $inicio = strtotime($desde ?? reset($fechaPlaca));
+        $dias   = (time() - $inicio) / 86400;
+        $agrupado = $dias <= 45 ? 'dia' : ($dias <= 400 ? 'semana' : 'mes');
+        $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+        $clave = static function (int $t) use ($agrupado): string {
+            return match ($agrupado) {
+                'dia'    => date('Y-m-d', $t),
+                'semana' => date('Y-m-d', strtotime('monday this week', $t)),
+                'mes'    => date('Y-m-01', $t),
+            };
+        };
+
+        $cubos = [];
+        $t = strtotime($clave($inicio));
+        $paso = ['dia' => '+1 day', 'semana' => '+1 week', 'mes' => '+1 month'][$agrupado];
+        while ($t <= time()) {
+            $k = date('Y-m-d', $t);
+            $cubos[$k] = ['placas' => 0, 'buenas' => 0, 'fallidas' => 0];
+            $t = strtotime($paso, $t);
+        }
+
+        $cuboDePlaca = [];
+        foreach ($fechaPlaca as $id => $fecha) {
+            $k = $clave(strtotime($fecha));
+            $cubos[$k] ??= ['placas' => 0, 'buenas' => 0, 'fallidas' => 0];
+            $cubos[$k]['placas']++;
+            $cuboDePlaca[$id] = $k;
+        }
+
+        foreach ($this->placaVersionModel->whereIn('placa_id', array_keys($fechaPlaca))->findAll() as $fila) {
+            $k = $cuboDePlaca[$fila['placa_id']];
+            $unidades = max(1, (int) $fila['cantidad']);
+            $fallidas = min($unidades, (int) $fila['fallidas']);
+            $cubos[$k]['buenas']   += $unidades - $fallidas;
+            $cubos[$k]['fallidas'] += $fallidas;
+        }
+        ksort($cubos);
+
+        $etiquetas = [];
+        foreach (array_keys($cubos) as $k) {
+            $t = strtotime($k);
+            $etiquetas[] = match ($agrupado) {
+                'dia', 'semana' => date('j', $t) . ' ' . $meses[(int) date('n', $t) - 1],
+                'mes'           => $meses[(int) date('n', $t) - 1] . ' ' . date('y', $t),
+            };
+        }
+
+        return [
+            'agrupado'  => $agrupado,
+            'etiquetas' => $etiquetas,
+            'placas'    => array_column($cubos, 'placas'),
+            'buenas'    => array_column($cubos, 'buenas'),
+            'fallidas'  => array_column($cubos, 'fallidas'),
+        ];
     }
 
     /**
@@ -2723,6 +2792,136 @@ class Web extends BaseController
         }
 
         return view('piezas/bitacora_editar', $this->datosDeLaBitacora($placa));
+    }
+
+    // ---- Enviar placa por correo ------------------------------------------
+
+    public function placaEnviarForm(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $calc = (new PiezaConfigModel())->calculadoraTiempo();
+        $minutos = $placa['minutos_previstos'] ?? $placa['minutos_estimados'] ?? null;
+        if ($minutos === null && $placa['numero_capas']) {
+            $minutos = round($placa['numero_capas'] * $calc['minutosPorCapa'] + $calc['minutosPreparacion']);
+        }
+
+        $enlaces = $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll();
+        $enlace = '';
+        foreach ($enlaces as $e) {
+            if (str_contains($e['url'], 'drive.google')) {
+                $enlace = $e['url'];
+                break;
+            }
+        }
+
+        $ahora = time();
+        $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
+
+        return view('piezas/placa_enviar', [
+            'placa'     => $placa,
+            'imagenes'  => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            'destino'   => (string) env('PIEZAS_PLACA_EMAIL', ''),
+            'minutos'   => $minutos !== null ? (int) $minutos : null,
+            'enlace'    => $enlace ?: ($enlaces[0]['url'] ?? ''),
+            'fichero'   => $placa['nombre'] . '.goo',
+            'fecha'     => date('Y-m-d', $ponerEn),
+            'hora'      => date('H:i', $ponerEn),
+            'calc'      => $calc,
+        ]);
+    }
+
+    public function placaEnviar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $destino = trim((string) env('PIEZAS_PLACA_EMAIL', ''));
+        $config  = config('Email');
+        if ($destino === '' || $config->protocol !== 'smtp' || $config->SMTPUser === '') {
+            return redirect()->back()->withInput()
+                ->with('error', 'Falta configurar el correo en .env (PIEZAS_PLACA_EMAIL y email.SMTP*).');
+        }
+
+        $fecha   = (string) $this->request->getPost('fecha');
+        $hora    = (string) $this->request->getPost('hora');
+        $minutos = $this->aMinutos($this->request->getPost('duracion'));
+        $enlace  = $this->aUrl($this->request->getPost('enlace'));
+        $fichero = trim((string) $this->request->getPost('fichero'));
+        $ponerEn = strtotime($fecha . ' ' . $hora);
+
+        if (!$ponerEn || !preg_match('/^\d{1,2}:\d{2}$/', $hora) || !$minutos || $enlace === null) {
+            return redirect()->back()->withInput()->with('error', 'Faltan la fecha, la hora de ponerla, la duración o el enlace.');
+        }
+
+        $imagen = null;
+        $imagenId = (int) $this->request->getPost('imagen_id');
+        if ($imagenId) {
+            $imagen = $this->placaImagenModel->where('placa_id', $id)->find($imagenId);
+            if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
+                return redirect()->back()->withInput()->with('error', 'No se encuentra la imagen elegida.');
+            }
+        }
+
+        $config->mailType = 'html';
+        if ($config->fromEmail === '') {
+            $config->fromEmail = $config->SMTPUser;
+        }
+        $email = \Config\Services::email($config, false);
+        $email->setFrom($config->fromEmail, $config->fromName ?: 'Trackbitos');
+        $email->setTo($destino);
+        $email->setSubject('Placa #' . $id . ' — ponerla a las ' . date('H:i', $ponerEn));
+
+        $cid = null;
+        if ($imagen) {
+            $ruta = $this->almacen->absoluta($imagen['ruta_imagen']);
+            $email->attach($ruta, 'inline', 'placa-' . $id . '.' . pathinfo($ruta, PATHINFO_EXTENSION));
+            $cid = $email->setAttachmentCID($ruta);
+        }
+
+        $email->setMessage(view('piezas/email_placa', [
+            'id'       => $id,
+            'titulo'   => 'PLACA #' . $id . ' ' . $this->fechaLarga($ponerEn),
+            'duracion' => intdiv($minutos, 60) . ':' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'h',
+            'hora'     => date('H:i', $ponerEn),
+            'enlace'   => $enlace,
+            'fichero'  => $fichero,
+            'cid'      => $cid ?: null,
+        ]));
+
+        if (!$email->send(false)) {
+            log_message('error', '[Piezas enviar placa] ' . $email->printDebugger(['headers']));
+
+            return redirect()->back()->withInput()->with('error', 'No se pudo enviar el correo. Revisa la configuración SMTP (detalle en el log).');
+        }
+
+        $yaEsta = $this->placaEnlaceModel->where('placa_id', $id)->where('url', $enlace)->countAllResults() > 0;
+        if (!$yaEsta) {
+            $this->placaEnlaceModel->insert([
+                'placa_id' => $id,
+                'url'      => $enlace,
+                'titulo'   => mb_substr($fichero ?: 'Placa Chitubox', 0, 150),
+                'orden'    => $this->placaEnlaceModel->where('placa_id', $id)->countAllResults(),
+            ]);
+        }
+
+        $this->placaModel->update($id, ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino]);
+
+        return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+            ->with('success', 'Placa #' . $id . ' enviada a ' . $destino . '.');
+    }
+
+    private function fechaLarga(int $momento): string
+    {
+        $meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+            'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        return date('j', $momento) . ' ' . $meses[(int) date('n', $momento) - 1] . ' ' . date('Y', $momento);
     }
 
     /**

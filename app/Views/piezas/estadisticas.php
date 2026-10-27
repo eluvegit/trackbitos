@@ -26,6 +26,7 @@ $rankingsPeso = [
     .estad-pos { width: 2rem; flex-shrink: 0; }
     .min-w-0 { min-width: 0; }
     .estad-kpi .fs-4 { line-height: 1.1; }
+    .estad-grafico { position: relative; height: 240px; }
 </style>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
@@ -65,6 +66,30 @@ $rankingsPeso = [
         </div>
     <?php endforeach; ?>
 </div>
+
+<?php if (!empty($evolucion['etiquetas'])): ?>
+    <?php $porCubo = ['dia' => 'por día', 'semana' => 'por semana', 'mes' => 'por mes'][$evolucion['agrupado']]; ?>
+    <div class="row g-2 g-md-3 mb-3">
+        <?php foreach (['placas' => ['Placas impresas', 'bi-grid-3x3', 'text-info'], 'piezas' => ['Piezas impresas', 'bi-printer', 'text-success']] as $id => [$titulo, $icono, $color]): ?>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                            <div>
+                                <div class="text-muted small d-flex align-items-center gap-1">
+                                    <i class="bi <?= $icono ?> <?= $color ?>"></i> <?= $titulo ?> <?= $porCubo ?>
+                                </div>
+                                <div class="fs-4 fw-semibold" id="total-<?= $id ?>"></div>
+                            </div>
+                            <span class="badge rounded-pill" id="tendencia-<?= $id ?>"></span>
+                        </div>
+                        <div class="estad-grafico"><canvas id="grafico-<?= $id ?>"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
 
 <ul class="nav nav-pills estad-tabs mb-3" role="tablist">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#gastadas" type="button" role="tab"><i class="bi bi-box-arrow-right"></i> Más gastadas</button></li>
@@ -231,5 +256,102 @@ $rankingsPeso = [
     });
 })();
 </script>
+
+<?php if (!empty($evolucion['etiquetas'])): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var ev = <?= json_encode($evolucion) ?>;
+    var ventana = { dia: 7, semana: 4, mes: 3 }[ev.agrupado];
+    var piezas = ev.buenas.map(function (b, i) { return b + ev.fallidas[i]; });
+
+    var media = function (serie) {
+        return serie.map(function (_, i) {
+            var trozo = serie.slice(Math.max(0, i - ventana + 1), i + 1);
+            return Math.round(trozo.reduce(function (a, b) { return a + b; }, 0) / trozo.length * 10) / 10;
+        });
+    };
+    var suma = function (s) { return s.reduce(function (a, b) { return a + b; }, 0); };
+
+    var tendencia = function (id, serie) {
+        var badge = document.getElementById('tendencia-' + id);
+        document.getElementById('total-' + id).textContent = suma(serie).toLocaleString('es-ES');
+        var mitad = Math.floor(serie.length / 2);
+        if (mitad < 1) { badge.remove(); return; }
+        var antes = suma(serie.slice(0, mitad)) / mitad;
+        var ahora = suma(serie.slice(serie.length - mitad)) / mitad;
+        var pct = antes > 0 ? Math.round((ahora - antes) / antes * 100) : (ahora > 0 ? 100 : 0);
+        var estable = Math.abs(pct) < 10;
+        badge.className = 'badge rounded-pill ' + (estable ? 'text-bg-secondary' : pct > 0 ? 'text-bg-warning' : 'text-bg-info');
+        badge.innerHTML = '<i class="bi ' + (estable ? 'bi-arrow-right' : pct > 0 ? 'bi-graph-up-arrow' : 'bi-graph-down-arrow') + '"></i> '
+            + (estable ? 'Se mantiene' : (pct > 0 ? '+' : '') + pct + '%');
+        badge.title = 'Media de la segunda mitad del periodo frente a la primera';
+    };
+
+    Chart.defaults.color = 'rgba(255,255,255,.6)';
+    Chart.defaults.borderColor = 'rgba(255,255,255,.08)';
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+
+    var degradado = function (ctx, rgb) {
+        var g = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+        g.addColorStop(0, 'rgba(' + rgb + ',.9)');
+        g.addColorStop(1, 'rgba(' + rgb + ',.25)');
+        return g;
+    };
+
+    var opciones = function (apilado) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true } },
+                tooltip: { padding: 10, cornerRadius: 8 }
+            },
+            scales: {
+                x: { stacked: apilado, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
+                y: { stacked: apilado, beginAtZero: true, ticks: { precision: 0 } }
+            }
+        };
+    };
+
+    var lineaTendencia = function (serie) {
+        return {
+            type: 'line', label: 'Tendencia (media ' + ventana + ')', data: media(serie), stack: 'tendencia',
+            borderColor: '#ffc107', backgroundColor: '#ffc107', borderWidth: 2.5, tension: .4,
+            pointRadius: 0, pointHoverRadius: 4, order: 0
+        };
+    };
+    var barra = { borderRadius: 4, maxBarThickness: 28, order: 1 };
+
+    tendencia('placas', ev.placas);
+    new Chart(document.getElementById('grafico-placas'), {
+        type: 'bar',
+        data: {
+            labels: ev.etiquetas,
+            datasets: [
+                Object.assign({ label: 'Placas', data: ev.placas, backgroundColor: function (c) { return degradado(c, '13,202,240'); } }, barra),
+                lineaTendencia(ev.placas)
+            ]
+        },
+        options: opciones(false)
+    });
+
+    tendencia('piezas', piezas);
+    new Chart(document.getElementById('grafico-piezas'), {
+        type: 'bar',
+        data: {
+            labels: ev.etiquetas,
+            datasets: [
+                Object.assign({ label: 'Buenas', data: ev.buenas, stack: 'p', backgroundColor: function (c) { return degradado(c, '25,135,84'); } }, barra),
+                Object.assign({ label: 'Fallidas', data: ev.fallidas, stack: 'p', backgroundColor: function (c) { return degradado(c, '220,53,69'); } }, barra),
+                lineaTendencia(piezas)
+            ]
+        },
+        options: opciones(true)
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?= $this->endSection() ?>
