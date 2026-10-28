@@ -2939,7 +2939,7 @@ class Web extends BaseController
         $email = \Config\Services::email($config, false);
         $email->setFrom($config->fromEmail, ($config->fromName ?: 'IMPRESION') . ' ' . $impresora);
         $email->setTo($destino);
-        $email->setSubject('[' . $impresora . '] Placa #' . $id . ' — ponerla a las ' . date('H:i', $ponerEn));
+        $email->setSubject('[' . $impresora . '] Ponerla a las ' . date('H:i', $ponerEn) . ' — Placa #' . $id);
 
         $cid = null;
         if ($imagen) {
@@ -2948,16 +2948,9 @@ class Web extends BaseController
             $cid = $email->setAttachmentCID($ruta);
         }
 
-        $email->setMessage(view('piezas/email_placa', [
-            'id'        => $id,
-            'impresora' => $impresora,
-            'titulo'    => 'PLACA #' . $id . ' ' . $this->fechaLarga($ponerEn),
-            'duracion'  => intdiv($minutos, 60) . ':' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'h',
-            'hora'      => date('H:i', $ponerEn),
-            'enlace'    => $enlace,
-            'fichero'   => $nombre . '.goo',
-            'cid'       => $cid ?: null,
-        ]));
+        $email->setMessage(view('piezas/email_placa', $this->datosCorreo(
+            $id, $impresora, $ponerEn, $minutos, $enlace, $nombre, $cid ? 'cid:' . $cid : null
+        )));
 
         if (!$email->send(false)) {
             log_message('error', '[Piezas enviar placa] ' . $email->printDebugger(['headers']));
@@ -3033,12 +3026,58 @@ class Web extends BaseController
         );
     }
 
-    private function fechaLarga(int $momento): string
+    /** La vista previa de la pantalla de envío: la misma plantilla que se manda. */
+    public function placaPreviaCorreo(int $id)
     {
-        $meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
-            'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
 
-        return date('j', $momento) . ' ' . $meses[(int) date('n', $momento) - 1] . ' ' . date('Y', $momento);
+        $g = fn(string $k) => (string) $this->request->getGet($k);
+        $impresora = in_array($g('impresora'), PiezaPlacaModel::IMPRESORAS, true) ? $g('impresora') : null;
+        $ponerEn = strtotime($g('fecha') . ' ' . $g('hora')) ?: time();
+        $imagen = null;
+        if ((int) $g('imagen_id')) {
+            $fila = $this->placaImagenModel->where('placa_id', $id)->find((int) $g('imagen_id'));
+            $imagen = $fila ? imagen_pieza($fila, 'placa-imagen', 'v') : null;
+        }
+
+        return view('piezas/email_placa', $this->datosCorreo(
+            $id,
+            $impresora,
+            $ponerEn,
+            $this->aMinutos($g('duracion')),
+            $this->aUrl($g('enlace')) ?? '',
+            $this->nombreConImpresora($id, $g('nombre') ?: $placa['nombre'], $impresora),
+            $imagen
+        ));
+    }
+
+    private function datosCorreo(int $id, ?string $impresora, int $ponerEn, ?int $minutos, string $enlace, string $nombre, ?string $imagen): array
+    {
+        $dias  = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+            'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        $duracion = '—';
+        if ($minutos) {
+            $h = intdiv($minutos, 60);
+            $m = $minutos % 60;
+            $duracion = $h ? $h . ' h' . ($m ? ' ' . $m . ' min' : '') : $m . ' min';
+        }
+
+        return [
+            'id'        => $id,
+            'impresora' => $impresora,
+            'dia'       => $dias[(int) date('w', $ponerEn)] . ' ' . date('j', $ponerEn) . ' de ' . $meses[(int) date('n', $ponerEn) - 1],
+            'hora'      => date('H:i', $ponerEn),
+            'fin'       => $minutos ? date('H:i', $ponerEn + $minutos * 60) : null,
+            'duracion'  => $duracion,
+            'enlace'    => $enlace,
+            'fichero'   => $nombre . '.goo',
+            'imagen'    => $imagen,
+        ];
     }
 
     /**

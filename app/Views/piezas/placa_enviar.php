@@ -189,7 +189,7 @@ $bloqueada = $enviada && !old('desbloqueado');
 
     <div class="col-12 col-lg-7">
         <div class="small fw-semibold text-body-secondary mb-1">Vista previa</div>
-        <div class="border rounded p-3 bg-white text-dark" id="envPrevia"></div>
+        <iframe id="envPrevia" class="border rounded w-100" style="height: 1150px; background: #f3f4f6;" title="Vista previa del correo"></iframe>
     </div>
 </div>
 
@@ -233,8 +233,6 @@ $bloqueada = $enviada && !old('desbloqueado');
     var ENVIADAS = <?= json_encode($enviadas) ?>;
     var YA_ENVIADA = <?= json_encode($placa['enviada_en'] ? date('d/m H:i', strtotime($placa['enviada_en'])) . ($placa['impresora'] ? ' a ' . $placa['impresora'] : '') : null) ?>;
     var f = function (id) { return document.getElementById(id); };
-    var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
-        'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
     // Mismo criterio que Web::aMinutos(): "2:15", "2h 15", "135".
     function aMinutos(texto) {
@@ -251,11 +249,6 @@ $bloqueada = $enviada && !old('desbloqueado');
     function deHora(t) {
         var p = (t || '').split(':');
         return p.length === 2 ? parseInt(p[0], 10) * 60 + parseInt(p[1], 10) : null;
-    }
-    function esc(s) {
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
     }
 
     function actualizarFin() {
@@ -276,26 +269,24 @@ $bloqueada = $enviada && !old('desbloqueado');
         previa();
     }
 
+    // La plantilla real del correo, pedida al servidor (con un respiro para no
+    // lanzar una petición por tecla).
+    var previaTimer = null;
     function previa() {
-        var dur = aMinutos(f('envDuracion').value);
-        var fecha = f('envFecha').value ? new Date(f('envFecha').value + 'T12:00') : null;
-        var radio = form.querySelector('[name="imagen_id"]:checked');
-        var src = radio ? radio.getAttribute('data-src') : '';
-        var enlace = f('envEnlace').value.trim();
-        var fichero = f('envFichero').value.trim() ? f('envFichero').value.trim() + '.goo' : '';
-
-        var imp = impresora();
-        f('envPrevia').innerHTML =
-            (imp ? '<div class="mb-3 px-3 py-2 rounded text-white imp-' + imp + '" style="background: var(--c);">'
-                + '<span class="small text-uppercase" style="letter-spacing: 2px;">Impresora</span><br>'
-                + '<strong style="font-size: 40px; letter-spacing: 4px;">' + imp + '</strong></div>' : '')
-            + '<p class="fst-italic mb-3">PLACA #<?= $idPlaca ?> '
-                + (fecha ? fecha.getDate() + ' ' + MESES[fecha.getMonth()] + ' ' + fecha.getFullYear() : '') + '</p>'
-            + '<p class="mb-4">Placa que dura ' + (dur ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') + 'h' : '—')
-                + ' para ponerlo a las <strong style="font-size: 48px; vertical-align: middle;">' + esc(f('envHora').value || '—') + '</strong></p>'
-            + '<p class="mb-4"><a href="' + esc(enlace) + '" target="_blank" rel="noopener" style="color: #2e7d32;">' + esc(enlace || '(sin enlace)') + '</a></p>'
-            + (fichero ? '<p class="mb-3"><strong><em>' + esc(fichero) + '</em></strong></p>' : '')
-            + (src ? '<img src="' + esc(src) + '" alt="" style="max-width: 100%; height: auto; display: block;">' : '');
+        clearTimeout(previaTimer);
+        previaTimer = setTimeout(function () {
+            var radio = form.querySelector('[name="imagen_id"]:checked');
+            var q = new URLSearchParams({
+                impresora: impresora(),
+                fecha: f('envFecha').value,
+                hora: f('envHora').value,
+                duracion: f('envDuracion').value,
+                enlace: f('envEnlace').value,
+                nombre: f('envFichero').value,
+                imagen_id: radio ? radio.value : '0'
+            });
+            f('envPrevia').src = '<?= site_url('piezas/placa/' . $idPlaca . '/previa-correo') ?>?' + q.toString();
+        }, 300);
     }
 
     // Como la calculadora del índice: capas × min/capa de la referencia,
