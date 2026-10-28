@@ -2828,6 +2828,18 @@ class Web extends BaseController
             'fecha'     => date('Y-m-d', $ponerEn),
             'hora'      => date('H:i', $ponerEn),
             'calc'      => $calc,
+            'desfase'   => (new PiezaConfigModel())->desfaseImpresoras(),
+            'enviadas'  => array_map(static fn($p) => [
+                'id'        => (int) $p['id'],
+                'impresora' => $p['impresora'],
+                'fecha'     => substr($p['poner_en'], 0, 10),
+                'hora'      => substr($p['poner_en'], 11, 5),
+                'acaba'     => $p['acaba_en'] ? str_replace(' ', 'T', substr($p['acaba_en'], 0, 16)) : null,
+            ], $this->placaModel->select('id, impresora, poner_en, acaba_en')
+                ->where('id !=', $id)
+                ->where('impresora IS NOT NULL')
+                ->where('poner_en >=', date('Y-m-d', strtotime('-2 days')))
+                ->findAll()),
         ]);
     }
 
@@ -2851,9 +2863,27 @@ class Web extends BaseController
         $enlace  = $this->aUrl($this->request->getPost('enlace'));
         $fichero = trim((string) $this->request->getPost('fichero'));
         $ponerEn = strtotime($fecha . ' ' . $hora);
+        $impresora = (string) $this->request->getPost('impresora');
 
         if (!$ponerEn || !preg_match('/^\d{1,2}:\d{2}$/', $hora) || !$minutos || $enlace === null) {
             return redirect()->back()->withInput()->with('error', 'Faltan la fecha, la hora de ponerla, la duración o el enlace.');
+        }
+        if (!in_array($impresora, PiezaPlacaModel::IMPRESORAS, true)) {
+            return redirect()->back()->withInput()->with('error', 'Elige la impresora: OLD o NEW.');
+        }
+        $otra = $impresora === 'OLD' ? 'NEW' : 'OLD';
+        if (!preg_match('/\b' . $impresora . '\b/', $fichero) || preg_match('/\b' . $otra . '\b/', $fichero)) {
+            return redirect()->back()->withInput()->with('error', 'El nombre del fichero tiene que llevar ' . $impresora . ' (y no ' . $otra . ').');
+        }
+
+        if (!$this->request->getPost('confirmado')) {
+            $ocupada = $this->placaModel->where('id !=', $id)->where('impresora', $impresora)
+                ->where('DATE(poner_en)', date('Y-m-d', $ponerEn))->first();
+            if ($ocupada || $placa['enviada_en']) {
+                return redirect()->back()->withInput()->with('error', $ocupada
+                    ? 'Ese día ' . $impresora . ' ya tiene la placa #' . $ocupada['id'] . '. Mándala como ' . $otra . '.'
+                    : 'Esta placa ya se envió. Confírmalo en el aviso antes de mandarla otra vez.');
+            }
         }
 
         $imagen = null;
@@ -2870,9 +2900,9 @@ class Web extends BaseController
             $config->fromEmail = $config->SMTPUser;
         }
         $email = \Config\Services::email($config, false);
-        $email->setFrom($config->fromEmail, $config->fromName ?: 'Trackbitos');
+        $email->setFrom($config->fromEmail, ($config->fromName ?: 'IMPRESION') . ' ' . $impresora);
         $email->setTo($destino);
-        $email->setSubject('Placa #' . $id . ' — ponerla a las ' . date('H:i', $ponerEn));
+        $email->setSubject('[' . $impresora . '] Placa #' . $id . ' — ponerla a las ' . date('H:i', $ponerEn));
 
         $cid = null;
         if ($imagen) {
@@ -2882,7 +2912,8 @@ class Web extends BaseController
         }
 
         $email->setMessage(view('piezas/email_placa', [
-            'id'       => $id,
+            'id'        => $id,
+            'impresora' => $impresora,
             'titulo'   => 'PLACA #' . $id . ' ' . $this->fechaLarga($ponerEn),
             'duracion' => intdiv($minutos, 60) . ':' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'h',
             'hora'     => date('H:i', $ponerEn),
@@ -2907,7 +2938,13 @@ class Web extends BaseController
             ]);
         }
 
-        $datos = ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino];
+        $datos = [
+            'enviada_en' => date('Y-m-d H:i:s'),
+            'enviada_a'  => $destino,
+            'impresora'  => $impresora,
+            'poner_en'   => date('Y-m-d H:i:s', $ponerEn),
+            'acaba_en'   => date('Y-m-d H:i:s', $ponerEn + $minutos * 60),
+        ];
         $capas = (int) $this->request->getPost('numero_capas');
         if ($capas > 0 && !$placa['numero_capas']) {
             $datos['numero_capas'] = $capas;
@@ -2915,7 +2952,20 @@ class Web extends BaseController
         $this->placaModel->update($id, $datos);
 
         return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
-            ->with('success', 'Placa #' . $id . ' enviada a ' . $destino . '.');
+            ->with('success', 'Placa #' . $id . ' enviada para ' . $impresora . ' a ' . $destino . '.');
+    }
+
+    public function guardarDesfaseImpresoras()
+    {
+        return $this->ejecutar(
+            function () {
+                (new PiezaConfigModel())->guardarDesfaseImpresoras((int) $this->request->getPost('desfase'));
+
+                return true;
+            },
+            fn() => site_url('piezas/placas'),
+            fn() => 'Desfase guardado.'
+        );
     }
 
     private function fechaLarga(int $momento): string

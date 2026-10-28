@@ -986,6 +986,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
     $routes->GET('placa/(:num)/enviar', 'Web::placaEnviarForm/$1');
     $routes->POST('placa/(:num)/enviar', 'Web::placaEnviar/$1');
+    $routes->POST('desfase-impresoras', 'Web::guardarDesfaseImpresoras');
 
     // Añadir/quitar piezas sueltas de una bitácora ya guardada, sin rehacer
     // la placa entera: hasta ahora la única forma de corregir un olvido era

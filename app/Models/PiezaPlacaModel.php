@@ -40,7 +40,7 @@ class PiezaPlacaModel extends Model
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
         'origen_placa_id', 'es_reparto', 'descargada_en',
         'inventario_sincronizado_en',
-        'enviada_en', 'enviada_a',
+        'enviada_en', 'enviada_a', 'impresora', 'poner_en', 'acaba_en',
     ];
 
     protected $validationRules = [
@@ -59,6 +59,8 @@ class PiezaPlacaModel extends Model
         // centenas, pero una pieza alta a capa fina puede pasar de mil.
         'numero_capas' => 'permit_empty|is_natural_no_zero',
     ];
+
+    public const IMPRESORAS = ['OLD', 'NEW'];
 
     public const FUENTES_TIEMPO = [
         'minutos_estimados' => 'Programa',

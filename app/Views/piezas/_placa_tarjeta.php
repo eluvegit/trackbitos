@@ -46,6 +46,10 @@ $claseLomo = $resumen['veredicto']
                   // más pequeño, de apoyo para reconocer la placa a simple vista. ?>
             <div class="d-flex align-items-start">
                 <div class="fw-bold lh-1" style="font-size: 1.3rem;">#<?= $idPlaca ?></div>
+                <?php if (!empty($placa['impresora'])): ?>
+                    <span class="badge ms-2 text-white" style="background: <?= $placa['impresora'] === 'OLD' ? '#d97706' : '#2563eb' ?>; letter-spacing: 1px;"
+                        title="<?= $placa['poner_en'] ? 'Ponerla el ' . esc(date('d/m H:i', strtotime($placa['poner_en'])), 'attr') : '' ?>"><?= esc($placa['impresora']) ?></span>
+                <?php endif; ?>
                 <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>"
                     class="btn btn-sm <?= $placa['enviada_en'] ? 'btn-outline-success' : 'btn-outline-primary' ?> py-0 px-1 ms-auto"
                     title="<?= $placa['enviada_en'] ? 'Enviada el ' . esc(date('d/m H:i', strtotime($placa['enviada_en'])), 'attr') . ' — volver a enviar' : 'Enviar placa' ?>">

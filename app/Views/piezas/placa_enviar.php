@@ -6,7 +6,20 @@
 $idPlaca = (int) $placa['id'];
 $hm = static fn(?int $m) => $m === null ? '' : intdiv($m, 60) . ':' . str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT);
 $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
+$impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? ''));
 ?>
+
+<style>
+    :root { --imp-old: #d97706; --imp-new: #2563eb; }
+    .imp-boton { border: 2px solid var(--c); color: var(--c); font-weight: 700; letter-spacing: 3px; font-size: 1.4rem; padding: .5rem 0; }
+    .btn-check:checked + .imp-boton { background: var(--c); color: #fff; }
+    .imp-OLD { --c: var(--imp-old); }
+    .imp-NEW { --c: var(--imp-new); }
+    .imp-fichero { border-left: 4px solid var(--c, #adb5bd); }
+    #modalImpresora .imp-cabecera { background: var(--c); color: #fff; }
+    #modalImpresora .imp-grande { font-size: 4rem; font-weight: 800; letter-spacing: .5rem; line-height: 1; }
+    #modalImpresora .imp-dato { font-size: .8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--bs-secondary-color); }
+</style>
 
 <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">
     <i class="bi bi-envelope text-primary"></i>
@@ -38,9 +51,21 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
 
 <div class="row g-4">
     <div class="col-12 col-lg-5">
-        <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" id="formEnviarPlaca"
-            onsubmit="return confirm('¿Enviar la placa #<?= $idPlaca ?> a <?= esc($destino, 'js') ?>?');">
+        <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" id="formEnviarPlaca">
             <?= csrf_field() ?>
+            <input type="hidden" name="confirmado" value="">
+
+            <div class="small fw-semibold text-body-secondary mb-1">Impresora</div>
+            <div class="row g-2 mb-1">
+                <?php foreach (\App\Models\PiezaPlacaModel::IMPRESORAS as $imp): ?>
+                    <div class="col-6">
+                        <input type="radio" class="btn-check" name="impresora" value="<?= $imp ?>" id="imp<?= $imp ?>"
+                            autocomplete="off" <?= $impresoraElegida === $imp ? 'checked' : '' ?>>
+                        <label class="btn w-100 imp-boton imp-<?= $imp ?>" for="imp<?= $imp ?>"><?= $imp ?></label>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div id="envAvisoImpresora" class="small mb-3"></div>
 
             <label class="form-label small mb-1" for="envCapas">Número de capas</label>
             <input type="number" min="1" step="1" inputmode="numeric" name="numero_capas" id="envCapas"
@@ -70,17 +95,31 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
                         title="Cámbiala y se recalcula a qué hora ponerla">
                 </div>
             </div>
-            <div class="form-text mb-3" id="envAviso">
+            <div class="form-text mb-2" id="envAviso">
                 Cambia la hora de ponerla o la de acabar y la otra se recalcula.
+            </div>
+            <div class="alert alert-info py-1 px-2 small mb-2 d-none" id="envDesfaseNota"></div>
+            <div class="d-flex align-items-center gap-2 small mb-3 text-body-secondary">
+                <i class="bi bi-arrow-left-right"></i>
+                <label for="envDesfase" class="mb-0">Desfase entre impresoras</label>
+                <input type="number" min="0" step="5" id="envDesfase" class="form-control form-control-sm" style="width: 75px;"
+                    value="<?= (int) $desfase ?>">
+                <span>min</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="envGuardarDesfase">Guardar</button>
             </div>
 
             <label class="form-label small mb-1" for="envEnlace">Enlace de Drive</label>
             <input type="url" name="enlace" id="envEnlace" class="form-control form-control-sm mb-2" required
                 placeholder="https://drive.google.com/file/d/…" value="<?= esc(old('enlace', $enlace), 'attr') ?>">
 
-            <label class="form-label small mb-1" for="envFichero">Nombre del fichero</label>
-            <input type="text" name="fichero" id="envFichero" class="form-control form-control-sm mb-3" maxlength="200"
-                value="<?= esc(old('fichero', $fichero), 'attr') ?>">
+            <label class="form-label small mb-1" for="envFichero">Guarda el fichero en Chitubox con este nombre</label>
+            <div class="input-group input-group-sm mb-3">
+                <input type="text" name="fichero" id="envFichero" class="form-control fw-semibold imp-fichero" maxlength="200"
+                    value="<?= esc(old('fichero', $fichero), 'attr') ?>">
+                <button type="button" class="btn btn-outline-secondary" id="envCopiar" title="Copiar el nombre">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+            </div>
 
             <div class="small fw-semibold text-body-secondary mb-1">Imagen</div>
             <?php $elegida = (int) old('imagen_id', (string) $ultimaImagen); ?>
@@ -104,8 +143,8 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
 
             <div class="d-flex gap-2">
                 <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/editar') ?>" class="btn btn-sm btn-outline-secondary">Volver</a>
-                <button class="btn btn-sm btn-primary" <?= $destino === '' ? 'disabled' : '' ?>>
-                    <i class="bi bi-send"></i> Enviar a <?= esc($destino ?: '…') ?>
+                <button type="button" class="btn btn-sm btn-primary" id="envAbrirModal" <?= $destino === '' ? 'disabled' : '' ?>>
+                    <i class="bi bi-send"></i> Enviar placa…
                 </button>
             </div>
         </form>
@@ -117,9 +156,45 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
     </div>
 </div>
 
+<div class="modal fade" id="modalImpresora" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content overflow-hidden border-0 shadow">
+            <div class="imp-cabecera text-center py-4">
+                <div class="small text-uppercase" style="letter-spacing: 3px; opacity: .85;">Va a la impresora</div>
+                <div class="imp-grande" data-m="impresora"></div>
+            </div>
+            <div class="modal-body">
+                <div class="imp-dato">Fichero para el USB</div>
+                <div class="fw-semibold mb-3 text-break" data-m="fichero"></div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="imp-dato">Ponerla</div>
+                        <div class="fs-3 fw-bold lh-1" data-m="hora"></div>
+                        <div class="small text-muted" data-m="dia"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="imp-dato">Acaba</div>
+                        <div class="fs-3 fw-bold lh-1 text-muted" data-m="fin"></div>
+                        <div class="small text-muted" data-m="duracion"></div>
+                    </div>
+                </div>
+                <div class="small text-info-emphasis mb-2" data-m="desfase"></div>
+                <div data-m="avisos"></div>
+                <div class="small text-muted">Placa #<?= $idPlaca ?> · a <?= esc($destino) ?></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Revisar</button>
+                <button type="button" class="btn text-white px-4" style="background: var(--c);" data-m="enviar"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var form = document.getElementById('formEnviarPlaca');
+    var ENVIADAS = <?= json_encode($enviadas) ?>;
+    var YA_ENVIADA = <?= json_encode($placa['enviada_en'] ? date('d/m H:i', strtotime($placa['enviada_en'])) . ($placa['impresora'] ? ' a ' . $placa['impresora'] : '') : null) ?>;
     var f = function (id) { return document.getElementById(id); };
     var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
         'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -172,8 +247,12 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
         var enlace = f('envEnlace').value.trim();
         var fichero = f('envFichero').value.trim();
 
+        var imp = impresora();
         f('envPrevia').innerHTML =
-            '<p class="fst-italic mb-3">PLACA #<?= $idPlaca ?> '
+            (imp ? '<div class="mb-3 px-3 py-2 rounded text-white imp-' + imp + '" style="background: var(--c);">'
+                + '<span class="small text-uppercase" style="letter-spacing: 2px;">Impresora</span><br>'
+                + '<strong style="font-size: 40px; letter-spacing: 4px;">' + imp + '</strong></div>' : '')
+            + '<p class="fst-italic mb-3">PLACA #<?= $idPlaca ?> '
                 + (fecha ? fecha.getDate() + ' ' + MESES[fecha.getMonth()] + ' ' + fecha.getFullYear() : '') + '</p>'
             + '<p class="mb-4">Placa que dura ' + (dur ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') + 'h' : '—')
                 + ' para ponerlo a las <strong style="font-size: 48px; vertical-align: middle;">' + esc(f('envHora').value || '—') + '</strong></p>'
@@ -195,8 +274,59 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
                 + porCapa.toLocaleString('es-ES', { maximumFractionDigits: 4 }) + ' min/capa)'
             : '';
         if (t && !manual) f('envDuracion').value = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+        aplicarDesfase();
         actualizarFin();
     }
+
+    // ---- Desfase: la segunda placa del día acaba X min después que la otra --
+    var autoHora = <?= old('hora') ? 'false' : 'true' ?>;
+    function dosCifras(n) { return String(n).padStart(2, '0'); }
+    function aplicarDesfase() {
+        var nota = f('envDesfaseNota');
+        var imp = impresora(), dur = aMinutos(f('envDuracion').value);
+        var previas = imp ? ocupadas(f('envFecha').value).filter(function (p) { return p.impresora === otraDe(imp) && p.acaba; }) : [];
+        if (!previas.length || !dur) { nota.classList.add('d-none'); nota.innerHTML = ''; return; }
+
+        var ultima = previas.sort(function (a, b) { return a.acaba < b.acaba ? 1 : -1; })[0];
+        var desfase = parseInt(f('envDesfase').value, 10) || 0;
+        var acabaOtra = new Date(ultima.acaba);
+        var objetivo = new Date(acabaOtra.getTime() + desfase * 60000);
+        var hm = function (d) { return dosCifras(d.getHours()) + ':' + dosCifras(d.getMinutes()); };
+
+        if (autoHora) {
+            var poner = new Date(objetivo.getTime() - dur * 60000);
+            f('envFecha').value = poner.getFullYear() + '-' + dosCifras(poner.getMonth() + 1) + '-' + dosCifras(poner.getDate());
+            f('envHora').value = hm(poner);
+        }
+        nota.innerHTML = '<i class="bi bi-arrow-left-right"></i> ' + otraDe(imp) + ' #' + ultima.id + ' acaba a las <b>' + hm(acabaOtra)
+            + '</b>: esta, ' + desfase + ' min después → acaba a las <b>' + hm(objetivo) + '</b>'
+            + (autoHora ? '.' : ' <span class="text-muted">(has puesto la hora a mano)</span> '
+                + '<a href="#" id="envVolverDesfase">recalcular</a>');
+        nota.classList.remove('d-none');
+    }
+    f('envDesfaseNota').addEventListener('click', function (e) {
+        if (e.target.id !== 'envVolverDesfase') return;
+        e.preventDefault();
+        autoHora = true;
+        aplicarDesfase();
+        actualizarFin();
+        pintarImpresora();
+    });
+    f('envHora').addEventListener('input', function () { autoHora = false; aplicarDesfase(); });
+    f('envFin').addEventListener('change', function () { autoHora = false; aplicarDesfase(); });
+    f('envDesfase').addEventListener('input', function () { aplicarDesfase(); actualizarFin(); });
+    f('envGuardarDesfase').addEventListener('click', function () {
+        var boton = this, datos = new FormData();
+        datos.append('desfase', f('envDesfase').value);
+        var csrf = form.querySelector('input[name="<?= csrf_token() ?>"]');
+        if (csrf) datos.append(csrf.name, csrf.value);
+        fetch('<?= site_url('piezas/desfase-impresoras') ?>', {
+            method: 'POST', body: datos, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.json(); }).then(function (j) {
+            boton.textContent = j.ok ? 'Guardado' : 'Error';
+            setTimeout(function () { boton.textContent = 'Guardar'; }, 1500);
+        });
+    });
 
     f('envCapas').addEventListener('input', function () { manual = false; estimar(); });
     f('envDuracion').addEventListener('input', function () { manual = true; });
@@ -207,8 +337,120 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
     ['envFecha', 'envEnlace', 'envFichero'].forEach(function (id) { f(id).addEventListener('input', previa); });
     form.querySelectorAll('[name="imagen_id"]').forEach(function (r) { r.addEventListener('change', previa); });
 
+    // ---- Impresora OLD / NEW ----------------------------------------------
+    function impresora() {
+        var r = form.querySelector('[name="impresora"]:checked');
+        return r ? r.value : '';
+    }
+    function otraDe(imp) { return imp === 'OLD' ? 'NEW' : 'OLD'; }
+    function ocupadas(fecha) {
+        return ENVIADAS.filter(function (p) { return p.fecha === fecha; });
+    }
+    function avisos() {
+        var imp = impresora(), lista = [], dia = ocupadas(f('envFecha').value);
+        if (!imp) return lista;
+        var misma = dia.filter(function (p) { return p.impresora === imp; });
+        var otra = dia.filter(function (p) { return p.impresora === otraDe(imp); });
+        if (misma.length) {
+            lista.push(misma.map(function (p) { return '#' + p.id + ' (' + p.hora + ')'; }).join(', ')
+                + ' ya va a ' + imp + ' ese día.' + (otra.length ? ' Y ' + otraDe(imp) + ' también está ocupada.' : ' Mándala como <b>' + otraDe(imp) + '</b>.'));
+        }
+        if (YA_ENVIADA) lista.push('Esta placa ya se envió el ' + YA_ENVIADA + '. Si la mandas otra vez, se imprimirá dos veces.');
+        var fich = f('envFichero').value;
+        if (!new RegExp('\\b' + imp + '\\b').test(fich) || new RegExp('\\b' + otraDe(imp) + '\\b').test(fich)) {
+            lista.push('El nombre del fichero no lleva <b>' + imp + '</b>.');
+        }
+        return lista;
+    }
+    function porDefecto() {
+        if (impresora()) return;
+        var dia = ocupadas(f('envFecha').value).map(function (p) { return p.impresora; });
+        var libre = ['OLD', 'NEW'].filter(function (i) { return dia.indexOf(i) === -1; });
+        if (libre.length === 1) f('imp' + libre[0]).checked = true;
+    }
+    // El nombre del fichero lleva siempre la impresora justo después del "#nº".
+    function ficheroCon(imp) {
+        var fich = f('envFichero').value.trim();
+        if (/\b(OLD|NEW)\b/.test(fich)) return fich.replace(/\b(OLD|NEW)\b/, imp);
+        var m = fich.match(/^(#\d+)\s*(.*)$/);
+        return m ? m[1] + ' ' + imp + (m[2] ? ' ' + m[2] : '') : imp + ' ' + fich;
+    }
+    function pintarImpresora() {
+        var imp = impresora();
+        var campo = f('envFichero');
+        campo.classList.remove('imp-OLD', 'imp-NEW');
+        if (imp) campo.classList.add('imp-' + imp);
+        var caja = f('envAvisoImpresora'), lista = avisos().filter(function (a) { return a.indexOf('fichero') === -1; });
+        var dia = ocupadas(f('envFecha').value);
+        if (!imp) {
+            caja.className = 'small mb-3 text-danger';
+            caja.innerHTML = '<i class="bi bi-exclamation-circle"></i> Elige a qué impresora va.';
+        } else if (lista.length) {
+            caja.className = 'small mb-3 alert alert-warning py-1 px-2';
+            caja.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + lista.join('<br>');
+        } else {
+            caja.className = 'small mb-3 text-muted';
+            caja.innerHTML = dia.length
+                ? 'Ese día: ' + dia.map(function (p) { return p.impresora + ' #' + p.id + ' (' + p.hora + ')'; }).join(' · ')
+                : 'Ese día no hay otras placas mandadas.';
+        }
+        previa();
+    }
+
+    form.querySelectorAll('[name="impresora"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            f('envFichero').value = ficheroCon(r.value);
+            aplicarDesfase();
+            actualizarFin();
+            pintarImpresora();
+        });
+    });
+    f('envFecha').addEventListener('input', function () { aplicarDesfase(); actualizarFin(); pintarImpresora(); });
+    f('envFichero').addEventListener('input', pintarImpresora);
+
+    f('envCopiar').addEventListener('click', function () {
+        navigator.clipboard.writeText(f('envFichero').value).then(function () {
+            f('envCopiar').innerHTML = '<i class="bi bi-check2"></i>';
+            setTimeout(function () { f('envCopiar').innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1200);
+        });
+    });
+
+    // ---- Modal de confirmación ----------------------------------------------
+    var modalEl = f('modalImpresora');
+    var m = function (k) { return modalEl.querySelector('[data-m="' + k + '"]'); };
+    f('envAbrirModal').addEventListener('click', function () {
+        if (!impresora()) { pintarImpresora(); return; }
+        if (!form.reportValidity()) return;
+
+        var imp = impresora(), lista = avisos();
+        var fecha = new Date(f('envFecha').value + 'T12:00');
+        modalEl.querySelector('.modal-content').className = 'modal-content overflow-hidden border-0 shadow imp-' + imp;
+        m('impresora').textContent = imp;
+        m('fichero').textContent = f('envFichero').value;
+        m('hora').textContent = f('envHora').value;
+        m('dia').textContent = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+        m('fin').textContent = f('envFin').value || '—';
+        m('duracion').textContent = f('envDuracion').value ? 'dura ' + f('envDuracion').value + ' h' : '';
+        m('desfase').innerHTML = f('envDesfaseNota').classList.contains('d-none') ? '' : f('envDesfaseNota').innerHTML.replace(/<a [^>]*>.*?<\/a>/, '');
+        m('avisos').innerHTML = lista.length
+            ? '<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill"></i> ' + lista.join('<br>') + '</div>'
+            : '<div class="alert alert-success py-2 small mb-3"><i class="bi bi-check-circle-fill"></i> Todo cuadra: ' + imp + ' está libre ese día.</div>';
+        m('enviar').innerHTML = '<i class="bi bi-send-fill"></i> ' + (lista.length ? 'Enviar igualmente a ' : 'Enviar a ') + imp;
+        m('enviar').disabled = false;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    });
+    m('enviar').addEventListener('click', function () {
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando…';
+        form.querySelector('[name="confirmado"]').value = '1';
+        form.submit();
+    });
+
     <?php if (old('duracion')): ?>manual = true;<?php endif; ?>
+    porDefecto();
+    if (impresora() && !/\b(OLD|NEW)\b/.test(f('envFichero').value)) f('envFichero').value = ficheroCon(impresora());
     estimar();
+    pintarImpresora();
 })();
 </script>
 

@@ -25,6 +25,7 @@ class PiezaConfigModel extends Model
         'calc_minutos_preparacion',
         'precio_resina_eur_litro',
         'densidad_resina_g_ml',
+        'desfase_impresoras',
         'actualizado_en',
     ];
 
@@ -45,6 +46,8 @@ class PiezaConfigModel extends Model
     private const CALC_CAPAS_REF_DEFECTO   = 600;
     private const CALC_MINUTOS_REF_DEFECTO  = 92.0;
     private const CALC_MINUTOS_PREP_DEFECTO = 45.0;
+
+    private const DESFASE_IMPRESORAS_DEFECTO = 45;
 
     public function tareaJournalId(): ?int
     {
@@ -136,6 +139,28 @@ class PiezaConfigModel extends Model
             'calc_minutos_preparacion' => max(0, $minutosPreparacion),
             'actualizado_en'           => date('Y-m-d H:i:s'),
         ];
+
+        if ($this->find(self::FILA)) {
+            $this->update(self::FILA, $datos);
+        } else {
+            $this->insert(['id' => self::FILA] + $datos);
+        }
+    }
+
+    /** Minutos entre el final de una impresora y el de la otra el mismo día. */
+    public function desfaseImpresoras(): int
+    {
+        $fila = $this->find(self::FILA) ?: [];
+
+        return isset($fila['desfase_impresoras']) && $fila['desfase_impresoras'] !== null
+            ? (int) $fila['desfase_impresoras']
+            : self::DESFASE_IMPRESORAS_DEFECTO;
+    }
+
+    /** Mismo motivo que enlazarTarea(): save() no crea la fila si aún no existe. */
+    public function guardarDesfaseImpresoras(int $minutos): void
+    {
+        $datos = ['desfase_impresoras' => max(0, $minutos), 'actualizado_en' => date('Y-m-d H:i:s')];
 
         if ($this->find(self::FILA)) {
             $this->update(self::FILA, $datos);

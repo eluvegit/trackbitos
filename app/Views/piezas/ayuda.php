@@ -402,7 +402,10 @@
             <p><b>Enviar placa</b> (<i class="bi bi-send"></i> en la tarjeta o arriba en la bitácora) manda el correo con el enlace de Drive del <code>.goo</code>, la captura de Chitubox (foto de la plataforma) y <b>a qué hora ponerla</b>.</p>
             <ul>
                 <li>La duración sale de la placa (máquina, laminador o capas). Cambia la hora de ponerla o la de acabar y la otra se ajusta.</li>
-                <li>Pide confirmación antes de enviar; la tarjeta queda en verde (<i class="bi bi-send-check"></i>) cuando ya se envió.</li>
+                <li>Elige <b>OLD</b> o <b>NEW</b>: el nombre del fichero se ajusta solo (<code>#44 OLD …goo</code>). Guárdalo así en Chitubox para que el USB vaya a la máquina buena.</li>
+                <li>Si ese día ya hay una placa para esa impresora, o la placa ya se envió, te avisa y te propone la otra.</li>
+                <li><b>Desfase</b>: si la otra impresora ya tiene placa ese día, esta se calcula para acabar los minutos del desfase después (45 por defecto, se cambia y guarda en la misma pantalla).</li>
+                <li>Antes de enviar sale un aviso con la impresora en grande; la tarjeta queda en verde (<i class="bi bi-send-check"></i>) y con su etiqueta OLD/NEW.</li>
             </ul>
         </article>
 
