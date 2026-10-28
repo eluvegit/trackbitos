@@ -37,6 +37,9 @@
     <span class="text-muted fw-normal">#<?= $idPlaca ?></span>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Editar</strong>
+    <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="btn btn-sm btn-outline-primary ms-auto">
+        <i class="bi bi-send"></i> Enviar placa<?= $placa['enviada_en'] ? ' <i class="bi bi-check2" title="Ya enviada"></i>' : '' ?>
+    </a>
 </h5>
 
 <?php if (session('error')): ?>
@@ -122,6 +125,44 @@
 </div>
 
 <?= $this->include('piezas/_bitacora_js') ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // OLD/NEW se guarda al pulsar, y el nombre de la placa vuelve con la
+    // impresora ya puesta para que guardar la bitácora no la pise.
+    var grupo = document.querySelector('[data-impresora-placa]');
+    if (!grupo) return;
+    var form = grupo.closest('form');
+    var estado = document.querySelector('[data-impresora-estado]');
+    var candado = form.querySelector('[data-candado]');
+    var desbloqueado = form.querySelector('[data-desbloqueado]');
+    if (candado) candado.addEventListener('click', function () {
+        if (!confirm('Esta placa ya se envió. ¿Desbloquear la impresora y el nombre?\n\nSi los cambias, avisa a quien la vaya a poner.')) return;
+        desbloqueado.value = '1';
+        grupo.querySelectorAll('[name="impresora"]').forEach(function (r) { r.disabled = false; });
+        form.querySelector('[name="nombre"]').readOnly = false;
+        candado.innerHTML = '<i class="bi bi-unlock-fill text-warning"></i> Desbloqueada';
+        candado.disabled = true;
+    });
+    grupo.querySelectorAll('[name="impresora"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var datos = new FormData();
+            datos.append('impresora', radio.value);
+            datos.append('nombre', form.querySelector('[name="nombre"]').value);
+            if (desbloqueado) datos.append('desbloqueado', desbloqueado.value);
+            var csrf = form.querySelector('input[name="<?= csrf_token() ?>"]');
+            if (csrf) datos.append(csrf.name, csrf.value);
+            estado.textContent = 'Guardando…';
+            fetch(grupo.getAttribute('data-url'), {
+                method: 'POST', body: datos, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); }).then(function (j) {
+                if (j.ok) form.querySelector('[name="nombre"]').value = j.nombre;
+                estado.textContent = j.mensaje || '';
+            }).catch(function () { estado.textContent = 'No se pudo guardar.'; });
+        });
+    });
+});
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

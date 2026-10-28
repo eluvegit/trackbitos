@@ -44,7 +44,18 @@ $claseLomo = $resumen['veredicto']
             <?php // El id en grande es el dato que se usa fuera de la web (con
                   // otra herramienta, por su id); el nombre se queda debajo,
                   // más pequeño, de apoyo para reconocer la placa a simple vista. ?>
-            <div class="fw-bold lh-1" style="font-size: 1.3rem;">#<?= $idPlaca ?></div>
+            <div class="d-flex align-items-start">
+                <div class="fw-bold lh-1" style="font-size: 1.3rem;">#<?= $idPlaca ?></div>
+                <?php if (!empty($placa['impresora'])): ?>
+                    <span class="badge ms-2 text-white" style="background: <?= $placa['impresora'] === 'OLD' ? '#d97706' : '#2563eb' ?>; letter-spacing: 1px;"
+                        title="<?= $placa['poner_en'] ? 'Ponerla el ' . esc(date('d/m H:i', strtotime($placa['poner_en'])), 'attr') : '' ?>"><?= esc($placa['impresora']) ?></span>
+                <?php endif; ?>
+                <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>"
+                    class="btn btn-sm <?= $placa['enviada_en'] ? 'btn-outline-success' : 'btn-outline-primary' ?> py-0 px-1 ms-auto"
+                    title="<?= $placa['enviada_en'] ? 'Enviada el ' . esc(date('d/m H:i', strtotime($placa['enviada_en'])), 'attr') . ' — volver a enviar' : 'Enviar placa' ?>">
+                    <i class="bi <?= $placa['enviada_en'] ? 'bi-send-check' : 'bi-send' ?>"></i>
+                </a>
+            </div>
             <div class="small text-muted text-truncate" data-nombre-tarjeta
                 title="<?= esc($placa['nombre'], 'attr') ?>"><?= esc($placa['nombre']) ?></div>
             <div class="d-flex align-items-center gap-2 text-muted" style="font-size: .75rem;">

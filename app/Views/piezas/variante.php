@@ -628,8 +628,10 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 ?>
                 <div class="cabecera-buena d-flex flex-wrap flex-md-nowrap align-items-stretch gap-3">
                     <?php if ($validada && $imagenValidada): ?>
-                        <img src="<?= imagen_pieza($imagenValidada, 'render') ?>" class="cabecera-img rounded-3 flex-shrink-0"
-                            alt="<?= esc($etiqueta($validada), 'attr') ?>">
+                        <a href="<?= imagen_pieza($imagenValidada, 'render', 'v') ?>" target="_blank" data-foto-grande class="flex-shrink-0">
+                            <img src="<?= imagen_pieza($imagenValidada, 'render') ?>" class="cabecera-img rounded-3"
+                                alt="<?= esc($etiqueta($validada), 'attr') ?>">
+                        </a>
                     <?php elseif ($validada): ?>
                         <div class="cabecera-img rounded-3 flex-shrink-0 d-flex align-items-center justify-content-center text-body-tertiary">
                             <i class="bi bi-image fs-1"></i>
@@ -672,10 +674,12 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 </div>
                 <style>
                     .cabecera-buena .cabecera-img { width: 140px; height: 140px; object-fit: cover; background: var(--bs-tertiary-bg); }
+                    .cabecera-buena > a[data-foto-grande] { display: block; cursor: zoom-in; }
                     .cabecera-buena .cabecera-stock { min-width: 110px; transition: transform .15s; }
                     .cabecera-buena .cabecera-stock:hover { transform: translateY(-2px); }
                     @media (max-width: 767.98px) {
                         .cabecera-buena .cabecera-img { width: 100%; height: 200px; }
+                        .cabecera-buena > a[data-foto-grande] { width: 100%; }
                         .cabecera-buena .cabecera-stock { width: 100%; flex-direction: row !important; gap: .75rem; align-items: baseline; }
                     }
                 </style>
@@ -822,7 +826,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                         <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                             <?php foreach ($v['renders'] as $r): ?>
                                 <div class="position-relative" style="width: 56px;">
-                                    <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank"
+                                    <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank" data-foto-grande
                                         title="<?= esc($r['notas'] ?? '') ?>">
                                         <img src="<?= imagen_pieza($r, 'render') ?>"
                                             class="rounded border" style="width: 56px; height: 56px; object-fit: cover;"
@@ -1610,7 +1614,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                     <div class="d-flex flex-wrap gap-2">
                         <?php foreach ($referencias as $r): ?>
                             <div class="position-relative" style="width: 72px;">
-                                <a href="<?= imagen_pieza($r, 'referencia', 'v') ?>" target="_blank"
+                                <a href="<?= imagen_pieza($r, 'referencia', 'v') ?>" target="_blank" data-foto-grande
                                     title="<?= esc($r['notas'] ?? '') ?>">
                                     <img src="<?= imagen_pieza($r, 'referencia') ?>"
                                         class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
@@ -1715,7 +1719,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                     <div class="d-flex flex-wrap gap-2">
                         <?php foreach ($rendersSueltos as $r): ?>
                             <div class="position-relative" style="width: 72px;">
-                                <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank"
+                                <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank" data-foto-grande
                                     title="<?= esc($r['notas'] ?? '') ?>">
                                     <img src="<?= imagen_pieza($r, 'render') ?>"
                                         class="rounded border" style="width: 72px; height: 72px; object-fit: cover;"
@@ -1957,7 +1961,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                                                 <div class="d-flex flex-wrap gap-2 mb-2">
                                                     <?php foreach ($v['imagenes'] as $img): ?>
                                                         <div class="position-relative" style="width: 88px;">
-                                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank"
+                                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank" data-foto-grande
                                                                 title="<?= esc($img['notas'] ?? '') ?>">
                                                                 <img src="<?= imagen_pieza($img, 'placa-version-imagen') ?>"
                                                                     class="rounded border" style="width: 88px; height: 88px; object-fit: cover;"
@@ -2036,7 +2040,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                                     </div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <?php foreach ($porResultado[$clave] as $img): ?>
-                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank"
+                                            <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank" data-foto-grande
                                                 title="<?= esc($img['notas'] ?? '') ?>">
                                                 <img src="<?= imagen_pieza($img, 'placa-version-imagen') ?>"
                                                     class="rounded border" style="width: 64px; height: 64px; object-fit: cover;"
@@ -2270,6 +2274,31 @@ trackbitos cerrar</code></pre>
         if (boton.disabled) return;
         e.preventDefault();
         boton.click();
+    });
+})();
+</script>
+
+<div class="modal fade" id="modalFotoGrande" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content bg-black border-0" data-bs-dismiss="modal" style="cursor: zoom-out;">
+            <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" style="z-index: 1;" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            <div class="d-flex align-items-center justify-content-center h-100 p-2">
+                <img data-foto-grande-img alt="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var modal = document.getElementById('modalFotoGrande');
+    var img = modal.querySelector('[data-foto-grande-img]');
+    modal.addEventListener('hidden.bs.modal', function () { img.removeAttribute('src'); });
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest('a[data-foto-grande]');
+        if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        e.preventDefault();
+        img.src = a.href;
+        bootstrap.Modal.getOrCreateInstance(modal).show();
     });
 })();
 </script>

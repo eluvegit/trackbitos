@@ -397,6 +397,19 @@
             </ul>
         </article>
 
+        <article class="pa-ficha" id="como-enviar" data-claves="enviar correo email mail drive chitubox goo hora poner avisar">
+            <h3><i class="bi bi-send"></i> Enviar una placa por correo <a class="pa-ancla" href="#como-enviar">#</a></h3>
+            <p><b>Enviar placa</b> (<i class="bi bi-send"></i> en la tarjeta o arriba en la bitácora) manda el correo con el enlace de Drive del <code>.goo</code>, la captura de Chitubox (foto de la plataforma) y <b>a qué hora ponerla</b>.</p>
+            <ul>
+                <li>La duración sale de la placa (máquina, laminador o capas). Cambia la hora de ponerla o la de acabar y la otra se ajusta.</li>
+                <li>Elige <b>OLD</b> o <b>NEW</b> (aquí o ya antes en la bitácora): el nombre de la placa pasa a <code>#44 OLD …</code>. Pulsa <b>Copiar</b> y pégalo como nombre del fichero en Chitubox: así placa, fichero y USB coinciden.</li>
+                <li><b>Guardar</b> apunta todo sin enviar (por ejemplo, mientras subes el fichero a Drive); al volver está relleno.</li>
+                <li>Si ese día ya hay una placa para esa impresora, o la placa ya se envió, te avisa y te propone la otra.</li>
+                <li><b>Desfase</b>: si la otra impresora ya tiene placa ese día, esta se calcula para acabar los minutos del desfase después (45 por defecto, se cambia y guarda en la misma pantalla).</li>
+                <li>Antes de enviar sale un aviso con la impresora en grande; la tarjeta queda en verde (<i class="bi bi-send-check"></i>) y con su etiqueta OLD/NEW.</li>
+            </ul>
+        </article>
+
         <article class="pa-ficha" id="como-repartir" data-claves="repartir no cabe placa dividir deshacer reparto plataforma medidas">
             <h3><i class="bi bi-layout-split"></i> No cabe en la plataforma <a class="pa-ancla" href="#como-repartir">#</a></h3>
             <p><b>Repartir en otra placa</b> mueve unas cuantas piezas a una placa nueva enlazada a esta. <b>Deshacer reparto</b> las vuelve a juntar.</p>

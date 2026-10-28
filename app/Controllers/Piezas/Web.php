@@ -599,46 +599,228 @@ class Web extends BaseController
         usort($pesanVariante, $porPeso);
         usort($pesanFamilia, $porPeso);
 
+        $periodos = ['30' => '30 días', '90' => '90 días', '365' => '1 año', 'todo' => 'Todo'];
+        $periodo  = (string) $this->request->getGet('periodo');
+        if (!isset($periodos[$periodo])) {
+            $periodo = 'todo';
+        }
+        $desde = $periodo === 'todo' ? null : date('Y-m-d 00:00:00', strtotime('-' . $periodo . ' days'));
+
+        $impresas = $this->rankingUnidadesImpresas($desde);
+        $gastadas = $this->rankingGastadas($desde);
+
         return view('piezas/estadisticas', [
-            'total'         => $this->almacen->tamanoTotal(),
-            'totalPapelera' => $this->almacen->tamanoPapelera(),
-            'pesanVariante' => array_slice($pesanVariante, 0, 20),
-            'pesanFamilia'  => array_slice($pesanFamilia, 0, 20),
-            'topImpresas'   => $this->rankingUnidadesImpresas(),
+            'total'          => $this->almacen->tamanoTotal(),
+            'totalPapelera'  => $this->almacen->tamanoPapelera(),
+            'pesanVariante'  => array_slice($pesanVariante, 0, 20),
+            'pesanFamilia'   => array_slice($pesanFamilia, 0, 20),
+            'topImpresas'    => $impresas['filas'],
+            'totalImpresas'  => $impresas['total'],
+            'topFallos'      => $impresas['fallos'],
+            'totalFallidas'  => $impresas['fallidas'],
+            'topGastadas'    => $gastadas['filas'],
+            'totalGastadas'  => $gastadas['gastadas'],
+            'stockTotal'     => $gastadas['stock'],
+            'periodos'       => $periodos,
+            'periodo'        => $periodo,
+            'evolucion'      => $this->evolucionImpresiones($desde),
         ]);
+    }
+
+    private function evolucionImpresiones(?string $desde): array
+    {
+        $q = $this->placaModel->select('id, impresa_en')->where('impresa_en IS NOT NULL');
+        if ($desde !== null) {
+            $q->where('impresa_en >=', $desde);
+        }
+        $fechaPlaca = array_column($q->orderBy('impresa_en')->findAll(), 'impresa_en', 'id');
+        if ($fechaPlaca === []) {
+            return ['agrupado' => null, 'etiquetas' => [], 'placas' => [], 'buenas' => [], 'fallidas' => []];
+        }
+
+        $inicio = strtotime($desde ?? reset($fechaPlaca));
+        $dias   = (time() - $inicio) / 86400;
+        $agrupado = $dias <= 45 ? 'dia' : ($dias <= 400 ? 'semana' : 'mes');
+        $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+        $clave = static function (int $t) use ($agrupado): string {
+            return match ($agrupado) {
+                'dia'    => date('Y-m-d', $t),
+                'semana' => date('Y-m-d', strtotime('monday this week', $t)),
+                'mes'    => date('Y-m-01', $t),
+            };
+        };
+
+        $cubos = [];
+        $t = strtotime($clave($inicio));
+        $paso = ['dia' => '+1 day', 'semana' => '+1 week', 'mes' => '+1 month'][$agrupado];
+        while ($t <= time()) {
+            $k = date('Y-m-d', $t);
+            $cubos[$k] = ['placas' => 0, 'buenas' => 0, 'fallidas' => 0];
+            $t = strtotime($paso, $t);
+        }
+
+        $cuboDePlaca = [];
+        foreach ($fechaPlaca as $id => $fecha) {
+            $k = $clave(strtotime($fecha));
+            $cubos[$k] ??= ['placas' => 0, 'buenas' => 0, 'fallidas' => 0];
+            $cubos[$k]['placas']++;
+            $cuboDePlaca[$id] = $k;
+        }
+
+        foreach ($this->placaVersionModel->whereIn('placa_id', array_keys($fechaPlaca))->findAll() as $fila) {
+            $k = $cuboDePlaca[$fila['placa_id']];
+            $unidades = max(1, (int) $fila['cantidad']);
+            $fallidas = min($unidades, (int) $fila['fallidas']);
+            $cubos[$k]['buenas']   += $unidades - $fallidas;
+            $cubos[$k]['fallidas'] += $fallidas;
+        }
+        ksort($cubos);
+
+        $etiquetas = [];
+        foreach (array_keys($cubos) as $k) {
+            $t = strtotime($k);
+            $etiquetas[] = match ($agrupado) {
+                'dia', 'semana' => date('j', $t) . ' ' . $meses[(int) date('n', $t) - 1],
+                'mes'           => $meses[(int) date('n', $t) - 1] . ' ' . date('y', $t),
+            };
+        }
+
+        return [
+            'agrupado'  => $agrupado,
+            'etiquetas' => $etiquetas,
+            'placas'    => array_column($cubos, 'placas'),
+            'buenas'    => array_column($cubos, 'buenas'),
+            'fallidas'  => array_column($cubos, 'fallidas'),
+        ];
+    }
+
+    /**
+     * Nombre visible de cada variante cuya pieza no está en la papelera. El
+     * nombre de la variante solo se añade si distingue algo (misma regla que
+     * la galería y el índice).
+     *
+     * @param list<int> $varianteIds
+     * @return array<int,string>
+     */
+    private function nombresDeVariantes(array $varianteIds): array
+    {
+        if ($varianteIds === []) {
+            return [];
+        }
+        $familias = array_column($this->familiaModel->where('borrado_en', null)->findAll(), 'nombre', 'id');
+
+        $vivasPorFamilia = [];
+        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
+            $vivasPorFamilia[(int) $v['familia_id']] = ($vivasPorFamilia[(int) $v['familia_id']] ?? 0) + 1;
+        }
+
+        $nombres = [];
+        foreach ($this->varianteModel->whereIn('id', $varianteIds)->findAll() as $v) {
+            $familiaId = (int) $v['familia_id'];
+            if (!isset($familias[$familiaId])) {
+                continue;
+            }
+            $mostrar = $v['nombre'] !== PiezaService::VARIANTE_BASE || ($vivasPorFamilia[$familiaId] ?? 0) > 1;
+            $nombres[(int) $v['id']] = $familias[$familiaId] . ($mostrar ? ' · ' . $v['nombre'] : '');
+        }
+
+        return $nombres;
+    }
+
+    /**
+     * Lo que se gasta: bajas de existencias (delta < 0) por variante, frente
+     * a lo que entró en el mismo periodo (impresiones servibles + altas a
+     * mano) y el stock que queda hoy. Top 20 por unidades gastadas.
+     *
+     * @return array{filas: list<array>, gastadas: int, stock: int}
+     */
+    private function rankingGastadas(?string $desde): array
+    {
+        $movimientos = new \App\Models\PiezaStockMovimientoModel();
+        $stock = $movimientos->stockPorVariante();
+
+        $q = $movimientos->select('variante_id, delta, creado_en');
+        if ($desde !== null) {
+            $q->where('creado_en >=', $desde);
+        }
+
+        $acum = [];
+        foreach ($q->findAll() as $m) {
+            $id = (int) $m['variante_id'];
+            $acum[$id] ??= ['gastadas' => 0, 'entradas' => 0, 'ultima' => null];
+            if ((int) $m['delta'] < 0) {
+                $acum[$id]['gastadas'] -= (int) $m['delta'];
+                if ($acum[$id]['ultima'] === null || $m['creado_en'] > $acum[$id]['ultima']) {
+                    $acum[$id]['ultima'] = $m['creado_en'];
+                }
+            } else {
+                $acum[$id]['entradas'] += (int) $m['delta'];
+            }
+        }
+        $acum = array_filter($acum, static fn($a) => $a['gastadas'] > 0);
+        $nombres = $this->nombresDeVariantes(array_keys($acum));
+
+        $filas = [];
+        $totalGastadas = 0;
+        foreach ($acum as $id => $datos) {
+            if (!isset($nombres[$id])) {
+                continue;
+            }
+            $totalGastadas += $datos['gastadas'];
+            $filas[] = [
+                'nombre'   => $nombres[$id],
+                'url'      => site_url('piezas/existencias/' . $id),
+                'gastadas' => $datos['gastadas'],
+                'entradas' => $datos['entradas'],
+                'stock'    => $stock[$id] ?? 0,
+                'ultima'   => $datos['ultima'],
+            ];
+        }
+        usort(
+            $filas,
+            static fn($a, $b) => ($b['gastadas'] <=> $a['gastadas'])
+                ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
+        );
+
+        return [
+            'filas'    => array_slice($filas, 0, 20),
+            'gastadas' => $totalGastadas,
+            'stock'    => array_sum(array_map(static fn($n) => max(0, $n), $stock)),
+        ];
     }
 
     /**
      * Ranking de variantes por copias físicas impresas: la suma de la
      * `cantidad` de cada versión que ha ido en una placa ya marcada como
-     * impresa (`piezas_placas.impresa_en`), agrupada por variante — cada
-     * acabado es una tirada distinta. No mira el estado de la versión
-     * —cuenta lo que se mandó a la impresora de verdad, no lo que se juzgó
-     * después—. Una placa nacida de un reparto lleva sus propias filas (al
-     * dividir se mueven, no se duplican), así que sumar todas las placas
-     * impresas no cuenta dos veces la misma copia. Top 20.
+     * impresa (`piezas_placas.impresa_en`), agrupada por variante. Cuenta lo
+     * que se mandó a la impresora, no lo que se juzgó después. Una placa de
+     * reparto lleva sus propias filas (se mueven, no se duplican). Top 20.
      *
-     * @return list<array{nombre: string, url: string, unidades: int, placas: int, ultima: ?string}>
+     * También devuelve los fallos: las `fallidas` de esas mismas filas,
+     * ordenadas por unidades fallidas y luego por tasa.
+     *
+     * @return array{filas: list<array>, total: int, fallos: list<array>, fallidas: int}
      */
-    private function rankingUnidadesImpresas(): array
+    private function rankingUnidadesImpresas(?string $desde): array
     {
-        $fechaPlaca = array_column(
-            $this->placaModel->where('impresa_en IS NOT NULL')->findAll(),
-            'impresa_en',
-            'id'
-        );
+        $vacio = ['filas' => [], 'total' => 0, 'fallos' => [], 'fallidas' => 0];
+        $q = $this->placaModel->where('impresa_en IS NOT NULL');
+        if ($desde !== null) {
+            $q->where('impresa_en >=', $desde);
+        }
+        $fechaPlaca = array_column($q->findAll(), 'impresa_en', 'id');
         if ($fechaPlaca === []) {
-            return [];
+            return $vacio;
         }
 
         $filasVersion = $this->placaVersionModel
             ->whereIn('placa_id', array_keys($fechaPlaca))
             ->findAll();
         if ($filasVersion === []) {
-            return [];
+            return $vacio;
         }
 
-        // version_id -> variante_id -> variante (viva o no) y familia (solo vivas).
         $varianteDeVersion = array_column(
             $this->versionModel
                 ->whereIn('id', array_values(array_unique(array_column($filasVersion, 'version_id'))))
@@ -646,38 +828,26 @@ class Web extends BaseController
             'variante_id',
             'id'
         );
-        $variantes = array_column(
-            $this->varianteModel
-                ->whereIn('id', array_values(array_unique($varianteDeVersion)) ?: [0])
-                ->findAll(),
-            null,
-            'id'
-        );
-        $familias = array_column(
-            $this->familiaModel->where('borrado_en', null)->findAll(),
-            null,
-            'id'
-        );
-
-        // Cuántas variantes vivas tiene cada familia: el nombre de la
-        // variante solo se enseña si distingue algo (misma regla que la
-        // galería y el índice — con una sola "base" no dice nada).
-        $vivasPorFamilia = [];
-        foreach ($this->varianteModel->where('borrado_en', null)->findAll() as $v) {
-            $vivasPorFamilia[(int) $v['familia_id']] = ($vivasPorFamilia[(int) $v['familia_id']] ?? 0) + 1;
-        }
+        $nombres = $this->nombresDeVariantes(array_values(array_unique(array_map('intval', $varianteDeVersion))));
 
         $acum = [];
         foreach ($filasVersion as $fila) {
-            $varianteId = $varianteDeVersion[$fila['version_id']] ?? null;
-            $variante   = $varianteId !== null ? ($variantes[$varianteId] ?? null) : null;
+            $varianteId = (int) ($varianteDeVersion[$fila['version_id']] ?? 0);
             // Versión huérfana o pieza en la papelera: fuera del ranking.
-            if ($variante === null || !isset($familias[$variante['familia_id']])) {
+            if (!isset($nombres[$varianteId])) {
                 continue;
             }
 
-            $acum[$varianteId] ??= ['unidades' => 0, 'placas' => [], 'ultima' => null];
+            $acum[$varianteId] ??= ['unidades' => 0, 'fallidas' => 0, 'placas' => [], 'placasFallo' => [], 'ultima' => null, 'ultimoFallo' => null];
             $acum[$varianteId]['unidades'] += max(1, (int) $fila['cantidad']);
+            if ((int) $fila['fallidas'] > 0) {
+                $acum[$varianteId]['fallidas'] += (int) $fila['fallidas'];
+                $acum[$varianteId]['placasFallo'][(int) $fila['placa_id']] = true;
+                $fechaFallo = $fechaPlaca[$fila['placa_id']] ?? null;
+                if ($fechaFallo !== null && $fechaFallo > (string) $acum[$varianteId]['ultimoFallo']) {
+                    $acum[$varianteId]['ultimoFallo'] = $fechaFallo;
+                }
+            }
             $acum[$varianteId]['placas'][(int) $fila['placa_id']] = true;
 
             $fecha = $fechaPlaca[$fila['placa_id']] ?? null;
@@ -687,13 +857,21 @@ class Web extends BaseController
         }
 
         $ranking = [];
+        $fallos  = [];
         foreach ($acum as $varianteId => $datos) {
-            $variante  = $variantes[$varianteId];
-            $familiaId = (int) $variante['familia_id'];
-            $mostrar   = $variante['nombre'] !== \App\Services\PiezaService::VARIANTE_BASE
-                || ($vivasPorFamilia[$familiaId] ?? 0) > 1;
+            if ($datos['fallidas'] > 0) {
+                $fallos[] = [
+                    'nombre'   => $nombres[$varianteId],
+                    'url'      => site_url('piezas/variante/' . $varianteId),
+                    'fallidas' => $datos['fallidas'],
+                    'unidades' => $datos['unidades'],
+                    'tasa'     => (int) round($datos['fallidas'] / $datos['unidades'] * 100),
+                    'placas'   => count($datos['placasFallo']),
+                    'ultima'   => $datos['ultimoFallo'],
+                ];
+            }
             $ranking[] = [
-                'nombre'   => $familias[$familiaId]['nombre'] . ($mostrar ? ' · ' . $variante['nombre'] : ''),
+                'nombre'   => $nombres[$varianteId],
                 'url'      => site_url('piezas/variante/' . $varianteId),
                 'unidades' => $datos['unidades'],
                 'placas'   => count($datos['placas']),
@@ -706,7 +884,14 @@ class Web extends BaseController
                 ?: strcmp((string) $b['ultima'], (string) $a['ultima'])
         );
 
-        return array_slice($ranking, 0, 20);
+        usort($fallos, static fn($a, $b) => ($b['fallidas'] <=> $a['fallidas']) ?: ($b['tasa'] <=> $a['tasa']));
+
+        return [
+            'filas'    => array_slice($ranking, 0, 20),
+            'total'    => array_sum(array_column($ranking, 'unidades')),
+            'fallos'   => array_slice($fallos, 0, 20),
+            'fallidas' => array_sum(array_column($fallos, 'fallidas')),
+        ];
     }
 
     /**
@@ -2612,6 +2797,292 @@ class Web extends BaseController
         return view('piezas/bitacora_editar', $this->datosDeLaBitacora($placa));
     }
 
+    // ---- Enviar placa por correo ------------------------------------------
+
+    public function placaEnviarForm(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $calc = (new PiezaConfigModel())->calculadoraTiempo();
+
+        // Lo guardado con "Guardar" manda sobre lo calculado.
+        if ($placa['poner_en']) {
+            $ponerEn = strtotime($placa['poner_en']);
+            $minutos = $placa['acaba_en'] ? intdiv(strtotime($placa['acaba_en']) - $ponerEn, 60) : null;
+        } else {
+            $ahora = time();
+            $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
+            $minutos = $placa['numero_capas'] ? (int) round($placa['numero_capas'] * $calc['minutosPorCapa']) : null;
+        }
+
+        $enlaces = $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll();
+        $enlace = '';
+        foreach ($enlaces as $e) {
+            if (str_contains($e['url'], 'drive.google')) {
+                $enlace = $e['url'];
+                break;
+            }
+        }
+
+        return view('piezas/placa_enviar', [
+            'placa'     => $placa,
+            'imagenes'  => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
+            'destino'   => (string) env('PIEZAS_PLACA_EMAIL', ''),
+            'minutos'   => $minutos,
+            'enlace'    => $enlace ?: ($enlaces[0]['url'] ?? ''),
+            'fecha'     => date('Y-m-d', $ponerEn),
+            'hora'      => date('H:i', $ponerEn),
+            'guardada'  => $placa['poner_en'] !== null,
+            'calc'      => $calc,
+            'desfase'   => (new PiezaConfigModel())->desfaseImpresoras(),
+            'enviadas'  => array_map(static fn($p) => [
+                'id'        => (int) $p['id'],
+                'impresora' => $p['impresora'],
+                'fecha'     => substr($p['poner_en'], 0, 10),
+                'hora'      => substr($p['poner_en'], 11, 5),
+                'acaba'     => $p['acaba_en'] ? str_replace(' ', 'T', substr($p['acaba_en'], 0, 16)) : null,
+                'enviada'   => $p['enviada_en'] !== null,
+            ], $this->placaModel->select('id, impresora, poner_en, acaba_en, enviada_en')
+                ->where('id !=', $id)
+                ->where('impresora IS NOT NULL')
+                ->where('poner_en >=', date('Y-m-d', strtotime('-2 days')))
+                ->findAll()),
+        ]);
+    }
+
+    /**
+     * "Guardar" apunta lo que haya (sin exigir enlace) para volver luego;
+     * "Enviar" exige todo y además manda el correo. Los dos dejan el nombre
+     * de la placa con la impresora detrás del "#nº", que es el nombre del
+     * fichero en Chitubox.
+     */
+    public function placaEnviar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        if ($placa['enviada_en'] && !$this->request->getPost('desbloqueado')) {
+            return redirect()->back()->with('error', 'La placa ya está enviada: abre el candado para editarla.');
+        }
+
+        $enviar    = $this->request->getPost('accion') !== 'guardar';
+        $fecha     = (string) $this->request->getPost('fecha');
+        $hora      = (string) $this->request->getPost('hora');
+        $minutos   = $this->aMinutos($this->request->getPost('duracion'));
+        $enlace    = $this->aUrl($this->request->getPost('enlace'));
+        $impresora = (string) $this->request->getPost('impresora');
+        $capas     = (int) $this->request->getPost('numero_capas');
+        $ponerEn   = preg_match('/^\d{1,2}:\d{2}$/', $hora) ? strtotime($fecha . ' ' . $hora) : false;
+        if (!in_array($impresora, PiezaPlacaModel::IMPRESORAS, true)) {
+            $impresora = null;
+        }
+
+        $nombre = $this->nombreConImpresora($id, (string) ($this->request->getPost('nombre') ?: $placa['nombre']), $impresora);
+
+        $datos = ['nombre' => $nombre, 'impresora' => $impresora];
+        if ($ponerEn) {
+            $datos['poner_en'] = date('Y-m-d H:i:s', $ponerEn);
+            $datos['acaba_en'] = $minutos ? date('Y-m-d H:i:s', $ponerEn + $minutos * 60) : null;
+        }
+        if ($capas > 0) {
+            $datos['numero_capas'] = $capas;
+        }
+
+        if (!$enviar) {
+            $this->placaModel->update($id, $datos);
+            if ($enlace !== null) {
+                $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
+            }
+
+            return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+                ->with('success', 'Guardado sin enviar. Nombre de la placa: "' . $nombre . '".');
+        }
+
+        $destino = trim((string) env('PIEZAS_PLACA_EMAIL', ''));
+        $config  = config('Email');
+        if ($destino === '' || $config->protocol !== 'smtp' || $config->SMTPUser === '') {
+            return redirect()->back()->withInput()
+                ->with('error', 'Falta configurar el correo en .env (PIEZAS_PLACA_EMAIL y email.SMTP*).');
+        }
+        if (!$ponerEn || !$minutos || $enlace === null) {
+            return redirect()->back()->withInput()->with('error', 'Faltan la fecha, la hora de ponerla, la duración o el enlace.');
+        }
+        if ($impresora === null) {
+            return redirect()->back()->withInput()->with('error', 'Elige la impresora: OLD o NEW.');
+        }
+
+        if (!$this->request->getPost('confirmado')) {
+            $ocupada = $this->placaModel->where('id !=', $id)->where('impresora', $impresora)
+                ->where('DATE(poner_en)', date('Y-m-d', $ponerEn))->first();
+            if ($ocupada || $placa['enviada_en']) {
+                return redirect()->back()->withInput()->with('error', $ocupada
+                    ? 'Ese día ' . $impresora . ' ya tiene la placa #' . $ocupada['id'] . '. Mándala como ' . ($impresora === 'OLD' ? 'NEW' : 'OLD') . '.'
+                    : 'Esta placa ya se envió. Confírmalo en el aviso antes de mandarla otra vez.');
+            }
+        }
+
+        $imagen = null;
+        $imagenId = (int) $this->request->getPost('imagen_id');
+        if ($imagenId) {
+            $imagen = $this->placaImagenModel->where('placa_id', $id)->find($imagenId);
+            if (!$imagen || !$this->almacen->existe($imagen['ruta_imagen'])) {
+                return redirect()->back()->withInput()->with('error', 'No se encuentra la imagen elegida.');
+            }
+        }
+
+        $config->mailType = 'html';
+        if ($config->fromEmail === '') {
+            $config->fromEmail = $config->SMTPUser;
+        }
+        $email = \Config\Services::email($config, false);
+        $email->setFrom($config->fromEmail, ($config->fromName ?: 'IMPRESION') . ' ' . $impresora);
+        $email->setTo($destino);
+        $email->setSubject('[' . $impresora . '] Ponerla a las ' . date('H:i', $ponerEn) . ' — Placa #' . $id);
+
+        $cid = null;
+        if ($imagen) {
+            $ruta = $this->almacen->absoluta($imagen['ruta_imagen']);
+            $email->attach($ruta, 'inline', 'placa-' . $id . '.' . pathinfo($ruta, PATHINFO_EXTENSION));
+            $cid = $email->setAttachmentCID($ruta);
+        }
+
+        $email->setMessage(view('piezas/email_placa', $this->datosCorreo(
+            $id, $impresora, $ponerEn, $minutos, $enlace, $nombre, $cid ? 'cid:' . $cid : null
+        )));
+
+        if (!$email->send(false)) {
+            log_message('error', '[Piezas enviar placa] ' . $email->printDebugger(['headers']));
+
+            return redirect()->back()->withInput()->with('error', 'No se pudo enviar el correo. Revisa la configuración SMTP (detalle en el log).');
+        }
+
+        $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
+        $this->placaModel->update($id, $datos + ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino]);
+
+        return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+            ->with('success', 'Placa #' . $id . ' enviada para ' . $impresora . ' a ' . $destino . '.');
+    }
+
+    /** Desde la bitácora: elegir OLD/NEW al momento, sin guardar el resto del formulario. */
+    public function placaImpresora(int $id)
+    {
+        return $this->ejecutar(
+            function () use ($id) {
+                $placa = $this->placaModel->find($id);
+                if (!$placa) {
+                    throw new RuntimeException('Esa placa ya no existe.');
+                }
+                if ($placa['enviada_en'] && !$this->request->getPost('desbloqueado')) {
+                    throw new RuntimeException('La placa ya está enviada: abre el candado para cambiarla.');
+                }
+                $impresora = (string) $this->request->getPost('impresora');
+                $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
+                $nombre = $this->nombreConImpresora($id, (string) ($this->request->getPost('nombre') ?: $placa['nombre']), $impresora);
+                $this->placaModel->update($id, ['impresora' => $impresora, 'nombre' => $nombre]);
+
+                return ['nombre' => $nombre, 'impresora' => $impresora];
+            },
+            fn() => site_url('piezas/placa/' . $id . '/bitacora/editar'),
+            fn($r) => $r['impresora'] ? 'Asignada a ' . $r['impresora'] . '.' : 'Sin impresora.'
+        );
+    }
+
+    /** "#44 OLD Pareja…": la impresora justo detrás del número, una sola vez. */
+    private function nombreConImpresora(int $id, string $nombre, ?string $impresora): string
+    {
+        $nombre = preg_replace('/\.goo$/i', '', trim($nombre));
+        $nombre = trim(preg_replace('/^#\d+\s*/', '', $nombre));
+        $nombre = trim(preg_replace('/\s*\b(OLD|NEW)\b\s*/', ' ', $nombre));
+
+        return $this->nombreDePlaca($id, trim(($impresora ?? '') . ' ' . $nombre));
+    }
+
+    private function guardarEnlaceDePlaca(int $id, string $url, string $titulo): void
+    {
+        if ($this->placaEnlaceModel->where('placa_id', $id)->where('url', $url)->countAllResults() > 0) {
+            return;
+        }
+
+        $this->placaEnlaceModel->insert([
+            'placa_id' => $id,
+            'url'      => $url,
+            'titulo'   => mb_substr($titulo . '.goo', 0, 150),
+            'orden'    => $this->placaEnlaceModel->where('placa_id', $id)->countAllResults(),
+        ]);
+    }
+
+    public function guardarDesfaseImpresoras()
+    {
+        return $this->ejecutar(
+            function () {
+                (new PiezaConfigModel())->guardarDesfaseImpresoras((int) $this->request->getPost('desfase'));
+
+                return true;
+            },
+            fn() => site_url('piezas/placas'),
+            fn() => 'Desfase guardado.'
+        );
+    }
+
+    /** La vista previa de la pantalla de envío: la misma plantilla que se manda. */
+    public function placaPreviaCorreo(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $g = fn(string $k) => (string) $this->request->getGet($k);
+        $impresora = in_array($g('impresora'), PiezaPlacaModel::IMPRESORAS, true) ? $g('impresora') : null;
+        $ponerEn = strtotime($g('fecha') . ' ' . $g('hora')) ?: time();
+        $imagen = null;
+        if ((int) $g('imagen_id')) {
+            $fila = $this->placaImagenModel->where('placa_id', $id)->find((int) $g('imagen_id'));
+            $imagen = $fila ? imagen_pieza($fila, 'placa-imagen', 'v') : null;
+        }
+
+        return view('piezas/email_placa', $this->datosCorreo(
+            $id,
+            $impresora,
+            $ponerEn,
+            $this->aMinutos($g('duracion')),
+            $this->aUrl($g('enlace')) ?? '',
+            $this->nombreConImpresora($id, $g('nombre') ?: $placa['nombre'], $impresora),
+            $imagen
+        ));
+    }
+
+    private function datosCorreo(int $id, ?string $impresora, int $ponerEn, ?int $minutos, string $enlace, string $nombre, ?string $imagen): array
+    {
+        $dias  = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+            'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        $duracion = '—';
+        if ($minutos) {
+            $h = intdiv($minutos, 60);
+            $m = $minutos % 60;
+            $duracion = $h ? $h . ' h' . ($m ? ' ' . $m . ' min' : '') : $m . ' min';
+        }
+
+        return [
+            'id'        => $id,
+            'impresora' => $impresora,
+            'dia'       => $dias[(int) date('w', $ponerEn)] . ' ' . date('j', $ponerEn) . ' de ' . $meses[(int) date('n', $ponerEn) - 1],
+            'hora'      => date('H:i', $ponerEn),
+            'fin'       => $minutos ? date('H:i', $ponerEn + $minutos * 60) : null,
+            'duracion'  => $duracion,
+            'enlace'    => $enlace,
+            'fichero'   => $nombre . '.goo',
+            'imagen'    => $imagen,
+        ];
+    }
+
     /**
      * En qué punto está el cuaderno de una placa, para poder verlo desde
      * fuera sin abrirla: si tiene algo apuntado, cuántas preguntas siguen sin
@@ -2796,9 +3267,17 @@ class Web extends BaseController
         // logísticamente casi nunca se llega a pesar el tanque, y cuando
         // hace falta contarlo ahora va como texto suelto en notas.
         $numeroCapas = trim((string) $this->request->getPost('numero_capas'));
+        $impresora = $tieneCampo('impresora') ? (string) $this->request->getPost('impresora') : (string) $placa['impresora'];
+        $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
+        // Enviada = nombre e impresora bloqueados, salvo que se abra el candado.
+        $bloqueada = $placa['enviada_en'] && !$this->request->getPost('desbloqueado');
+        if ($bloqueada) {
+            $impresora = $placa['impresora'];
+        }
 
         $datos = [
-            'nombre'       => $this->nombreDePlaca($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre']),
+            'nombre'       => $bloqueada ? $placa['nombre'] : $this->nombreConImpresora($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'], $impresora),
+            'impresora'    => $impresora,
             'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
             'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
             'numero_capas' => $numeroCapas !== '' ? (int) $numeroCapas : null,
