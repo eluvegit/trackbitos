@@ -134,11 +134,22 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!grupo) return;
     var form = grupo.closest('form');
     var estado = document.querySelector('[data-impresora-estado]');
+    var candado = form.querySelector('[data-candado]');
+    var desbloqueado = form.querySelector('[data-desbloqueado]');
+    if (candado) candado.addEventListener('click', function () {
+        if (!confirm('Esta placa ya se envió. ¿Desbloquear la impresora y el nombre?\n\nSi los cambias, avisa a quien la vaya a poner.')) return;
+        desbloqueado.value = '1';
+        grupo.querySelectorAll('[name="impresora"]').forEach(function (r) { r.disabled = false; });
+        form.querySelector('[name="nombre"]').readOnly = false;
+        candado.innerHTML = '<i class="bi bi-unlock-fill text-warning"></i> Desbloqueada';
+        candado.disabled = true;
+    });
     grupo.querySelectorAll('[name="impresora"]').forEach(function (radio) {
         radio.addEventListener('change', function () {
             var datos = new FormData();
             datos.append('impresora', radio.value);
             datos.append('nombre', form.querySelector('[name="nombre"]').value);
+            if (desbloqueado) datos.append('desbloqueado', desbloqueado.value);
             var csrf = form.querySelector('input[name="<?= csrf_token() ?>"]');
             if (csrf) datos.append(csrf.name, csrf.value);
             estado.textContent = 'Guardando…';

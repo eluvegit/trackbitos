@@ -2863,6 +2863,10 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
+        if ($placa['enviada_en'] && !$this->request->getPost('desbloqueado')) {
+            return redirect()->back()->with('error', 'La placa ya está enviada: abre el candado para editarla.');
+        }
+
         $enviar    = $this->request->getPost('accion') !== 'guardar';
         $fecha     = (string) $this->request->getPost('fecha');
         $hora      = (string) $this->request->getPost('hora');
@@ -2976,6 +2980,9 @@ class Web extends BaseController
                 $placa = $this->placaModel->find($id);
                 if (!$placa) {
                     throw new RuntimeException('Esa placa ya no existe.');
+                }
+                if ($placa['enviada_en'] && !$this->request->getPost('desbloqueado')) {
+                    throw new RuntimeException('La placa ya está enviada: abre el candado para cambiarla.');
                 }
                 $impresora = (string) $this->request->getPost('impresora');
                 $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
@@ -3220,9 +3227,14 @@ class Web extends BaseController
         $numeroCapas = trim((string) $this->request->getPost('numero_capas'));
         $impresora = $tieneCampo('impresora') ? (string) $this->request->getPost('impresora') : (string) $placa['impresora'];
         $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
+        // Enviada = nombre e impresora bloqueados, salvo que se abra el candado.
+        $bloqueada = $placa['enviada_en'] && !$this->request->getPost('desbloqueado');
+        if ($bloqueada) {
+            $impresora = $placa['impresora'];
+        }
 
         $datos = [
-            'nombre'       => $this->nombreConImpresora($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'], $impresora),
+            'nombre'       => $bloqueada ? $placa['nombre'] : $this->nombreConImpresora($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'], $impresora),
             'impresora'    => $impresora,
             'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
             'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),

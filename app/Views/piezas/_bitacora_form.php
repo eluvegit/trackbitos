@@ -110,13 +110,21 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
             </div>
             <div class="row g-3">
                 <div class="col-12">
-                    <label class="form-label small mb-1">Impresora</label>
                     <?php $impActual = (string) ($placa['impresora'] ?? ''); ?>
+                    <?php $bloqueada = (bool) $placa['enviada_en']; ?>
+                    <label class="form-label small mb-1">Impresora</label>
+                    <?php if ($bloqueada): ?>
+                        <input type="hidden" name="desbloqueado" value="" data-desbloqueado>
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-decoration-none small" data-candado
+                            title="Enviada el <?= esc(date('d/m H:i', strtotime($placa['enviada_en'])), 'attr') ?>: impresora y nombre bloqueados">
+                            <i class="bi bi-lock-fill text-success"></i> Enviada · desbloquear
+                        </button>
+                    <?php endif; ?>
                     <div class="btn-group btn-group-sm" role="group" data-impresora-placa
                         data-url="<?= site_url('piezas/placa/' . $idPlaca . '/impresora') ?>">
                         <?php foreach (['OLD' => '#d97706', 'NEW' => '#2563eb', '' => '#6c757d'] as $imp => $color): ?>
                             <input type="radio" class="btn-check" name="impresora" value="<?= $imp ?>" id="imp-<?= $idPlaca ?>-<?= $imp ?: 'no' ?>"
-                                autocomplete="off" <?= $impActual === $imp ? 'checked' : '' ?>>
+                                autocomplete="off" <?= $impActual === $imp ? 'checked' : '' ?> <?= $bloqueada ? 'disabled' : '' ?>>
                             <label class="btn btn-outline-secondary fw-bold px-3" for="imp-<?= $idPlaca ?>-<?= $imp ?: 'no' ?>"
                                 style="--bs-btn-active-bg: <?= $color ?>; --bs-btn-active-border-color: <?= $color ?>; letter-spacing: 1px;">
                                 <?= $imp ?: 'Sin asignar' ?>
@@ -127,8 +135,14 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small mb-1">Nombre de la placa</label>
-                    <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
-                        value="<?= esc(old('nombre', $placa['nombre']), 'attr') ?>" required>
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"
+                            value="<?= esc(old('nombre', $placa['nombre']), 'attr') ?>" required <?= $bloqueada ? 'readonly' : '' ?>>
+                        <button type="button" class="btn btn-outline-secondary" title="Copiar para pegarlo como nombre del fichero"
+                            onclick="var b = this; navigator.clipboard.writeText(b.previousElementSibling.value).then(function () { b.innerHTML = '<i class=&quot;bi bi-check2&quot;></i>'; setTimeout(function () { b.innerHTML = '<i class=&quot;bi bi-clipboard&quot;></i> Copiar'; }, 1200); });">
+                            <i class="bi bi-clipboard"></i> Copiar
+                        </button>
+                    </div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small mb-1">Exposición</label>

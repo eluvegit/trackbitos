@@ -7,6 +7,8 @@ $idPlaca = (int) $placa['id'];
 $hm = static fn(?int $m) => $m === null ? '' : intdiv($m, 60) . ':' . str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT);
 $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
 $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? ''));
+$enviada = (bool) $placa['enviada_en'];
+$bloqueada = $enviada && !old('desbloqueado');
 ?>
 
 <style>
@@ -37,10 +39,32 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
 <?php endif; ?>
 <?php if (session('success')): ?>
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
-<?php elseif ($placa['enviada_en']): ?>
-    <div class="alert alert-info py-2 small">
-        <i class="bi bi-check2-circle"></i> Ya se envió el <?= esc(date('d/m/Y H:i', strtotime($placa['enviada_en']))) ?>
-        a <?= esc($placa['enviada_a']) ?>.
+<?php endif; ?>
+<?php if ($enviada): ?>
+    <div class="alert alert-light border d-flex align-items-start gap-3 py-2">
+        <i class="bi bi-lock-fill fs-4 text-success" id="envCandadoIcono"></i>
+        <div class="small flex-grow-1">
+            <div>
+                <b>Enviada</b> el <?= esc(date('d/m/Y H:i', strtotime($placa['enviada_en']))) ?> a <?= esc($placa['enviada_a']) ?>
+                <?php if ($placa['impresora']): ?>
+                    <span class="badge text-white ms-1" style="background: var(--imp-<?= strtolower($placa['impresora']) ?>);"><?= esc($placa['impresora']) ?></span>
+                <?php endif; ?>
+            </div>
+            <?php if ($placa['poner_en']): ?>
+                <div>Ponerla el <b><?= esc(date('d/m H:i', strtotime($placa['poner_en']))) ?></b>
+                    <?= $placa['acaba_en'] ? '· acaba a las <b>' . esc(date('H:i', strtotime($placa['acaba_en']))) . '</b>' : '' ?></div>
+            <?php endif; ?>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <code class="text-body"><?= esc($placa['nombre']) ?></code>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                    onclick="var b = this; navigator.clipboard.writeText(<?= esc(json_encode($placa['nombre']), 'attr') ?>).then(function () { b.textContent = 'Copiado'; setTimeout(function () { b.innerHTML = '<i class=&quot;bi bi-clipboard&quot;></i> Copiar'; }, 1200); });">
+                    <i class="bi bi-clipboard"></i> Copiar
+                </button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="envDesbloquear" <?= $bloqueada ? '' : 'disabled' ?>>
+            <i class="bi <?= $bloqueada ? 'bi-lock' : 'bi-unlock' ?>"></i> <?= $bloqueada ? 'Desbloquear' : 'Desbloqueada' ?>
+        </button>
     </div>
 <?php elseif ($guardada): ?>
     <div class="alert alert-secondary py-2 small">
@@ -60,6 +84,8 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
             <?= csrf_field() ?>
             <input type="hidden" name="confirmado" value="">
             <input type="hidden" name="accion" value="enviar">
+            <input type="hidden" name="desbloqueado" value="<?= $enviada && !$bloqueada ? '1' : '' ?>">
+            <fieldset id="envBloque" <?= $bloqueada ? 'disabled' : '' ?>>
 
             <div class="small fw-semibold text-body-secondary mb-1">Impresora</div>
             <div class="row g-2 mb-1">
@@ -157,6 +183,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
                     <i class="bi bi-send"></i> Enviar placa…
                 </button>
             </div>
+            </fieldset>
         </form>
     </div>
 
@@ -450,6 +477,16 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         form.querySelector('[name="confirmado"]').value = '1';
         form.submit();
     });
+    var desbloquear = f('envDesbloquear');
+    if (desbloquear) desbloquear.addEventListener('click', function () {
+        if (!confirm('Esta placa ya se envió. ¿Desbloquear para editarla?\n\nSi cambias la impresora o la hora, avisa a quien la vaya a poner.')) return;
+        f('envBloque').disabled = false;
+        form.querySelector('[name="desbloqueado"]').value = '1';
+        f('envCandadoIcono').className = 'bi bi-unlock-fill fs-4 text-warning';
+        this.innerHTML = '<i class="bi bi-unlock"></i> Desbloqueada';
+        this.disabled = true;
+    });
+
     f('envGuardar').addEventListener('click', function () {
         this.disabled = true;
         form.querySelector('[name="accion"]').value = 'guardar';
