@@ -5,9 +5,6 @@
 <?php
 $idPlaca = (int) $placa['id'];
 $hm = static fn(?int $m) => $m === null ? '' : intdiv($m, 60) . ':' . str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT);
-$origenDuracion = $placa['minutos_previstos'] !== null ? 'tiempo de la máquina'
-    : ($placa['minutos_estimados'] !== null ? 'tiempo del laminador'
-    : ($placa['numero_capas'] ? 'estimado por capas (impresión + preparación)' : null));
 $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
 ?>
 
@@ -45,6 +42,12 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
             onsubmit="return confirm('¿Enviar la placa #<?= $idPlaca ?> a <?= esc($destino, 'js') ?>?');">
             <?= csrf_field() ?>
 
+            <label class="form-label small mb-1" for="envCapas">Número de capas</label>
+            <input type="number" min="1" step="1" inputmode="numeric" name="numero_capas" id="envCapas"
+                class="form-control form-control-sm" placeholder="p. ej. 1240"
+                value="<?= esc(old('numero_capas', (string) ($placa['numero_capas'] ?? '')), 'attr') ?>">
+            <p class="text-muted small mb-3 mt-1" id="envEstimado" data-por-capa="<?= esc((string) $calc['minutosPorCapa'], 'attr') ?>"></p>
+
             <div class="row g-2">
                 <div class="col-6">
                     <label class="form-label small mb-1" for="envFecha">Día</label>
@@ -68,7 +71,6 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
                 </div>
             </div>
             <div class="form-text mb-3" id="envAviso">
-                <?= $origenDuracion ? 'Duración sacada del ' . esc($origenDuracion) . '.' : 'Sin tiempo en la placa: escribe la duración.' ?>
                 Cambia la hora de ponerla o la de acabar y la otra se recalcula.
             </div>
 
@@ -180,13 +182,33 @@ $ultimaImagen = $imagenes ? (int) end($imagenes)['id'] : 0;
             + (src ? '<img src="' + esc(src) + '" alt="" style="max-width: 100%; height: auto; display: block;">' : '');
     }
 
+    // Como la calculadora del índice: capas × min/capa de la referencia,
+    // solo impresión. Escribir la duración a mano la deja fija.
+    var porCapa = parseFloat(f('envEstimado').getAttribute('data-por-capa')) || 0;
+    var manual = false;
+
+    function estimar() {
+        var capas = parseInt(f('envCapas').value, 10);
+        var t = capas > 0 ? Math.round(capas * porCapa) : null;
+        f('envEstimado').textContent = t
+            ? '≈ ' + Math.floor(t / 60) + ' h ' + (t % 60) + ' min de impresión (' + capas + ' capas × '
+                + porCapa.toLocaleString('es-ES', { maximumFractionDigits: 4 }) + ' min/capa)'
+            : '';
+        if (t && !manual) f('envDuracion').value = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+        actualizarFin();
+    }
+
+    f('envCapas').addEventListener('input', function () { manual = false; estimar(); });
+    f('envDuracion').addEventListener('input', function () { manual = true; });
+
     f('envHora').addEventListener('input', actualizarFin);
     f('envDuracion').addEventListener('input', actualizarFin);
     f('envFin').addEventListener('change', actualizarPoner);
     ['envFecha', 'envEnlace', 'envFichero'].forEach(function (id) { f(id).addEventListener('input', previa); });
     form.querySelectorAll('[name="imagen_id"]').forEach(function (r) { r.addEventListener('change', previa); });
 
-    actualizarFin();
+    <?php if (old('duracion')): ?>manual = true;<?php endif; ?>
+    estimar();
 })();
 </script>
 

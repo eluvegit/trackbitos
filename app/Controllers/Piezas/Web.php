@@ -2804,10 +2804,7 @@ class Web extends BaseController
         }
 
         $calc = (new PiezaConfigModel())->calculadoraTiempo();
-        $minutos = $placa['minutos_previstos'] ?? $placa['minutos_estimados'] ?? null;
-        if ($minutos === null && $placa['numero_capas']) {
-            $minutos = round($placa['numero_capas'] * $calc['minutosPorCapa'] + $calc['minutosPreparacion']);
-        }
+        $minutos = $placa['numero_capas'] ? round($placa['numero_capas'] * $calc['minutosPorCapa']) : null;
 
         $enlaces = $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll();
         $enlace = '';
@@ -2910,7 +2907,12 @@ class Web extends BaseController
             ]);
         }
 
-        $this->placaModel->update($id, ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino]);
+        $datos = ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino];
+        $capas = (int) $this->request->getPost('numero_capas');
+        if ($capas > 0 && !$placa['numero_capas']) {
+            $datos['numero_capas'] = $capas;
+        }
+        $this->placaModel->update($id, $datos);
 
         return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
             ->with('success', 'Placa #' . $id . ' enviada a ' . $destino . '.');
