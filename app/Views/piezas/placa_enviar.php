@@ -42,6 +42,11 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         <i class="bi bi-check2-circle"></i> Ya se envió el <?= esc(date('d/m/Y H:i', strtotime($placa['enviada_en']))) ?>
         a <?= esc($placa['enviada_a']) ?>.
     </div>
+<?php elseif ($guardada): ?>
+    <div class="alert alert-secondary py-2 small">
+        <i class="bi bi-floppy"></i> Guardada sin enviar: <?= esc($placa['impresora'] ?? 'sin impresora') ?>,
+        ponerla el <?= esc(date('d/m H:i', strtotime($placa['poner_en']))) ?>.
+    </div>
 <?php endif; ?>
 <?php if ($destino === ''): ?>
     <div class="alert alert-warning py-2 small">
@@ -54,6 +59,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" id="formEnviarPlaca">
             <?= csrf_field() ?>
             <input type="hidden" name="confirmado" value="">
+            <input type="hidden" name="accion" value="enviar">
 
             <div class="small fw-semibold text-body-secondary mb-1">Impresora</div>
             <div class="row g-2 mb-1">
@@ -112,14 +118,15 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
             <input type="url" name="enlace" id="envEnlace" class="form-control form-control-sm mb-2" required
                 placeholder="https://drive.google.com/file/d/…" value="<?= esc(old('enlace', $enlace), 'attr') ?>">
 
-            <label class="form-label small mb-1" for="envFichero">Guarda el fichero en Chitubox con este nombre</label>
-            <div class="input-group input-group-sm mb-3">
-                <input type="text" name="fichero" id="envFichero" class="form-control fw-semibold imp-fichero" maxlength="200"
-                    value="<?= esc(old('fichero', $fichero), 'attr') ?>">
-                <button type="button" class="btn btn-outline-secondary" id="envCopiar" title="Copiar el nombre">
-                    <i class="bi bi-clipboard"></i>
+            <label class="form-label small mb-1" for="envFichero">Nombre de la placa = nombre del fichero en Chitubox</label>
+            <div class="input-group input-group-sm mb-1">
+                <input type="text" name="nombre" id="envFichero" class="form-control fw-semibold imp-fichero" maxlength="145"
+                    value="<?= esc(old('nombre', $placa['nombre']), 'attr') ?>">
+                <button type="button" class="btn btn-outline-secondary" id="envCopiar" title="Copiar para pegarlo como nombre del fichero">
+                    <i class="bi bi-clipboard"></i> Copiar
                 </button>
             </div>
+            <div class="form-text mb-3">Se guarda como nombre de la placa, con la impresora detrás del número. En el correo va con <code>.goo</code>.</div>
 
             <div class="small fw-semibold text-body-secondary mb-1">Imagen</div>
             <?php $elegida = (int) old('imagen_id', (string) $ultimaImagen); ?>
@@ -143,6 +150,9 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
 
             <div class="d-flex gap-2">
                 <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/editar') ?>" class="btn btn-sm btn-outline-secondary">Volver</a>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="envGuardar" title="Guardar sin enviar, para terminar luego">
+                    <i class="bi bi-floppy"></i> Guardar
+                </button>
                 <button type="button" class="btn btn-sm btn-primary" id="envAbrirModal" <?= $destino === '' ? 'disabled' : '' ?>>
                     <i class="bi bi-send"></i> Enviar placa…
                 </button>
@@ -245,7 +255,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         var radio = form.querySelector('[name="imagen_id"]:checked');
         var src = radio ? radio.getAttribute('data-src') : '';
         var enlace = f('envEnlace').value.trim();
-        var fichero = f('envFichero').value.trim();
+        var fichero = f('envFichero').value.trim() ? f('envFichero').value.trim() + '.goo' : '';
 
         var imp = impresora();
         f('envPrevia').innerHTML =
@@ -279,7 +289,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
     }
 
     // ---- Desfase: la segunda placa del día acaba X min después que la otra --
-    var autoHora = <?= old('hora') ? 'false' : 'true' ?>;
+    var autoHora = <?= old('hora') || $guardada ? 'false' : 'true' ?>;
     function dosCifras(n) { return String(n).padStart(2, '0'); }
     function aplicarDesfase() {
         var nota = f('envDesfaseNota');
@@ -352,14 +362,10 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         var misma = dia.filter(function (p) { return p.impresora === imp; });
         var otra = dia.filter(function (p) { return p.impresora === otraDe(imp); });
         if (misma.length) {
-            lista.push(misma.map(function (p) { return '#' + p.id + ' (' + p.hora + ')'; }).join(', ')
+            lista.push(misma.map(function (p) { return '#' + p.id + ' (' + p.hora + (p.enviada ? '' : ', sin enviar') + ')'; }).join(', ')
                 + ' ya va a ' + imp + ' ese día.' + (otra.length ? ' Y ' + otraDe(imp) + ' también está ocupada.' : ' Mándala como <b>' + otraDe(imp) + '</b>.'));
         }
         if (YA_ENVIADA) lista.push('Esta placa ya se envió el ' + YA_ENVIADA + '. Si la mandas otra vez, se imprimirá dos veces.');
-        var fich = f('envFichero').value;
-        if (!new RegExp('\\b' + imp + '\\b').test(fich) || new RegExp('\\b' + otraDe(imp) + '\\b').test(fich)) {
-            lista.push('El nombre del fichero no lleva <b>' + imp + '</b>.');
-        }
         return lista;
     }
     function porDefecto() {
@@ -368,19 +374,18 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         var libre = ['OLD', 'NEW'].filter(function (i) { return dia.indexOf(i) === -1; });
         if (libre.length === 1) f('imp' + libre[0]).checked = true;
     }
-    // El nombre del fichero lleva siempre la impresora justo después del "#nº".
+    // Igual que Web::nombreConImpresora(): "#44 OLD Pareja…".
     function ficheroCon(imp) {
-        var fich = f('envFichero').value.trim();
-        if (/\b(OLD|NEW)\b/.test(fich)) return fich.replace(/\b(OLD|NEW)\b/, imp);
-        var m = fich.match(/^(#\d+)\s*(.*)$/);
-        return m ? m[1] + ' ' + imp + (m[2] ? ' ' + m[2] : '') : imp + ' ' + fich;
+        var resto = f('envFichero').value.trim().replace(/\.goo$/i, '').replace(/^#\d+\s*/, '')
+            .replace(/\s*\b(OLD|NEW)\b\s*/g, ' ').trim();
+        return '#<?= $idPlaca ?> ' + imp + (resto ? ' ' + resto : '');
     }
     function pintarImpresora() {
         var imp = impresora();
         var campo = f('envFichero');
         campo.classList.remove('imp-OLD', 'imp-NEW');
         if (imp) campo.classList.add('imp-' + imp);
-        var caja = f('envAvisoImpresora'), lista = avisos().filter(function (a) { return a.indexOf('fichero') === -1; });
+        var caja = f('envAvisoImpresora'), lista = avisos();
         var dia = ocupadas(f('envFecha').value);
         if (!imp) {
             caja.className = 'small mb-3 text-danger';
@@ -391,7 +396,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         } else {
             caja.className = 'small mb-3 text-muted';
             caja.innerHTML = dia.length
-                ? 'Ese día: ' + dia.map(function (p) { return p.impresora + ' #' + p.id + ' (' + p.hora + ')'; }).join(' · ')
+                ? 'Ese día: ' + dia.map(function (p) { return p.impresora + ' #' + p.id + ' (' + p.hora + (p.enviada ? '' : ', sin enviar') + ')'; }).join(' · ')
                 : 'Ese día no hay otras placas mandadas.';
         }
         previa();
@@ -426,7 +431,7 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         var fecha = new Date(f('envFecha').value + 'T12:00');
         modalEl.querySelector('.modal-content').className = 'modal-content overflow-hidden border-0 shadow imp-' + imp;
         m('impresora').textContent = imp;
-        m('fichero').textContent = f('envFichero').value;
+        m('fichero').textContent = f('envFichero').value + '.goo';
         m('hora').textContent = f('envHora').value;
         m('dia').textContent = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
         m('fin').textContent = f('envFin').value || '—';
@@ -445,10 +450,15 @@ $impresoraElegida = (string) old('impresora', (string) ($placa['impresora'] ?? '
         form.querySelector('[name="confirmado"]').value = '1';
         form.submit();
     });
+    f('envGuardar').addEventListener('click', function () {
+        this.disabled = true;
+        form.querySelector('[name="accion"]').value = 'guardar';
+        form.submit();
+    });
 
-    <?php if (old('duracion')): ?>manual = true;<?php endif; ?>
+    <?php if (old('duracion') || $guardada): ?>manual = true;<?php endif; ?>
     porDefecto();
-    if (impresora() && !/\b(OLD|NEW)\b/.test(f('envFichero').value)) f('envFichero').value = ficheroCon(impresora());
+    if (impresora()) f('envFichero').value = ficheroCon(impresora());
     estimar();
     pintarImpresora();
 })();

@@ -2804,7 +2804,16 @@ class Web extends BaseController
         }
 
         $calc = (new PiezaConfigModel())->calculadoraTiempo();
-        $minutos = $placa['numero_capas'] ? round($placa['numero_capas'] * $calc['minutosPorCapa']) : null;
+
+        // Lo guardado con "Guardar" manda sobre lo calculado.
+        if ($placa['poner_en']) {
+            $ponerEn = strtotime($placa['poner_en']);
+            $minutos = $placa['acaba_en'] ? intdiv(strtotime($placa['acaba_en']) - $ponerEn, 60) : null;
+        } else {
+            $ahora = time();
+            $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
+            $minutos = $placa['numero_capas'] ? (int) round($placa['numero_capas'] * $calc['minutosPorCapa']) : null;
+        }
 
         $enlaces = $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll();
         $enlace = '';
@@ -2815,18 +2824,15 @@ class Web extends BaseController
             }
         }
 
-        $ahora = time();
-        $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
-
         return view('piezas/placa_enviar', [
             'placa'     => $placa,
             'imagenes'  => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'destino'   => (string) env('PIEZAS_PLACA_EMAIL', ''),
-            'minutos'   => $minutos !== null ? (int) $minutos : null,
+            'minutos'   => $minutos,
             'enlace'    => $enlace ?: ($enlaces[0]['url'] ?? ''),
-            'fichero'   => $placa['nombre'] . '.goo',
             'fecha'     => date('Y-m-d', $ponerEn),
             'hora'      => date('H:i', $ponerEn),
+            'guardada'  => $placa['poner_en'] !== null,
             'calc'      => $calc,
             'desfase'   => (new PiezaConfigModel())->desfaseImpresoras(),
             'enviadas'  => array_map(static fn($p) => [
@@ -2835,7 +2841,8 @@ class Web extends BaseController
                 'fecha'     => substr($p['poner_en'], 0, 10),
                 'hora'      => substr($p['poner_en'], 11, 5),
                 'acaba'     => $p['acaba_en'] ? str_replace(' ', 'T', substr($p['acaba_en'], 0, 16)) : null,
-            ], $this->placaModel->select('id, impresora, poner_en, acaba_en')
+                'enviada'   => $p['enviada_en'] !== null,
+            ], $this->placaModel->select('id, impresora, poner_en, acaba_en, enviada_en')
                 ->where('id !=', $id)
                 ->where('impresora IS NOT NULL')
                 ->where('poner_en >=', date('Y-m-d', strtotime('-2 days')))
@@ -2843,11 +2850,50 @@ class Web extends BaseController
         ]);
     }
 
+    /**
+     * "Guardar" apunta lo que haya (sin exigir enlace) para volver luego;
+     * "Enviar" exige todo y además manda el correo. Los dos dejan el nombre
+     * de la placa con la impresora detrás del "#nº", que es el nombre del
+     * fichero en Chitubox.
+     */
     public function placaEnviar(int $id)
     {
         $placa = $this->placaModel->find($id);
         if (!$placa) {
             return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $enviar    = $this->request->getPost('accion') !== 'guardar';
+        $fecha     = (string) $this->request->getPost('fecha');
+        $hora      = (string) $this->request->getPost('hora');
+        $minutos   = $this->aMinutos($this->request->getPost('duracion'));
+        $enlace    = $this->aUrl($this->request->getPost('enlace'));
+        $impresora = (string) $this->request->getPost('impresora');
+        $capas     = (int) $this->request->getPost('numero_capas');
+        $ponerEn   = preg_match('/^\d{1,2}:\d{2}$/', $hora) ? strtotime($fecha . ' ' . $hora) : false;
+        if (!in_array($impresora, PiezaPlacaModel::IMPRESORAS, true)) {
+            $impresora = null;
+        }
+
+        $nombre = $this->nombreConImpresora($id, (string) ($this->request->getPost('nombre') ?: $placa['nombre']), $impresora);
+
+        $datos = ['nombre' => $nombre, 'impresora' => $impresora];
+        if ($ponerEn) {
+            $datos['poner_en'] = date('Y-m-d H:i:s', $ponerEn);
+            $datos['acaba_en'] = $minutos ? date('Y-m-d H:i:s', $ponerEn + $minutos * 60) : null;
+        }
+        if ($capas > 0) {
+            $datos['numero_capas'] = $capas;
+        }
+
+        if (!$enviar) {
+            $this->placaModel->update($id, $datos);
+            if ($enlace !== null) {
+                $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
+            }
+
+            return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+                ->with('success', 'Guardado sin enviar. Nombre de la placa: "' . $nombre . '".');
         }
 
         $destino = trim((string) env('PIEZAS_PLACA_EMAIL', ''));
@@ -2856,24 +2902,11 @@ class Web extends BaseController
             return redirect()->back()->withInput()
                 ->with('error', 'Falta configurar el correo en .env (PIEZAS_PLACA_EMAIL y email.SMTP*).');
         }
-
-        $fecha   = (string) $this->request->getPost('fecha');
-        $hora    = (string) $this->request->getPost('hora');
-        $minutos = $this->aMinutos($this->request->getPost('duracion'));
-        $enlace  = $this->aUrl($this->request->getPost('enlace'));
-        $fichero = trim((string) $this->request->getPost('fichero'));
-        $ponerEn = strtotime($fecha . ' ' . $hora);
-        $impresora = (string) $this->request->getPost('impresora');
-
-        if (!$ponerEn || !preg_match('/^\d{1,2}:\d{2}$/', $hora) || !$minutos || $enlace === null) {
+        if (!$ponerEn || !$minutos || $enlace === null) {
             return redirect()->back()->withInput()->with('error', 'Faltan la fecha, la hora de ponerla, la duración o el enlace.');
         }
-        if (!in_array($impresora, PiezaPlacaModel::IMPRESORAS, true)) {
+        if ($impresora === null) {
             return redirect()->back()->withInput()->with('error', 'Elige la impresora: OLD o NEW.');
-        }
-        $otra = $impresora === 'OLD' ? 'NEW' : 'OLD';
-        if (!preg_match('/\b' . $impresora . '\b/', $fichero) || preg_match('/\b' . $otra . '\b/', $fichero)) {
-            return redirect()->back()->withInput()->with('error', 'El nombre del fichero tiene que llevar ' . $impresora . ' (y no ' . $otra . ').');
         }
 
         if (!$this->request->getPost('confirmado')) {
@@ -2881,7 +2914,7 @@ class Web extends BaseController
                 ->where('DATE(poner_en)', date('Y-m-d', $ponerEn))->first();
             if ($ocupada || $placa['enviada_en']) {
                 return redirect()->back()->withInput()->with('error', $ocupada
-                    ? 'Ese día ' . $impresora . ' ya tiene la placa #' . $ocupada['id'] . '. Mándala como ' . $otra . '.'
+                    ? 'Ese día ' . $impresora . ' ya tiene la placa #' . $ocupada['id'] . '. Mándala como ' . ($impresora === 'OLD' ? 'NEW' : 'OLD') . '.'
                     : 'Esta placa ya se envió. Confírmalo en el aviso antes de mandarla otra vez.');
             }
         }
@@ -2914,12 +2947,12 @@ class Web extends BaseController
         $email->setMessage(view('piezas/email_placa', [
             'id'        => $id,
             'impresora' => $impresora,
-            'titulo'   => 'PLACA #' . $id . ' ' . $this->fechaLarga($ponerEn),
-            'duracion' => intdiv($minutos, 60) . ':' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'h',
-            'hora'     => date('H:i', $ponerEn),
-            'enlace'   => $enlace,
-            'fichero'  => $fichero,
-            'cid'      => $cid ?: null,
+            'titulo'    => 'PLACA #' . $id . ' ' . $this->fechaLarga($ponerEn),
+            'duracion'  => intdiv($minutos, 60) . ':' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'h',
+            'hora'      => date('H:i', $ponerEn),
+            'enlace'    => $enlace,
+            'fichero'   => $nombre . '.goo',
+            'cid'       => $cid ?: null,
         ]));
 
         if (!$email->send(false)) {
@@ -2928,31 +2961,56 @@ class Web extends BaseController
             return redirect()->back()->withInput()->with('error', 'No se pudo enviar el correo. Revisa la configuración SMTP (detalle en el log).');
         }
 
-        $yaEsta = $this->placaEnlaceModel->where('placa_id', $id)->where('url', $enlace)->countAllResults() > 0;
-        if (!$yaEsta) {
-            $this->placaEnlaceModel->insert([
-                'placa_id' => $id,
-                'url'      => $enlace,
-                'titulo'   => mb_substr($fichero ?: 'Placa Chitubox', 0, 150),
-                'orden'    => $this->placaEnlaceModel->where('placa_id', $id)->countAllResults(),
-            ]);
-        }
-
-        $datos = [
-            'enviada_en' => date('Y-m-d H:i:s'),
-            'enviada_a'  => $destino,
-            'impresora'  => $impresora,
-            'poner_en'   => date('Y-m-d H:i:s', $ponerEn),
-            'acaba_en'   => date('Y-m-d H:i:s', $ponerEn + $minutos * 60),
-        ];
-        $capas = (int) $this->request->getPost('numero_capas');
-        if ($capas > 0 && !$placa['numero_capas']) {
-            $datos['numero_capas'] = $capas;
-        }
-        $this->placaModel->update($id, $datos);
+        $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
+        $this->placaModel->update($id, $datos + ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino]);
 
         return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
             ->with('success', 'Placa #' . $id . ' enviada para ' . $impresora . ' a ' . $destino . '.');
+    }
+
+    /** Desde la bitácora: elegir OLD/NEW al momento, sin guardar el resto del formulario. */
+    public function placaImpresora(int $id)
+    {
+        return $this->ejecutar(
+            function () use ($id) {
+                $placa = $this->placaModel->find($id);
+                if (!$placa) {
+                    throw new RuntimeException('Esa placa ya no existe.');
+                }
+                $impresora = (string) $this->request->getPost('impresora');
+                $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
+                $nombre = $this->nombreConImpresora($id, (string) ($this->request->getPost('nombre') ?: $placa['nombre']), $impresora);
+                $this->placaModel->update($id, ['impresora' => $impresora, 'nombre' => $nombre]);
+
+                return ['nombre' => $nombre, 'impresora' => $impresora];
+            },
+            fn() => site_url('piezas/placa/' . $id . '/bitacora/editar'),
+            fn($r) => $r['impresora'] ? 'Asignada a ' . $r['impresora'] . '.' : 'Sin impresora.'
+        );
+    }
+
+    /** "#44 OLD Pareja…": la impresora justo detrás del número, una sola vez. */
+    private function nombreConImpresora(int $id, string $nombre, ?string $impresora): string
+    {
+        $nombre = preg_replace('/\.goo$/i', '', trim($nombre));
+        $nombre = trim(preg_replace('/^#\d+\s*/', '', $nombre));
+        $nombre = trim(preg_replace('/\s*\b(OLD|NEW)\b\s*/', ' ', $nombre));
+
+        return $this->nombreDePlaca($id, trim(($impresora ?? '') . ' ' . $nombre));
+    }
+
+    private function guardarEnlaceDePlaca(int $id, string $url, string $titulo): void
+    {
+        if ($this->placaEnlaceModel->where('placa_id', $id)->where('url', $url)->countAllResults() > 0) {
+            return;
+        }
+
+        $this->placaEnlaceModel->insert([
+            'placa_id' => $id,
+            'url'      => $url,
+            'titulo'   => mb_substr($titulo . '.goo', 0, 150),
+            'orden'    => $this->placaEnlaceModel->where('placa_id', $id)->countAllResults(),
+        ]);
     }
 
     public function guardarDesfaseImpresoras()
@@ -3160,9 +3218,12 @@ class Web extends BaseController
         // logísticamente casi nunca se llega a pesar el tanque, y cuando
         // hace falta contarlo ahora va como texto suelto en notas.
         $numeroCapas = trim((string) $this->request->getPost('numero_capas'));
+        $impresora = $tieneCampo('impresora') ? (string) $this->request->getPost('impresora') : (string) $placa['impresora'];
+        $impresora = in_array($impresora, PiezaPlacaModel::IMPRESORAS, true) ? $impresora : null;
 
         $datos = [
-            'nombre'       => $this->nombreDePlaca($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre']),
+            'nombre'       => $this->nombreConImpresora($id, trim((string) $this->request->getPost('nombre')) ?: $placa['nombre'], $impresora),
+            'impresora'    => $impresora,
             'impresa_en'   => $this->request->getPost('impresa_en') ?: null,
             'minutos_reales'    => $this->aMinutos($this->request->getPost('minutos_reales')),
             'numero_capas' => $numeroCapas !== '' ? (int) $numeroCapas : null,

@@ -109,6 +109,22 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                 <i class="bi bi-sliders"></i> Nombre y ajustes de la impresión
             </div>
             <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small mb-1">Impresora</label>
+                    <?php $impActual = (string) ($placa['impresora'] ?? ''); ?>
+                    <div class="btn-group btn-group-sm" role="group" data-impresora-placa
+                        data-url="<?= site_url('piezas/placa/' . $idPlaca . '/impresora') ?>">
+                        <?php foreach (['OLD' => '#d97706', 'NEW' => '#2563eb', '' => '#6c757d'] as $imp => $color): ?>
+                            <input type="radio" class="btn-check" name="impresora" value="<?= $imp ?>" id="imp-<?= $idPlaca ?>-<?= $imp ?: 'no' ?>"
+                                autocomplete="off" <?= $impActual === $imp ? 'checked' : '' ?>>
+                            <label class="btn btn-outline-secondary fw-bold px-3" for="imp-<?= $idPlaca ?>-<?= $imp ?: 'no' ?>"
+                                style="--bs-btn-active-bg: <?= $color ?>; --bs-btn-active-border-color: <?= $color ?>; letter-spacing: 1px;">
+                                <?= $imp ?: 'Sin asignar' ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <span class="small text-muted ms-2" data-impresora-estado></span>
+                </div>
                 <div class="col-md-6">
                     <label class="form-label small mb-1">Nombre de la placa</label>
                     <input type="text" name="nombre" class="form-control form-control-sm" maxlength="150"

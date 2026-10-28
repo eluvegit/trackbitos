@@ -128,6 +128,33 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // OLD/NEW se guarda al pulsar, y el nombre de la placa vuelve con la
+    // impresora ya puesta para que guardar la bitácora no la pise.
+    var grupo = document.querySelector('[data-impresora-placa]');
+    if (!grupo) return;
+    var form = grupo.closest('form');
+    var estado = document.querySelector('[data-impresora-estado]');
+    grupo.querySelectorAll('[name="impresora"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var datos = new FormData();
+            datos.append('impresora', radio.value);
+            datos.append('nombre', form.querySelector('[name="nombre"]').value);
+            var csrf = form.querySelector('input[name="<?= csrf_token() ?>"]');
+            if (csrf) datos.append(csrf.name, csrf.value);
+            estado.textContent = 'Guardando…';
+            fetch(grupo.getAttribute('data-url'), {
+                method: 'POST', body: datos, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); }).then(function (j) {
+                if (j.ok) form.querySelector('[name="nombre"]').value = j.nombre;
+                estado.textContent = j.mensaje || '';
+            }).catch(function () { estado.textContent = 'No se pudo guardar.'; });
+        });
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
     var columna = document.getElementById('fotos');
     var form = columna.querySelector('[data-fotos-form]');
     var input = form.querySelector('[data-fotos-input]');
