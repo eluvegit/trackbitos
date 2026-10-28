@@ -933,6 +933,25 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('guias/(:num)/resultados', 'GuiasController::resultados/$1');
     $routes->GET('guias/(:num)', 'GuiasController::editar/$1');
 
+    // Cuaderno: todas las anotaciones de las bitácoras de placa en una sola
+    // página de lectura (pruebas, conclusiones, notas), más responder las
+    // preguntas pendientes sin entrar en cada placa.
+    $routes->GET('cuaderno', 'CuadernoController::index');
+    $routes->POST('cuaderno/prueba/(:num)/respuesta', 'CuadernoController::responder/$1');
+
+    // Tiradas: producción grande planificada en placas por días y máquinas
+    // (plazo, confirmación del diseño, progreso). 'crear' y 'placa' son
+    // literales y van antes que el patrón numérico.
+    $routes->GET('tiradas', 'TiradasController::index');
+    $routes->POST('tiradas/crear', 'TiradasController::crear');
+    $routes->POST('tiradas/placa/(:num)/impresa', 'TiradasController::alternarImpresa/$1');
+    $routes->GET('tiradas/(:num)', 'TiradasController::ver/$1');
+    $routes->POST('tiradas/(:num)/actualizar', 'TiradasController::actualizar/$1');
+    $routes->POST('tiradas/(:num)/ajustes', 'TiradasController::ajustes/$1');
+    $routes->POST('tiradas/(:num)/tipos', 'TiradasController::guardarTipos/$1');
+    $routes->POST('tiradas/(:num)/placas', 'TiradasController::guardarPlacas/$1');
+    $routes->POST('tiradas/(:num)/borrar', 'TiradasController::borrar/$1');
+
     $routes->GET('ubicaciones', 'UbicacionesController::index');
     $routes->GET('ubicaciones/imprimir', 'UbicacionesController::imprimir');
     $routes->POST('ubicaciones/crear', 'UbicacionesController::crear');

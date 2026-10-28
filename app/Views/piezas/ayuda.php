@@ -416,6 +416,27 @@
             <p class="pa-corto mb-0">Para calcular lo que ocupa se usan las medidas (ancho × fondo) de cada trozo STL.</p>
         </article>
 
+        <article class="pa-ficha" id="como-cuaderno" data-claves="cuaderno wiki resumen anotaciones conclusiones notas pruebas preguntas respuestas pendientes buscar mejoras historial">
+            <h3><i class="bi bi-journal-bookmark"></i> Cuaderno: todas las anotaciones de golpe <a class="pa-ancla" href="#como-cuaderno">#</a></h3>
+            <p>En <?= $pag('piezas/cuaderno', 'Cuaderno') ?> (<i class="bi bi-journal-bookmark"></i>) se leen de corrido las bitácoras de todas las placas, de la más reciente a la más antigua: pruebas con su respuesta, conclusiones, notas, notas por pieza y fotos. Las placas sin nada escrito no salen.</p>
+            <ul>
+                <li>Arriba, las <b>preguntas sin responder</b>: se contestan ahí mismo (Intro guarda).</li>
+                <li>Busca un tema («soportes», «exposición», sin importar las tildes) o filtra por veredicto, pieza o impresora.</li>
+                <li>Los botones <b>Preguntas · Conclusiones · Notas · Piezas · Fotos</b> muestran u ocultan cada parte (p. ej. solo conclusiones = resumen de lo aprendido); <b>Todo</b> lo vuelve a enseñar. Se recuerda en este navegador.</li>
+            </ul>
+        </article>
+
+        <article class="pa-ficha" id="como-tiradas" data-claves="tirada produccion plan placas dias maquinas resina plazo confirmacion diseño muñecos correo casa progreso">
+            <h3><i class="bi bi-calendar-range"></i> Tiradas: plan de una producción grande <a class="pa-ancla" href="#como-tiradas">#</a></h3>
+            <p>En <?= $pag('piezas/tiradas', 'Tiradas') ?> (<i class="bi bi-calendar-range"></i>) se reparte un encargo grande (p. ej. 250 muñecos) en placas por días y máquinas.</p>
+            <ul>
+                <li><b>Tipos</b>: resina, cuántas caben por placa, cuántas lleva cada muñeco, si hay versión H/M y si esperan a la confirmación del diseño.</li>
+                <li><b>Placas</b> en orden de cola: cada máquina coge la primera de su resina que ya se pueda imprimir ese día.</li>
+                <li>En el panel mueves el <b>día de confirmación</b>, permites o no el <b>cambio de resina</b> y marcas días <b>fuera de casa</b>: el plan se recoloca solo y avisa si se pasa del plazo.</li>
+                <li>Pulsa una placa para ver por qué va ahí y <b>marcarla como impresa</b>; las barras muestran lo impreso frente a lo necesario.</li>
+            </ul>
+        </article>
+
         <article class="pa-ficha" id="como-calcular" data-claves="calculadora tiempo capas minutos estimado resina precio litro densidad coste">
             <h3><i class="bi bi-stopwatch"></i> Calculadoras: tiempo y resina <a class="pa-ancla" href="#como-calcular">#</a></h3>
             <ul>

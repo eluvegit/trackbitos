@@ -104,6 +104,12 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
         <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('placas') ?>" title="Placas">
             <i class="bi bi-printer"></i>
         </a>
+        <a href="<?= site_url('piezas/cuaderno') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('cuaderno') ?>" title="Cuaderno: todas las pruebas, conclusiones y notas de las bitácoras de golpe">
+            <i class="bi bi-journal-bookmark"></i>
+        </a>
+        <a href="<?= site_url('piezas/tiradas') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('tiradas') ?>" title="Tiradas: plan de placas por días para una producción grande">
+            <i class="bi bi-calendar-range"></i>
+        </a>
         <?php // Calculadora: cuánto tarda una placa a partir de su número de capas. ?>
         <button type="button" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir" data-bs-toggle="modal" data-bs-target="#modalCalcTiempo" title="Calcular tiempo estimado por capas">
             <i class="bi bi-stopwatch"></i>
