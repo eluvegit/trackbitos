@@ -46,6 +46,12 @@
     .hueco-tile .piezas .nombre-grupo { display: flex; align-items: center; gap: .3rem; min-width: 0; flex: 1 1 auto; }
     .hueco-tile .piezas .miniatura { width: 1.6rem; height: 1.6rem; object-fit: cover; border-radius: .25rem; flex: none; }
     .hueco-tile .piezas .nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hueco-tile .total { font-size: .7rem; color: var(--bs-secondary-color); white-space: nowrap; }
+    .hueco-tile .piezas .cantidad { flex: none; margin-left: auto; font-weight: 700; font-size: .8rem; min-width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .hueco-tile .piezas .cantidad.cero { color: var(--bs-danger); }
+    .hueco-tile.huerfanas, .hueco-tile.huerfanas:hover { width: 100%; max-height: none; padding-left: .65rem; transform: none; border-color: var(--bs-border-color); }
+    .hueco-tile.huerfanas .piezas { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); column-gap: 1.25rem; row-gap: .2rem; font-size: .75rem; }
+    .hueco-tile.huerfanas .fila:hover .nombre { text-decoration: underline; }
     .hueco-tile .vacio { font-size: .7rem; color: var(--bs-secondary-color); font-style: italic; }
 
     .hueco-del-form { position: absolute; top: -.5rem; left: -.5rem; margin: 0; }
@@ -159,6 +165,9 @@
                                     class="hueco-tile<?= $h['contenido'] !== [] ? ' con-stock' : '' ?>">
                                     <div class="cabecera">
                                         <span class="codigo"><?= esc($h['codigo']) ?></span>
+                                        <?php if ($h['contenido'] !== []): ?>
+                                            <span class="total"><?= (int) $h['unidades'] ?> ud.</span>
+                                        <?php endif; ?>
                                     </div>
                                     <?php if ($h['contenido'] === []): ?>
                                         <span class="vacio">Vacío</span>
@@ -172,6 +181,7 @@
                                                         <?php endif; ?>
                                                         <span class="nombre"><?= esc($c['nombre']) ?></span>
                                                     </span>
+                                                    <span class="cantidad<?= (int) $c['stock'] <= 0 ? ' cero' : '' ?>"><?= (int) $c['stock'] ?></span>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
@@ -239,6 +249,40 @@
                 </div>
             </div>
         <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+<?php if (! empty($huerfanas)): ?>
+    <div class="card estuche-card mt-3">
+        <div class="card-body">
+            <button type="button" class="estuche-toggle d-flex align-items-center gap-2 flex-wrap mb-3"
+                data-estuche-id="sin-hueco" title="Plegar/desplegar">
+                <i class="bi bi-question-square fs-5 text-warning"></i>
+                <span class="estuche-titulo">Sin ubicación</span>
+                <span class="text-muted small">
+                    <?= count($huerfanas) ?> piezas · <?= array_sum(array_column($huerfanas, 'stock')) ?> ud.
+                </span>
+                <i class="bi bi-chevron-down chevron"></i>
+            </button>
+
+            <div class="hueco-grid" id="huecos-sin-hueco">
+                <div class="hueco-tile huerfanas">
+                    <div class="piezas">
+                        <?php foreach ($huerfanas as $c): ?>
+                            <a href="<?= site_url('piezas/existencias/' . $c['id']) ?>" class="fila text-reset text-decoration-none">
+                                <span class="nombre-grupo">
+                                    <?php if ($c['img']): ?>
+                                        <img src="<?= esc($c['img'], 'attr') ?>" alt="" class="miniatura" loading="lazy">
+                                    <?php endif; ?>
+                                    <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                </span>
+                                <span class="cantidad<?= (int) $c['stock'] <= 0 ? ' cero' : '' ?>"><?= (int) $c['stock'] ?></span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 

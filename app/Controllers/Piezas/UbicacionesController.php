@@ -103,7 +103,32 @@ class UbicacionesController extends BaseController
             ];
         }
 
-        return view('piezas/ubicaciones/index', ['filas' => $filas]);
+        $huerfanas = [];
+        $sinHueco  = $this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id', null)->findAll();
+        if ($sinHueco !== []) {
+            $ids        = array_map(static fn ($v) => (int) $v['id'], $sinHueco);
+            $stockSin   = array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
+            $imagenesSin = [];
+            foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (isset($imagenesSin[$vid]) || (empty($r['ruta_imagen']) && empty($r['hash_imagen']))) {
+                    continue;
+                }
+                $imagenesSin[$vid] = imagen_pieza($r, 'render', 't');
+            }
+            foreach ($sinHueco as $v) {
+                $vid         = (int) $v['id'];
+                $huerfanas[] = [
+                    'id'     => $vid,
+                    'nombre' => trim(($familias[(int) $v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
+                    'stock'  => $stockSin[$vid],
+                    'img'    => $imagenesSin[$vid] ?? null,
+                ];
+            }
+            usort($huerfanas, static fn ($a, $b) => ($b['stock'] > 0) <=> ($a['stock'] > 0) ?: $a['nombre'] <=> $b['nombre']);
+        }
+
+        return view('piezas/ubicaciones/index', ['filas' => $filas, 'huerfanas' => $huerfanas]);
     }
 
     /**
