@@ -296,15 +296,17 @@ class ExistenciasController extends BaseController
         $volver   = $variante
             ? site_url('piezas/existencias/' . $varianteId)
             : site_url('piezas/existencias');
+        if ($this->request->getPost('volver') === 'ubicaciones') {
+            $volver = site_url('piezas/ubicaciones');
+        }
 
-        if (!$variante) {
-            return redirect()->to($volver)->with('error', 'Esa variante no existe.');
-        }
-        if (!in_array($sentido, ['alta', 'baja'], true) || $cantidad < 1) {
-            return redirect()->to($volver)->with('error', 'Indica una cantidad de al menos 1.');
-        }
-        if ($nota === '') {
-            return redirect()->to($volver)->with('error', 'Escribe el motivo del movimiento.');
+        $error = !$variante ? 'Esa variante no existe.'
+            : (!in_array($sentido, ['alta', 'baja'], true) || $cantidad < 1 ? 'Indica una cantidad de al menos 1.'
+            : ($nota === '' ? 'Escribe el motivo del movimiento.' : null));
+        if ($error !== null) {
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $error])
+                : redirect()->to($volver)->with('error', $error);
         }
 
         if ($sentido === 'alta') {
@@ -324,8 +326,13 @@ class ExistenciasController extends BaseController
 
         $nuevo = $this->inventario->stockDeVariante($varianteId);
         $aviso = $nuevo < 0 ? ' Ojo: el stock queda en negativo.' : '';
+        $mensaje = 'Movimiento registrado. Stock actual: ' . $nuevo . '.' . $aviso;
 
-        return redirect()->to($volver)->with('success', 'Movimiento registrado. Stock actual: ' . $nuevo . '.' . $aviso);
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'stock' => $nuevo, 'mensaje' => $mensaje]);
+        }
+
+        return redirect()->to($volver)->with('success', $mensaje);
     }
 
     /**

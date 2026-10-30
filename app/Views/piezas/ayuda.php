@@ -195,7 +195,7 @@
                 <span class="pa-flecha"><i class="bi bi-arrow-right"></i></span>
                 <div class="pa-paso"><span class="pa-paso-num">7</span><b>Inventario</b>Bitácora → «Dar de alta en inventario».<br><span class="pa-donde">web</span></div>
                 <span class="pa-flecha"><i class="bi bi-arrow-right"></i></span>
-                <div class="pa-paso"><span class="pa-paso-num">8</span><b>Guardar</b>Asignarle un hueco de un estuche. Ya sale en el TPV.<br><span class="pa-donde">web</span></div>
+                <div class="pa-paso"><span class="pa-paso-num">8</span><b>Guardar</b>Entra en la caja; desde «Cajas» se guarda en su hueco. Ya sale en el TPV.<br><span class="pa-donde">web</span></div>
             </div>
             <p class="pa-truco">Regla para no liarse: si es el <code>.blend</code> que <b>editas</b>, se hace por terminal. Si es algo que <b>generas una vez y adjuntas</b> (foto, render, STL) o una <b>decisión</b> (validar, descartar), se hace en la web.</p>
         </article>
@@ -451,14 +451,14 @@
 <section class="pa-seccion" id="inventario">
     <div class="pa-seccion-cab"><span class="pa-seccion-num">04</span><h2>Inventario</h2><span>existencias, huecos y TPV</span></div>
     <div class="pa-rejilla">
-        <article class="pa-ficha" id="como-alta-inventario" data-claves="dar de alta inventario stock placa sincronizar quitar del inventario impreso">
+        <article class="pa-ficha" id="como-alta-inventario" data-claves="dar de alta inventario stock placa sincronizar quitar del inventario impreso caja cajas guardar pedido">
             <h3><i class="bi bi-box-arrow-in-down"></i> Meter lo impreso en el inventario <a class="pa-ancla" href="#como-alta-inventario">#</a></h3>
             <ol>
                 <li>Apunta en la bitácora las copias y las fallidas.</li>
                 <li>Pulsa <b>Dar de alta en inventario</b>. Suma las servibles de cada pieza.</li>
             </ol>
             <p>Se puede pulsar otra vez si corriges algo: <b>reajusta, no duplica</b>. <b>Quitar del inventario</b> deshace lo que aportó esa placa.</p>
-            <p class="pa-corto mb-0">Lo que entra va solo al hueco de esa pieza, si ya tiene uno.</p>
+            <p class="pa-corto mb-0">Lo que entra va a la caja que elijas junto al botón: <b>impresas</b> o <b>pedido</b> (lo que ha pedido Esther). En <?= $pag('piezas/ubicaciones/cajas', 'Ubicaciones → Cajas') ?> lo guardas en su hueco, pieza a pieza o «Guardar todo», o lo pasas de una caja a otra. Las cajas también salen arriba en la lista de Ubicaciones, con borde ámbar, y ahí mismo cada pieza tiene sus botones: <b>→ hueco</b> (si ya tiene), <b>Elegir hueco</b> (si no) , <b>A pedido / A impresas</b> y <b>Se las lleva</b> (salida de algunas o todas, con quién se las lleva). Con <b>Meter piezas</b>, en la cabecera de cada caja, pasas a la caja piezas que estaban en su hueco o sin ubicación. Para algo más largo («me llevo esto de aquí y esto de allá») o con la foto de Esther, usa <?= $pag('piezas/salidas', 'Albaranes') ?>: lo creas con la foto, añades líneas eligiendo de dónde sale cada pieza y lo confirmas. Si te equivocas, «Reabrir» devuelve las piezas a su sitio. Mientras está en la caja cuenta como stock, pero no sale en ningún hueco.</p>
         </article>
 
         <article class="pa-ficha" id="como-existencias" data-claves="existencias stock semaforo minimo alta baja manual ajuste motivo rojo amarillo verde">

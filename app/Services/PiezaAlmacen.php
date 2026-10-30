@@ -73,6 +73,12 @@ class PiezaAlmacen
         return sprintf('placa-%d/imagen-%d.%s', $placaId, $imagenId, $extension);
     }
 
+    /** Foto de un albarán de salida (la que manda Esther). */
+    public function rutaSalidaImagen(int $salidaId, string $extension): string
+    {
+        return sprintf('salida-%d/imagen.%s', $salidaId, $extension);
+    }
+
     /** Imagen de referencia de un pedido (lo que manda el cliente). */
     public function rutaPedidoImagen(int $pedidoId, int $imagenId, string $extension): string
     {

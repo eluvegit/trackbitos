@@ -17,8 +17,8 @@ class PiezaStockMovimientoModel extends Model
     protected $useTimestamps = false;
 
     protected $allowedFields = [
-        'variante_id', 'version_id', 'ubicacion_id', 'origen', 'delta', 'motivo', 'nota',
-        'placa_id', 'placa_version_id', 'creado_en', 'actualizado_en',
+        'variante_id', 'version_id', 'ubicacion_id', 'caja', 'origen', 'delta', 'motivo', 'nota',
+        'placa_id', 'placa_version_id', 'salida_id', 'creado_en', 'actualizado_en',
     ];
 
     /** Stock actual de una variante: la suma de todos sus movimientos. */
@@ -53,12 +53,14 @@ class PiezaStockMovimientoModel extends Model
     /**
      * Stock por hueco que cuadra con el total. Cada pieza vive en un único
      * hueco: las bajas (delta negativo, sin hueco) se restan de ese hueco.
+     * Lo que está en una caja (caja no nula) no cuenta en ningún hueco.
      *
      * @return array<int, array<int,int>>  varianteId => (huecoId => stock)
      */
     private function reparto(array $varianteIds = []): array
     {
         $q = $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
+            ->where('caja', null)
             ->where('NOT (delta < 0 AND ubicacion_id IS NULL)', null, false)
             ->groupBy(['variante_id', 'ubicacion_id']);
         if ($varianteIds !== []) {
@@ -71,6 +73,7 @@ class PiezaStockMovimientoModel extends Model
         }
 
         $q = $this->select('variante_id, SUM(-delta) AS total')
+            ->where('caja', null)
             ->where('delta <', 0)
             ->where('ubicacion_id', null)
             ->groupBy('variante_id');
@@ -89,6 +92,28 @@ class PiezaStockMovimientoModel extends Model
             if ($mapa[$vid] === []) {
                 unset($mapa[$vid]);
             }
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * @param list<int> $varianteIds
+     * @return array<string, array<int,int>>  caja => (varianteId => unidades), sin ceros
+     */
+    public function stockEnCajas(array $varianteIds = []): array
+    {
+        $q = $this->select('caja, variante_id, SUM(delta) AS total')
+            ->where('caja IS NOT NULL', null, false)
+            ->groupBy(['caja', 'variante_id'])
+            ->having('total !=', 0);
+        if ($varianteIds !== []) {
+            $q->whereIn('variante_id', $varianteIds);
+        }
+
+        $mapa = [];
+        foreach ($q->findAll() as $fila) {
+            $mapa[$fila['caja']][(int) $fila['variante_id']] = (int) $fila['total'];
         }
 
         return $mapa;
@@ -129,7 +154,7 @@ class PiezaStockMovimientoModel extends Model
     public function colocarVariante(int $varianteId, ?int $huecoId): int
     {
         $q = function () use ($varianteId, $huecoId) {
-            $this->where('variante_id', $varianteId)->where('delta >', 0);
+            $this->where('variante_id', $varianteId)->where('caja', null)->where('delta >', 0);
 
             return $huecoId === null
                 ? $this->where('ubicacion_id IS NOT NULL', null, false)

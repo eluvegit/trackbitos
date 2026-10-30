@@ -7,6 +7,7 @@ use App\Models\PiezaEstucheModel;
 use App\Models\PiezaFamiliaModel;
 use App\Models\PiezaHuecoModel;
 use App\Models\PiezaRenderModel;
+use App\Models\PiezaSalidaDestinoModel;
 use App\Models\PiezaVarianteModel;
 use App\Services\PiezaInventario;
 
@@ -107,7 +108,7 @@ class UbicacionesController extends BaseController
         $sinHueco  = $this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id', null)->findAll();
         if ($sinHueco !== []) {
             $ids        = array_map(static fn ($v) => (int) $v['id'], $sinHueco);
-            $stockSin   = array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
+            $stockSin   = array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
             $imagenesSin = [];
             foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
                 $vid = (int) $r['variante_id'];
@@ -128,7 +129,14 @@ class UbicacionesController extends BaseController
             usort($huerfanas, static fn ($a, $b) => ($b['stock'] > 0) <=> ($a['stock'] > 0) ?: $a['nombre'] <=> $b['nombre']);
         }
 
-        return view('piezas/ubicaciones/index', ['filas' => $filas, 'huerfanas' => $huerfanas]);
+        return view('piezas/ubicaciones/index', [
+            'filas'     => $filas,
+            'huerfanas' => $huerfanas,
+            'cajas'     => $this->contenidoDeCajas($huecos = $this->codigosDeHuecos()),
+            'huecos'    => $huecos,
+            'huecosLibres' => array_diff_key($huecos, $this->inventario->huecosOcupados()),
+            'destinos'  => (new PiezaSalidaDestinoModel())->lista(),
+        ]);
     }
 
     /**
@@ -403,7 +411,7 @@ class UbicacionesController extends BaseController
         $estuche = $this->estuches->find($hueco['estuche_id']);
 
         $ids   = array_map(static fn (array $v) => (int) $v['id'], $this->inventario->variantesDeHueco($id));
-        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
+        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
 
         $familias = [];
         foreach ($this->familias->findAll() as $f) {
@@ -481,17 +489,7 @@ class UbicacionesController extends BaseController
             return $this->response->setJSON(['resultados' => []]);
         }
 
-        $familiasQueEncajan = $this->familias->where('borrado_en', null)->like('nombre', $q)->findAll();
-        $idsFamilia = array_column($familiasQueEncajan, 'id') ?: [0];
-
-        $variantes = $this->variantes->where('borrado_en', null)
-            ->groupStart()
-                ->like('nombre', $q)
-                ->orLike('sku', $q)
-                ->orWhereIn('familia_id', $idsFamilia)
-            ->groupEnd()
-            ->orderBy('nombre')
-            ->findAll(60);
+        $variantes = $this->variantesQueEncajan($q);
 
         $variantes = array_values(array_filter($variantes, static fn (array $v) => (int) ($v['hueco_predeterminado_id'] ?? 0) !== $id));
         $variantes = array_slice($variantes, 0, 15);
@@ -647,6 +645,277 @@ class UbicacionesController extends BaseController
      *
      * @return array{0: array<int, list<int>>, 1: array<int,int>}
      */
+    public function cajas()
+    {
+        $huecos = $this->codigosDeHuecos();
+
+        return view('piezas/ubicaciones/cajas', [
+            'cajas'        => $this->contenidoDeCajas($huecos),
+            'huecos'       => $huecos,
+            'huecosLibres' => array_diff_key($huecos, $this->inventario->huecosOcupados()),
+            'destinos'  => (new PiezaSalidaDestinoModel())->lista(),
+        ]);
+    }
+
+    public function guardarCaja()
+    {
+        $volver     = $this->volverDeCaja();
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $caja       = (string) $this->request->getPost('caja');
+        $cantidad   = (int) $this->request->getPost('cantidad');
+        $huecoId    = (int) $this->request->getPost('hueco_id') ?: null;
+
+        $hay = $this->inventario->stockEnCajas([$varianteId])[$caja][$varianteId] ?? 0;
+        if (!in_array($caja, ['impresas', 'pedido'], true) || $cantidad < 1 || $cantidad > $hay) {
+            return redirect()->to($volver)->with('error', 'Cantidad no válida para esa caja.');
+        }
+        if ($this->inventario->huecoDeVariante($varianteId) === null && ($huecoId === null || !$this->huecos->find($huecoId))) {
+            return redirect()->to($volver)->with('error', 'Esa pieza no tiene hueco: elige uno.');
+        }
+
+        $this->inventario->guardarDeCaja($varianteId, $caja, $cantidad, $huecoId);
+
+        return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) guardada(s) en su hueco.');
+    }
+
+    /** Guarda de golpe todo lo de una caja que ya tiene hueco. */
+    public function guardarCajaEntera()
+    {
+        $caja = (string) $this->request->getPost('caja');
+        if (!in_array($caja, ['impresas', 'pedido'], true)) {
+            return redirect()->to(site_url('piezas/ubicaciones/cajas'));
+        }
+
+        $n = 0;
+        $sinHueco = 0;
+        foreach ($this->inventario->stockEnCajas()[$caja] ?? [] as $vid => $cantidad) {
+            if ($cantidad < 1) {
+                continue;
+            }
+            if ($this->inventario->huecoDeVariante($vid) === null) {
+                $sinHueco++;
+                continue;
+            }
+            $this->inventario->guardarDeCaja($vid, $caja, $cantidad);
+            $n += $cantidad;
+        }
+
+        $aviso = $sinHueco > 0 ? ' Quedan ' . $sinHueco . ' pieza(s) sin hueco en la caja.' : '';
+
+        return redirect()->to(site_url('piezas/ubicaciones/cajas'))->with('success', $n . ' pieza(s) guardada(s).' . $aviso);
+    }
+
+    public function salidaCaja()
+    {
+        $volver     = $this->volverDeCaja();
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $caja       = (string) $this->request->getPost('caja');
+        $cantidad   = (int) $this->request->getPost('cantidad');
+        $destinoId  = (int) $this->request->getPost('destino_id') ?: null;
+        $nota       = trim((string) $this->request->getPost('nota')) ?: null;
+
+        $hay = $this->inventario->stockEnCajas([$varianteId])[$caja][$varianteId] ?? 0;
+        if (!in_array($caja, ['impresas', 'pedido'], true) || $cantidad < 1 || $cantidad > $hay) {
+            return redirect()->to($volver)->with('error', 'Cantidad no válida para esa caja.');
+        }
+
+        $this->inventario->salidaDeCaja($varianteId, $caja, $cantidad, $destinoId, $nota);
+
+        return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) salen de la caja de ' . $caja . '.');
+    }
+
+    /** Da hueco a una pieza que no lo tiene; lo que tenga sin ubicación va con ella. */
+    public function colocar()
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $huecoId    = (int) $this->request->getPost('hueco_id');
+        $volver     = site_url('piezas/ubicaciones');
+
+        if (!$this->variantes->find($varianteId) || !$this->huecos->find($huecoId)) {
+            return redirect()->to($volver)->with('error', 'Elige pieza y hueco.');
+        }
+        if ($this->inventario->huecoDeVariante($varianteId) !== null) {
+            return redirect()->to($volver)->with('error', 'Esa pieza ya tiene hueco.');
+        }
+
+        $this->inventario->colocarEnHueco($varianteId, $huecoId);
+
+        return redirect()->to($volver)->with('success', 'Pieza colocada en ' . $this->codigoDeHueco($huecoId) . '.');
+    }
+
+    /** Pasa a una caja todas las unidades de las piezas sin hueco. */
+    public function sinUbicacionACaja()
+    {
+        $caja   = (string) $this->request->getPost('caja');
+        $volver = site_url('piezas/ubicaciones');
+        if (!in_array($caja, ['impresas', 'pedido'], true)) {
+            return redirect()->to($volver)->with('error', 'Elige la caja.');
+        }
+
+        $sinHueco = $this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id', null)->findAll();
+        $ids      = array_map(static fn ($v) => (int) $v['id'], $sinHueco);
+        $piezas   = 0;
+        $uds      = 0;
+        foreach ($ids === [] ? [] : $this->inventario->stockEnHuecos($ids) as $vid => $n) {
+            if ($n > 0) {
+                $this->inventario->meterEnCaja($vid, $caja, $n);
+                $piezas++;
+                $uds += $n;
+            }
+        }
+
+        return redirect()->to($volver)->with('success', $uds . ' ud. de ' . $piezas . ' pieza(s) pasadas a la caja de ' . $caja . '.');
+    }
+
+    /** Buscador para meter en una caja: solo piezas con unidades fuera de las cajas. */
+    public function buscarParaCaja()
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if (mb_strlen($q) < 2) {
+            return $this->response->setJSON(['resultados' => []]);
+        }
+
+        $variantes = $this->variantesQueEncajan($q);
+        $fuera     = $variantes === [] ? [] : $this->inventario->stockEnHuecos(array_map(static fn (array $v) => (int) $v['id'], $variantes));
+        $codigos   = $this->codigosDeHuecos();
+
+        $resultados = [];
+        foreach ($variantes as $v) {
+            $n = $fuera[(int) $v['id']] ?? 0;
+            if ($n < 1) {
+                continue;
+            }
+            $familia = $this->familias->find($v['familia_id']);
+            $huecoId = (int) ($v['hueco_predeterminado_id'] ?? 0);
+            $resultados[] = [
+                'id'     => (int) $v['id'],
+                'nombre' => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
+                'fuera'  => $n,
+                'hueco'  => $huecoId > 0 ? ($codigos[$huecoId] ?? '?') : null,
+            ];
+            if (count($resultados) === 15) {
+                break;
+            }
+        }
+
+        return $this->response->setJSON(['resultados' => $resultados]);
+    }
+
+    public function meterEnCaja()
+    {
+        $volver     = $this->volverDeCaja();
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $caja       = (string) $this->request->getPost('caja');
+        $cantidad   = (int) $this->request->getPost('cantidad');
+
+        $hay = $this->inventario->stockEnHuecos([$varianteId])[$varianteId] ?? 0;
+        if (!in_array($caja, ['impresas', 'pedido'], true) || $cantidad < 1 || $cantidad > $hay) {
+            return redirect()->to($volver)->with('error', 'Cantidad no válida: esa pieza tiene ' . $hay . ' fuera de las cajas.');
+        }
+
+        $this->inventario->meterEnCaja($varianteId, $caja, $cantidad);
+
+        return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) metida(s) en la caja de ' . $caja . '.');
+    }
+
+    public function moverDeCaja()
+    {
+        $volver     = $this->volverDeCaja();
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $de         = (string) $this->request->getPost('caja');
+        $cantidad   = (int) $this->request->getPost('cantidad');
+        $a          = $de === 'impresas' ? 'pedido' : 'impresas';
+
+        $hay = $this->inventario->stockEnCajas([$varianteId])[$de][$varianteId] ?? 0;
+        if (!in_array($de, ['impresas', 'pedido'], true) || $cantidad < 1 || $cantidad > $hay) {
+            return redirect()->to($volver)->with('error', 'Cantidad no válida para esa caja.');
+        }
+
+        $this->inventario->cambiarDeCaja($varianteId, $de, $a, $cantidad);
+
+        return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) pasada(s) a la caja de ' . $a . '.');
+    }
+
+    private function variantesQueEncajan(string $q): array
+    {
+        $familiasQueEncajan = $this->familias->where('borrado_en', null)->like('nombre', $q)->findAll();
+        $idsFamilia = array_column($familiasQueEncajan, 'id') ?: [0];
+
+        return $this->variantes->where('borrado_en', null)
+            ->groupStart()
+                ->like('nombre', $q)
+                ->orLike('sku', $q)
+                ->orWhereIn('familia_id', $idsFamilia)
+            ->groupEnd()
+            ->orderBy('nombre')
+            ->findAll(60);
+    }
+
+    private function volverDeCaja(): string
+    {
+        return site_url($this->request->getPost('volver') === 'ubicaciones' ? 'piezas/ubicaciones' : 'piezas/ubicaciones/cajas');
+    }
+
+    /** @return array<int,string>  huecoId => código completo ("E1H2") */
+    private function codigosDeHuecos(): array
+    {
+        $huecos = [];
+        foreach ($this->estuches->ordenados() as $e) {
+            foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
+                $huecos[(int) $h['id']] = PiezaHuecoModel::codigoCompleto($e, $h);
+            }
+        }
+
+        return $huecos;
+    }
+
+    /** @return array<string, list<array>>  caja => piezas (id, nombre, cantidad, hueco, imagen) */
+    private function contenidoDeCajas(array $codigosHuecos): array
+    {
+        $enCajas = $this->inventario->stockEnCajas();
+        $ids = [];
+        foreach ($enCajas as $porVariante) {
+            $ids += $porVariante;
+        }
+        $ids = array_keys($ids);
+
+        $variantes = $ids === [] ? [] : array_column($this->variantes->whereIn('id', $ids)->findAll(), null, 'id');
+        $familias  = [];
+        $imagenes  = [];
+        if ($ids !== []) {
+            $famIds = array_unique(array_column($variantes, 'familia_id'));
+            $familias = array_column($this->familias->whereIn('id', $famIds)->findAll(), null, 'id');
+            foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (!isset($imagenes[$vid]) && (!empty($r['ruta_imagen']) || !empty($r['hash_imagen']))) {
+                    $imagenes[$vid] = imagen_pieza($r, 'render', 't');
+                }
+            }
+        }
+
+        $cajas = [];
+        foreach (['impresas', 'pedido'] as $caja) {
+            $cajas[$caja] = [];
+            foreach ($enCajas[$caja] ?? [] as $vid => $n) {
+                $v = $variantes[$vid] ?? null;
+                if (!$v) {
+                    continue;
+                }
+                $huecoId = (int) ($v['hueco_predeterminado_id'] ?? 0) ?: null;
+                $cajas[$caja][] = [
+                    'id'       => $vid,
+                    'nombre'   => trim(($familias[$v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
+                    'cantidad' => $n,
+                    'hueco'    => $huecoId !== null ? ($codigosHuecos[$huecoId] ?? '?') : null,
+                    'imagen'   => $imagenes[$vid] ?? null,
+                ];
+            }
+            usort($cajas[$caja], static fn ($a, $b) => [$a['hueco'] ?? '~', $a['nombre']] <=> [$b['hueco'] ?? '~', $b['nombre']]);
+        }
+
+        return $cajas;
+    }
+
     private function piezasPorHueco(): array
     {
         $porHueco = [];
@@ -655,7 +924,7 @@ class UbicacionesController extends BaseController
         }
 
         $ids   = array_merge([], ...array_values($porHueco));
-        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockPorVariante($ids));
+        $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
 
         return [$porHueco, $stock];
     }

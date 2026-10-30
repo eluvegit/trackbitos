@@ -3427,14 +3427,16 @@ class Web extends BaseController
                 : redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
-        $r = (new PiezaInventario())->sincronizarPlaca($id);
+        $caja = $this->request->getPost('caja') === 'pedido' ? 'pedido' : 'impresas';
+        $r = (new PiezaInventario())->sincronizarPlaca($id, $caja);
 
         $mensaje = sprintf(
-            'Inventario actualizado: %d alta(s), %d ajuste(s), %d retirada(s) · %d unidades servibles.',
+            'Inventario actualizado: %d alta(s), %d ajuste(s), %d retirada(s) · %d unidades servibles.%s',
             $r['altas'],
             $r['ajustes'],
             $r['retiradas'],
-            $r['unidades']
+            $r['unidades'],
+            $r['altas'] > 0 ? ' Las nuevas van a la caja de ' . $caja . '.' : ''
         );
 
         if ($this->request->isAJAX()) {

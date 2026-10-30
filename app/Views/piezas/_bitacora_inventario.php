@@ -25,8 +25,12 @@ $colocacionHuecos = $colocacionHuecos ?? [];
           // bitácora — mismo patrón que la subida de fotos. ?>
     <div class="mt-3 pt-2 border-top d-flex flex-wrap align-items-center gap-2">
         <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario') ?>"
-            data-ajax-form="inventario-sincronizar">
+            data-ajax-form="inventario-sincronizar" class="d-flex gap-1 align-items-center">
             <?= csrf_field() ?>
+            <select name="caja" class="form-select form-select-sm" style="width: auto;" title="A qué caja van las piezas nuevas">
+                <option value="impresas">a caja de impresas</option>
+                <option value="pedido">a caja de pedido</option>
+            </select>
             <button class="btn btn-sm btn-success">
                 <i class="bi bi-boxes"></i>
                 <?= $placa['inventario_sincronizado_en'] ? 'Actualizar inventario con esta placa' : 'Dar de alta en inventario' ?>
@@ -46,6 +50,9 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                 </button>
             </form>
         <?php endif; ?>
+        <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="btn btn-sm btn-outline-secondary" title="Lo impreso pendiente de guardar">
+            <i class="bi bi-box-seam"></i> Cajas
+        </a>
         <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary" title="Ver existencias">
             <i class="bi bi-box-arrow-up-right"></i> Existencias
         </a>
@@ -105,8 +112,8 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                 <?php endforeach; ?>
             </div>
             <p class="text-muted mt-2 mb-0" style="font-size: .72rem;">
-                El hueco que elijas aquí pasa a ser el de esa pieza: la próxima vez que salga de una placa,
-                caerá ahí solo.
+                El hueco que elijas aquí pasa a ser el de esa pieza: lo impreso entra en la caja y,
+                al guardarlo desde Cajas, va a ese hueco.
             </p>
         </div>
     <?php endif; ?>

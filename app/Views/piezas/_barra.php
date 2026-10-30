@@ -123,6 +123,9 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
         <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-inventario<?= $activa('ubicaciones') ?>" title="Ubicaciones: dónde está guardada cada pieza">
             <i class="bi bi-geo-alt"></i>
         </a>
+        <a href="<?= site_url('piezas/salidas') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-inventario<?= $activa('salidas') ?>" title="Albaranes de salida: lo que se lleva Esther, a pintura…">
+            <i class="bi bi-receipt"></i>
+        </a>
     </div>
 
     <div class="btn-group">

@@ -11,6 +11,9 @@
         'baja_manual' => 'Baja a mano',
         'ajuste'      => 'Ajuste',
         'impresion'   => 'Impresión',
+        'guardado'    => 'Guardado',
+        'cambio_caja' => 'Cambio de caja',
+        'salida'      => 'Salida',
     ];
     $claseTexto = ['cero' => 'text-danger', 'bajo' => 'text-warning', 'ok' => 'text-success'];
     $claseBorde = ['cero' => 'border-danger',  'bajo' => 'border-warning',  'ok' => 'border-success'];
@@ -188,7 +191,12 @@
                     ?>
                     <tr>
                         <td class="text-muted"><?= esc($fecha ? substr($fecha, 0, 16) : '—') ?></td>
-                        <td><?= esc($etiquetaMotivo[$m['motivo']] ?? $m['motivo']) ?></td>
+                        <td>
+                            <?= esc($etiquetaMotivo[$m['motivo']] ?? $m['motivo']) ?>
+                            <?php if (!empty($m['caja'])): ?>
+                                <span class="badge text-bg-light border" title="Movimiento en caja">caja <?= esc($m['caja']) ?></span>
+                            <?php endif; ?>
+                        </td>
                         <td class="text-end fw-semibold <?= (int) $m['delta'] < 0 ? 'text-danger' : 'text-success' ?>">
                             <?= (int) $m['delta'] > 0 ? '+' : '' ?><?= (int) $m['delta'] ?>
                         </td>
@@ -204,7 +212,7 @@
                             <?php endif; ?>
                         </td>
                         <td class="text-end">
-                            <?php if (!$esPlaca): ?>
+                            <?php if (!$esPlaca && !in_array($m['motivo'], ['guardado', 'cambio_caja', 'salida'], true)): ?>
                                 <form method="post" action="<?= site_url('piezas/existencias/movimiento/' . (int) $m['id'] . '/borrar') ?>"
                                     onsubmit="return confirm('¿Borrar este movimiento (<?= (int) $m['delta'] > 0 ? '+' : '' ?><?= (int) $m['delta'] ?>)? No se puede deshacer.');">
                                     <?= csrf_field() ?>

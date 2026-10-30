@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\PiezaPlacaModel;
 use App\Models\PiezaPlacaVersionModel;
+use App\Models\PiezaSalidaDestinoModel;
+use App\Models\PiezaSalidaLineaModel;
+use App\Models\PiezaSalidaModel;
 use App\Models\PiezaStockMovimientoModel;
 use App\Models\PiezaVarianteModel;
 use App\Models\PiezaVersionModel;
@@ -58,7 +61,7 @@ class PiezaInventario
      *
      * @return array{altas:int, ajustes:int, retiradas:int, unidades:int}
      */
-    public function sincronizarPlaca(int $placaId): array
+    public function sincronizarPlaca(int $placaId, string $caja = 'impresas'): array
     {
         $ahora = date('Y-m-d H:i:s');
         $res = ['altas' => 0, 'ajustes' => 0, 'retiradas' => 0, 'unidades' => 0];
@@ -92,12 +95,10 @@ class PiezaInventario
                     $res['ajustes']++;
                 }
             } else {
-                $huecoId = $this->huecoDeVariante($varianteId);
-
                 $this->movimientos->insert([
                     'variante_id'      => $varianteId,
                     'version_id'       => (int) $version['id'],
-                    'ubicacion_id'     => $huecoId,
+                    'caja'             => $caja,
                     'origen'           => 'placa',
                     'delta'            => $servibles,
                     'motivo'           => 'impresion',
@@ -115,6 +116,163 @@ class PiezaInventario
         $this->placas->update($placaId, ['inventario_sincronizado_en' => $ahora]);
 
         return $res;
+    }
+
+    /** @return array<string, array<int,int>>  caja => (varianteId => unidades) */
+    public function stockEnCajas(array $varianteIds = []): array
+    {
+        return $this->movimientos->stockEnCajas($varianteIds);
+    }
+
+    /**
+     * Stock guardado (fuera de las cajas) por variante.
+     *
+     * @param list<int> $varianteIds
+     * @return array<int,int>
+     */
+    public function stockEnHuecos(array $varianteIds = []): array
+    {
+        $stock = $this->stockPorVariante($varianteIds);
+        foreach ($this->stockEnCajas($varianteIds) as $porVariante) {
+            foreach ($porVariante as $vid => $n) {
+                $stock[$vid] = ($stock[$vid] ?? 0) - $n;
+            }
+        }
+
+        return $stock;
+    }
+
+    /**
+     * Pasa n piezas de una caja a su hueco: par -n caja / +n hueco. Si la
+     * pieza no tiene hueco, se le asigna $huecoId.
+     */
+    public function guardarDeCaja(int $varianteId, string $caja, int $cantidad, ?int $huecoId = null): void
+    {
+        $actual = $this->huecoDeVariante($varianteId);
+        if ($actual === null && $huecoId !== null) {
+            $this->colocarEnHueco($varianteId, $huecoId);
+            $actual = $huecoId;
+        }
+
+        $ahora = date('Y-m-d H:i:s');
+        $this->movimientos->insertBatch([
+            ['variante_id' => $varianteId, 'ubicacion_id' => null, 'caja' => $caja, 'origen' => 'manual', 'delta' => -$cantidad,
+                'motivo' => 'guardado', 'nota' => 'A su hueco', 'creado_en' => $ahora],
+            ['variante_id' => $varianteId, 'ubicacion_id' => $actual, 'caja' => null, 'origen' => 'manual', 'delta' => $cantidad,
+                'motivo' => 'guardado', 'nota' => 'Desde caja ' . $caja, 'creado_en' => $ahora],
+        ]);
+    }
+
+    /** Lo contrario de guardar: n piezas de su hueco (o sin ubicación) a una caja. */
+    public function meterEnCaja(int $varianteId, string $caja, int $cantidad): void
+    {
+        $ahora = date('Y-m-d H:i:s');
+        $this->movimientos->insertBatch([
+            ['variante_id' => $varianteId, 'ubicacion_id' => $this->huecoDeVariante($varianteId), 'caja' => null, 'origen' => 'manual',
+                'delta' => -$cantidad, 'motivo' => 'cambio_caja', 'nota' => 'A caja ' . $caja, 'creado_en' => $ahora],
+            ['variante_id' => $varianteId, 'ubicacion_id' => null, 'caja' => $caja, 'origen' => 'manual',
+                'delta' => $cantidad, 'motivo' => 'cambio_caja', 'nota' => 'Desde su hueco', 'creado_en' => $ahora],
+        ]);
+    }
+
+    /** Pasa n piezas de una caja a la otra: par -n / +n con motivo 'cambio_caja'. */
+    public function cambiarDeCaja(int $varianteId, string $de, string $a, int $cantidad): void
+    {
+        $ahora = date('Y-m-d H:i:s');
+        $this->movimientos->insertBatch([
+            ['variante_id' => $varianteId, 'caja' => $de, 'origen' => 'manual', 'delta' => -$cantidad,
+                'motivo' => 'cambio_caja', 'nota' => 'A caja ' . $a, 'creado_en' => $ahora],
+            ['variante_id' => $varianteId, 'caja' => $a, 'origen' => 'manual', 'delta' => $cantidad,
+                'motivo' => 'cambio_caja', 'nota' => 'Desde caja ' . $de, 'creado_en' => $ahora],
+        ]);
+    }
+
+    /**
+     * Alguien se lleva n piezas de una caja: albarán sin foto, ya
+     * confirmado, con una línea y su movimiento 'salida'. Devuelve su id.
+     */
+    public function salidaDeCaja(int $varianteId, string $caja, int $cantidad, ?int $destinoId, ?string $nota): int
+    {
+        $ahora   = date('Y-m-d H:i:s');
+        $destino = $destinoId !== null ? (new PiezaSalidaDestinoModel())->find($destinoId) : null;
+
+        $salidaId = (int) (new PiezaSalidaModel())->insert([
+            'fecha' => date('Y-m-d'), 'destino_id' => $destino['id'] ?? null, 'estado' => 'confirmada', 'nota' => $nota,
+            'confirmada_en' => $ahora, 'creado_en' => $ahora, 'actualizado_en' => $ahora,
+        ], true);
+        (new PiezaSalidaLineaModel())->insert([
+            'salida_id' => $salidaId, 'variante_id' => $varianteId, 'cantidad' => $cantidad, 'origen' => $caja,
+        ]);
+        $this->movimientos->insert([
+            'variante_id' => $varianteId, 'caja' => $caja, 'origen' => 'manual', 'delta' => -$cantidad, 'motivo' => 'salida',
+            'nota' => trim('Se la lleva ' . ($destino['nombre'] ?? 'alguien') . '. ' . (string) $nota), 'salida_id' => $salidaId,
+            'creado_en' => $ahora,
+        ]);
+
+        return $salidaId;
+    }
+
+    /** @return array{hueco:int, impresas:int, pedido:int}  dónde hay unidades de una pieza */
+    public function dondeHay(int $varianteId): array
+    {
+        $cajas = $this->stockEnCajas([$varianteId]);
+
+        return [
+            'hueco'    => $this->stockEnHuecos([$varianteId])[$varianteId] ?? 0,
+            'impresas' => $cajas['impresas'][$varianteId] ?? 0,
+            'pedido'   => $cajas['pedido'][$varianteId] ?? 0,
+        ];
+    }
+
+    /**
+     * Confirma un albarán en borrador: un movimiento 'salida' por línea,
+     * restando de su origen. Devuelve un error o null.
+     */
+    public function confirmarSalida(int $salidaId): ?string
+    {
+        $salidas = new PiezaSalidaModel();
+        $salida  = $salidas->find($salidaId);
+        if (!$salida || $salida['estado'] !== 'borrador') {
+            return 'Ese albarán no está en borrador.';
+        }
+        $lineas = (new PiezaSalidaLineaModel())->where('salida_id', $salidaId)->findAll();
+        if ($lineas === []) {
+            return 'El albarán no tiene líneas.';
+        }
+        foreach ($lineas as $l) {
+            if (empty($l['variante_id'])) {
+                return 'Hay líneas sin pieza asignada («' . ($l['descripcion'] ?? '') . '»).';
+            }
+        }
+
+        $destino = !empty($salida['destino_id']) ? (new PiezaSalidaDestinoModel())->find($salida['destino_id']) : null;
+        $ahora   = date('Y-m-d H:i:s');
+        $filas   = [];
+        foreach ($lineas as $l) {
+            $vid     = (int) $l['variante_id'];
+            $filas[] = [
+                'variante_id'  => $vid,
+                'ubicacion_id' => $l['origen'] === 'hueco' ? $this->huecoDeVariante($vid) : null,
+                'caja'         => $l['origen'] === 'hueco' ? null : $l['origen'],
+                'origen'       => 'manual',
+                'delta'        => -(int) $l['cantidad'],
+                'motivo'       => 'salida',
+                'nota'         => 'Albarán #' . $salidaId . ($destino ? ' · ' . $destino['nombre'] : ''),
+                'salida_id'    => $salidaId,
+                'creado_en'    => $ahora,
+            ];
+        }
+        $this->movimientos->insertBatch($filas);
+        $salidas->update($salidaId, ['estado' => 'confirmada', 'confirmada_en' => $ahora, 'actualizado_en' => $ahora]);
+
+        return null;
+    }
+
+    /** Vuelve a borrador: borra los movimientos del albarán, las piezas vuelven a su origen. */
+    public function reabrirSalida(int $salidaId): void
+    {
+        $this->movimientos->where('salida_id', $salidaId)->delete();
+        (new PiezaSalidaModel())->update($salidaId, ['estado' => 'borrador', 'confirmada_en' => null, 'actualizado_en' => date('Y-m-d H:i:s')]);
     }
 
     /** Quita del inventario todo lo que aportaba una placa. */
@@ -228,7 +386,7 @@ class PiezaInventario
     public function borrarMovimientoManual(int $movimientoId): bool
     {
         $movimiento = $this->movimientos->find($movimientoId);
-        if (!$movimiento || $movimiento['origen'] !== 'manual') {
+        if (!$movimiento || $movimiento['origen'] !== 'manual' || in_array($movimiento['motivo'], ['guardado', 'cambio_caja', 'salida'], true)) {
             return false;
         }
 
