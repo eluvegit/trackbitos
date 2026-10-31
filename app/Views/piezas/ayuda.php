@@ -426,14 +426,14 @@
             </ul>
         </article>
 
-        <article class="pa-ficha" id="como-tiradas" data-claves="tirada produccion plan placas dias maquinas resina plazo confirmacion diseño muñecos correo casa progreso">
-            <h3><i class="bi bi-calendar-range"></i> Tiradas: plan de una producción grande <a class="pa-ancla" href="#como-tiradas">#</a></h3>
-            <p>En <?= $pag('piezas/tiradas', 'Tiradas') ?> (<i class="bi bi-calendar-range"></i>) se reparte un encargo grande (p. ej. 250 muñecos) en placas por días y máquinas.</p>
+        <article class="pa-ficha" id="como-tiradas" data-claves="tirada encargo produccion plan placas dias maquinas resina plazo confirmacion fallidas margen necesarias prioridad pintura correo casa progreso">
+            <h3><i class="bi bi-calendar-range"></i> Tiradas: plan de un encargo grande <a class="pa-ancla" href="#como-tiradas">#</a></h3>
+            <p>En <?= $pag('piezas/tiradas', 'Tiradas') ?> (<i class="bi bi-calendar-range"></i>) se reparte un encargo grande en placas por días y máquinas.</p>
             <ul>
-                <li><b>Tipos</b>: resina, cuántas caben por placa, cuántas lleva cada muñeco, si hay versión H/M y si esperan a la confirmación del diseño.</li>
-                <li><b>Placas</b> en orden de cola: cada máquina coge la primera de su resina que ya se pueda imprimir ese día.</li>
+                <li><b>Piezas</b> del encargo, cada una con sus condiciones: resina, <b>necesarias</b> (el mínimo), <b>margen %</b> de más, cuántas caben <b>por placa</b>, <b>prioridad de pintura</b> y si <b>espera confirmación</b>.</li>
+                <li><b>Placas</b> en orden de cola, cada una con una o varias piezas (todas de la misma resina): cada máquina coge la primera de su resina que ya se pueda imprimir ese día. «Ordenar por prioridad de pintura» sube las que llevan piezas más urgentes.</li>
                 <li>En el panel mueves el <b>día de confirmación</b>, permites o no el <b>cambio de resina</b> y marcas días <b>fuera de casa</b>: el plan se recoloca solo y avisa si se pasa del plazo.</li>
-                <li>Pulsa una placa para ver por qué va ahí y <b>marcarla como impresa</b>; las barras muestran lo impreso frente a lo necesario.</li>
+                <li>Pulsa una placa para <b>marcarla como impresa</b> y apuntar sus <b>fallidas</b> por pieza. El <b>balance por pieza</b> cuenta solo las buenas y dice si el margen está cubierto, si se ha comido parte o cuántas faltan para el mínimo; en ese caso añade tú una placa con ellas.</li>
             </ul>
         </article>
 

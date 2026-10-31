@@ -2794,7 +2794,7 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
-        return view('piezas/bitacora_editar', $this->datosDeLaBitacora($placa));
+        return view('piezas/bitacora_editar', $this->datosDeLaBitacora($placa) + ['vecinas' => $this->vecinasDePlaca($placa)]);
     }
 
     // ---- Enviar placa por correo ------------------------------------------
@@ -2806,6 +2806,82 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
+        $con  = $this->request->getGet('con');
+        $otra = null;
+        if ($con === null) {
+            $otra = $this->parejaDelDia($placa);
+        } elseif ((int) $con && (int) $con !== $id) {
+            $otra = $this->placaModel->find((int) $con);
+        }
+
+        $envios = [$this->datosEnvio($placa)];
+        if ($otra) {
+            $envios[] = $this->datosEnvio($otra);
+            if ($placa['impresora'] === 'NEW' && $otra['impresora'] === 'OLD') {
+                $envios = array_reverse($envios);
+            }
+        }
+
+        return view('piezas/placa_enviar', [
+            'placa'      => $placa,
+            'envios'     => $envios,
+            'con'        => $otra ? (int) $otra['id'] : 0,
+            'destino'    => (string) env('PIEZAS_PLACA_EMAIL', ''),
+            'calc'       => (new PiezaConfigModel())->calculadoraTiempo(),
+            'desfase'    => (new PiezaConfigModel())->desfaseImpresoras(),
+            'vecinas'    => $this->vecinasDePlaca($placa),
+            'candidatas' => $this->placaModel->select('id, nombre, impresora, poner_en')
+                ->where('id !=', $id)
+                ->groupStart()
+                    ->where('impresa_en', null)
+                    ->orWhere('poner_en >=', date('Y-m-d', strtotime('-2 days')))
+                ->groupEnd()
+                ->orderBy('id', 'DESC')->findAll(),
+        ]);
+    }
+
+    /** La otra placa puesta ese mismo día, mejor si va a la otra impresora. */
+    private function parejaDelDia(array $placa): ?array
+    {
+        if (!$placa['poner_en']) {
+            return null;
+        }
+
+        $mismoDia = $this->placaModel->where('id !=', (int) $placa['id'])
+            ->where('DATE(poner_en)', substr($placa['poner_en'], 0, 10))
+            ->orderBy('poner_en')->findAll();
+        foreach ($mismoDia as $p) {
+            if ($p['impresora'] !== $placa['impresora']) {
+                return $p;
+            }
+        }
+
+        return $mismoDia[0] ?? null;
+    }
+
+    /**
+     * La placa anterior (más antigua) y la siguiente (más reciente) del mismo
+     * cajón que en el histórico: impresas por impresa_en, el resto por creado_en.
+     *
+     * @return array{anterior: ?array, siguiente: ?array}
+     */
+    private function vecinasDePlaca(array $placa): array
+    {
+        $campo = $placa['impresa_en'] ? 'impresa_en' : 'creado_en';
+        $lista = $this->placaModel->select('id, nombre')
+            ->where($placa['impresa_en'] ? 'impresa_en IS NOT NULL' : 'impresa_en IS NULL', null, false)
+            ->orderBy($campo)->orderBy('id')->findAll();
+        $i = array_search((int) $placa['id'], array_map('intval', array_column($lista, 'id')), true);
+
+        return [
+            'anterior'  => $i !== false && $i > 0 ? $lista[$i - 1] : null,
+            'siguiente' => $i !== false && isset($lista[$i + 1]) ? $lista[$i + 1] : null,
+        ];
+    }
+
+    private function datosEnvio(array $placa): array
+    {
+        $id   = (int) $placa['id'];
         $calc = (new PiezaConfigModel())->calculadoraTiempo();
 
         // Lo guardado con "Guardar" manda sobre lo calculado.
@@ -2827,17 +2903,14 @@ class Web extends BaseController
             }
         }
 
-        return view('piezas/placa_enviar', [
+        return [
             'placa'     => $placa,
             'imagenes'  => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
-            'destino'   => (string) env('PIEZAS_PLACA_EMAIL', ''),
             'minutos'   => $minutos,
             'enlace'    => $enlace ?: ($enlaces[0]['url'] ?? ''),
             'fecha'     => date('Y-m-d', $ponerEn),
             'hora'      => date('H:i', $ponerEn),
             'guardada'  => $placa['poner_en'] !== null,
-            'calc'      => $calc,
-            'desfase'   => (new PiezaConfigModel())->desfaseImpresoras(),
             'enviadas'  => array_map(static fn($p) => [
                 'id'        => (int) $p['id'],
                 'impresora' => $p['impresora'],
@@ -2850,7 +2923,15 @@ class Web extends BaseController
                 ->where('impresora IS NOT NULL')
                 ->where('poner_en >=', date('Y-m-d', strtotime('-2 days')))
                 ->findAll()),
-        ]);
+        ];
+    }
+
+    /** Tras guardar/enviar, volver a la misma pantalla (sola o en paralelo). */
+    private function urlVueltaEnvio(int $id): string
+    {
+        $volver = (string) $this->request->getPost('volver');
+
+        return str_starts_with($volver, site_url('piezas/placa/')) ? $volver : site_url('piezas/placa/' . $id . '/enviar');
     }
 
     /**
@@ -2899,7 +2980,7 @@ class Web extends BaseController
                 $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
             }
 
-            return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+            return redirect()->to($this->urlVueltaEnvio($id))
                 ->with('success', 'Guardado sin enviar. Nombre de la placa: "' . $nombre . '".');
         }
 
@@ -2964,7 +3045,7 @@ class Web extends BaseController
         $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
         $this->placaModel->update($id, $datos + ['enviada_en' => date('Y-m-d H:i:s'), 'enviada_a' => $destino]);
 
-        return redirect()->to(site_url('piezas/placa/' . $id . '/enviar'))
+        return redirect()->to($this->urlVueltaEnvio($id))
             ->with('success', 'Placa #' . $id . ' enviada para ' . $impresora . ' a ' . $destino . '.');
     }
 

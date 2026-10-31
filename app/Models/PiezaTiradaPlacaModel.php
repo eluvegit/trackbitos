@@ -7,7 +7,7 @@ use CodeIgniter\Model;
 /**
  * Placa de una tirada, en su orden de cola. Qué día y en qué máquina sale
  * no se guarda: lo calcula la vista simulando el plan con los ajustes de la
- * tirada. Lo único que se registra es si ya está impresa.
+ * tirada. Lo que lleva va en sus líneas (PiezaTiradaLineaModel).
  */
 class PiezaTiradaPlacaModel extends Model
 {
@@ -15,7 +15,7 @@ class PiezaTiradaPlacaModel extends Model
     protected $primaryKey = 'id';
     protected $returnType = 'array';
 
-    protected $allowedFields = ['tirada_id', 'tipo_id', 'codigo', 'hombres', 'mujeres', 'unidades', 'motivo', 'orden', 'impresa_en'];
+    protected $allowedFields = ['tirada_id', 'codigo', 'motivo', 'orden', 'impresa_en'];
 
     public function deTirada(int $tiradaId): array
     {

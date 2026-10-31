@@ -6,8 +6,8 @@ use CodeIgniter\Model;
 
 /**
  * Tirada: una producción grande planificada en placas por días y máquinas
- * (ver App\Controllers\Piezas\TiradasController). Sus tipos de pieza y sus
- * placas van en PiezaTiradaTipoModel y PiezaTiradaPlacaModel.
+ * (ver App\Controllers\Piezas\TiradasController). Sus piezas y sus
+ * placas van en PiezaTiradaPiezaModel y PiezaTiradaPlacaModel.
  */
 class PiezaTiradaModel extends Model
 {
@@ -19,7 +19,7 @@ class PiezaTiradaModel extends Model
     protected $updatedField  = 'actualizado_en';
 
     protected $allowedFields = [
-        'nombre', 'notas', 'fecha_inicio', 'plazo_dias', 'objetivo_h', 'objetivo_m',
+        'nombre', 'notas', 'fecha_inicio', 'plazo_dias',
         'maquinas', 'placas_dia', 'placas_correo', 'dia_confirmacion', 'cambio_resina', 'dias_fuera',
     ];
 

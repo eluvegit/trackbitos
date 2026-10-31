@@ -37,7 +37,8 @@
     <span class="text-muted fw-normal">#<?= $idPlaca ?></span>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Editar</strong>
-    <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="btn btn-sm btn-outline-primary ms-auto">
+    <span class="ms-auto"><?= view('piezas/_placa_vecinas', ['vecinas' => $vecinas, 'sufijo' => '/bitacora/editar']) ?></span>
+    <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-send"></i> Enviar placa<?= $placa['enviada_en'] ? ' <i class="bi bi-check2" title="Ya enviada"></i>' : '' ?>
     </a>
 </h5>

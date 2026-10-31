@@ -10,7 +10,7 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= esc($tirada['nombre']) ?></strong>
     <span class="ms-auto d-flex gap-1">
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalTipos"><i class="bi bi-tags"></i> Tipos</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalPiezas"><i class="bi bi-puzzle"></i> Piezas</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalPlacas"><i class="bi bi-list-ol"></i> Placas</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAjustes" title="Ajustes de la tirada"><i class="bi bi-gear"></i></button>
     </span>
@@ -43,14 +43,20 @@
     .tr-resin { font: 700 .66rem/1 var(--bs-font-monospace); text-transform: uppercase; padding: 3px 5px; border-radius: 4px; border: 1px solid var(--tr-line); color: var(--tr-muted); }
 
     .tr-bars { display: grid; gap: 16px; }
-    .tr-bar { display: grid; grid-template-columns: 170px 1fr 170px; gap: 12px; align-items: center; }
+    .tr-bar { display: grid; grid-template-columns: 170px 1fr 230px; gap: 12px; align-items: center; }
     .tr-bar .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; }
     .tr-track { position: relative; height: 18px; background: var(--tr-sunk); border-radius: 5px; }
     .tr-track .fill, .tr-track .plan { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 5px; }
     .tr-track .plan { opacity: .28; }
     .tr-track .need { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--bs-body-color); }
-    .tr-track .need::after { content: "necesario"; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font: 600 .62rem var(--bs-font-monospace); color: var(--tr-muted); white-space: nowrap; }
+    .tr-track .need.obj { background: var(--tr-amber); width: 2px; }
+    .tr-track .need.obj::after { content: "margen"; color: var(--tr-amber); top: auto; bottom: -15px; }
+    .tr-track .need::after { content: "mínimo"; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font: 600 .62rem var(--bs-font-monospace); color: var(--tr-muted); white-space: nowrap; }
     .tr-bar .num { font-size: .88rem; text-align: right; }
+    .tr-bar .est { font-size: .78rem; }
+    .tr-est-ok { color: var(--tr-ok); } .tr-est-margen { color: var(--tr-amber); } .tr-est-minimo { color: var(--tr-red); }
+    .tr-fail { font: 700 .66rem var(--bs-font-monospace); color: var(--tr-red); }
+    .tr-lin { display: flex; gap: 4px; margin-bottom: 4px; }
     .tr-dolls { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; border-top: 1px solid var(--tr-line); padding-top: 12px; }
     .tr-big { font-size: 2rem; font-weight: 800; line-height: 1; }
     .tr-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .82rem; color: var(--tr-muted); }
@@ -119,10 +125,8 @@
             <div class="modal-header"><h5 class="modal-title">Ajustes de la tirada</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body row g-3">
                 <div class="col-12"><label class="form-label">Nombre</label><input type="text" name="nombre" class="form-control" value="<?= esc($tirada['nombre']) ?>" required></div>
-                <div class="col-sm-4"><label class="form-label">Día 1</label><input type="date" name="fecha_inicio" class="form-control" value="<?= esc((string) $tirada['fecha_inicio']) ?>"></div>
-                <div class="col-sm-4"><label class="form-label">Plazo (último día de impresión)</label><input type="number" min="1" name="plazo_dias" class="form-control" value="<?= (int) $tirada['plazo_dias'] ?>"></div>
-                <div class="col-sm-2"><label class="form-label">Hombres</label><input type="number" min="0" name="objetivo_h" class="form-control" value="<?= (int) $tirada['objetivo_h'] ?>"></div>
-                <div class="col-sm-2"><label class="form-label">Mujeres</label><input type="number" min="0" name="objetivo_m" class="form-control" value="<?= (int) $tirada['objetivo_m'] ?>"></div>
+                <div class="col-sm-6"><label class="form-label">Día 1</label><input type="date" name="fecha_inicio" class="form-control" value="<?= esc((string) $tirada['fecha_inicio']) ?>"></div>
+                <div class="col-sm-6"><label class="form-label">Plazo (último día de impresión)</label><input type="number" min="1" name="plazo_dias" class="form-control" value="<?= (int) $tirada['plazo_dias'] ?>"></div>
                 <div class="col-sm-4">
                     <label class="form-label">Máquinas</label>
                     <textarea name="maquinas" rows="3" class="form-control mono"><?= esc($tirada['maquinas']) ?></textarea>
@@ -147,82 +151,90 @@
     </div>
 </div>
 <form method="post" id="formBorrarTirada" action="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/borrar') ?>"
-    onsubmit="return confirm('¿Borrar la tirada «<?= esc($tirada['nombre'], 'js') ?>» con sus tipos y placas?');">
+    onsubmit="return confirm('¿Borrar la tirada «<?= esc($tirada['nombre'], 'js') ?>» con sus piezas y placas?');">
     <?= csrf_field() ?>
 </form>
 
-<?php // ---- Tipos de pieza ---- ?>
-<div class="modal fade" id="modalTipos" tabindex="-1" aria-hidden="true">
+<?php // ---- Piezas del encargo ---- ?>
+<div class="modal fade" id="modalPiezas" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <form method="post" action="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/tipos') ?>" class="modal-content">
+        <form method="post" action="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/piezas') ?>" class="modal-content">
             <?= csrf_field() ?>
-            <div class="modal-header"><h5 class="modal-title">Tipos de pieza</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h5 class="modal-title">Piezas de la tirada</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <p class="small text-muted">
-                    <b>Por muñeco</b>: cuántas lleva cada uno (brazos 2). <b>H/M</b>: hay versión de hombre y de mujer.
-                    <b>Espera confirmación</b>: no se imprime antes del día de confirmación del diseño.
+                    <b>Necesarias</b>: el mínimo que hace falta. <b>Margen</b>: % de más que quieres imprimir para cubrir fallos.
+                    <b>Por placa</b>: cuántas caben. <b>Prioridad pintura</b>: 0–9, más alta = antes a pintar (sirve para ordenar la cola).
+                    <b>Espera confirmación</b>: no se imprime antes del día de confirmación.
                 </p>
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle" id="tablaTipos">
-                        <thead><tr><th>Nombre</th><th>Resina</th><th>Por placa</th><th>Por muñeco</th><th>H/M</th><th>Espera confirmación</th><th>Color</th><th></th></tr></thead>
+                    <table class="table table-sm align-middle" id="tablaPiezas">
+                        <thead><tr><th>Nombre</th><th>Resina</th><th>Necesarias</th><th>Margen %</th><th>Por placa</th><th>Prioridad pintura</th><th>Espera confirmación</th><th>Color</th><th></th></tr></thead>
                         <tbody>
-                            <?php foreach ($tipos as $i => $t): ?>
+                            <?php foreach ($piezas as $i => $pz): ?>
                                 <tr>
-                                    <td><input type="hidden" name="tipos[<?= $i ?>][id]" value="<?= (int) $t['id'] ?>"><input type="text" name="tipos[<?= $i ?>][nombre]" class="form-control form-control-sm" value="<?= esc($t['nombre']) ?>"></td>
-                                    <td><input type="text" name="tipos[<?= $i ?>][resina]" class="form-control form-control-sm" style="width: 7rem;" value="<?= esc($t['resina']) ?>"></td>
-                                    <td><input type="number" min="1" name="tipos[<?= $i ?>][por_placa]" class="form-control form-control-sm" style="width: 6rem;" value="<?= (int) $t['por_placa'] ?>"></td>
-                                    <td><input type="number" min="1" name="tipos[<?= $i ?>][por_muneco]" class="form-control form-control-sm" style="width: 5rem;" value="<?= (int) $t['por_muneco'] ?>"></td>
-                                    <td><input type="checkbox" name="tipos[<?= $i ?>][sexuado]" value="1" class="form-check-input" <?= $t['sexuado'] ? 'checked' : '' ?>></td>
-                                    <td><input type="checkbox" name="tipos[<?= $i ?>][bloqueado]" value="1" class="form-check-input" <?= $t['bloqueado'] ? 'checked' : '' ?>></td>
-                                    <td><input type="color" name="tipos[<?= $i ?>][color]" class="form-control form-control-sm form-control-color" value="<?= esc($t['color']) ?>"></td>
+                                    <td><input type="hidden" name="piezas[<?= $i ?>][id]" value="<?= (int) $pz['id'] ?>"><input type="text" name="piezas[<?= $i ?>][nombre]" class="form-control form-control-sm" value="<?= esc($pz['nombre']) ?>"></td>
+                                    <td><input type="text" name="piezas[<?= $i ?>][resina]" class="form-control form-control-sm" style="width: 7rem;" value="<?= esc($pz['resina']) ?>"></td>
+                                    <td><input type="number" min="0" name="piezas[<?= $i ?>][necesarias]" class="form-control form-control-sm" style="width: 6rem;" value="<?= (int) $pz['necesarias'] ?>"></td>
+                                    <td><input type="number" min="0" name="piezas[<?= $i ?>][margen]" class="form-control form-control-sm" style="width: 5rem;" value="<?= (int) $pz['margen'] ?>"></td>
+                                    <td><input type="number" min="1" name="piezas[<?= $i ?>][por_placa]" class="form-control form-control-sm" style="width: 6rem;" value="<?= (int) $pz['por_placa'] ?>"></td>
+                                    <td><input type="number" min="0" max="9" name="piezas[<?= $i ?>][prioridad]" class="form-control form-control-sm" style="width: 4.5rem;" value="<?= (int) $pz['prioridad'] ?>"></td>
+                                    <td><input type="checkbox" name="piezas[<?= $i ?>][espera_confirmacion]" value="1" class="form-check-input" <?= $pz['espera_confirmacion'] ? 'checked' : '' ?>></td>
+                                    <td><input type="color" name="piezas[<?= $i ?>][color]" class="form-control form-control-sm form-control-color" value="<?= esc($pz['color']) ?>"></td>
                                     <td><button type="button" class="btn btn-sm btn-outline-danger" data-quitar-fila title="Quitar"><i class="bi bi-x-lg"></i></button></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="addTipo"><i class="bi bi-plus-lg"></i> Añadir tipo</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="addPieza"><i class="bi bi-plus-lg"></i> Añadir pieza</button>
             </div>
-            <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar tipos</button></div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar piezas</button></div>
         </form>
     </div>
 </div>
 
-<?php // ---- Placas, en orden de cola ---- ?>
+<?php // ---- Placas, en orden de cola, con sus líneas de pieza ---- ?>
 <div class="modal fade" id="modalPlacas" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <form method="post" action="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/placas') ?>" class="modal-content">
+        <form method="post" action="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/placas') ?>" class="modal-content" id="formPlacas">
             <?= csrf_field() ?>
             <div class="modal-header"><h5 class="modal-title">Placas en orden de cola</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <p class="small text-muted">
                     Cada máquina coge, de las placas de su resina, la primera de esta lista que ya se pueda imprimir ese día.
-                    Subir o bajar una placa cambia cuándo sale. Las que ya están impresas lo siguen estando.
+                    Una placa lleva una o varias piezas, todas de la misma resina. Las impresas lo siguen estando y conservan sus fallidas.
                 </p>
-                <?php if ($tipos === []): ?>
-                    <p class="text-warning">Define antes los tipos de pieza.</p>
+                <?php if ($piezas === []): ?>
+                    <p class="text-warning">Define antes las piezas.</p>
                 <?php endif; ?>
+                <div class="text-danger small mb-2" id="placasError"></div>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle" id="tablaPlacas">
-                        <thead><tr><th></th><th>Código</th><th>Tipo</th><th>H</th><th>M</th><th>Unidades</th><th>Por qué va ahí</th><th></th></tr></thead>
+                        <thead><tr><th></th><th>Código</th><th>Piezas que lleva</th><th>Por qué va ahí</th><th></th></tr></thead>
                         <tbody>
-                            <?php foreach ($placas as $i => $p): ?>
-                                <tr data-placa>
+                            <?php $j = 0; foreach ($placas as $i => $p): ?>
+                                <tr data-placa data-i="<?= $i ?>">
                                     <td class="text-nowrap">
                                         <button type="button" class="btn btn-sm btn-link p-0" data-mover="-1" title="Subir"><i class="bi bi-arrow-up"></i></button>
                                         <button type="button" class="btn btn-sm btn-link p-0" data-mover="1" title="Bajar"><i class="bi bi-arrow-down"></i></button>
                                     </td>
                                     <td><input type="hidden" name="placas[<?= $i ?>][id]" value="<?= (int) $p['id'] ?>"><input type="text" name="placas[<?= $i ?>][codigo]" class="form-control form-control-sm" style="width: 5rem;" value="<?= esc($p['codigo']) ?>"><?= $p['impresa_en'] ? '<span class="small text-success">✓ impresa</span>' : '' ?></td>
-                                    <td>
-                                        <select name="placas[<?= $i ?>][tipo_id]" class="form-select form-select-sm" data-tipo style="width: 9rem;">
-                                            <?php foreach ($tipos as $t): ?>
-                                                <option value="<?= (int) $t['id'] ?>" <?= (int) $t['id'] === (int) $p['tipo_id'] ? 'selected' : '' ?>><?= esc($t['nombre']) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                    <td data-lineas>
+                                        <?php foreach ($lineas[(int) $p['id']] ?? [] as $l): $j++; ?>
+                                            <div class="tr-lin">
+                                                <input type="hidden" name="placas[<?= $i ?>][lineas][<?= $j ?>][id]" value="<?= (int) $l['id'] ?>">
+                                                <select name="placas[<?= $i ?>][lineas][<?= $j ?>][pieza_id]" class="form-select form-select-sm" data-pieza style="width: 10rem;">
+                                                    <?php foreach ($piezas as $pz): ?>
+                                                        <option value="<?= (int) $pz['id'] ?>" <?= (int) $pz['id'] === (int) $l['pieza_id'] ? 'selected' : '' ?>><?= esc($pz['nombre']) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <input type="number" min="0" name="placas[<?= $i ?>][lineas][<?= $j ?>][cantidad]" class="form-control form-control-sm" style="width: 5.5rem;" data-cant value="<?= (int) $l['cantidad'] ?>">
+                                                <button type="button" class="btn btn-sm btn-link text-danger p-0" data-quitar-linea title="Quitar pieza"><i class="bi bi-x"></i></button>
+                                            </div>
+                                        <?php endforeach; ?>
+                                        <button type="button" class="btn btn-sm btn-link p-0" data-add-linea><i class="bi bi-plus"></i> pieza</button>
                                     </td>
-                                    <td><input type="number" min="0" name="placas[<?= $i ?>][hombres]" class="form-control form-control-sm" style="width: 5rem;" data-h value="<?= (int) $p['hombres'] ?>"></td>
-                                    <td><input type="number" min="0" name="placas[<?= $i ?>][mujeres]" class="form-control form-control-sm" style="width: 5rem;" data-m value="<?= (int) $p['mujeres'] ?>"></td>
-                                    <td><input type="number" min="0" name="placas[<?= $i ?>][unidades]" class="form-control form-control-sm" style="width: 5.5rem;" data-u value="<?= (int) $p['unidades'] ?>"></td>
                                     <td><textarea name="placas[<?= $i ?>][motivo]" rows="1" class="form-control form-control-sm" style="min-width: 18rem;"><?= esc((string) $p['motivo']) ?></textarea></td>
                                     <td><button type="button" class="btn btn-sm btn-outline-danger" data-quitar-fila title="Quitar"><i class="bi bi-x-lg"></i></button></td>
                                 </tr>
@@ -230,8 +242,9 @@
                         </tbody>
                     </table>
                 </div>
-                <?php if ($tipos !== []): ?>
+                <?php if ($piezas !== []): ?>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="addPlaca"><i class="bi bi-plus-lg"></i> Añadir placa</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="ordenarPrioridad" title="Ordena la cola por la prioridad de pintura más alta de cada placa; a igual prioridad, se queda como está"><i class="bi bi-sort-down"></i> Ordenar por prioridad de pintura</button>
                 <?php endif; ?>
             </div>
             <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar placas</button></div>
@@ -244,21 +257,20 @@
     var CSRF_NOMBRE = '<?= csrf_token() ?>';
     var CSRF_VALOR = '<?= csrf_hash() ?>';
     var URL_AJUSTES = '<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '/ajustes') ?>';
-    var URL_IMPRESA = '<?= site_url('piezas/tiradas/placa') ?>/';
+    var URL_PLACA = '<?= site_url('piezas/tiradas/placa') ?>/';
 
     var PLAZO = <?= (int) $tirada['plazo_dias'] ?>;
     var HOY = <?= (int) $hoy ?>;
-    var OBJ = { h: <?= (int) $tirada['objetivo_h'] ?>, m: <?= (int) $tirada['objetivo_m'] ?> };
     var POR_DIA = <?= (int) $tirada['placas_dia'] ?>, POR_CORREO = <?= (int) $tirada['placas_correo'] ?>;
     var MAQ = <?= json_encode($maquinas, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
     var NOTAS = <?= json_encode((string) $tirada['notas'], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
-    var TIPOS = <?= json_encode(array_map(static fn (array $t) => [
-        'id' => (int) $t['id'], 'nombre' => $t['nombre'], 'resina' => $t['resina'], 'porPlaca' => (int) $t['por_placa'],
-        'porMuneco' => (int) $t['por_muneco'], 'sexuado' => (bool) $t['sexuado'], 'bloqueado' => (bool) $t['bloqueado'], 'color' => $t['color'],
-    ], $tipos), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+    var PIEZAS = <?= json_encode(array_map(static fn (array $pz) => [
+        'id' => (int) $pz['id'], 'nombre' => $pz['nombre'], 'resina' => $pz['resina'], 'nec' => (int) $pz['necesarias'], 'margen' => (int) $pz['margen'],
+        'porPlaca' => (int) $pz['por_placa'], 'prio' => (int) $pz['prioridad'], 'espera' => (bool) $pz['espera_confirmacion'], 'color' => $pz['color'],
+    ], $piezas), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
     var PLACAS = <?= json_encode(array_map(static fn (array $p) => [
-        'id' => (int) $p['id'], 'tipo' => (int) $p['tipo_id'], 'codigo' => $p['codigo'], 'h' => (int) $p['hombres'],
-        'm' => (int) $p['mujeres'], 'u' => (int) $p['unidades'], 'motivo' => (string) $p['motivo'], 'impresa' => $p['impresa_en'] !== null,
+        'id' => (int) $p['id'], 'codigo' => $p['codigo'], 'motivo' => (string) $p['motivo'], 'impresa' => $p['impresa_en'] !== null,
+        'lineas' => array_map(static fn (array $l) => ['id' => (int) $l['id'], 'pieza' => (int) $l['pieza_id'], 'cant' => (int) $l['cantidad'], 'fall' => (int) $l['fallidas']], $lineas[(int) $p['id']] ?? []),
     ], $placas), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 
     var S = {
@@ -268,10 +280,10 @@
     };
     var selected = null;
 
-    var TIPO = {}, P = {};
-    TIPOS.forEach(function (t) { TIPO[t.id] = t; });
+    var PZ = {}, P = {};
+    PIEZAS.forEach(function (pz) { PZ[pz.id] = pz; });
+    PLACAS = PLACAS.filter(function (p) { return p.lineas.length; });
     PLACAS.forEach(function (p) { P[p.id] = p; });
-    var NOBJ = OBJ.h + OBJ.m;
 
     function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
@@ -283,13 +295,20 @@
             .then(function (r) { return r.json(); })
             .then(function (d) { if (!d.ok) throw d; return d; });
     }
+    function resinaDe(p) { return PZ[p.lineas[0].pieza].resina; }
+    function colorDe(p) { return PZ[p.lineas[0].pieza].color; }
+    function esperaDe(p) { return p.lineas.some(function (l) { return PZ[l.pieza].espera; }); }
+    function pendientesIguales(p, l) {
+        return PLACAS.filter(function (o) { return o !== p && !o.impresa && o.lineas.some(function (x) { return x.pieza === l.pieza && x.cant === l.cant; }); }).length;
+    }
+    function fallidasDe(p) { return p.lineas.reduce(function (a, l) { return a + l.fall; }, 0); }
 
     // ---- simulación: cada máquina coge de la cola de su resina la primera placa ya imprimible ----
     var RESINAS_MAQ = MAQ.map(function (m) { return m.resina; });
     function simulate(conf, cambio, fuera) {
         var colas = {}, sinMaquina = [];
         PLACAS.forEach(function (p) {
-            var r = TIPO[p.tipo].resina;
+            var r = resinaDe(p);
             if (!cambio && RESINAS_MAQ.indexOf(r) < 0) { sinMaquina.push(p.id); return; }
             (colas[r] = colas[r] || []).push(p.id);
         });
@@ -297,7 +316,7 @@
         function quedan() { return Object.keys(colas).some(function (r) { return colas[r].length; }); }
         function take(r, day) {
             var q = colas[r] || [];
-            for (var i = 0; i < q.length; i++) { if (!TIPO[P[q[i]].tipo].bloqueado || day >= conf) return q.splice(i, 1)[0]; }
+            for (var i = 0; i < q.length; i++) { if (!esperaDe(P[q[i]]) || day >= conf) return q.splice(i, 1)[0]; }
             return null;
         }
         for (var day = 1; day <= 365 && quedan(); day++) {
@@ -326,35 +345,34 @@
         return 0;
     }
 
-    // ---- cálculos ----
-    function units(ids) {
+    // ---- cálculos por pieza: buenas = cantidad - fallidas ----
+    function cuenta(ids) {
         var r = {};
-        TIPOS.forEach(function (t) { r[t.id] = { h: 0, m: 0, u: 0 }; });
-        ids.forEach(function (id) { var p = P[id], o = r[p.tipo]; o.u += p.u; o.h += p.h; o.m += p.m; });
+        PIEZAS.forEach(function (pz) { r[pz.id] = { cant: 0, fall: 0, buenas: 0, placas: 0 }; });
+        ids.forEach(function (id) { P[id].lineas.forEach(function (l) { var o = r[l.pieza]; o.cant += l.cant; o.fall += l.fall; o.buenas += l.cant - l.fall; o.placas++; }); });
         return r;
     }
-    function dolls(u) {
-        var h = Infinity, m = Infinity, sueltos = Infinity, lim = null, limS = null;
-        TIPOS.forEach(function (t) {
-            if (t.sexuado) {
-                h = Math.min(h, Math.floor(u[t.id].h / t.porMuneco));
-                m = Math.min(m, Math.floor(u[t.id].m / t.porMuneco));
-            } else {
-                var n = Math.floor(u[t.id].u / t.porMuneco);
-                if (n < sueltos) { sueltos = n; limS = t.nombre; }
-            }
-        });
-        if (h === Infinity) { h = 0; m = 0; var tot = sueltos === Infinity ? 0 : sueltos; return { h: null, m: null, tot: tot, lim: null }; }
-        var tot2 = Math.min(h + m, sueltos);
-        if (tot2 < h + m) lim = limS;
-        return { h: h, m: m, tot: tot2, lim: lim };
+    function objetivo(pz) { return pz.nec + Math.ceil(pz.nec * pz.margen / 100); }
+    function balance(pz, plan, hecho) {
+        var obj = objetivo(pz), prev = plan.buenas, imp = hecho.buenas;
+        var b = { nec: pz.nec, obj: obj, prev: prev, imp: imp, fall: plan.fall, faltaMin: Math.max(0, pz.nec - imp), faltaObj: Math.max(0, obj - imp) };
+        if (prev < pz.nec) { b.estado = 'minimo'; b.texto = 'Faltan ' + (pz.nec - prev) + ' para el mínimo: añade placa'; }
+        else if (prev < obj) { b.estado = 'margen'; b.texto = 'Margen +' + (prev - pz.nec) + ' de +' + (obj - pz.nec); }
+        else { b.estado = 'ok'; b.texto = pz.nec ? 'Margen cubierto +' + (prev - pz.nec) : 'Sin mínimo fijado'; }
+        if (plan.fall) b.texto += ' · ' + plan.fall + ' fallidas';
+        return b;
     }
-    function necesario(t) { return t.porMuneco * NOBJ; }
+    function cubierta(c) {
+        var pct = null, lim = null;
+        PIEZAS.forEach(function (pz) {
+            if (!pz.nec) return;
+            var v = Math.min(1, c[pz.id].buenas / pz.nec);
+            if (pct === null || v < pct) { pct = v; lim = pz.nombre; }
+        });
+        return { pct: pct === null ? null : Math.floor(pct * 100), lim: lim };
+    }
     function desc(p) {
-        var t = TIPO[p.tipo];
-        if (!t.sexuado) return p.u + ' ' + esc(t.nombre.toLowerCase());
-        var parts = []; if (p.h) parts.push(p.h + ' H'); if (p.m) parts.push(p.m + ' M');
-        return esc(t.nombre) + ' · ' + parts.join(' + ');
+        return p.lineas.map(function (l) { return l.cant + ' ' + esc(PZ[l.pieza].nombre); }).join(' + ');
     }
     function slotNombre(s) { return s < POR_CORREO ? 'correo' : (POR_DIA - POR_CORREO > 1 ? 'en casa ' + (s - POR_CORREO + 1) : 'en casa'); }
 
@@ -364,11 +382,24 @@
         var alt = simulate(S.conf, !S.cambio, S.fuera);
         var lcNo = latestConf(false), lcSi = latestConf(true);
         var margin = PLAZO - sim.last;
-        var cls = sim.sinMaquina.length || margin < 0 ? 'bad' : margin <= 1 ? 'warn' : '';
+
+        var allIds = PLACAS.map(function (p) { return p.id; });
+        var doneIds = allIds.filter(function (id) { return P[id].impresa; });
+        var planIds = Object.keys(sim.where).filter(function (k) { return sim.where[k].day <= HOY; });
+        var cPlan = cuenta(allIds), cDone = cuenta(doneIds), cToday = cuenta(planIds);
+        var BAL = {};
+        PIEZAS.forEach(function (pz) { BAL[pz.id] = balance(pz, cPlan[pz.id], cDone[pz.id]); });
+        var bajoMin = PIEZAS.filter(function (pz) { return BAL[pz.id].estado === 'minimo'; });
+        var sinMargen = PIEZAS.filter(function (pz) { return BAL[pz.id].estado === 'margen'; });
+        var N = Math.max(PLAZO, sim.last, 1);
+
+        var cls = sim.sinMaquina.length || margin < 0 || bajoMin.length ? 'bad' : margin <= 1 || sinMargen.length ? 'warn' : '';
         var head = !PLACAS.length ? 'Todavía no hay placas: defínelas en «Placas».'
             : margin < 0 ? 'No entra en plazo: la última placa sale el día ' + sim.last + ' (' + plural(-margin, 'día', 'días') + ' tarde).'
             : 'La última placa sale el día ' + sim.last + ': ' + plural(margin, 'día', 'días') + ' de margen.';
         var lines = [];
+        bajoMin.forEach(function (pz) { lines.push('<b class="text-danger">' + esc(pz.nombre) + ': faltan ' + (pz.nec - BAL[pz.id].prev) + ' para el mínimo (' + pz.nec + ').</b> Añade una placa con ellas.'); });
+        sinMargen.forEach(function (pz) { var b = BAL[pz.id]; lines.push('<b style="color:var(--tr-amber)">' + esc(pz.nombre) + ': llega al mínimo, pero el margen es +' + (b.prev - b.nec) + ' de +' + (b.obj - b.nec) + '.</b>' + (b.fall ? ' ' + plural(b.fall, 'fallida', 'fallidas') + '.' : '')); });
         if (sim.sinMaquina.length) lines.push('<b class="text-danger">' + plural(sim.sinMaquina.length, 'placa', 'placas') + ' sin máquina de su resina</b> (' + sim.sinMaquina.map(function (id) { return esc(P[id].codigo); }).join(', ') + '): añade una máquina o permite el cambio de resina.');
         lines.push('Cambios de resina: <b>' + sim.changes + '</b>.');
         if (!S.cambio) {
@@ -379,39 +410,34 @@
         }
         if (lcNo === 0 && lcSi === 0 && PLACAS.length) lines.push('Ni confirmando el día 1 entra en plazo con estas máquinas.');
 
-        var allIds = PLACAS.map(function (p) { return p.id; });
-        var doneIds = allIds.filter(function (id) { return P[id].impresa; });
-        var planIds = Object.keys(sim.where).filter(function (k) { return sim.where[k].day <= HOY; });
-        var uDone = units(doneIds), uPlan = units(allIds), uToday = units(planIds);
-        var dDone = dolls(uDone), dToday = dolls(uToday);
-        var N = Math.max(PLAZO, sim.last, 1);
-
         var h = '';
         h += '<div class="tr-controls">' +
-            '<span class="small text-muted">' + (NOBJ ? NOBJ + ' muñecos (' + OBJ.h + ' H / ' + OBJ.m + ' M) · ' : '') + plural(MAQ.length, 'máquina', 'máquinas') + ' · plazo día ' + PLAZO + ' · hoy es el <b>día ' + HOY + '</b></span>' +
-            '<span class="d-flex align-items-center gap-2"><b class="small">Confirmación del diseño</b><span class="tr-step"><button type="button" data-conf="-1" aria-label="Un día antes">−</button><output>día ' + S.conf + '</output><button type="button" data-conf="1" aria-label="Un día después">+</button></span></span>' +
+            '<span class="small text-muted">' + plural(PIEZAS.length, 'pieza', 'piezas') + ' · ' + plural(PLACAS.length, 'placa', 'placas') + ' · ' + plural(MAQ.length, 'máquina', 'máquinas') + ' · plazo día ' + PLAZO + ' · hoy es el <b>día ' + HOY + '</b></span>' +
+            '<span class="d-flex align-items-center gap-2"><b class="small">Confirmación</b><span class="tr-step"><button type="button" data-conf="-1" aria-label="Un día antes">−</button><output>día ' + S.conf + '</output><button type="button" data-conf="1" aria-label="Un día después">+</button></span></span>' +
             '<span class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="trCambio"' + (S.cambio ? ' checked' : '') + '><label class="form-check-label small fw-semibold" for="trCambio">Permitir cambio de resina cuando una máquina se queda sin nada que imprimir</label></span>' +
             '<span class="small text-muted" id="trMsg"></span></div>';
         h += '<div class="tr-status ' + cls + '"><strong>' + head + '</strong><span class="small">' + lines.join('<br>') + '</span></div>';
 
-        // progreso
-        h += '<section><h6>Progreso por tipo</h6><div class="tr-panel tr-bars">';
-        TIPOS.forEach(function (t) {
-            var d = uDone[t.id].u, pl = uPlan[t.id].u || 1, td = uToday[t.id].u, ne = necesario(t);
-            var sub = t.sexuado ? '<div class="text-muted mono" style="font-size:.78rem">H ' + uDone[t.id].h + '/' + t.porMuneco * OBJ.h + ' · M ' + uDone[t.id].m + '/' + t.porMuneco * OBJ.m + '</div>' : '';
-            var marg = ne ? Math.round((uPlan[t.id].u / ne - 1) * 100) : 0;
-            h += '<div class="tr-bar"><div class="nm"><span class="tr-dot" style="background:' + t.color + '"></span>' + esc(t.nombre) + ' <span class="tr-resin">' + esc(t.resina) + '</span></div>' +
-                '<div class="tr-track" title="Impreso ' + d + ' · previsto hasta hoy ' + td + ' · total ' + uPlan[t.id].u + '">' +
-                '<div class="plan" style="width:' + Math.min(100, td / pl * 100) + '%;background:' + t.color + '"></div>' +
-                '<div class="fill" style="width:' + Math.min(100, d / pl * 100) + '%;background:' + t.color + '"></div>' +
-                (ne ? '<div class="need" style="left:' + Math.min(100, ne / pl * 100) + '%"></div>' : '') + '</div>' +
-                '<div class="num mono">' + d + ' / ' + ne + ' <span class="text-muted">(' + (marg >= 0 ? '+' : '') + marg + ' %)</span>' + sub + '</div></div>';
+        // balance por pieza
+        h += '<section><h6>Balance por pieza</h6><div class="tr-panel tr-bars">';
+        PIEZAS.forEach(function (pz) {
+            var b = BAL[pz.id], esc1 = Math.max(cPlan[pz.id].cant, b.obj, 1), td = cToday[pz.id].buenas;
+            h += '<div class="tr-bar"><div class="nm"><span class="tr-dot" style="background:' + pz.color + '"></span>' + esc(pz.nombre) + ' <span class="tr-resin">' + esc(pz.resina) + '</span></div>' +
+                '<div class="tr-track" title="Buenas impresas ' + b.imp + ' · previstas hasta hoy ' + td + ' · previstas en total ' + b.prev + '">' +
+                '<div class="plan" style="width:' + Math.min(100, td / esc1 * 100) + '%;background:' + pz.color + '"></div>' +
+                '<div class="fill" style="width:' + Math.min(100, b.imp / esc1 * 100) + '%;background:' + pz.color + '"></div>' +
+                (b.nec ? '<div class="need" style="left:' + Math.min(100, b.nec / esc1 * 100) + '%"></div>' : '') +
+                (b.obj > b.nec ? '<div class="need obj" style="left:' + Math.min(100, b.obj / esc1 * 100) + '%"></div>' : '') + '</div>' +
+                '<div class="num"><span class="mono">' + b.imp + ' / ' + b.nec + '</span> <span class="text-muted mono">(previstas ' + b.prev + ')</span>' +
+                '<div class="est tr-est-' + b.estado + '">' + b.texto + '</div>' +
+                (b.faltaMin ? '<div class="est text-muted">Por imprimir buenas: ' + b.faltaMin + ' para el mínimo' + (b.faltaObj > b.faltaMin ? ', ' + b.faltaObj + ' con margen' : '') + '</div>' : '') + '</div></div>';
         });
-        h += '<div class="tr-legend"><span><i style="background:var(--bs-body-color)"></i>fuerte: impreso</span><span><i style="background:var(--bs-secondary-color);opacity:.4"></i>claro: previsto hasta hoy</span><span>raya: lo necesario; a su derecha, margen</span></div>';
-        if (NOBJ) {
-            h += '<div class="tr-dolls"><div><div class="small text-muted text-uppercase fw-semibold">Muñecos completos con lo impreso</div><span class="tr-big mono">' + dDone.tot + '</span> <span class="text-muted">/ ' + NOBJ + '</span></div>' +
-                (dDone.h !== null ? '<div class="mono">H ' + dDone.h + ' · M ' + dDone.m + (dDone.lim ? ' <span class="text-muted">(limitado por ' + esc(dDone.lim.toLowerCase()) + ')</span>' : '') + '</div>' : '') +
-                '<div class="text-muted">Según el plan, al cerrar hoy: <b class="mono">' + dToday.tot + '</b></div></div>';
+        h += '<div class="tr-legend"><span><i style="background:var(--bs-body-color)"></i>fuerte: buenas impresas</span><span><i style="background:var(--bs-secondary-color);opacity:.4"></i>claro: previsto hasta hoy</span><span>raya: mínimo · raya ámbar: con margen</span><span>fallidas restan de lo impreso y de lo previsto</span></div>';
+        var cv = cubierta(cDone), ch = cubierta(cToday);
+        if (cv.pct !== null) {
+            h += '<div class="tr-dolls"><div><div class="small text-muted text-uppercase fw-semibold">Tirada cubierta con lo impreso</div><span class="tr-big mono">' + cv.pct + ' %</span></div>' +
+                (cv.pct < 100 ? '<div class="text-muted">limitada por <b>' + esc(cv.lim) + '</b></div>' : '') +
+                '<div class="text-muted">Según el plan, al cerrar hoy: <b class="mono">' + ch.pct + ' %</b></div></div>';
         }
         h += '</div></section>';
 
@@ -419,15 +445,15 @@
         h += '<section><h6>Línea de tiempo</h6><div class="tr-panel"><div class="tr-scroll"><div class="tr-gantt" style="--n:' + N + '"><div></div><div class="tr-gdays" style="margin-top:22px">';
         for (var d = 1; d <= N; d++) h += '<span class="' + (d > PLAZO ? 'over' : '') + '">' + d + '</span>';
         h += '</div>';
-        TIPOS.forEach(function (t) {
-            h += '<div class="tr-glab"><span class="tr-dot" style="background:' + t.color + '"></span>' + esc(t.nombre) + '</div><div class="tr-grow">';
+        PIEZAS.forEach(function (pz) {
+            h += '<div class="tr-glab"><span class="tr-dot" style="background:' + pz.color + '"></span>' + esc(pz.nombre) + '</div><div class="tr-grow">';
             for (var d = 1; d <= N; d++) {
                 h += '<div class="tr-gcell">';
                 var r = sim.rows[d - 1];
                 if (r) r.m.forEach(function (slots) { slots.forEach(function (c) {
-                    if (!c || P[c.id].tipo !== t.id) return;
+                    if (!c || !P[c.id].lineas.some(function (l) { return l.pieza === pz.id; })) return;
                     var st = P[c.id].impresa ? '' : (d < HOY ? ' pend late' : ' pend');
-                    h += '<button type="button" class="tr-blk' + st + '" data-id="' + c.id + '" style="background:' + t.color + ';--bc:' + t.color + '" title="' + esc(P[c.id].codigo) + '">' + esc(P[c.id].codigo) + '</button>';
+                    h += '<button type="button" class="tr-blk' + st + '" data-id="' + c.id + '" style="background:' + pz.color + ';--bc:' + pz.color + '" title="' + esc(P[c.id].codigo) + '">' + esc(P[c.id].codigo) + '</button>';
                 }); });
                 h += '</div>';
             }
@@ -445,7 +471,7 @@
         h += '<section id="trDetalle">' + detail(sim) + '</section>';
 
         // rejilla por día
-        h += '<section><h6>Placas por día</h6><p class="small text-muted mb-2">Pulsa una placa para ver qué lleva y por qué va ahí, y márcala como impresa. «Fuera» quita los huecos de casa de ese día y el plan se recoloca solo.</p>' +
+        h += '<section><h6>Placas por día</h6><p class="small text-muted mb-2">Pulsa una placa para ver qué lleva y por qué va ahí, márcala como impresa y apunta sus fallidas. «Fuera» quita los huecos de casa de ese día y el plan se recoloca solo.</p>' +
             '<div class="tr-panel tr-scroll" style="padding:8px 10px"><table class="tr-grid"><thead><tr><th>Día</th>';
         MAQ.forEach(function (m) { for (var s = 0; s < POR_DIA; s++) h += '<th>' + esc(m.nombre) + ' · ' + slotNombre(s) + '</th>'; });
         h += '<th></th></tr></thead><tbody>';
@@ -457,11 +483,11 @@
             h += '<tr class="' + trc + '"><td class="tr-dayn">' + d2 + (d2 === S.conf ? '<small>confirmación</small>' : d2 === HOY ? '<small>hoy</small>' : d2 > PLAZO ? '<small>fuera de plazo</small>' : '') + '</td>';
             r.m.forEach(function (slots, i) { slots.forEach(function (c, s) {
                 if (!c) { h += '<td><div class="tr-cell empty">' + (s >= POR_CORREO && away ? 'fuera de casa' : 'libre') + '</div></td>'; return; }
-                var p = P[c.id], t = TIPO[p.tipo];
+                var p = P[c.id], f = fallidasDe(p);
                 var st = (p.impresa ? ' done' : (d2 < HOY ? ' late' : '')) + (selected === c.id ? ' sel' : '');
-                h += '<td><button type="button" class="tr-cell' + st + '" data-id="' + c.id + '" style="--bc:' + t.color + '">' +
+                h += '<td><button type="button" class="tr-cell' + st + '" data-id="' + c.id + '" style="--bc:' + colorDe(p) + '">' +
                     (c.change ? '<span class="tr-chg">cambio a ' + esc(c.change) + '</span>' : '') +
-                    '<span class="code">' + esc(p.codigo) + '</span><span class="what">' + desc(p) + '</span></button></td>';
+                    '<span class="code">' + esc(p.codigo) + (f ? ' <span class="tr-fail">✗ ' + f + '</span>' : '') + '</span><span class="what">' + desc(p) + '</span></button></td>';
             }); });
             h += '<td>' + (POR_DIA > POR_CORREO ? '<button type="button" class="tr-away" data-day="' + d2 + '" aria-pressed="' + away + '">' + (away ? 'fuera' : 'en casa') + '</button>' : '') + '</td></tr>';
         }
@@ -479,25 +505,40 @@
         }
 
         // resumen
-        h += '<section><div class="tr-panel tr-scroll"><table class="table table-sm tr-tbl mb-0"><thead><tr><th>Tipo</th><th>Resina</th><th class="n">Por placa</th><th class="n">Placas</th><th class="n">Total</th><th class="n">Necesario</th><th class="n">Margen</th></tr></thead><tbody>';
-        TIPOS.forEach(function (t) {
-            var n = PLACAS.filter(function (p) { return p.tipo === t.id; }).length, tot = uPlan[t.id].u, ne = necesario(t);
-            h += '<tr><td><span class="tr-dot me-2" style="background:' + t.color + '"></span>' + esc(t.nombre) + '</td><td>' + esc(t.resina) + '</td><td class="n">' + t.porPlaca + '</td><td class="n">' + n + '</td><td class="n">' + tot + '</td><td class="n">' + ne + '</td><td class="n' + (tot < ne ? ' text-danger' : '') + '">' + (tot - ne >= 0 ? '+' : '') + (tot - ne) + '</td></tr>';
+        h += '<section><div class="tr-panel tr-scroll"><table class="table table-sm tr-tbl mb-0"><thead><tr><th>Pieza</th><th>Resina</th><th class="n">Prioridad</th><th class="n">Por placa</th><th class="n">Placas</th><th class="n">Total</th><th class="n">Fallidas</th><th class="n">Necesarias</th><th class="n">Margen pedido</th><th class="n">Margen real</th></tr></thead><tbody>';
+        PIEZAS.forEach(function (pz) {
+            var c = cPlan[pz.id], b = BAL[pz.id], real = b.prev - b.nec;
+            h += '<tr><td><span class="tr-dot me-2" style="background:' + pz.color + '"></span>' + esc(pz.nombre) + (pz.espera ? ' <span class="small text-muted">· espera confirmación</span>' : '') + '</td><td>' + esc(pz.resina) + '</td><td class="n">' + pz.prio + '</td><td class="n">' + pz.porPlaca + '</td><td class="n">' + c.placas + '</td><td class="n">' + c.cant + '</td><td class="n' + (c.fall ? ' text-danger' : '') + '">' + c.fall + '</td><td class="n">' + b.nec + '</td><td class="n">+' + (b.obj - b.nec) + ' (' + pz.margen + ' %)</td><td class="n tr-est-' + b.estado + '">' + (real >= 0 ? '+' : '') + real + '</td></tr>';
         });
-        h += '<tr><td><b>Total</b></td><td></td><td></td><td class="n"><b>' + PLACAS.length + '</b></td><td></td><td></td><td></td></tr></tbody></table></div></section>';
+        h += '<tr><td><b>Total</b></td><td></td><td></td><td></td><td class="n"><b>' + PLACAS.length + '</b></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table></div></section>';
 
         document.getElementById('tr-app').innerHTML = h;
     }
 
     function detail(sim) {
         if (!selected || !P[selected]) return '<div class="tr-panel tr-detail"><div class="small text-muted text-uppercase fw-semibold">Detalle de placa</div><div class="text-muted">Pulsa cualquier placa de la línea de tiempo o de la rejilla para ver su contenido y el motivo de su posición.</div></div>';
-        var p = P[selected], w = sim.where[selected], t = TIPO[p.tipo];
+        var p = P[selected], w = sim.where[selected];
         var pos = w ? 'Día ' + w.day + ' · máquina ' + esc(MAQ[w.m].nombre) + ' · ' + slotNombre(w.s) : 'Sin hueco en el plan';
         var st = p.impresa ? 'Impresa' : (w && w.day < HOY ? 'Atrasada' : 'Pendiente');
         var col = st === 'Impresa' ? 'var(--tr-ok)' : st === 'Atrasada' ? 'var(--tr-red)' : 'var(--tr-muted)';
-        return '<div class="tr-panel tr-detail" style="--bc:' + t.color + '"><div class="d-flex flex-wrap gap-3 align-items-baseline"><span class="code">' + esc(p.codigo) + '</span><b>' + desc(p) + '</b><span class="tr-resin">' + esc(t.resina) + '</span><span class="text-muted">' + pos + '</span><span class="mono" style="color:' + col + '">' + st + '</span></div>' +
+        var tabla = '<table class="table table-sm mb-0" style="max-width:760px"><thead><tr><th>Pieza</th><th class="text-end">Lleva</th>' + (p.impresa ? '<th class="text-end">Fallidas</th><th class="text-end">Buenas</th>' : '') + '<th></th></tr></thead><tbody>' +
+            p.lineas.map(function (l) {
+                var pz = PZ[l.pieza], iguales = pendientesIguales(p, l);
+                var prop = iguales || pz.porPlaca === l.cant
+                    ? '<label class="small text-muted"><input type="checkbox" class="form-check-input me-1" data-prop="' + l.id + '" checked>si cambia, aplicar también a ' +
+                      (iguales ? plural(iguales, 'placa pendiente', 'placas pendientes') + ' con ' + l.cant : '') + (iguales && pz.porPlaca === l.cant ? ' y a ' : '') + (pz.porPlaca === l.cant ? '«por placa»' : '') + '</label>'
+                    : '';
+                return '<tr><td><span class="tr-dot me-2" style="background:' + pz.color + '"></span>' + esc(pz.nombre) + '</td>' +
+                    '<td class="text-end"><input type="number" min="1" class="form-control form-control-sm d-inline-block text-end" style="width:5.5rem" data-cant="' + l.id + '" value="' + l.cant + '"></td>' +
+                    (p.impresa ? '<td class="text-end"><input type="number" min="0" class="form-control form-control-sm d-inline-block text-end" style="width:5.5rem" data-fall="' + l.id + '" value="' + l.fall + '"></td><td class="text-end mono">' + (l.cant - l.fall) + '</td>' : '') +
+                    '<td>' + prop + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        return '<div class="tr-panel tr-detail" style="--bc:' + colorDe(p) + '"><div class="d-flex flex-wrap gap-3 align-items-baseline"><span class="code">' + esc(p.codigo) + '</span><span class="tr-resin">' + esc(resinaDe(p)) + '</span><span class="text-muted">' + pos + '</span><span class="mono" style="color:' + col + '">' + st + '</span></div>' +
+            tabla +
             (p.motivo ? '<p class="mb-0" style="max-width:70ch">' + esc(p.motivo) + '</p>' : '') +
-            '<div class="d-flex gap-2"><button type="button" class="btn btn-sm ' + (p.impresa ? 'btn-outline-secondary' : 'btn-success') + '" id="trMarcar">' + (p.impresa ? 'Desmarcar' : 'Marcar como impresa') + '</button><button type="button" class="btn btn-sm btn-outline-secondary" id="trCerrar">Cerrar</button></div></div>';
+            '<div class="d-flex gap-2 flex-wrap">' +
+            '<button type="button" class="btn btn-sm btn-primary" id="trLineas">Guardar ' + (p.impresa ? 'cantidades y fallidas' : 'cantidades') + '</button>' +
+            '<button type="button" class="btn btn-sm ' + (p.impresa ? 'btn-outline-secondary' : 'btn-success') + '" id="trMarcar">' + (p.impresa ? 'Desmarcar' : 'Marcar como impresa') + '</button><button type="button" class="btn btn-sm btn-outline-secondary" id="trCerrar">Cerrar</button></div></div>';
     }
 
     function aviso(texto) { var m = document.getElementById('trMsg'); if (m) m.textContent = texto; }
@@ -520,79 +561,134 @@
         else if (b.dataset.id) { selected = Number(b.dataset.id); render(); var ds = document.getElementById('trDetalle'); if (ds) ds.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
         else if (b.id === 'trCerrar') { selected = null; render(); }
         else if (b.id === 'trMarcar' && selected) {
+            var p = P[selected], f = fallidasDe(p);
+            if (p.impresa && !confirm('¿Desmarcar ' + p.codigo + ' como impresa?' + (f ? ' Se borran sus ' + f + ' fallidas.' : ''))) return;
             b.disabled = true;
-            post(URL_IMPRESA + selected + '/impresa', {})
-                .then(function (d) { P[selected].impresa = d.impresa_en !== null; render(); })
-                .catch(function () { b.disabled = false; alert('No se pudo marcar la placa.'); });
+            post(URL_PLACA + selected + '/impresa', {})
+                .then(function (d) { p.impresa = d.impresa_en !== null; if (!p.impresa) p.lineas.forEach(function (l) { l.fall = 0; }); render(); })
+                .catch(function () { b.disabled = false; aviso('No se pudo marcar la placa.'); });
+        }
+        else if (b.id === 'trLineas' && selected) {
+            var campos = {};
+            app.querySelectorAll('[data-cant]').forEach(function (inp) { campos['cantidad[' + inp.dataset.cant + ']'] = inp.value || 1; });
+            app.querySelectorAll('[data-fall]').forEach(function (inp) { campos['fallidas[' + inp.dataset.fall + ']'] = inp.value || 0; });
+            app.querySelectorAll('[data-prop]').forEach(function (inp) { if (inp.checked) campos['propagar[' + inp.dataset.prop + ']'] = 1; });
+            b.disabled = true;
+            post(URL_PLACA + selected + '/lineas', campos)
+                .then(function (d) {
+                    try { sessionStorage.setItem('trAviso', 'Guardado' + (d.propagadas ? ' · ' + plural(d.propagadas, 'placa pendiente cambiada', 'placas pendientes cambiadas') : '')); } catch (err) {}
+                    location.hash = 'placa-' + selected;
+                    location.reload();
+                })
+                .catch(function () { b.disabled = false; aviso('No se pudo guardar.'); });
         }
     });
     app.addEventListener('change', function (e) {
         if (e.target.id === 'trCambio') { S.cambio = e.target.checked; render(); guardarAjustes(); }
     });
+    var m = /^#placa-(\d+)$/.exec(location.hash);
+    if (m && P[Number(m[1])]) selected = Number(m[1]);
     render();
+    if (selected) { var ds0 = document.getElementById('trDetalle'); if (ds0) ds0.scrollIntoView({ block: 'center' }); }
+    try { var av = sessionStorage.getItem('trAviso'); if (av) { aviso(av); sessionStorage.removeItem('trAviso'); } } catch (err) {}
 
-    // ---- modales de edición: filas de tipos y placas ----
+    // ---- modales de edición: piezas y placas con sus líneas ----
     var contador = 1000;
+    function opcionesPieza(sel) {
+        return PIEZAS.map(function (pz) { return '<option value="' + pz.id + '"' + (pz.id === sel ? ' selected' : '') + '>' + esc(pz.nombre) + '</option>'; }).join('');
+    }
+    function nuevaLinea(i, piezaId) {
+        var j = contador++, pz = PZ[piezaId];
+        var div = document.createElement('div');
+        div.className = 'tr-lin';
+        div.innerHTML = '<select name="placas[' + i + '][lineas][' + j + '][pieza_id]" class="form-select form-select-sm" data-pieza style="width:10rem">' + opcionesPieza(piezaId) + '</select>' +
+            '<input type="number" min="0" name="placas[' + i + '][lineas][' + j + '][cantidad]" class="form-control form-control-sm" style="width:5.5rem" data-cant value="' + (pz ? pz.porPlaca : 0) + '">' +
+            '<button type="button" class="btn btn-sm btn-link text-danger p-0" data-quitar-linea title="Quitar pieza"><i class="bi bi-x"></i></button>';
+        return div;
+    }
     document.addEventListener('click', function (e) {
         var q = e.target.closest('[data-quitar-fila]');
         if (q) { q.closest('tr').remove(); return; }
+        var ql = e.target.closest('[data-quitar-linea]');
+        if (ql) { ql.closest('.tr-lin').remove(); return; }
+        var al = e.target.closest('[data-add-linea]');
+        if (al) {
+            var tr = al.closest('tr[data-placa]'), prev = tr.querySelector('[data-pieza]');
+            al.parentNode.insertBefore(nuevaLinea(tr.dataset.i, prev ? Number(prev.value) : PIEZAS[0].id), al);
+            return;
+        }
         var mv = e.target.closest('[data-mover]');
         if (mv) {
-            var tr = mv.closest('tr');
-            if (mv.dataset.mover === '-1' && tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling);
-            if (mv.dataset.mover === '1' && tr.nextElementSibling) tr.parentNode.insertBefore(tr.nextElementSibling, tr);
+            var fila = mv.closest('tr');
+            if (mv.dataset.mover === '-1' && fila.previousElementSibling) fila.parentNode.insertBefore(fila, fila.previousElementSibling);
+            if (mv.dataset.mover === '1' && fila.nextElementSibling) fila.parentNode.insertBefore(fila.nextElementSibling, fila);
         }
     });
 
-    document.getElementById('addTipo').addEventListener('click', function () {
+    document.getElementById('addPieza').addEventListener('click', function () {
         var i = contador++;
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td><input type="text" name="tipos[' + i + '][nombre]" class="form-control form-control-sm" placeholder="Nombre"></td>' +
-            '<td><input type="text" name="tipos[' + i + '][resina]" class="form-control form-control-sm" style="width:7rem" value="' + esc(RESINAS_MAQ[0] || '') + '"></td>' +
-            '<td><input type="number" min="1" name="tipos[' + i + '][por_placa]" class="form-control form-control-sm" style="width:6rem" value="1"></td>' +
-            '<td><input type="number" min="1" name="tipos[' + i + '][por_muneco]" class="form-control form-control-sm" style="width:5rem" value="1"></td>' +
-            '<td><input type="checkbox" name="tipos[' + i + '][sexuado]" value="1" class="form-check-input"></td>' +
-            '<td><input type="checkbox" name="tipos[' + i + '][bloqueado]" value="1" class="form-check-input"></td>' +
-            '<td><input type="color" name="tipos[' + i + '][color]" class="form-control form-control-sm form-control-color" value="#9aa5b3"></td>' +
+        tr.innerHTML = '<td><input type="text" name="piezas[' + i + '][nombre]" class="form-control form-control-sm" placeholder="Nombre"></td>' +
+            '<td><input type="text" name="piezas[' + i + '][resina]" class="form-control form-control-sm" style="width:7rem" value="' + esc(RESINAS_MAQ[0] || '') + '"></td>' +
+            '<td><input type="number" min="0" name="piezas[' + i + '][necesarias]" class="form-control form-control-sm" style="width:6rem" value="0"></td>' +
+            '<td><input type="number" min="0" name="piezas[' + i + '][margen]" class="form-control form-control-sm" style="width:5rem" value="0"></td>' +
+            '<td><input type="number" min="1" name="piezas[' + i + '][por_placa]" class="form-control form-control-sm" style="width:6rem" value="1"></td>' +
+            '<td><input type="number" min="0" max="9" name="piezas[' + i + '][prioridad]" class="form-control form-control-sm" style="width:4.5rem" value="0"></td>' +
+            '<td><input type="checkbox" name="piezas[' + i + '][espera_confirmacion]" value="1" class="form-check-input"></td>' +
+            '<td><input type="color" name="piezas[' + i + '][color]" class="form-control form-control-sm form-control-color" value="#9aa5b3"></td>' +
             '<td><button type="button" class="btn btn-sm btn-outline-danger" data-quitar-fila title="Quitar"><i class="bi bi-x-lg"></i></button></td>';
-        document.querySelector('#tablaTipos tbody').appendChild(tr);
+        document.querySelector('#tablaPiezas tbody').appendChild(tr);
         tr.querySelector('input').focus();
     });
 
-    // H/M solo para tipos con sexo; para ellos las unidades son H + M.
-    function ajustarFila(tr, rellenar) {
-        var t = TIPO[Number(tr.querySelector('[data-tipo]').value)];
-        if (!t) return;
-        var h = tr.querySelector('[data-h]'), m = tr.querySelector('[data-m]'), u = tr.querySelector('[data-u]');
-        h.disabled = m.disabled = !t.sexuado;
-        u.readOnly = t.sexuado;
-        if (rellenar) { if (t.sexuado) { h.value = t.porPlaca; m.value = 0; } else { u.value = t.porPlaca; } }
-        if (t.sexuado) u.value = (Number(h.value) || 0) + (Number(m.value) || 0);
-    }
     var tablaPlacas = document.getElementById('tablaPlacas');
-    tablaPlacas.querySelectorAll('tr[data-placa]').forEach(function (tr) { ajustarFila(tr, false); });
-    tablaPlacas.addEventListener('change', function (e) { var tr = e.target.closest('tr[data-placa]'); if (tr) ajustarFila(tr, e.target.matches('[data-tipo]')); });
-    tablaPlacas.addEventListener('input', function (e) { var tr = e.target.closest('tr[data-placa]'); if (tr && (e.target.matches('[data-h]') || e.target.matches('[data-m]'))) ajustarFila(tr, false); });
+    tablaPlacas.addEventListener('change', function (e) {
+        if (!e.target.matches('[data-pieza]')) return;
+        var cant = e.target.closest('.tr-lin').querySelector('[data-cant]'), pz = PZ[Number(e.target.value)];
+        if (pz && !(Number(cant.value) > 0)) cant.value = pz.porPlaca;
+    });
 
     var addPlaca = document.getElementById('addPlaca');
     if (addPlaca) addPlaca.addEventListener('click', function () {
         var i = contador++;
-        var filas = tablaPlacas.querySelectorAll('tbody tr[data-placa]');
-        var ultimo = filas.length ? filas[filas.length - 1].querySelector('[data-tipo]').value : String(TIPOS[0].id);
+        var sels = tablaPlacas.querySelectorAll('tbody [data-pieza]');
+        var ultima = sels.length ? Number(sels[sels.length - 1].value) : PIEZAS[0].id;
         var tr = document.createElement('tr');
         tr.setAttribute('data-placa', '');
+        tr.dataset.i = i;
         tr.innerHTML = '<td class="text-nowrap"><button type="button" class="btn btn-sm btn-link p-0" data-mover="-1" title="Subir"><i class="bi bi-arrow-up"></i></button> <button type="button" class="btn btn-sm btn-link p-0" data-mover="1" title="Bajar"><i class="bi bi-arrow-down"></i></button></td>' +
             '<td><input type="text" name="placas[' + i + '][codigo]" class="form-control form-control-sm" style="width:5rem" placeholder="Código"></td>' +
-            '<td><select name="placas[' + i + '][tipo_id]" class="form-select form-select-sm" data-tipo style="width:9rem">' +
-            TIPOS.map(function (t) { return '<option value="' + t.id + '"' + (String(t.id) === ultimo ? ' selected' : '') + '>' + esc(t.nombre) + '</option>'; }).join('') + '</select></td>' +
-            '<td><input type="number" min="0" name="placas[' + i + '][hombres]" class="form-control form-control-sm" style="width:5rem" data-h value="0"></td>' +
-            '<td><input type="number" min="0" name="placas[' + i + '][mujeres]" class="form-control form-control-sm" style="width:5rem" data-m value="0"></td>' +
-            '<td><input type="number" min="0" name="placas[' + i + '][unidades]" class="form-control form-control-sm" style="width:5.5rem" data-u value="0"></td>' +
+            '<td data-lineas><button type="button" class="btn btn-sm btn-link p-0" data-add-linea><i class="bi bi-plus"></i> pieza</button></td>' +
             '<td><textarea name="placas[' + i + '][motivo]" rows="1" class="form-control form-control-sm" style="min-width:18rem"></textarea></td>' +
             '<td><button type="button" class="btn btn-sm btn-outline-danger" data-quitar-fila title="Quitar"><i class="bi bi-x-lg"></i></button></td>';
+        var celda = tr.querySelector('[data-lineas]');
+        celda.insertBefore(nuevaLinea(i, ultima), celda.firstChild);
         tablaPlacas.querySelector('tbody').appendChild(tr);
-        ajustarFila(tr, true);
         tr.querySelector('input[type=text]').focus();
+    });
+
+    function prioridadFila(tr) {
+        var max = 0;
+        tr.querySelectorAll('[data-pieza]').forEach(function (s) { var pz = PZ[Number(s.value)]; if (pz && pz.prio > max) max = pz.prio; });
+        return max;
+    }
+    var ordenar = document.getElementById('ordenarPrioridad');
+    if (ordenar) ordenar.addEventListener('click', function () {
+        var tbody = tablaPlacas.querySelector('tbody');
+        Array.prototype.slice.call(tbody.querySelectorAll('tr[data-placa]'))
+            .map(function (tr, i) { return { tr: tr, i: i, p: prioridadFila(tr) }; })
+            .sort(function (a, b) { return b.p - a.p || a.i - b.i; })
+            .forEach(function (o) { tbody.appendChild(o.tr); });
+    });
+
+    document.getElementById('formPlacas').addEventListener('submit', function (e) {
+        var mal = [];
+        tablaPlacas.querySelectorAll('tbody tr[data-placa]').forEach(function (tr) {
+            var resinas = {};
+            tr.querySelectorAll('[data-pieza]').forEach(function (s) { var pz = PZ[Number(s.value)]; if (pz) resinas[pz.resina] = true; });
+            if (Object.keys(resinas).length > 1) mal.push((tr.querySelector('input[type=text]').value || '¿sin código?') + ' (' + Object.keys(resinas).join(', ') + ')');
+        });
+        if (mal.length) { e.preventDefault(); document.getElementById('placasError').textContent = 'Mezclan resinas: ' + mal.join(' · ') + '. Una placa va en una sola resina.'; }
     });
 })();
 </script>

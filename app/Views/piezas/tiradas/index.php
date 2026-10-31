@@ -17,8 +17,8 @@
 <?php endif; ?>
 
 <p class="text-muted small" style="max-width: 720px;">
-    Una producción grande repartida en placas por días y máquinas: qué placa va antes, en qué impresora y con qué
-    resina, cuándo se pasa del plazo si el diseño se confirma tarde, y cuánto llevas impreso de cada tipo.
+    Un encargo grande repartido en placas por días y máquinas: qué placa va antes, en qué impresora y con qué
+    resina, cuándo se pasa del plazo si algo espera confirmación, y cuántas piezas buenas llevas de cada una frente a lo necesario.
 </p>
 
 <?php if ($filas === []): ?>
@@ -54,7 +54,7 @@
     <input type="text" name="nombre" class="form-control form-control-sm" style="max-width: 16rem;" placeholder="Nombre de la tirada nueva" required>
     <input type="date" name="fecha_inicio" class="form-control form-control-sm" style="max-width: 10rem;" value="<?= date('Y-m-d') ?>" title="Día 1 de la tirada">
     <?php if ($filas !== []): ?>
-        <select name="copiar_de" class="form-select form-select-sm" style="max-width: 14rem;" title="Trae sus tipos, placas, máquinas y notas, sin nada impreso">
+        <select name="copiar_de" class="form-select form-select-sm" style="max-width: 14rem;" title="Trae sus piezas, placas, máquinas y notas, sin nada impreso">
             <option value="">Vacía</option>
             <?php foreach ($filas as $f): ?>
                 <option value="<?= (int) $f['tirada']['id'] ?>">Copia de <?= esc($f['tirada']['nombre']) ?></option>
