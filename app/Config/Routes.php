@@ -761,6 +761,11 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // Ajuste global de resina (precio por litro + densidad) para el coste
     // de resina por pieza, editable desde el desplegable del índice.
     $routes->POST('ajustes-resina', 'Web::guardarPrecioResina');
+    $routes->GET('resinas', 'ResinasController::index');
+    $routes->POST('resinas/crear', 'ResinasController::crear');
+    $routes->POST('resinas/(:num)/actualizar', 'ResinasController::actualizar/$1');
+    $routes->POST('resinas/(:num)/archivar', 'ResinasController::archivar/$1');
+    $routes->POST('resinas/(:num)/borrar', 'ResinasController::borrar/$1');
 
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.

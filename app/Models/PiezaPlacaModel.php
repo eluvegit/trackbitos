@@ -36,7 +36,7 @@ class PiezaPlacaModel extends Model
     protected $allowedFields = [
         'nombre', 'impresa_en', 'exposicion', 'peso_antes', 'peso_despues',
         'notas', 'conclusiones',
-        'resina', 'temperatura', 'veredicto',
+        'resina', 'resina_id', 'temperatura', 'veredicto',
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
         'origen_placa_id', 'es_reparto', 'descargada_en',
         'inventario_sincronizado_en',

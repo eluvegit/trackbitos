@@ -36,6 +36,7 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
                     <i class="bi bi-droplet"></i> Resina
                 </button>
             </li>
+            <li><a class="dropdown-item" href="<?= site_url('piezas/resinas') ?>"><i class="bi bi-droplet-half"></i> Resinas</a></li>
             <?php // Solo aparece cuando hay algo dentro: no tiene sentido un enlace a una papelera vacía. ?>
             <?php if (!empty($papeleraCount) || !$enIndex): ?>
                 <li>

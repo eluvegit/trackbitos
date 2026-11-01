@@ -151,10 +151,22 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                         value="<?= esc(old('exposicion', (string) $placa['exposicion']), 'attr') ?>">
                 </div>
                 <div class="col-md-9">
-                    <label class="form-label small mb-1">Resina (marca, color, lote)</label>
-                    <input type="text" name="resina" class="form-control form-control-sm" maxlength="120"
-                        placeholder="Elegoo ABS-like gris, lote de marzo"
-                        value="<?= esc(old('resina', (string) $placa['resina']), 'attr') ?>">
+                    <label class="form-label small mb-1 d-flex">Resina
+                        <a href="<?= site_url('piezas/resinas') ?>" class="ms-auto small text-decoration-none">Gestionar</a></label>
+                    <?php $resinaActual = (int) old('resina_id', (string) $placa['resina_id']); ?>
+                    <select name="resina_id" class="form-select form-select-sm"
+                        onchange="var n = document.getElementById('resinaNueva<?= $idPlaca ?>'); n.classList.toggle('d-none', this.value !== 'nueva'); if (this.value === 'nueva') n.focus();">
+                        <option value="">— sin resina —</option>
+                        <?php foreach ($resinas ?? [] as $r): ?>
+                            <?php $en = $resinasEnMaquina[(int) $r['id']] ?? []; ?>
+                            <option value="<?= (int) $r['id'] ?>" <?= (int) $r['id'] === $resinaActual ? 'selected' : '' ?>>
+                                <?= esc($r['nombre']) ?><?= $en ? ' · en ' . esc(implode(' y ', $en)) : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <option value="nueva">+ Nueva resina…</option>
+                    </select>
+                    <input type="text" name="resina_nueva" id="resinaNueva<?= $idPlaca ?>" class="form-control form-control-sm mt-1 d-none" maxlength="120"
+                        placeholder="Nombre de la resina o mezcla">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small mb-1 text-nowrap" title="Temperatura ambiente">Temp. (°C)</label>

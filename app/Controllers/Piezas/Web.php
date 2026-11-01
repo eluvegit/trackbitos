@@ -2185,6 +2185,7 @@ class Web extends BaseController
             'origen_placa_id' => $origenId ?: null,
             'exposicion'      => $modelo['exposicion'],
             'resina'          => $modelo['resina'],
+            'resina_id'       => $modelo['resina_id'],
             'temperatura'     => $modelo['temperatura'],
         ], static fn($v) => $v !== null);
     }
@@ -2691,6 +2692,7 @@ class Web extends BaseController
                     'descargada_en'   => $placa['descargada_en'],
                     'exposicion'      => $placa['exposicion'],
                     'resina'          => $placa['resina'],
+                    'resina_id'       => $placa['resina_id'],
                     'temperatura'     => $placa['temperatura'],
                 ], true);
                 if ($nuevaId) {
@@ -3244,6 +3246,8 @@ class Web extends BaseController
             'colocacion'       => $colocacion['filas'],
             'colocacionHuecos' => $colocacion['huecosDisponibles'],
             'versionesNuevas'  => $this->versionesNuevasDeLaPlaca($placa, $piezas),
+            'resinas'          => (new \App\Models\PiezaResinaModel())->paraSelector((int) $placa['resina_id'] ?: null),
+            'resinasEnMaquina' => (new \App\Models\PiezaResinaModel())->enCadaImpresora(),
         ];
     }
 
@@ -3367,13 +3371,22 @@ class Web extends BaseController
             'exposicion'   => $tieneCampo('exposicion') ? (trim((string) $this->request->getPost('exposicion')) ?: null) : $placa['exposicion'],
             'notas'        => $tieneCampo('notas') ? (trim((string) $this->request->getPost('notas')) ?: null) : $placa['notas'],
             'conclusiones' => $tieneCampo('conclusiones') ? (trim((string) $this->request->getPost('conclusiones')) ?: null) : $placa['conclusiones'],
-            'resina'      => $tieneCampo('resina') ? (trim((string) $this->request->getPost('resina')) ?: null) : $placa['resina'],
             'temperatura' => $tieneCampo('temperatura') ? $this->aPeso($this->request->getPost('temperatura')) : $placa['temperatura'],
 
             'resina_estimada'   => $tieneCampo('resina_estimada') ? $this->aPeso($this->request->getPost('resina_estimada')) : $placa['resina_estimada'],
             'minutos_estimados' => $tieneCampo('minutos_estimados') ? $this->aMinutos($this->request->getPost('minutos_estimados')) : $placa['minutos_estimados'],
             'minutos_previstos' => $tieneCampo('minutos_previstos') ? $this->aMinutos($this->request->getPost('minutos_previstos')) : $placa['minutos_previstos'],
         ];
+
+        if ($tieneCampo('resina_id')) {
+            $resinaModel = new \App\Models\PiezaResinaModel();
+            $resinaId = $this->request->getPost('resina_id') === 'nueva'
+                ? $resinaModel->idPorNombre((string) $this->request->getPost('resina_nueva'))
+                : ((int) $this->request->getPost('resina_id') ?: null);
+            $resina = $resinaId ? $resinaModel->find($resinaId) : null;
+            $datos['resina_id'] = $resina ? (int) $resina['id'] : null;
+            $datos['resina']    = $resina['nombre'] ?? null;
+        }
 
         if (!$this->placaModel->update($id, $datos)) {
             $mensaje = implode(' ', $this->placaModel->errors());
