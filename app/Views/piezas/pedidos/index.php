@@ -43,6 +43,10 @@
                 <input type="date" name="fecha_entrega" class="form-control form-control-sm mb-2">
                 <label class="form-label small">Notas</label>
                 <textarea name="notas" class="form-control form-control-sm" rows="2"></textarea>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="idea" value="1" id="nuevoComoIdea">
+                    <label class="form-check-label small" for="nuevoComoIdea">Apuntar como idea</label>
+                </div>
                 <p class="text-muted small mt-2 mb-0">
                     Nace sin líneas — se añaden en la ficha del pedido, buscando cada pieza en el catálogo.
                 </p>
@@ -64,6 +68,7 @@
 
 <?php
     $coloresColumna = [
+        'idea'           => 'secondary',
         'nuevo'          => 'primary',
         'en_produccion'  => 'warning',
         'para_impresion' => 'info',
@@ -91,10 +96,6 @@
     #pestanas-estados .nav-link { padding: .35rem .25rem; font-size: .8rem; white-space: nowrap; color: var(--bs-body-color); }
     #pestanas-estados .nav-link.active { color: #fff; }
     #pestanas-estados .nav-link .badge { font-size: .65rem; }
-    /* Escritorio sin "Hecho": las tres que quedan se reparten el ancho. */
-    @media (min-width: 1200px) {
-        #tablero-pedidos.sin-hechos > .columna-pedidos { flex: 0 0 auto; width: 33.333%; }
-    }
 </style>
 
 <?php // Solo en móvil: sustituye a las columnas apiladas. ?>
@@ -119,7 +120,12 @@
     <?php endforeach; ?>
 
     <?php // Manual: el orden arrastrado a mano. Por entrega: lo que vence antes arriba (sin tocar el orden guardado). ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary ms-md-auto" id="ocultar-hechos" aria-pressed="false"
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-md-auto" id="ocultar-ideas" aria-pressed="false"
+        title="Quitar la columna Ideas del tablero">
+        <i class="bi bi-eye-slash"></i> <span>Ocultar ideas</span>
+        <span class="badge rounded-pill bg-body-secondary text-body-secondary border"><?= $columnas['idea']['total'] ?></span>
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="ocultar-hechos" aria-pressed="false"
         title="Quitar la columna Hecho del tablero">
         <i class="bi bi-eye-slash"></i> <span>Ocultar hechos</span>
     </button>
@@ -132,7 +138,7 @@
 
 <div class="row g-3" id="tablero-pedidos">
     <?php foreach ($columnas as $estado => $columna): ?>
-        <div class="col-12 col-md-6 col-xl-3 columna-pedidos" data-columna="<?= esc($estado) ?>">
+        <div class="col-12 col-md-6 col-xl columna-pedidos" data-columna="<?= esc($estado) ?>">
             <div class="d-none d-md-flex align-items-center gap-2 mb-2">
                 <span class="badge text-bg-<?= $coloresColumna[$estado] ?>">&nbsp;</span>
                 <span class="fw-semibold"><?= esc($columna['titulo']) ?></span>
@@ -168,6 +174,7 @@
         const columnas = Array.from(document.querySelectorAll('#tablero-pedidos .columna-pedidos'));
         const tablero = document.getElementById('tablero-pedidos');
         const botonOcultar = document.getElementById('ocultar-hechos');
+        const botonOcultarIdeas = document.getElementById('ocultar-ideas');
         const movil = window.matchMedia('(max-width: 767.98px)');
 
         function leer(clave, porDefecto) {
@@ -178,20 +185,32 @@
         }
 
         // Escritorio: filtro de las píldoras ('' = todas). Móvil: una sola
-        // pestaña. "Ocultar hechos" quita Hecho de "todas" y de las pestañas;
-        // pulsar la píldora Hecho a propósito la sigue enseñando.
+        // pestaña. "Ocultar hechos/ideas" quita esa columna de "todas" y de
+        // las pestañas; pulsar su píldora a propósito la sigue enseñando.
         var filtro = '';
         var pestana = leer('pedidos.pestana', 'en_produccion');
         var ocultarHechos = leer('pedidos.ocultarHechos', '0') === '1';
+        var ocultarIdeas = leer('pedidos.ocultarIdeas', '0') === '1';
         var arrastrando = false;
 
         function pestanasVisibles() {
             return pestanas.filter(function (p) { return !p.classList.contains('d-none'); });
         }
 
+        function oculta(estado) {
+            return (ocultarHechos && estado === 'completado') || (ocultarIdeas && estado === 'idea');
+        }
+
+        function pintarBotonOcultar(boton, oculto, nombre) {
+            boton.classList.toggle('active', oculto);
+            boton.setAttribute('aria-pressed', oculto ? 'true' : 'false');
+            boton.querySelector('i').className = 'bi ' + (oculto ? 'bi-eye' : 'bi-eye-slash');
+            boton.querySelector('span').textContent = (oculto ? 'Mostrar ' : 'Ocultar ') + nombre;
+        }
+
         function aplicar() {
             pestanas.forEach(function (p) {
-                p.classList.toggle('d-none', ocultarHechos && p.dataset.pestana === 'completado');
+                p.classList.toggle('d-none', oculta(p.dataset.pestana));
             });
             if (!pestanasVisibles().some(function (p) { return p.dataset.pestana === pestana; })) {
                 pestana = 'en_produccion';
@@ -201,7 +220,7 @@
                 var estado = col.dataset.columna;
                 var visible = movil.matches
                     ? estado === pestana
-                    : (filtro === '' ? !(ocultarHechos && estado === 'completado') : estado === filtro);
+                    : (filtro === '' ? !oculta(estado) : estado === filtro);
                 col.classList.toggle('d-none', !visible);
             });
             botones.forEach(function (btn) {
@@ -213,11 +232,8 @@
                 p.classList.toggle('text-bg-' + p.dataset.color, activa);
             });
 
-            tablero.classList.toggle('sin-hechos', !movil.matches && filtro === '' && ocultarHechos);
-            botonOcultar.classList.toggle('active', ocultarHechos);
-            botonOcultar.setAttribute('aria-pressed', ocultarHechos ? 'true' : 'false');
-            botonOcultar.querySelector('i').className = 'bi ' + (ocultarHechos ? 'bi-eye' : 'bi-eye-slash');
-            botonOcultar.querySelector('span').textContent = ocultarHechos ? 'Mostrar hechos' : 'Ocultar hechos';
+            pintarBotonOcultar(botonOcultar, ocultarHechos, 'hechos');
+            pintarBotonOcultar(botonOcultarIdeas, ocultarIdeas, 'ideas');
         }
 
         function irAPestana(estado) {
@@ -235,6 +251,11 @@
         botonOcultar.addEventListener('click', function () {
             ocultarHechos = !ocultarHechos;
             guardar('pedidos.ocultarHechos', ocultarHechos ? '1' : '0');
+            aplicar();
+        });
+        botonOcultarIdeas.addEventListener('click', function () {
+            ocultarIdeas = !ocultarIdeas;
+            guardar('pedidos.ocultarIdeas', ocultarIdeas ? '1' : '0');
             aplicar();
         });
         movil.addEventListener('change', aplicar);

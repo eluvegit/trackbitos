@@ -35,9 +35,10 @@ class PedidosController extends BaseController
     {
         $pedidoModel = new PiezaPedidoModel();
 
-        // Tablero por estado, mismo orden que el flujo real: recién llegado ->
-        // diseñando -> para impresión -> hecho.
+        // Tablero por estado, mismo orden que el flujo real: idea -> recién
+        // llegado -> diseñando -> para impresión -> hecho.
         $columnas = [
+            'idea'           => ['titulo' => 'Ideas', 'pedidos' => []],
             'nuevo'          => ['titulo' => 'Nuevos', 'pedidos' => []],
             'en_produccion'  => ['titulo' => 'Diseñando', 'pedidos' => []],
             'para_impresion' => ['titulo' => 'Para impresión', 'pedidos' => []],
@@ -137,16 +138,17 @@ class PedidosController extends BaseController
      */
     public function crear()
     {
+        $esIdea = (bool) $this->request->getPost('idea');
         $pedidoId = (new PiezaPedidoModel())->insert([
             'origen'             => 'manual',
-            'estado'             => 'nuevo',
+            'estado'             => $esIdea ? 'idea' : 'nuevo',
             'referencia_externa' => trim((string) $this->request->getPost('referencia_externa')) ?: null,
             'notas'              => trim((string) $this->request->getPost('notas')) ?: null,
             'fecha_entrega'      => $this->fechaEntregaDelPost(),
             'creado_en'          => date('Y-m-d H:i:s'),
         ]);
 
-        return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', 'Pedido creado. Añade sus líneas aquí abajo.');
+        return redirect()->to('/piezas/pedido/' . $pedidoId)->with('success', ($esIdea ? 'Idea apuntada.' : 'Pedido creado.') . ' Añade sus líneas aquí abajo.');
     }
 
     /** Misma cascada que Web::fotosDe(), pero por variante suelta (sin versión concreta). */
@@ -217,10 +219,10 @@ class PedidosController extends BaseController
             ->where('pp.pedido_id', $id)
             ->orderBy('piezas_placas.creado_en', 'DESC')->findAll();
 
-        // Destinos posibles para "copiar líneas a…": solo pedidos aún
-        // abiertos — copiar a uno hecho no tiene sentido.
+        // Destinos posibles para "copiar líneas a…": pedidos aún abiertos
+        // o ideas — copiar a uno hecho no tiene sentido.
         $pedidosAbiertos = (new PiezaPedidoModel())
-            ->whereIn('estado', PiezaPedidoModel::ABIERTOS)
+            ->whereIn('estado', ['idea', ...PiezaPedidoModel::ABIERTOS])
             ->where('id !=', $id)
             ->orderBy('creado_en', 'DESC')
             ->findAll(30);

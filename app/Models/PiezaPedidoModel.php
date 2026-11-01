@@ -10,11 +10,12 @@ class PiezaPedidoModel extends Model
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
-    // Fases del pedido: nuevo -> diseñando (clave histórica en_produccion)
-    // -> para impresión -> hecho.
-    public const ESTADOS = ['nuevo', 'en_produccion', 'para_impresion', 'completado'];
+    // Fases del pedido: (idea) -> nuevo -> diseñando (clave histórica
+    // en_produccion) -> para impresión -> hecho.
+    public const ESTADOS = ['idea', 'nuevo', 'en_produccion', 'para_impresion', 'completado'];
 
-    // Los que aún no están hechos.
+    // Los que están en marcha. Las ideas quedan fuera: no cuentan como
+    // "por hacer" ni avisan de entrega.
     public const ABIERTOS = ['nuevo', 'en_produccion', 'para_impresion'];
 
     protected $allowedFields = [
@@ -24,7 +25,7 @@ class PiezaPedidoModel extends Model
 
     protected $validationRules = [
         'origen' => 'required|max_length[30]',
-        'estado' => 'permit_empty|in_list[nuevo,en_produccion,para_impresion,completado]',
+        'estado' => 'permit_empty|in_list[idea,nuevo,en_produccion,para_impresion,completado]',
         'fecha_entrega' => 'permit_empty|valid_date[Y-m-d]',
     ];
 
@@ -90,10 +91,10 @@ class PiezaPedidoModel extends Model
             ->orderBy('creado_en', 'DESC')->findAll($limite);
     }
 
-    /** Todos los que aún no están hechos, en el orden del tablero. */
+    /** Todos los que aún no están hechos (ideas incluidas), en el orden del tablero. */
     public function abiertos(): array
     {
-        return $this->whereIn('estado', self::ABIERTOS)
+        return $this->whereIn('estado', ['idea', ...self::ABIERTOS])
             ->orderBy('prioritario', 'DESC')->orderBy('orden', 'ASC')
             ->orderBy('creado_en', 'DESC')->findAll();
     }

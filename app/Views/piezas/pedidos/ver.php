@@ -3,9 +3,9 @@
 <?= $this->include('piezas/_nav') ?>
 
 <?php
-    $etiquetas = ['nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
-    $colores   = ['nuevo' => 'primary', 'en_produccion' => 'warning', 'para_impresion' => 'info', 'completado' => 'success'];
-    $iconos    = ['nuevo' => 'bi-inbox', 'en_produccion' => 'bi-vector-pen', 'para_impresion' => 'bi-printer', 'completado' => 'bi-check2-circle'];
+    $etiquetas = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
+    $colores   = ['idea' => 'secondary', 'nuevo' => 'primary', 'en_produccion' => 'warning', 'para_impresion' => 'info', 'completado' => 'success'];
+    $iconos    = ['idea' => 'bi-lightbulb', 'nuevo' => 'bi-inbox', 'en_produccion' => 'bi-vector-pen', 'para_impresion' => 'bi-printer', 'completado' => 'bi-check2-circle'];
     $estadoActual = $pedido['estado'];
     $creado = strtotime($pedido['creado_en']);
 ?>
