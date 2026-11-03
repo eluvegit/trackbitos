@@ -1,7 +1,19 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 
-<div class="jt-header mb-3">
+<?php
+$amplitude   = (int)($task['amplitude'] ?? 0);
+$completed   = (int)($task['completed'] ?? 0);
+$pct         = $amplitude > 0 ? min(100, (int)round($completed / $amplitude * 100)) : 0;
+$subDone     = count(array_filter($subtasks, fn($s) => !empty($s['is_done'])));
+$fmtDate     = fn($v) => (!empty($v) && $v !== '0000-00-00 00:00:00') ? date('Y-m-d', strtotime($v)) : '';
+$startDate   = $fmtDate($task['start_time'] ?? '');
+$endDate     = $fmtDate($task['end_time'] ?? '');
+$imgExts     = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif', 'svg'];
+$subtaskTitleById = array_column($subtasks, 'title', 'id');
+?>
+
+<div class="jt-header mb-2">
     <a href="<?= site_url('journal') ?>" class="jt-back"><i class="bi bi-chevron-left"></i> Journal</a>
 </div>
 
@@ -9,290 +21,395 @@
     <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
 <?php endif; ?>
 
-<?php if (!empty($task['image'])): ?>
-    <div class="jt-image mb-3">
-        <img src="<?= base_url($task['image']) ?>" alt="Imagen actual">
-        <form action="<?= site_url('journal/delete-image/' . $task['id']) ?>" method="post"
-              onsubmit="return confirm('¿Eliminar esta imagen?')" class="m-0">
-            <?= csrf_field() ?>
-            <button type="submit" class="jt-image-remove" title="Eliminar imagen">
-                <i class="bi bi-trash"></i>
+<!-- Cabecera: imagen + título + resumen -->
+<div class="jt-hero mb-3">
+    <div class="jt-hero-img">
+        <?php if (!empty($task['image'])): ?>
+            <img src="<?= base_url($task['image']) ?>" alt="Imagen de la tarea">
+            <form action="<?= site_url('journal/delete-image/' . $task['id']) ?>" method="post"
+                  onsubmit="return confirm('¿Eliminar esta imagen?')" class="m-0">
+                <?= csrf_field() ?>
+                <button type="submit" class="jt-image-remove" title="Eliminar imagen"><i class="bi bi-x-lg"></i></button>
+            </form>
+        <?php else: ?>
+            <button type="button" class="jt-hero-img-empty js-pick-image" title="Añadir imagen"><i class="bi bi-image"></i></button>
+        <?php endif; ?>
+    </div>
+
+    <div class="jt-hero-main">
+        <div class="jt-title-row">
+            <button type="button" class="jt-star" id="starBtn" aria-pressed="<?= !empty($task['is_current']) ? 'true' : 'false' ?>" title="Marcar como actual">
+                <i class="bi <?= !empty($task['is_current']) ? 'bi-star-fill' : 'bi-star' ?>"></i>
             </button>
-        </form>
-    </div>
-<?php endif; ?>
+            <input type="text" name="title" id="title" form="taskForm" class="jt-title-input"
+                   value="<?= esc($task['title'] ?? '') ?>" placeholder="Título" required>
+            <input type="checkbox" name="is_current" id="is_current" form="taskForm" value="1" class="d-none"
+                   <?= !empty($task['is_current']) ? 'checked' : '' ?>>
+        </div>
 
-<form action="<?= site_url('journal/edit/' . $task['id']) ?>" method="post" enctype="multipart/form-data">
-    <?= csrf_field() ?>
-
-    <!-- Título + estrella -->
-    <div class="jt-title-row mb-3">
-        <button type="button" class="jt-star" id="starBtn" aria-pressed="<?= !empty($task['is_current']) ? 'true' : 'false' ?>" title="Marcar como actual">
-            <i class="bi <?= !empty($task['is_current']) ? 'bi-star-fill' : 'bi-star' ?>"></i>
-        </button>
-        <input type="text" name="title" id="title" class="jt-title-input"
-               value="<?= esc($task['title'] ?? '') ?>" placeholder="Título" required>
-        <input type="checkbox" name="is_current" id="is_current" value="1" class="d-none"
-               <?= !empty($task['is_current']) ? 'checked' : '' ?>>
-    </div>
-
-    <!-- Periodo -->
-    <div class="jt-section mb-3">
-        <div class="jt-section-title">Periodo</div>
-        <div class="row g-2">
-            <div class="col-6">
-                <label for="start_time" class="jt-label">Inicio</label>
-                <input type="date" name="start_time" id="start_time" class="form-control"
-                       value="<?= !empty($task['start_time']) && $task['start_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['start_time'])) : '' ?>">
-            </div>
-            <div class="col-6">
-                <label for="end_time" class="jt-label">Fin</label>
-                <input type="date" name="end_time" id="end_time" class="form-control"
-                       value="<?= !empty($task['end_time']) && $task['end_time'] !== '0000-00-00 00:00:00' ? date('Y-m-d', strtotime($task['end_time'])) : '' ?>">
-            </div>
+        <div class="jt-stats">
+            <span class="jt-stat jt-stat-progress" title="Progreso">
+                <span class="jt-stat-bar"><span id="heroBar" style="width: <?= $pct ?>%"></span></span>
+                <b id="heroPct"><?= $pct ?>%</b>
+            </span>
+            <span class="jt-stat" title="Tiempo invertido"><i class="bi bi-clock"></i> <b id="heroHours"><?= number_format(((int)($task['time_spent'] ?? 0)) / 60, 1) ?></b> h</span>
+            <span class="jt-stat" title="Subtareas hechas"><i class="bi bi-check2-square"></i> <b id="heroSubs"><?= $subDone ?>/<?= count($subtasks) ?></b></span>
+            <?php if ($startDate || $endDate): ?>
+                <span class="jt-stat" title="Periodo"><i class="bi bi-calendar3"></i>
+                    <?= $startDate ? date('d/m/y', strtotime($startDate)) : '…' ?> → <?= $endDate ? date('d/m/y', strtotime($endDate)) : '…' ?>
+                </span>
+            <?php endif; ?>
         </div>
     </div>
+</div>
 
-    <!-- Progreso -->
-    <div class="jt-section mb-3">
-        <div class="jt-section-title">Progreso</div>
-        <div class="row g-2">
-            <div class="col-6">
-                <label for="amplitude" class="jt-label">Amplitud (total)</label>
-                <input type="number" name="amplitude" id="amplitude" class="form-control"
-                       min="1" required value="<?= esc($task['amplitude'] ?? '') ?>" placeholder="Ej. 10">
-            </div>
-            <div class="col-6">
-                <label for="completed" class="jt-label">Completados</label>
-                <input type="number" name="completed" id="completed" class="form-control"
-                       min="0" value="<?= esc($task['completed'] ?? '') ?>" placeholder="Ej. 4">
-            </div>
-        </div>
-        <div class="jt-progress mt-2">
-            <div class="jt-progress-bar" id="jtProgressBar" style="width:0%"></div>
-        </div>
-        <div class="jt-hint" id="jtProgressLabel">0%</div>
-    </div>
+<div class="jt-workspace">
 
-    <!-- Tiempo invertido -->
-    <div class="jt-section mb-3">
-        <div class="jt-section-title">Tiempo invertido</div>
-        <div class="input-group">
-            <input type="number" name="time_spent" id="time_spent" class="form-control" min="0"
-                   value="<?= esc($task['time_spent'] ?? '') ?>">
-            <span class="input-group-text">min</span>
-        </div>
-        <div class="jt-hint" id="timeHint">= 0.00 h</div>
-    </div>
+    <!-- ============ Columna lateral: datos de la tarea ============ -->
+    <aside class="jt-side">
+        <details class="jt-card jt-fold" id="detailsPanel" open>
+            <summary>
+                <span><i class="bi bi-sliders"></i> Detalles</span>
+                <i class="bi bi-chevron-down jt-fold-icon"></i>
+            </summary>
 
-    <!-- Nota -->
-    <div class="jt-section mb-3">
-        <div class="jt-section-title">Nota</div>
-        <textarea name="note" id="note" class="form-control" rows="3" placeholder="Nota"><?= esc($task['note'] ?? '') ?></textarea>
-    </div>
+            <form action="<?= site_url('journal/edit/' . $task['id']) ?>" method="post" enctype="multipart/form-data" id="taskForm" class="jt-fold-body">
+                <?= csrf_field() ?>
 
-    <!-- Imagen opcional -->
-    <div class="jt-section mb-3">
-        <div class="jt-section-title">Imagen</div>
-        <input type="file" name="image" id="image" class="form-control">
-    </div>
+                <div class="jt-field-group">
+                    <div class="jt-field">
+                        <label for="start_time" class="jt-label">Inicio</label>
+                        <input type="date" name="start_time" id="start_time" class="form-control form-control-sm" value="<?= $startDate ?>">
+                    </div>
+                    <div class="jt-field">
+                        <label for="end_time" class="jt-label">Fin</label>
+                        <input type="date" name="end_time" id="end_time" class="form-control form-control-sm" value="<?= $endDate ?>">
+                    </div>
+                </div>
 
-    <div class="d-flex gap-2 mb-3">
-        <a href="<?= site_url('journal') ?>" class="btn btn-outline-secondary flex-fill">Cancelar</a>
-        <button type="submit" class="btn btn-primary flex-fill">Guardar</button>
-    </div>
-</form>
+                <div class="jt-field-group">
+                    <div class="jt-field">
+                        <label for="completed" class="jt-label">Completados</label>
+                        <input type="number" name="completed" id="completed" class="form-control form-control-sm"
+                               min="0" value="<?= esc($task['completed'] ?? '') ?>" placeholder="Ej. 4">
+                    </div>
+                    <div class="jt-field">
+                        <label for="amplitude" class="jt-label">De un total de</label>
+                        <input type="number" name="amplitude" id="amplitude" class="form-control form-control-sm"
+                               min="1" required value="<?= esc($task['amplitude'] ?? '') ?>" placeholder="Ej. 10">
+                    </div>
+                </div>
+                <div class="jt-progress-wrap">
+                    <div class="jt-progress"><div class="jt-progress-bar" id="jtProgressBar" style="width:0%"></div></div>
+                    <span class="jt-hint" id="jtProgressLabel">0%</span>
+                </div>
 
-<!-- Subtareas -->
-<div class="jt-section mb-3">
-    <div class="jt-section-title d-flex align-items-center justify-content-between">
-        <span>Subtareas</span>
-        <button type="button" id="subtaskSuggestBtn" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-stars"></i> Sugerir subtareas
-        </button>
-    </div>
+                <div class="jt-field">
+                    <label for="time_spent" class="jt-label">Tiempo invertido</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="time_spent" id="time_spent" class="form-control" min="0"
+                               value="<?= esc($task['time_spent'] ?? '') ?>">
+                        <span class="input-group-text">min</span>
+                        <span class="input-group-text jt-hint-inline" id="timeHint">= 0.00 h</span>
+                    </div>
+                </div>
 
-    <div class="jt-subtask-filters">
-        <button type="button" class="jt-subtask-filter-btn js-hide-done" title="Ocultar/mostrar subtareas hechas">
-            <i class="bi bi-eye-slash"></i>
-        </button>
-        <button type="button" class="jt-subtask-filter-btn js-push-done" title="Empujar las hechas al final">
-            <i class="bi bi-arrow-down-square"></i>
-        </button>
-    </div>
+                <div class="jt-field">
+                    <label for="note" class="jt-label">Nota</label>
+                    <textarea name="note" id="note" class="form-control form-control-sm" rows="3" placeholder="Algo que recordar sobre la tarea…"><?= esc($task['note'] ?? '') ?></textarea>
+                </div>
 
-    <div class="jt-subtask-add">
-        <input type="text" id="subtaskInput" class="form-control form-control-sm" placeholder="Nueva subtarea..." maxlength="255">
-        <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary">
-            <i class="bi bi-plus-lg"></i>
-        </button>
-    </div>
+                <div class="jt-field">
+                    <label for="image" class="jt-label"><?= !empty($task['image']) ? 'Cambiar imagen' : 'Imagen' ?></label>
+                    <input type="file" name="image" id="image" accept="image/*" class="form-control form-control-sm">
+                </div>
 
-    <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
-        <?php foreach ($subtasks as $s):
-            $isDone = !empty($s['is_done']);
-            $subFiles = array_values(array_filter($files, fn($f) => (int)($f['subtask_id'] ?? 0) === (int)$s['id']));
-            $subLinks = array_values(array_filter($links, fn($l) => (int)($l['subtask_id'] ?? 0) === (int)$s['id']));
-            $attachCount = count($subFiles) + count($subLinks);
-        ?>
-            <div class="jt-subtask-item <?= $isDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
-                <div class="jt-subtask-row">
-                    <span class="jt-subtask-handle" title="Arrastrar para reordenar">
-                        <i class="bi bi-grip-vertical"></i>
-                    </span>
-                    <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
-                        <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
-                    </button>
-                    <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
-                    <div class="jt-subtask-actions">
-                        <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="<?= (int)$s['id'] ?>" title="Añadir tiempo">
-                            <?= number_format(((int)($s['time_spent'] ?? 0)) / 60, 2) ?> h
-                        </span>
-                        <?php if ($attachCount > 0): ?>
-                            <button type="button" class="jt-subtask-attach-toggle" data-bs-toggle="collapse" data-bs-target="#subAttach<?= (int)$s['id'] ?>" title="Ver materiales/enlaces asociados">
-                                <i class="bi bi-paperclip"></i> <?= $attachCount ?>
+                <div class="d-flex gap-2">
+                    <a href="<?= site_url('journal') ?>" class="btn btn-sm btn-outline-secondary flex-fill">Volver</a>
+                    <button type="submit" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-check2"></i> Guardar</button>
+                </div>
+            </form>
+        </details>
+
+        <!-- Historial de fechas -->
+        <details class="jt-card jt-fold" id="logsPanel">
+            <summary>
+                <span><i class="bi bi-calendar-check"></i> Historial <span class="jt-count"><?= count($logs) ?></span></span>
+                <i class="bi bi-chevron-down jt-fold-icon"></i>
+            </summary>
+            <div class="jt-fold-body">
+                <?php if (empty($logs)): ?>
+                    <p class="text-muted small mb-0">Sin registros todavía.</p>
+                <?php else: ?>
+                    <div class="jt-log-list">
+                        <?php foreach ($logs as $log): ?>
+                            <button type="button" class="jt-log-item js-edit-log"
+                                    data-id="<?= (int)$log['id'] ?>"
+                                    data-date="<?= esc($log['log_date']) ?>"
+                                    data-minutes="<?= (int)$log['minutes'] ?>">
+                                <span class="jt-log-date"><?= date('d/m/Y', strtotime($log['log_date'])) ?></span>
+                                <span class="jt-log-minutes"><?= (int)$log['minutes'] ?> min</span>
+                                <i class="bi bi-pencil jt-log-edit-icon"></i>
                             </button>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </details>
+
+        <form action="<?= site_url('journal/delete/' . $task['id']) ?>" method="post" class="jt-danger"
+              onsubmit="return confirm('¿Seguro que quieres eliminar esta tarea?');">
+            <?= csrf_field() ?>
+            <button type="submit" class="jt-danger-btn"><i class="bi bi-trash"></i> Eliminar tarea</button>
+        </form>
+    </aside>
+
+    <!-- ============ Zona principal: pestañas de trabajo ============ -->
+    <section class="jt-main">
+        <div class="jt-tabs" role="tablist">
+            <button type="button" class="jt-tab" role="tab" data-tab="subtareas">
+                <i class="bi bi-list-check"></i> <span class="jt-tab-label">Subtareas</span> <span class="jt-count" id="countSubtareas"><?= count($subtasks) ?></span>
+            </button>
+            <button type="button" class="jt-tab" role="tab" data-tab="materiales">
+                <i class="bi bi-images"></i> <span class="jt-tab-label">Materiales</span> <span class="jt-count" id="countMateriales"><?= count($files) ?></span>
+            </button>
+            <button type="button" class="jt-tab" role="tab" data-tab="enlaces">
+                <i class="bi bi-link-45deg"></i> <span class="jt-tab-label">Enlaces</span> <span class="jt-count" id="countEnlaces"><?= count($links) ?></span>
+            </button>
+        </div>
+
+        <!-- ---------- Subtareas ---------- -->
+        <div class="jt-panel jt-card" data-panel="subtareas">
+            <div class="jt-toolbar">
+                <div class="jt-subtask-add">
+                    <i class="bi bi-plus-lg jt-add-icon"></i>
+                    <input type="text" id="subtaskInput" class="form-control form-control-sm" placeholder="Añadir subtarea y pulsar Enter…" maxlength="255">
+                    <button type="button" id="subtaskAddBtn" class="btn btn-sm btn-primary" title="Añadir"><i class="bi bi-plus-lg"></i></button>
+                </div>
+                <div class="jt-toolbar-actions">
+                    <button type="button" class="jt-icon-btn js-hide-done" title="Ocultar/mostrar subtareas hechas"><i class="bi bi-eye-slash"></i></button>
+                    <button type="button" class="jt-icon-btn js-push-done" title="Empujar las hechas al final"><i class="bi bi-sort-down"></i></button>
+                    <button type="button" id="subtaskSuggestBtn" class="btn btn-sm btn-outline-primary" title="Sugerir subtareas con IA">
+                        <i class="bi bi-stars"></i> <span class="d-none d-sm-inline">Sugerir</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="jt-subprogress <?= empty($subtasks) ? 'd-none' : '' ?>" id="subProgress">
+                <div class="jt-progress"><div class="jt-progress-bar" id="subProgressBar" style="width: <?= count($subtasks) ? round($subDone / count($subtasks) * 100) : 0 ?>%"></div></div>
+                <span class="jt-hint" id="subProgressLabel"><?= $subDone ?> de <?= count($subtasks) ?> hechas</span>
+            </div>
+
+            <div class="jt-subtask-list" id="subtaskList" data-task-id="<?= (int)$task['id'] ?>">
+                <?php foreach ($subtasks as $s):
+                    $isDone = !empty($s['is_done']);
+                    $subFiles = array_values(array_filter($files, fn($f) => (int)($f['subtask_id'] ?? 0) === (int)$s['id']));
+                    $subLinks = array_values(array_filter($links, fn($l) => (int)($l['subtask_id'] ?? 0) === (int)$s['id']));
+                    $attachCount = count($subFiles) + count($subLinks);
+                ?>
+                    <div class="jt-subtask-item <?= $isDone ? 'is-done' : '' ?>" data-id="<?= (int)$s['id'] ?>">
+                        <div class="jt-subtask-row">
+                            <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
+                            <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha">
+                                <i class="bi <?= $isDone ? 'bi-check-circle-fill' : 'bi-circle' ?>"></i>
+                            </button>
+                            <span class="jt-subtask-title"><?= esc($s['title']) ?></span>
+                            <?php if ($attachCount > 0): ?>
+                                <button type="button" class="jt-chip-btn" data-bs-toggle="collapse" data-bs-target="#subAttach<?= (int)$s['id'] ?>" title="Ver materiales/enlaces asociados">
+                                    <i class="bi bi-paperclip"></i> <?= $attachCount ?>
+                                </button>
+                            <?php endif; ?>
+                            <span class="jt-chip-btn jt-subtask-time subtask-time-trigger" data-subtask-id="<?= (int)$s['id'] ?>" title="Añadir tiempo">
+                                <?= number_format(((int)($s['time_spent'] ?? 0)) / 60, 2) ?> h
+                            </span>
+                            <div class="dropdown">
+                                <button type="button" class="jt-icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Más acciones"><i class="bi bi-three-dots"></i></button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><button type="button" class="dropdown-item js-edit-subtask"><i class="bi bi-pencil"></i> Renombrar</button></li>
+                                    <li><button type="button" class="dropdown-item js-move-top-subtask"><i class="bi bi-arrow-bar-up"></i> Mover al principio</button></li>
+                                    <li><button type="button" class="dropdown-item js-move-bottom-subtask"><i class="bi bi-arrow-bar-down"></i> Mover al final</button></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><button type="button" class="dropdown-item text-danger js-delete-subtask"><i class="bi bi-trash"></i> Eliminar</button></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <?php if ($attachCount > 0): ?>
+                            <div class="collapse jt-subtask-attachments" id="subAttach<?= (int)$s['id'] ?>">
+                                <?php foreach ($subFiles as $f): ?>
+                                    <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-subtask-attachment-link">
+                                        <i class="bi bi-file-earmark"></i> <span><?= esc($f['nombre_original']) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                                <?php foreach ($subLinks as $l): ?>
+                                    <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-subtask-attachment-link">
+                                        <i class="bi bi-link-45deg"></i> <span><?= esc($l['titulo'] ?: $l['url']) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
                         <?php endif; ?>
-                        <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio">
-                            <i class="bi bi-arrow-bar-up"></i>
-                        </button>
-                        <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final">
-                            <i class="bi bi-arrow-bar-down"></i>
-                        </button>
-                        <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea">
-                            <i class="bi bi-trash"></i>
-                        </button>
                     </div>
-                </div>
-                <?php if ($attachCount > 0): ?>
-                    <div class="collapse jt-subtask-attachments" id="subAttach<?= (int)$s['id'] ?>">
-                        <?php foreach ($subFiles as $f): ?>
-                            <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-subtask-attachment-link">
-                                <i class="bi bi-file-earmark"></i> <span><?= esc($f['nombre_original']) ?></span>
-                            </a>
-                        <?php endforeach; ?>
-                        <?php foreach ($subLinks as $l): ?>
-                            <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-subtask-attachment-link">
-                                <i class="bi bi-link-45deg"></i> <span><?= esc($l['titulo'] ?: $l['url']) ?></span>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
+                <?php endforeach; ?>
             </div>
-        <?php endforeach; ?>
-    </div>
 
-    <p class="text-muted small mb-2 <?= empty($subtasks) ? '' : 'd-none' ?>" id="subtaskEmptyMsg">Sin subtareas todavía.</p>
+            <div class="jt-empty <?= empty($subtasks) ? '' : 'd-none' ?>" id="subtaskEmptyMsg">
+                <i class="bi bi-list-check"></i>
+                <span>Sin subtareas todavía. Escribe arriba o pulsa <b>Sugerir</b>.</span>
+            </div>
+        </div>
+
+        <!-- ---------- Materiales ---------- -->
+        <div class="jt-panel jt-card" data-panel="materiales">
+            <label class="jt-drop" id="materialDrop" for="materialInput">
+                <i class="bi bi-cloud-arrow-up"></i>
+                <span><b>Arrastra archivos aquí</b> o pulsa para elegirlos</span>
+                <input type="file" id="materialInput" multiple class="d-none">
+            </label>
+            <div class="jt-drop-opts">
+                <label for="materialSubtaskSelect" class="jt-label mb-0">Asociar a</label>
+                <select id="materialSubtaskSelect" class="form-select form-select-sm">
+                    <option value="">(sin subtarea)</option>
+                    <?php foreach ($subtasks as $s): ?>
+                        <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="jt-toolbar jt-gallery-bar <?= empty($files) ? 'd-none' : '' ?>" id="materialesToolbar">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Vista">
+                    <button type="button" class="btn btn-outline-secondary js-mat-view" data-view="gallery" title="Galería"><i class="bi bi-grid-3x3-gap"></i></button>
+                    <button type="button" class="btn btn-outline-secondary js-mat-view" data-view="list" title="Lista"><i class="bi bi-list-ul"></i></button>
+                </div>
+                <span class="jt-gallery-count" id="galleryCount"></span>
+                <div class="jt-toolbar-actions" id="gallerySelTools">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="gallerySelectAll">Seleccionar todas</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="galleryDownloadBtn" disabled>
+                        <i class="bi bi-download"></i> <span id="gallerySelCount">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Galería (se construye en JS a partir del listado) -->
+            <div class="jt-gallery-grid" id="galleryGrid"></div>
+
+            <div class="jt-list-heading d-none" id="otherFilesHeading">Otros archivos</div>
+            <div class="jt-materiales-list" id="materialesList">
+                <?php foreach ($files as $f):
+                    $ext = strtolower(pathinfo($f['nombre_original'], PATHINFO_EXTENSION));
+                    $icon = match (true) {
+                        in_array($ext, $imgExts, true) => 'bi-file-earmark-image',
+                        $ext === 'pdf' => 'bi-file-earmark-pdf',
+                        in_array($ext, ['doc', 'docx'], true) => 'bi-file-earmark-word',
+                        in_array($ext, ['xls', 'xlsx'], true) => 'bi-file-earmark-excel',
+                        in_array($ext, ['zip', 'rar', '7z'], true) => 'bi-file-earmark-zip',
+                        in_array($ext, ['mp4', 'mov', 'avi', 'mkv'], true) => 'bi-file-earmark-play',
+                        default => 'bi-file-earmark',
+                    };
+                    $sizeLabel = '';
+                    if (!empty($f['tamano'])) {
+                        $sizeLabel = $f['tamano'] < 1024 * 1024
+                            ? round($f['tamano'] / 1024, 1) . ' KB'
+                            : round($f['tamano'] / 1024 / 1024, 1) . ' MB';
+                    }
+                ?>
+                    <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>" data-url="<?= esc(base_url($f['ruta_archivo']), 'attr') ?>" data-nombre="<?= esc($f['nombre_original'], 'attr') ?>" data-descripcion="<?= esc($f['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($f['subtask_id'] ?? 0) ?>">
+                        <div class="jt-material-row">
+                            <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
+                                <?php if (in_array($ext, $imgExts, true)): ?>
+                                    <img class="jt-material-thumb" loading="lazy" src="<?= base_url($f['ruta_archivo']) ?>" alt="">
+                                <?php else: ?>
+                                    <i class="bi <?= $icon ?>"></i>
+                                <?php endif; ?>
+                                <span class="jt-material-name"><?= esc($f['nombre_original']) ?></span>
+                            </a>
+                            <span class="jt-material-size"><?= esc($sizeLabel) ?></span>
+                            <button type="button" class="jt-icon-btn js-edit-material" title="Editar material" aria-label="Editar material"><i class="bi bi-pencil"></i></button>
+                            <button type="button" class="jt-icon-btn jt-icon-danger js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+                        </div>
+                        <?php if (!empty($f['descripcion'])): ?>
+                            <div class="jt-material-desc"><?= esc($f['descripcion']) ?></div>
+                        <?php endif; ?>
+                        <?php if (!empty($f['subtask_id']) && isset($subtaskTitleById[$f['subtask_id']])): ?>
+                            <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <span><?= esc($subtaskTitleById[$f['subtask_id']]) ?></span></div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="jt-empty <?= empty($files) ? '' : 'd-none' ?>" id="materialesEmptyMsg">
+                <i class="bi bi-images"></i>
+                <span>Sin materiales todavía. Fotos de referencia, PDFs, documentos…</span>
+            </div>
+        </div>
+
+        <!-- ---------- Enlaces ---------- -->
+        <div class="jt-panel jt-card" data-panel="enlaces">
+            <div class="jt-link-add">
+                <input type="url" id="linkUrlInput" class="form-control form-control-sm" placeholder="Pega una URL https://…">
+                <input type="text" id="linkTituloInput" class="form-control form-control-sm" placeholder="Texto (opcional)" maxlength="255">
+                <select id="linkSubtaskSelect" class="form-select form-select-sm">
+                    <option value="">(sin subtarea)</option>
+                    <?php foreach ($subtasks as $s): ?>
+                        <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" id="linkAddBtn" class="btn btn-sm btn-primary" title="Añadir enlace"><i class="bi bi-plus-lg"></i></button>
+            </div>
+
+            <div class="jt-materiales-list" id="linksList">
+                <?php foreach ($links as $l): $host = parse_url($l['url'], PHP_URL_HOST) ?: ''; ?>
+                    <div class="jt-material-item" data-id="<?= (int)$l['id'] ?>" data-url="<?= esc($l['url'], 'attr') ?>" data-titulo="<?= esc($l['titulo'] ?? '', 'attr') ?>" data-descripcion="<?= esc($l['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($l['subtask_id'] ?? 0) ?>">
+                        <div class="jt-material-row">
+                            <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-material-link">
+                                <i class="bi bi-link-45deg"></i>
+                                <span class="jt-material-name"><?= esc($l['titulo'] ?: $l['url']) ?></span>
+                            </a>
+                            <span class="jt-material-size jt-link-host"><?= esc(preg_replace('/^www\./', '', $host)) ?></span>
+                            <button type="button" class="jt-icon-btn js-edit-link" title="Editar enlace" aria-label="Editar enlace"><i class="bi bi-pencil"></i></button>
+                            <button type="button" class="jt-icon-btn jt-icon-danger js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace"><i class="bi bi-trash"></i></button>
+                        </div>
+                        <?php if (!empty($l['descripcion'])): ?>
+                            <div class="jt-material-desc"><?= esc($l['descripcion']) ?></div>
+                        <?php endif; ?>
+                        <?php if (!empty($l['subtask_id']) && isset($subtaskTitleById[$l['subtask_id']])): ?>
+                            <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <span><?= esc($subtaskTitleById[$l['subtask_id']]) ?></span></div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="jt-empty <?= empty($links) ? '' : 'd-none' ?>" id="linksEmptyMsg">
+                <i class="bi bi-link-45deg"></i>
+                <span>Sin enlaces todavía. Tutoriales, tiendas, referencias…</span>
+            </div>
+        </div>
+    </section>
 </div>
 
-<?php $subtaskTitleById = array_column($subtasks, 'title', 'id'); ?>
-
-<!-- Materiales (histórico de archivos de referencia para hacer la tarea) -->
-<div class="jt-section mb-3">
-    <div class="jt-section-title">Materiales</div>
-
-    <div class="jt-materiales-list mb-2" id="materialesList">
-        <?php foreach ($files as $f):
-            $ext = strtolower(pathinfo($f['nombre_original'], PATHINFO_EXTENSION));
-            $icon = match (true) {
-                in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true) => 'bi-file-earmark-image',
-                $ext === 'pdf' => 'bi-file-earmark-pdf',
-                in_array($ext, ['doc', 'docx'], true) => 'bi-file-earmark-word',
-                in_array($ext, ['xls', 'xlsx'], true) => 'bi-file-earmark-excel',
-                in_array($ext, ['zip', 'rar', '7z'], true) => 'bi-file-earmark-zip',
-                in_array($ext, ['mp4', 'mov', 'avi', 'mkv'], true) => 'bi-file-earmark-play',
-                default => 'bi-file-earmark',
-            };
-            $sizeLabel = '';
-            if (!empty($f['tamano'])) {
-                $sizeLabel = $f['tamano'] < 1024 * 1024
-                    ? round($f['tamano'] / 1024, 1) . ' KB'
-                    : round($f['tamano'] / 1024 / 1024, 1) . ' MB';
-            }
-        ?>
-            <div class="jt-material-item" data-id="<?= (int)$f['id'] ?>" data-nombre="<?= esc($f['nombre_original'], 'attr') ?>" data-descripcion="<?= esc($f['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($f['subtask_id'] ?? 0) ?>">
-                <div class="jt-material-row">
-                    <a href="<?= base_url($f['ruta_archivo']) ?>" target="_blank" class="jt-material-link">
-                        <i class="bi <?= $icon ?>"></i>
-                        <span class="jt-material-name"><?= esc($f['nombre_original']) ?></span>
-                    </a>
-                    <span class="jt-material-size"><?= esc($sizeLabel) ?></span>
-                    <button type="button" class="jt-subtask-edit js-edit-material" title="Editar material" aria-label="Editar material">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-                <?php if (!empty($f['descripcion'])): ?>
-                    <div class="jt-material-desc"><?= esc($f['descripcion']) ?></div>
-                <?php endif; ?>
-                <?php if (!empty($f['subtask_id']) && isset($subtaskTitleById[$f['subtask_id']])): ?>
-                    <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <?= esc($subtaskTitleById[$f['subtask_id']]) ?></div>
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
-    </div>
-
-    <p class="text-muted small mb-2 <?= empty($files) ? '' : 'd-none' ?>" id="materialesEmptyMsg">Sin materiales todavía.</p>
-
-    <div class="d-flex gap-2 align-items-start">
-        <input type="file" id="materialInput" class="form-control form-control-sm" multiple style="flex: 1 1 60%;">
-        <select id="materialSubtaskSelect" class="form-select form-select-sm" style="flex: 1 1 40%;">
-            <option value="">(sin subtarea)</option>
-            <?php foreach ($subtasks as $s): ?>
-                <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </div>
+<!-- Barra flotante de cambios sin guardar -->
+<div class="jt-savebar" id="saveBar" aria-live="polite">
+    <span><i class="bi bi-pencil-square"></i> Cambios sin guardar</span>
+    <button type="submit" form="taskForm" class="btn btn-sm btn-primary"><i class="bi bi-check2"></i> Guardar</button>
 </div>
 
-<!-- Enlaces (URLs de referencia para la tarea, con texto libre opcional) -->
-<div class="jt-section mb-3">
-    <div class="jt-section-title">Enlaces</div>
-
-    <div class="jt-materiales-list mb-2" id="linksList">
-        <?php foreach ($links as $l): ?>
-            <div class="jt-material-item" data-id="<?= (int)$l['id'] ?>" data-titulo="<?= esc($l['titulo'] ?? '', 'attr') ?>" data-descripcion="<?= esc($l['descripcion'] ?? '', 'attr') ?>" data-subtask-id="<?= (int)($l['subtask_id'] ?? 0) ?>">
-                <div class="jt-material-row">
-                    <a href="<?= esc($l['url'], 'attr') ?>" target="_blank" rel="noopener" class="jt-material-link">
-                        <i class="bi bi-link-45deg"></i>
-                        <span class="jt-material-name"><?= esc($l['titulo'] ?: $l['url']) ?></span>
-                    </a>
-                    <button type="button" class="jt-subtask-edit js-edit-link" title="Editar enlace" aria-label="Editar enlace">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button type="button" class="jt-subtask-delete js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-                <?php if (!empty($l['descripcion'])): ?>
-                    <div class="jt-material-desc"><?= esc($l['descripcion']) ?></div>
-                <?php endif; ?>
-                <?php if (!empty($l['subtask_id']) && isset($subtaskTitleById[$l['subtask_id']])): ?>
-                    <div class="jt-material-subtask"><i class="bi bi-list-check"></i> <?= esc($subtaskTitleById[$l['subtask_id']]) ?></div>
-                <?php endif; ?>
+<!-- Visor de imágenes -->
+<div class="modal fade jt-lightbox" id="lightboxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="jt-lb-top">
+                <span class="jt-lb-name" id="lbName"></span>
+                <span class="jt-lb-pos" id="lbPos"></span>
+                <a class="jt-lb-btn" id="lbDownload" title="Descargar"><i class="bi bi-download"></i></a>
+                <a class="jt-lb-btn" id="lbOpen" target="_blank" title="Abrir original"><i class="bi bi-box-arrow-up-right"></i></a>
+                <button type="button" class="jt-lb-btn jt-lb-del" id="lbDelete" title="Eliminar imagen"><i class="bi bi-trash"></i></button>
+                <button type="button" class="jt-lb-btn" data-bs-dismiss="modal" title="Cerrar"><i class="bi bi-x-lg"></i></button>
             </div>
-        <?php endforeach; ?>
-    </div>
-
-    <p class="text-muted small mb-2 <?= empty($links) ? '' : 'd-none' ?>" id="linksEmptyMsg">Sin enlaces todavía.</p>
-
-    <div class="jt-link-add">
-        <input type="url" id="linkUrlInput" class="form-control form-control-sm" placeholder="https://...">
-        <input type="text" id="linkTituloInput" class="form-control form-control-sm" placeholder="Texto (opcional)" maxlength="255">
-        <select id="linkSubtaskSelect" class="form-select form-select-sm">
-            <option value="">(sin subtarea)</option>
-            <?php foreach ($subtasks as $s): ?>
-                <option value="<?= (int)$s['id'] ?>"><?= esc($s['title']) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <button type="button" id="linkAddBtn" class="btn btn-sm btn-primary">
-            <i class="bi bi-plus-lg"></i>
-        </button>
+            <div class="jt-lb-stage">
+                <button type="button" class="jt-lb-nav jt-lb-prev" id="lbPrev" aria-label="Anterior"><i class="bi bi-chevron-left"></i></button>
+                <img id="lbImg" alt="">
+                <button type="button" class="jt-lb-nav jt-lb-next" id="lbNext" aria-label="Siguiente"><i class="bi bi-chevron-right"></i></button>
+            </div>
+            <div class="jt-lb-desc" id="lbDesc"></div>
+        </div>
     </div>
 </div>
 
@@ -405,6 +522,10 @@
             </div>
             <div class="modal-body">
                 <div class="mb-2">
+                    <label for="linkEditUrl" class="form-label">URL</label>
+                    <input type="url" id="linkEditUrl" class="form-control" required>
+                </div>
+                <div class="mb-2">
                     <label for="linkEditTitulo" class="form-label">Texto (opcional)</label>
                     <input type="text" id="linkEditTitulo" class="form-control" maxlength="255">
                 </div>
@@ -428,36 +549,6 @@
             </div>
         </div>
     </div>
-</div>
-
-<form action="<?= site_url('journal/delete/' . $task['id']) ?>" method="post" class="mb-4"
-      onsubmit="return confirm('¿Seguro que quieres eliminar esta tarea?');">
-    <?= csrf_field() ?>
-    <button type="submit" class="btn btn-outline-danger btn-sm">
-        <i class="bi bi-trash"></i> Eliminar tarea
-    </button>
-</form>
-
-<!-- Historial de fechas -->
-<div class="jt-section">
-    <div class="jt-section-title">Historial de fechas</div>
-
-    <?php if (empty($logs)): ?>
-        <p class="text-muted small mb-0">Sin registros todavía.</p>
-    <?php else: ?>
-        <div class="jt-log-list">
-            <?php foreach ($logs as $log): ?>
-                <button type="button" class="jt-log-item js-edit-log"
-                        data-id="<?= (int)$log['id'] ?>"
-                        data-date="<?= esc($log['log_date']) ?>"
-                        data-minutes="<?= (int)$log['minutes'] ?>">
-                    <span class="jt-log-date"><?= date('d/m/Y', strtotime($log['log_date'])) ?></span>
-                    <span class="jt-log-minutes"><?= (int)$log['minutes'] ?> min</span>
-                    <i class="bi bi-pencil jt-log-edit-icon"></i>
-                </button>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
 </div>
 
 <!-- Modal: editar registro del historial -->
@@ -488,341 +579,356 @@
 </div>
 
 <style>
+/* ===== Journal · edición de tarea =====
+   Escritorio: cabecera + columna lateral (detalles, plegable y fija) +
+   zona principal con pestañas. Móvil: todo en una columna, detalles plegados. */
+:root { --jt-accent: #7c3aed; --jt-accent-soft: rgba(124,58,237,.14); --jt-radius: 14px; }
+
 .jt-back {
-    display: inline-flex;
-    align-items: center;
-    font-size: .85rem;
-    color: var(--bs-secondary-color);
-    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: .85rem; color: var(--bs-secondary-color); text-decoration: none;
 }
 .jt-back:hover { color: var(--bs-emphasis-color); }
 
-.jt-image {
-    position: relative;
-    display: inline-block;
-}
-.jt-image img {
-    max-width: 140px;
-    max-height: 140px;
-    border-radius: 12px;
+/* ---------- Cabecera ---------- */
+.jt-hero { display: flex; gap: 14px; align-items: center; }
+.jt-hero-img { position: relative; flex: 0 0 auto; }
+.jt-hero-img img, .jt-hero-img-empty {
+    width: 76px; height: 76px; border-radius: 16px; object-fit: cover; display: block;
     border: 1px solid var(--bs-border-color);
-    display: block;
 }
+.jt-hero-img-empty {
+    display: grid; place-items: center; background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color); font-size: 1.5rem; border-style: dashed; cursor: pointer;
+}
+.jt-hero-img-empty:hover { color: var(--jt-accent); border-color: var(--jt-accent); }
 .jt-image-remove {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    border: none;
-    background: #dc3545;
-    color: #fff;
+    position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
+    display: grid; place-items: center; border-radius: 50%; border: none;
+    background: #dc3545; color: #fff; font-size: .7rem; opacity: 0; transition: opacity .15s;
 }
+.jt-hero-img:hover .jt-image-remove, .jt-image-remove:focus { opacity: 1; }
+@media (hover: none) { .jt-image-remove { opacity: 1; } }
 
+.jt-hero-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .jt-title-row { display: flex; align-items: center; gap: 8px; }
 .jt-star {
-    flex: 0 0 auto;
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-tertiary-bg);
-    color: #adb5bd;
-    font-size: 1.15rem;
-    cursor: pointer;
+    flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center;
+    border-radius: 50%; border: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg);
+    color: #adb5bd; font-size: 1.05rem; cursor: pointer;
 }
-.jt-star[aria-pressed="true"] {
-    color: #ffc107;
-    border-color: rgba(255,193,7,.4);
-    background: rgba(255,193,7,.12);
-}
+.jt-star[aria-pressed="true"] { color: #ffc107; border-color: rgba(255,193,7,.4); background: rgba(255,193,7,.12); }
 .jt-title-input {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 1.05rem;
-    font-weight: 700;
-    padding: .55rem .8rem;
-    border-radius: 12px;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
-    color: var(--bs-emphasis-color);
+    flex: 1 1 auto; min-width: 0; font-size: 1.35rem; font-weight: 700;
+    padding: .25rem .5rem; border-radius: 10px; border: 1px solid transparent;
+    background: transparent; color: var(--bs-emphasis-color);
 }
-.jt-title-input:focus {
-    outline: none;
-    border-color: #7c3aed;
-    box-shadow: 0 0 0 .2rem rgba(124,58,237,.2);
-}
+.jt-title-input:hover { border-color: var(--bs-border-color); }
+.jt-title-input:focus { outline: none; border-color: var(--jt-accent); background: var(--bs-body-bg); box-shadow: 0 0 0 .2rem rgba(124,58,237,.2); }
 
-.jt-section {
-    background: var(--bs-tertiary-bg);
-    border: 1px solid var(--bs-border-color);
-    border-radius: 14px;
-    padding: 12px 14px;
-}
-.jt-section-title {
-    font-size: .72rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--bs-secondary-color);
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-.jt-label {
-    font-size: .74rem;
-    color: var(--bs-secondary-color);
-    margin-bottom: 2px;
-}
-
-.jt-progress {
-    height: 8px;
-    border-radius: 999px;
-    background: rgba(124,58,237,.12);
-    overflow: hidden;
-}
-.jt-progress-bar {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #7c3aed, #a78bfa);
-    transition: width .2s ease;
-}
-.jt-hint {
-    margin-top: 4px;
-    font-size: .74rem;
+.jt-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+.jt-stat {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 999px; font-size: .78rem;
+    background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color);
     color: var(--bs-secondary-color);
 }
+.jt-stat b { color: var(--bs-emphasis-color); font-weight: 600; }
+.jt-stat-bar { width: 64px; height: 6px; border-radius: 999px; background: var(--jt-accent-soft); overflow: hidden; }
+.jt-stat-bar span { display: block; height: 100%; background: linear-gradient(90deg, #7c3aed, #a78bfa); transition: width .2s; }
 
-.jt-subtask-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-
-/* Filtros de subtareas hechas (solo visual, no altera el orden real) */
-.jt-subtask-filters { display: flex; gap: 4px; margin-bottom: 6px; }
-.jt-subtask-filter-btn {
-    background: none;
-    border: none;
-    color: var(--bs-secondary-color);
-    opacity: .55;
-    font-size: .78rem;
-    line-height: 1;
-    padding: 2px 6px;
-    border-radius: 6px;
+/* ---------- Estructura ---------- */
+.jt-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-bottom: 70px; }
+.jt-workspace > * { min-width: 0; }
+.jt-side { display: flex; flex-direction: column; gap: 10px; }
+/* Una columna: Detalles arriba, luego las pestañas, y al final historial y borrar */
+@media (max-width: 991.98px) {
+    .jt-side { display: contents; }
+    #detailsPanel { order: 1; }
+    .jt-main { order: 2; }
+    #logsPanel { order: 3; }
+    .jt-danger { order: 4; }
 }
-.jt-subtask-filter-btn:hover { opacity: 1; background: var(--bs-tertiary-bg); }
-.jt-subtask-filter-btn.active { opacity: 1; color: #0d6efd; background: rgba(13,110,253,.12); }
+@media (min-width: 992px) {
+    .jt-workspace { grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
+    .jt-side { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+}
+
+.jt-card {
+    background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color);
+    border-radius: var(--jt-radius); padding: 12px 14px;
+}
+
+/* Bloques plegables (Detalles / Historial) */
+.jt-fold { padding: 0; }
+.jt-fold > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; font-weight: 600; font-size: .9rem; color: var(--bs-emphasis-color);
+}
+.jt-fold > summary::-webkit-details-marker { display: none; }
+.jt-fold > summary i:first-child { color: var(--bs-secondary-color); margin-right: 4px; }
+.jt-fold-icon { color: var(--bs-secondary-color); transition: transform .15s; }
+.jt-fold[open] .jt-fold-icon { transform: rotate(180deg); }
+.jt-fold-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+.jt-field-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jt-field { display: flex; flex-direction: column; min-width: 0; }
+.jt-label { font-size: .72rem; color: var(--bs-secondary-color); margin-bottom: 3px; font-weight: 500; }
+.jt-hint { font-size: .74rem; color: var(--bs-secondary-color); white-space: nowrap; }
+.jt-hint-inline { font-size: .75rem; color: var(--bs-secondary-color); }
+.jt-progress-wrap { display: flex; align-items: center; gap: 8px; margin-top: -4px; }
+.jt-progress-wrap .jt-progress { flex: 1 1 auto; }
+.jt-progress { height: 6px; border-radius: 999px; background: var(--jt-accent-soft); overflow: hidden; }
+.jt-progress-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7c3aed, #a78bfa); transition: width .2s ease; }
+
+.jt-count {
+    display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px;
+    font-size: .7rem; font-weight: 600; line-height: 18px; text-align: center;
+    background: var(--bs-secondary-bg); color: var(--bs-secondary-color);
+}
+
+.jt-log-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.jt-log-item {
+    display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid transparent; background: var(--bs-body-bg); color: var(--bs-emphasis-color);
+    text-align: left; cursor: pointer;
+}
+.jt-log-item:hover { border-color: var(--bs-border-color); }
+.jt-log-date { font-weight: 600; font-size: .82rem; }
+.jt-log-minutes { font-size: .78rem; color: var(--bs-secondary-color); margin-left: auto; }
+.jt-log-edit-icon { color: var(--bs-secondary-color); font-size: .75rem; }
+
+.jt-danger { text-align: center; }
+.jt-danger-btn {
+    border: none; background: none; color: var(--bs-secondary-color);
+    font-size: .8rem; padding: 6px 10px; border-radius: 8px;
+}
+.jt-danger-btn:hover { color: #dc3545; background: rgba(220,53,69,.1); }
+
+/* ---------- Pestañas ---------- */
+.jt-tabs {
+    display: flex; gap: 4px; padding: 4px; margin-bottom: 10px;
+    background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color); border-radius: 12px;
+}
+.jt-tab {
+    flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 8px; border: none; border-radius: 9px; background: transparent;
+    color: var(--bs-secondary-color); font-size: .88rem; font-weight: 500; white-space: nowrap;
+}
+.jt-tab:hover { color: var(--bs-emphasis-color); }
+.jt-tab.active { background: var(--bs-body-bg); color: var(--bs-emphasis-color); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.jt-tab.active .jt-count { background: var(--jt-accent-soft); color: #a78bfa; }
+.jt-panel { display: none; flex-direction: column; gap: 10px; }
+.jt-panel.active { display: flex; }
+
+.jt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jt-toolbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+
+.jt-icon-btn {
+    flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
+    border-radius: 8px; border: none; background: transparent; color: var(--bs-secondary-color);
+}
+.jt-icon-btn:hover { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
+.jt-icon-btn.active { color: #0d6efd; background: rgba(13,110,253,.14); }
+.jt-icon-danger:hover { background: rgba(220,53,69,.12); color: #dc3545; }
+
+.jt-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+    padding: 26px 10px; color: var(--bs-secondary-color); font-size: .85rem;
+}
+.jt-empty i { font-size: 1.8rem; opacity: .5; }
+
+/* ---------- Subtareas ---------- */
+.jt-subtask-add { flex: 1 1 260px; display: flex; align-items: center; gap: 6px; position: relative; }
+.jt-subtask-add .form-control { flex: 1 1 auto; padding-left: 30px; }
+.jt-add-icon { position: absolute; left: 10px; color: var(--bs-secondary-color); font-size: .8rem; pointer-events: none; }
+.jt-subprogress { display: flex; align-items: center; gap: 10px; }
+.jt-subprogress .jt-progress { flex: 1 1 auto; }
+
+.jt-subtask-list { display: flex; flex-direction: column; gap: 2px; }
 .jt-subtask-list.hide-done .jt-subtask-item.is-done { display: none; }
 .jt-subtask-list.push-done .jt-subtask-item.is-done { order: 1; }
 
 .jt-subtask-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 6px 8px;
-    border-radius: 10px;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
+    display: flex; flex-direction: column; gap: 2px; padding: 2px 4px;
+    border-radius: 10px; border: 1px solid transparent; background: var(--bs-body-bg);
     transition: opacity .15s ease, background-color .15s ease;
 }
-.jt-subtask-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-/* Botonera secundaria de la subtarea (mover/renombrar/borrar/adjuntos).
-   En escritorio: grupo al final de la misma fila. En móvil: baja a su
-   propia línea (ver media query al final de la hoja). */
-.jt-subtask-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 0 0 auto;
-}
+.jt-subtask-item:hover { border-color: var(--bs-border-color); }
 .jt-subtask-item.sortable-ghost { opacity: .3; }
-.jt-subtask-item.sortable-chosen { background: var(--bs-tertiary-bg); }
-.jt-subtask-item.is-done { opacity: .6; }
-
-.jt-subtask-attach-toggle {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--bs-border-color);
-    background: transparent;
-    color: var(--bs-secondary-color);
-    font-size: .75rem;
-    cursor: pointer;
-}
-.jt-subtask-attach-toggle:hover { background: var(--bs-tertiary-bg); }
-.jt-subtask-attachments {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding-left: 30px;
-}
-.jt-subtask-attachment-link {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: .8rem;
-    text-decoration: none;
-    color: inherit;
-    min-width: 0;
-}
-.jt-subtask-attachment-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jt-subtask-attachment-link:hover { text-decoration: underline; }
+.jt-subtask-item.sortable-chosen { background: var(--bs-secondary-bg); }
+.jt-subtask-item.is-done { opacity: .55; }
+.jt-subtask-row { display: flex; align-items: center; gap: 4px; min-height: 36px; }
 
 .jt-subtask-handle {
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 32px;
-    color: var(--bs-secondary-color);
-    cursor: grab;
-    touch-action: none;
+    flex: 0 0 auto; display: grid; place-items: center; width: 18px; height: 30px;
+    color: var(--bs-secondary-color); cursor: grab; touch-action: none; opacity: .35;
 }
+.jt-subtask-item:hover .jt-subtask-handle { opacity: 1; }
+@media (hover: none) { .jt-subtask-handle { opacity: .7; } }
 .jt-subtask-handle:active { cursor: grabbing; }
 
 .jt-subtask-check {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: var(--bs-secondary-color);
-    font-size: 1.05rem;
-    cursor: pointer;
+    flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
+    border-radius: 50%; border: none; background: transparent; color: var(--bs-secondary-color);
+    font-size: 1.05rem; cursor: pointer;
 }
+.jt-subtask-check:hover { color: #10b981; }
 .jt-subtask-item.is-done .jt-subtask-check { color: #10b981; }
 
-.jt-subtask-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: .9rem;
-    color: var(--bs-emphasis-color);
-    word-break: break-word;
+.jt-subtask-title { flex: 1 1 auto; min-width: 0; font-size: .9rem; color: var(--bs-emphasis-color); word-break: break-word; padding: 4px 0; }
+.jt-subtask-item.is-done .jt-subtask-title { text-decoration: line-through; color: var(--bs-secondary-color); }
+
+.jt-chip-btn {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 8px; border-radius: 999px; border: 1px solid var(--bs-border-color);
+    background: transparent; color: var(--bs-secondary-color); font-size: .72rem;
+    cursor: pointer; white-space: nowrap; line-height: 20px;
 }
-.jt-subtask-item.is-done .jt-subtask-title {
-    text-decoration: line-through;
-    color: var(--bs-secondary-color);
+.jt-chip-btn:hover { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
+.jt-subtask-attachments { display: flex; flex-direction: column; gap: 3px; padding: 0 0 6px 52px; }
+.jt-subtask-attachment-link { display: flex; align-items: center; gap: 6px; font-size: .8rem; text-decoration: none; color: inherit; min-width: 0; }
+.jt-subtask-attachment-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jt-subtask-attachment-link:hover { text-decoration: underline; }
+.jt-subtask-item .dropdown-item { font-size: .85rem; display: flex; gap: 8px; align-items: center; }
+
+/* ---------- Materiales ---------- */
+.jt-drop {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 14px; border: 2px dashed var(--bs-border-color); border-radius: 12px;
+    color: var(--bs-secondary-color); font-size: .85rem; cursor: pointer; text-align: center;
+    transition: border-color .15s, background-color .15s, color .15s; margin: 0;
+}
+.jt-drop i { font-size: 1.4rem; }
+.jt-drop:hover, .jt-drop.is-over { border-color: var(--jt-accent); color: var(--bs-emphasis-color); background: var(--jt-accent-soft); }
+.jt-drop.is-busy { opacity: .6; pointer-events: none; }
+.jt-drop-opts { display: flex; align-items: center; gap: 8px; margin-top: -4px; }
+.jt-drop-opts .jt-label { white-space: nowrap; }
+.jt-drop-opts .form-select { flex: 1 1 auto; max-width: 280px; }
+
+.jt-gallery-count { font-size: .78rem; color: var(--bs-secondary-color); }
+.jt-gallery-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    grid-auto-rows: max-content; gap: 8px;
+}
+.jt-gallery-grid:empty { display: none; }
+.jt-thumb {
+    position: relative; margin: 0; border-radius: 10px; overflow: hidden;
+    background: var(--bs-body-bg); border: 2px solid transparent; cursor: zoom-in;
+}
+.jt-thumb.is-selected { border-color: var(--bs-primary); }
+.jt-thumb.is-hl { border-color: var(--bs-info); }
+.jt-thumb-img { display: block; aspect-ratio: 1 / 1; background: var(--bs-secondary-bg); }
+.jt-thumb-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.jt-thumb:hover .jt-thumb-img img { transform: scale(1.04); }
+.jt-thumb-check, .jt-thumb-act {
+    position: absolute; width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55); color: #fff; text-decoration: none; border: none;
+    opacity: 0; transition: opacity .15s; cursor: pointer;
+}
+.jt-thumb-check { top: 5px; left: 5px; }
+.jt-thumb-check input { cursor: pointer; margin: 0; width: 16px; height: 16px; }
+.jt-thumb-act.dl { top: 5px; right: 5px; }
+.jt-thumb-act.ed { top: 37px; right: 5px; }
+.jt-thumb-act.del { top: 69px; right: 5px; }
+.jt-thumb-act:hover { background: var(--bs-primary); color: #fff; }
+.jt-thumb-act.del:hover { background: #dc3545; }
+.jt-material-thumb {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 6px;
+    object-fit: cover; background: var(--bs-secondary-bg); display: block;
+}
+.jt-material-item:has(.jt-material-thumb) .jt-material-desc,
+.jt-material-item:has(.jt-material-thumb) .jt-material-subtask { padding-left: 42px; }
+.jt-thumb:hover .jt-thumb-check, .jt-thumb:hover .jt-thumb-act,
+.jt-thumb.is-selected .jt-thumb-check, .jt-gallery-grid.selecting .jt-thumb-check { opacity: 1; }
+@media (hover: none) { .jt-thumb-check, .jt-thumb-act { opacity: 1; } }
+.jt-thumb figcaption {
+    font-size: .7rem; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--bs-secondary-color);
 }
 
-.jt-subtask-time {
-    flex: 0 0 auto;
-    font-size: .75rem;
-    color: var(--bs-secondary-color);
-    cursor: pointer;
-    white-space: nowrap;
-}
-.jt-subtask-time:hover { color: var(--bs-emphasis-color); text-decoration: underline; }
-
-.jt-subtask-edit,
-.jt-subtask-delete,
-.jt-subtask-move {
-    flex: 0 0 auto;
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: var(--bs-secondary-color);
-    cursor: pointer;
-}
-.jt-subtask-edit:hover { background: rgba(13,110,253,.12); color: #0d6efd; }
-.jt-subtask-delete:hover { background: rgba(220,53,69,.12); color: #dc3545; }
-.jt-subtask-move:hover { background: var(--bs-tertiary-bg); color: var(--bs-emphasis-color); }
-
-.jt-subtask-add { display: flex; gap: 6px; }
-.jt-subtask-add .form-control { flex: 1 1 auto; }
-
-.jt-materiales-list { display: flex; flex-direction: column; gap: 6px; }
+.jt-list-heading { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--bs-secondary-color); margin-top: 4px; }
+.jt-materiales-list { display: flex; flex-direction: column; gap: 2px; }
+.jt-materiales-list:empty { display: none; }
+#materialesList.only-files .jt-material-item.is-image { display: none; }
 .jt-material-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px 8px;
-    border-radius: 8px;
-    background: var(--bs-tertiary-bg);
+    display: flex; flex-direction: column; gap: 1px; padding: 3px 4px 3px 8px;
+    border-radius: 9px; border: 1px solid transparent; background: var(--bs-body-bg);
 }
-.jt-material-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.jt-material-desc {
-    font-size: .75rem;
-    color: var(--bs-secondary-color);
-    padding-left: 26px;
-    word-break: break-word;
-}
-.jt-material-subtask {
-    font-size: .75rem;
-    color: var(--bs-primary);
-    padding-left: 26px;
-}
-.jt-material-link {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 1 1 auto;
-    min-width: 0;
-    text-decoration: none;
-    color: inherit;
-}
+.jt-material-item:hover { border-color: var(--bs-border-color); }
+.jt-material-item.is-hl { border-color: var(--bs-info); }
+.jt-material-row { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+.jt-material-desc, .jt-material-subtask { font-size: .74rem; padding: 0 0 3px 24px; word-break: break-word; }
+.jt-material-desc { color: var(--bs-secondary-color); }
+.jt-material-subtask { color: var(--bs-primary); }
+.jt-material-link { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; text-decoration: none; color: inherit; font-size: .86rem; }
 .jt-material-link:hover { text-decoration: underline; }
+.jt-material-link i { color: var(--bs-secondary-color); }
 .jt-material-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jt-material-size { flex: 0 0 auto; font-size: .75rem; color: var(--bs-secondary-color); }
+.jt-material-size { flex: 0 0 auto; font-size: .72rem; color: var(--bs-secondary-color); }
+.jt-link-host { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.jt-link-add { display: flex; flex-wrap: wrap; gap: 6px; }
-.jt-link-add #linkUrlInput { flex: 1 1 100%; }
-.jt-link-add #linkTituloInput { flex: 1 1 auto; }
-.jt-link-add #linkSubtaskSelect { flex: 1 1 auto; max-width: 160px; }
+/* ---------- Enlaces ---------- */
+.jt-link-add { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 6px; }
 
-.jt-log-list { display: flex; flex-direction: column; gap: 6px; }
-.jt-log-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-body-bg);
-    color: var(--bs-emphasis-color);
-    text-align: left;
-    cursor: pointer;
+/* ---------- Barra de guardar ---------- */
+.jt-savebar {
+    position: fixed; left: 50%; bottom: 16px; z-index: 1040;
+    transform: translate(-50%, 140%); transition: transform .2s ease;
+    display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 16px;
+    border-radius: 999px; background: var(--bs-body-bg); border: 1px solid var(--jt-accent);
+    box-shadow: 0 8px 28px rgba(0,0,0,.4); font-size: .85rem; color: var(--bs-emphasis-color);
 }
-.jt-log-item:hover { background: var(--bs-tertiary-bg); }
-.jt-log-date { font-weight: 600; font-size: .85rem; }
-.jt-log-minutes { font-size: .8rem; color: var(--bs-secondary-color); margin-left: auto; }
-.jt-log-edit-icon { color: var(--bs-secondary-color); font-size: .8rem; }
+.jt-savebar.show { transform: translate(-50%, 0); }
+.jt-savebar .btn { border-radius: 999px; }
 
-@media (max-width: 400px) {
-    .jt-title-input { font-size: 1rem; }
+/* ---------- Visor ---------- */
+.jt-lightbox .modal-content { background: rgba(10,10,14,.96); border: none; color: #fff; }
+.jt-lb-top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.jt-lb-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
+.jt-lb-pos { font-size: .78rem; opacity: .6; margin-right: 6px; }
+.jt-lb-btn {
+    width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px;
+    border: none; background: rgba(255,255,255,.08); color: #fff; text-decoration: none;
 }
+.jt-lb-btn:hover { background: var(--bs-primary); color: #fff; }
+.jt-lb-del { margin-left: 6px; }
+.jt-lb-del:hover { background: #dc3545; }
+.jt-lb-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 50vh; }
+/* Tamaño fijo + contain: las imágenes pequeñas también se ven grandes, sin deformarse */
+.jt-lb-stage img { width: 100%; height: 75vh; object-fit: contain; display: block; }
+.jt-lb-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%; border: none;
+    background: rgba(0,0,0,.5); color: #fff; font-size: 1.2rem; display: grid; place-items: center;
+}
+.jt-lb-nav:hover { background: var(--bs-primary); }
+.jt-lb-prev { left: 10px; }
+.jt-lb-next { right: 10px; }
+.jt-lb-desc { padding: 6px 12px 12px; font-size: .8rem; opacity: .75; text-align: center; }
+.jt-lb-desc:empty { display: none; }
 
-/* Móvil: la subtarea pasa a dos líneas. Línea 1: asa + check + texto.
-   Línea 2: el resto de botones, porque no cabe todo en una sola fila. */
+/* ---------- Móvil ---------- */
 @media (max-width: 575.98px) {
-    .jt-subtask-row { flex-wrap: wrap; align-items: flex-start; }
-    .jt-subtask-title { flex: 1 1 0; }
-    .jt-subtask-actions {
-        flex: 1 1 100%;
-        gap: 4px;
-        padding-left: 30px;
-    }
-    /* Ergonomía: borrar a la izquierda, lejos del borde derecho (zona del
-       pulgar). El tiempo pasa al extremo derecho, donde antes caía borrar. */
-    .jt-subtask-delete { order: -1; }
-    .jt-subtask-time { order: 5; margin-left: auto; }
+    .jt-hero { align-items: flex-start; gap: 10px; }
+    .jt-hero-img img, .jt-hero-img-empty { width: 56px; height: 56px; border-radius: 12px; }
+    .jt-title-input { font-size: 1.1rem; }
+    .jt-star { width: 32px; height: 32px; font-size: .95rem; }
+    .jt-stat-bar { width: 40px; }
+    .jt-tab { gap: 4px; font-size: .8rem; padding: 7px 4px; }
+    .jt-tab > i { display: none; }
+    .jt-card { padding: 10px; }
+    .jt-fold { padding: 0; }
+    .jt-gallery-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .jt-link-add { grid-template-columns: minmax(0, 1fr) auto; }
+    .jt-link-add #linkUrlInput { grid-column: 1 / -1; }
+    .jt-link-add #linkTituloInput { grid-column: 1 / -1; }
+    .jt-link-host { display: none; }
+    .jt-chip-btn { padding: 1px 6px; }
+    .jt-drop { padding: 12px; }
+    .jt-drop-opts .form-select { max-width: none; }
 }
 </style>
 
@@ -858,6 +964,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const pct = amplitude > 0 ? Math.min(100, Math.round((completed / amplitude) * 100)) : 0;
         progressBar.style.width = pct + '%';
         progressLabel.textContent = pct + '%';
+        document.getElementById('heroBar').style.width = pct + '%';
+        document.getElementById('heroPct').textContent = pct + '%';
     }
     amplitudeInput.addEventListener('input', actualizarProgreso);
     completedInput.addEventListener('input', actualizarProgreso);
@@ -869,6 +977,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function actualizarHint() {
         const mins = parseInt(timeInput.value, 10) || 0;
         timeHint.textContent = '= ' + (mins / 60).toFixed(2) + ' h';
+        document.getElementById('heroHours').textContent = (mins / 60).toFixed(1);
     }
     timeInput.addEventListener('input', actualizarHint);
     actualizarHint();
@@ -991,12 +1100,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 <span class="jt-subtask-handle" title="Arrastrar para reordenar"><i class="bi bi-grip-vertical"></i></span>
                 <button type="button" class="jt-subtask-check js-toggle-subtask" aria-label="Marcar como hecha"><i class="bi bi-circle"></i></button>
                 <span class="jt-subtask-title"></span>
-                <div class="jt-subtask-actions">
-                    <span class="jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" title="Añadir tiempo">0.00 h</span>
-                    <button type="button" class="jt-subtask-move js-move-top-subtask" title="Mover al principio" aria-label="Mover al principio"><i class="bi bi-arrow-bar-up"></i></button>
-                    <button type="button" class="jt-subtask-move js-move-bottom-subtask" title="Mover al final" aria-label="Mover al final"><i class="bi bi-arrow-bar-down"></i></button>
-                    <button type="button" class="jt-subtask-edit js-edit-subtask" title="Renombrar subtarea" aria-label="Renombrar subtarea"><i class="bi bi-pencil"></i></button>
-                    <button type="button" class="jt-subtask-delete js-delete-subtask" title="Eliminar subtarea" aria-label="Eliminar subtarea"><i class="bi bi-trash"></i></button>
+                <span class="jt-chip-btn jt-subtask-time subtask-time-trigger" data-subtask-id="${subtask.id}" title="Añadir tiempo">0.00 h</span>
+                <div class="dropdown">
+                    <button type="button" class="jt-icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Más acciones"><i class="bi bi-three-dots"></i></button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button type="button" class="dropdown-item js-edit-subtask"><i class="bi bi-pencil"></i> Renombrar</button></li>
+                        <li><button type="button" class="dropdown-item js-move-top-subtask"><i class="bi bi-arrow-bar-up"></i> Mover al principio</button></li>
+                        <li><button type="button" class="dropdown-item js-move-bottom-subtask"><i class="bi bi-arrow-bar-down"></i> Mover al final</button></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><button type="button" class="dropdown-item text-danger js-delete-subtask"><i class="bi bi-trash"></i> Eliminar</button></li>
+                    </ul>
                 </div>
             </div>
         `;
@@ -1282,21 +1395,26 @@ document.addEventListener('DOMContentLoaded', function () {
         const div = document.createElement('div');
         div.className = 'jt-material-item';
         div.dataset.id = f.id;
+        div.dataset.url = f.url;
         div.dataset.nombre = f.nombre_original;
         div.dataset.descripcion = f.descripcion || '';
         div.dataset.subtaskId = f.subtask_id || '';
         div.innerHTML = `
             <div class="jt-material-row">
                 <a href="${f.url}" target="_blank" class="jt-material-link">
-                    <i class="bi ${materialIcon(f.nombre_original)}"></i>
+                    ${materialIcon(f.nombre_original) === 'bi-file-earmark-image'
+                        ? '<img class="jt-material-thumb" loading="lazy" alt="">'
+                        : `<i class="bi ${materialIcon(f.nombre_original)}"></i>`}
                     <span class="jt-material-name"></span>
                 </a>
                 <span class="jt-material-size">${formatSize(f.tamano)}</span>
-                <button type="button" class="jt-subtask-edit js-edit-material" title="Editar material" aria-label="Editar material"><i class="bi bi-pencil"></i></button>
-                <button type="button" class="jt-subtask-delete js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
+                <button type="button" class="jt-icon-btn js-edit-material" title="Editar material" aria-label="Editar material"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="jt-icon-btn jt-icon-danger js-delete-material" title="Eliminar material" aria-label="Eliminar material"><i class="bi bi-trash"></i></button>
             </div>
         `;
         div.querySelector('.jt-material-name').textContent = f.nombre_original;
+        const thumbImg = div.querySelector('.jt-material-thumb');
+        if (thumbImg) thumbImg.src = f.url;
         setMaterialSubtask(div, f.subtask_id, f.subtask_title);
         return div;
     }
@@ -1332,11 +1450,215 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    materialInput.addEventListener('change', async () => {
-        if (!materialInput.files.length) return;
+    // --- Galería de imágenes (se reconstruye a partir del listado) ---
+    // Vista "gallery": miniaturas de las imágenes + listado solo con los demás
+    // archivos. Vista "list": listado completo, sin miniaturas.
+    const materialesToolbar = document.getElementById('materialesToolbar');
+    const galleryGrid = document.getElementById('galleryGrid');
+    const galleryCount = document.getElementById('galleryCount');
+    const gallerySelTools = document.getElementById('gallerySelTools');
+    const gallerySelectAll = document.getElementById('gallerySelectAll');
+    const galleryDownloadBtn = document.getElementById('galleryDownloadBtn');
+    const gallerySelCount = document.getElementById('gallerySelCount');
+    const otherFilesHeading = document.getElementById('otherFilesHeading');
+    const IMG_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif', 'svg'];
+    let matView = 'gallery';
+    try { matView = localStorage.getItem('journalMatView') || 'gallery'; } catch (e) {}
+
+    function isImageName(name) {
+        return IMG_EXTS.includes(((name || '').split('.').pop() || '').toLowerCase());
+    }
+
+    function updateGallerySelection() {
+        const checks = galleryGrid.querySelectorAll('.jt-thumb input[type=checkbox]');
+        let n = 0;
+        checks.forEach(c => {
+            c.closest('.jt-thumb').classList.toggle('is-selected', c.checked);
+            if (c.checked) n++;
+        });
+        gallerySelCount.textContent = n;
+        galleryDownloadBtn.disabled = n === 0;
+        galleryGrid.classList.toggle('selecting', n > 0);
+        gallerySelectAll.textContent = (n > 0 && n === checks.length) ? 'Quitar selección' : 'Seleccionar todas';
+    }
+
+    function syncGallery() {
+        const selected = new Set([...galleryGrid.querySelectorAll('.jt-thumb input:checked')]
+            .map(c => c.closest('.jt-thumb').dataset.id));
+        galleryGrid.innerHTML = '';
+
+        const all = [...materialesList.querySelectorAll('.jt-material-item')];
+        all.forEach(it => it.classList.toggle('is-image', isImageName(it.dataset.nombre)));
+        const items = all.filter(it => it.dataset.url && it.classList.contains('is-image'));
+        const others = all.length - items.length;
+
+        const showGallery = matView === 'gallery' && items.length > 0;
+        if (showGallery) {
+            items.forEach(it => {
+                const fig = document.createElement('figure');
+                fig.className = 'jt-thumb';
+                fig.dataset.id = it.dataset.id;
+                fig.innerHTML = `
+                    <div class="jt-thumb-img"><img loading="lazy" alt=""></div>
+                    <label class="jt-thumb-check" title="Seleccionar"><input type="checkbox"></label>
+                    <a class="jt-thumb-act dl" title="Descargar" aria-label="Descargar"><i class="bi bi-download"></i></a>
+                    <button type="button" class="jt-thumb-act ed" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="jt-thumb-act del" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
+                    <figcaption></figcaption>
+                `;
+                fig.querySelector('img').src = it.dataset.url;
+                fig.querySelector('img').alt = it.dataset.nombre;
+                const dl = fig.querySelector('.dl');
+                dl.href = it.dataset.url;
+                dl.setAttribute('download', it.dataset.nombre);
+                fig.querySelector('figcaption').textContent = it.dataset.nombre;
+                fig.title = it.dataset.descripcion ? it.dataset.nombre + ' — ' + it.dataset.descripcion : it.dataset.nombre;
+                fig.querySelector('input').checked = selected.has(it.dataset.id);
+                galleryGrid.appendChild(fig);
+            });
+        }
+
+        materialesList.classList.toggle('only-files', showGallery);
+        otherFilesHeading.classList.toggle('d-none', !(showGallery && others > 0));
+        materialesToolbar.classList.toggle('d-none', all.length === 0);
+        gallerySelTools.classList.toggle('d-none', !showGallery);
+        document.querySelectorAll('.js-mat-view').forEach(b => b.classList.toggle('active', b.dataset.view === matView));
+
+        const parts = [];
+        if (items.length) parts.push(items.length + (items.length === 1 ? ' imagen' : ' imágenes'));
+        if (others) parts.push(others + (others === 1 ? ' archivo' : ' archivos'));
+        galleryCount.textContent = parts.join(' · ');
+        updateGallerySelection();
+    }
+
+    document.querySelectorAll('.js-mat-view').forEach(b => b.addEventListener('click', () => {
+        matView = b.dataset.view;
+        try { localStorage.setItem('journalMatView', matView); } catch (e) {}
+        syncGallery();
+    }));
+
+    galleryGrid.addEventListener('change', e => {
+        if (e.target.matches('input[type=checkbox]')) updateGallerySelection();
+    });
+
+    galleryGrid.addEventListener('click', e => {
+        const fig = e.target.closest('.jt-thumb');
+        if (!fig) return;
+        if (e.target.closest('.jt-thumb-check, .dl')) return; // casilla y descarga: comportamiento normal
+        if (e.target.closest('.del')) {
+            const item = materialesList.querySelector(`.jt-material-item[data-id="${fig.dataset.id}"]`);
+            if (item) deleteMaterial(item);
+            return;
+        }
+        if (e.target.closest('.ed')) {
+            materialesList.querySelector(`.jt-material-item[data-id="${fig.dataset.id}"] .js-edit-material`)?.click();
+            return;
+        }
+        // Con alguna seleccionada, pulsar la miniatura alterna la selección (como en una galería de fotos)
+        if (galleryGrid.classList.contains('selecting')) {
+            const cb = fig.querySelector('input');
+            cb.checked = !cb.checked;
+            updateGallerySelection();
+            return;
+        }
+        openLightbox([...galleryGrid.querySelectorAll('.jt-thumb')].indexOf(fig));
+    });
+
+    gallerySelectAll.addEventListener('click', () => {
+        const checks = [...galleryGrid.querySelectorAll('.jt-thumb input[type=checkbox]')];
+        const all = checks.length > 0 && checks.every(c => c.checked);
+        checks.forEach(c => c.checked = !all);
+        updateGallerySelection();
+    });
+
+    galleryDownloadBtn.addEventListener('click', async () => {
+        const links = [...galleryGrid.querySelectorAll('.jt-thumb')]
+            .filter(f => f.querySelector('input').checked)
+            .map(f => f.querySelector('.dl'));
+        // Una a una con una pequeña pausa: el navegador puede pedir permiso
+        // la primera vez para "descargar varios archivos".
+        for (const a of links) {
+            a.click();
+            await new Promise(r => setTimeout(r, 250));
+        }
+    });
+
+    // Resaltar a la vez la fila del listado y su miniatura al pasar el ratón
+    function highlight(id, on) {
+        materialesList.querySelector(`.jt-material-item[data-id="${id}"]`)?.classList.toggle('is-hl', on);
+        galleryGrid.querySelector(`.jt-thumb[data-id="${id}"]`)?.classList.toggle('is-hl', on);
+    }
+    [materialesList, galleryGrid].forEach(el => {
+        el.addEventListener('mouseover', e => {
+            const t = e.target.closest('.jt-material-item, .jt-thumb');
+            if (t) highlight(t.dataset.id, true);
+        });
+        el.addEventListener('mouseout', e => {
+            const t = e.target.closest('.jt-material-item, .jt-thumb');
+            if (t && !t.contains(e.relatedTarget)) highlight(t.dataset.id, false);
+        });
+    });
+
+    // --- Visor de imágenes (anterior/siguiente con flechas o deslizando) ---
+    const lightboxEl = document.getElementById('lightboxModal');
+    const lightbox = new bootstrap.Modal(lightboxEl);
+    const lbImg = document.getElementById('lbImg');
+    let lbIndex = 0;
+
+    function lbItems() {
+        return [...materialesList.querySelectorAll('.jt-material-item.is-image')];
+    }
+    function showLb(i) {
+        const items = lbItems();
+        if (!items.length) return;
+        lbIndex = (i + items.length) % items.length;
+        const it = items[lbIndex];
+        lbImg.src = it.dataset.url;
+        lbImg.alt = it.dataset.nombre;
+        document.getElementById('lbName').textContent = it.dataset.nombre;
+        document.getElementById('lbPos').textContent = (lbIndex + 1) + ' / ' + items.length;
+        document.getElementById('lbDesc').textContent = it.dataset.descripcion || '';
+        const dl = document.getElementById('lbDownload');
+        dl.href = it.dataset.url;
+        dl.setAttribute('download', it.dataset.nombre);
+        document.getElementById('lbOpen').href = it.dataset.url;
+        const multi = items.length > 1;
+        document.getElementById('lbPrev').classList.toggle('d-none', !multi);
+        document.getElementById('lbNext').classList.toggle('d-none', !multi);
+    }
+    function openLightbox(i) { showLb(i); lightbox.show(); }
+    // Borrar desde el visor: tras borrar, pasa a la siguiente imagen (o se cierra si no quedan)
+    document.getElementById('lbDelete').addEventListener('click', async () => {
+        const item = lbItems()[lbIndex];
+        if (!item || !(await deleteMaterial(item))) return;
+        if (lbItems().length) showLb(lbIndex); else lightbox.hide();
+    });
+    document.getElementById('lbPrev').addEventListener('click', () => showLb(lbIndex - 1));
+    document.getElementById('lbNext').addEventListener('click', () => showLb(lbIndex + 1));
+    document.addEventListener('keydown', e => {
+        if (!lightboxEl.classList.contains('show')) return;
+        if (e.key === 'ArrowLeft') showLb(lbIndex - 1);
+        if (e.key === 'ArrowRight') showLb(lbIndex + 1);
+    });
+    let touchX = null;
+    lightboxEl.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+    lightboxEl.addEventListener('touchend', e => {
+        if (touchX === null) return;
+        const dx = e.changedTouches[0].clientX - touchX;
+        if (Math.abs(dx) > 50) showLb(lbIndex + (dx < 0 ? 1 : -1));
+        touchX = null;
+    });
+
+    syncGallery();
+
+    // --- Subida de materiales: selector de archivos o arrastrar y soltar ---
+    const materialDrop = document.getElementById('materialDrop');
+
+    async function uploadMaterials(fileList) {
+        if (!fileList || !fileList.length) return;
 
         const formData = new FormData();
-        for (const file of materialInput.files) {
+        for (const file of fileList) {
             formData.append('archivo', file);
         }
         if (materialSubtaskSelect.value) {
@@ -1344,6 +1666,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         materialInput.disabled = true;
+        materialDrop.classList.add('is-busy');
         try {
             const res = await fetch('<?= site_url('journal/tasks') ?>/' + subtaskList.dataset.taskId + '/materiales', {
                 method: 'POST',
@@ -1356,14 +1679,36 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await res.json();
             if (!data.success) throw new Error(data.error || 'No se pudieron subir los archivos.');
 
-            data.files.forEach(f => materialesList.appendChild(buildMaterialItem(f)));
+            data.files.forEach(f => materialesList.prepend(buildMaterialItem(f)));
             materialesEmptyMsg.classList.add('d-none');
+            syncGallery();
         } catch (err) {
             alert(err.message || 'No se pudieron subir los archivos.');
         } finally {
             materialInput.value = '';
             materialInput.disabled = false;
+            materialDrop.classList.remove('is-busy');
         }
+    }
+
+    materialInput.addEventListener('change', () => uploadMaterials(materialInput.files));
+
+    ['dragenter', 'dragover'].forEach(ev => materialDrop.addEventListener(ev, e => {
+        e.preventDefault();
+        materialDrop.classList.add('is-over');
+    }));
+    ['dragleave', 'drop'].forEach(ev => materialDrop.addEventListener(ev, e => {
+        e.preventDefault();
+        materialDrop.classList.remove('is-over');
+    }));
+    materialDrop.addEventListener('drop', e => uploadMaterials(e.dataTransfer.files));
+
+    // Pegar una imagen (Ctrl+V) con la pestaña Materiales abierta la sube directamente
+    document.addEventListener('paste', e => {
+        if (!document.querySelector('[data-panel="materiales"].active')) return;
+        if (e.target.closest('input, textarea')) return;
+        const files = [...(e.clipboardData?.files || [])];
+        if (files.length) uploadMaterials(files);
     });
 
     const materialEditModal = new bootstrap.Modal(document.getElementById('materialEditModal'));
@@ -1374,6 +1719,13 @@ document.addEventListener('DOMContentLoaded', function () {
     let materialEditItem = null;
 
     materialesList.addEventListener('click', async (e) => {
+        const listThumb = e.target.closest('.jt-material-thumb');
+        if (listThumb) {
+            e.preventDefault();
+            openLightbox(lbItems().indexOf(listThumb.closest('.jt-material-item')));
+            return;
+        }
+
         const editBtn = e.target.closest('.js-edit-material');
         if (editBtn) {
             materialEditItem = editBtn.closest('.jt-material-item');
@@ -1386,17 +1738,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const delBtn = e.target.closest('.js-delete-material');
         if (!delBtn) return;
-        if (!confirm('¿Eliminar este material?')) return;
+        deleteMaterial(delBtn.closest('.jt-material-item'));
+    });
 
-        const item = delBtn.closest('.jt-material-item');
+    // Borra un material (desde el listado, la miniatura o el visor). Devuelve true si se borró.
+    async function deleteMaterial(item) {
+        if (!confirm('¿Eliminar «' + (item.dataset.nombre || 'este material') + '»?')) return false;
+
         const data = await postJSON('<?= site_url('journal/materiales') ?>/' + item.dataset.id + '/borrar');
-        if (!data.success) return;
+        if (!data.success) {
+            alert('No se pudo eliminar el material.');
+            return false;
+        }
 
         item.remove();
+        syncGallery();
         if (!materialesList.querySelector('.jt-material-item')) {
             materialesEmptyMsg.classList.remove('d-none');
         }
-    });
+        return true;
+    }
 
     materialEditSaveBtn.addEventListener('click', async () => {
         if (!materialEditItem) return;
@@ -1417,6 +1778,7 @@ document.addEventListener('DOMContentLoaded', function () {
             materialEditItem.querySelector('.jt-material-name').textContent = data.file.nombre_original;
             setMaterialDesc(materialEditItem, data.file.descripcion);
             setMaterialSubtask(materialEditItem, data.file.subtask_id, data.file.subtask_title);
+            syncGallery();
             materialEditModal.hide();
         } catch (err) {
             alert(err.message || 'No se pudo editar el material.');
@@ -1437,6 +1799,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const div = document.createElement('div');
         div.className = 'jt-material-item';
         div.dataset.id = l.id;
+        div.dataset.url = l.url;
         div.dataset.titulo = l.titulo || '';
         div.dataset.descripcion = l.descripcion || '';
         div.dataset.subtaskId = l.subtask_id || '';
@@ -1446,11 +1809,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     <i class="bi bi-link-45deg"></i>
                     <span class="jt-material-name"></span>
                 </a>
-                <button type="button" class="jt-subtask-edit js-edit-link" title="Editar enlace" aria-label="Editar enlace"><i class="bi bi-pencil"></i></button>
-                <button type="button" class="jt-subtask-delete js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace"><i class="bi bi-trash"></i></button>
+                <span class="jt-material-size jt-link-host"></span>
+                <button type="button" class="jt-icon-btn js-edit-link" title="Editar enlace" aria-label="Editar enlace"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="jt-icon-btn jt-icon-danger js-delete-link" title="Eliminar enlace" aria-label="Eliminar enlace"><i class="bi bi-trash"></i></button>
             </div>
         `;
         div.querySelector('.jt-material-name').textContent = l.titulo || l.url;
+        try { div.querySelector('.jt-link-host').textContent = new URL(l.url).hostname.replace(/^www\./, ''); } catch (e) {}
         div.querySelector('.jt-material-link').href = l.url;
         setLinkSubtask(div, l.subtask_id, l.subtask_title);
         return div;
@@ -1516,6 +1881,7 @@ document.addEventListener('DOMContentLoaded', function () {
     linkTituloInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addLink(); });
 
     const linkEditModal = new bootstrap.Modal(document.getElementById('linkEditModal'));
+    const linkEditUrl = document.getElementById('linkEditUrl');
     const linkEditTitulo = document.getElementById('linkEditTitulo');
     const linkEditDescripcion = document.getElementById('linkEditDescripcion');
     const linkEditSubtask = document.getElementById('linkEditSubtask');
@@ -1526,6 +1892,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const editBtn = e.target.closest('.js-edit-link');
         if (editBtn) {
             linkEditItem = editBtn.closest('.jt-material-item');
+            linkEditUrl.value = linkEditItem.dataset.url || linkEditItem.querySelector('.jt-material-link').href;
             linkEditTitulo.value = linkEditItem.dataset.titulo || '';
             linkEditDescripcion.value = linkEditItem.dataset.descripcion || '';
             linkEditSubtask.value = linkEditItem.dataset.subtaskId || '';
@@ -1549,18 +1916,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
     linkEditSaveBtn.addEventListener('click', async () => {
         if (!linkEditItem) return;
+        const url = linkEditUrl.value.trim();
+        if (!url) { linkEditUrl.focus(); return; }
 
         linkEditSaveBtn.disabled = true;
         try {
             const data = await postJSON('<?= site_url('journal/enlaces') ?>/' + linkEditItem.dataset.id + '/editar', {
+                url,
                 titulo: linkEditTitulo.value.trim(),
                 descripcion: linkEditDescripcion.value.trim(),
                 subtask_id: linkEditSubtask.value,
             });
             if (!data.success) throw new Error(data.error || 'No se pudo editar el enlace.');
 
+            linkEditItem.dataset.url = data.link.url;
             linkEditItem.dataset.titulo = data.link.titulo || '';
+            linkEditItem.querySelector('.jt-material-link').href = data.link.url;
             linkEditItem.querySelector('.jt-material-name').textContent = data.link.titulo || data.link.url;
+            try { linkEditItem.querySelector('.jt-link-host').textContent = new URL(data.link.url).hostname.replace(/^www\./, ''); } catch (e) {}
             setLinkDesc(linkEditItem, data.link.descripcion);
             setLinkSubtask(linkEditItem, data.link.subtask_id, data.link.subtask_title);
             linkEditModal.hide();
@@ -1570,6 +1943,72 @@ document.addEventListener('DOMContentLoaded', function () {
             linkEditSaveBtn.disabled = false;
         }
     });
+
+    // --- Pestañas Subtareas / Materiales / Enlaces (recuerda la última) ---
+    const tabs = [...document.querySelectorAll('.jt-tab')];
+    const panels = [...document.querySelectorAll('.jt-panel')];
+    function showTab(name) {
+        if (!panels.some(p => p.dataset.panel === name)) name = 'subtareas';
+        tabs.forEach(t => {
+            const on = t.dataset.tab === name;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        panels.forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+        try { localStorage.setItem('journalEditTab', name); } catch (e) {}
+    }
+    tabs.forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+    let initialTab = 'subtareas';
+    try { initialTab = localStorage.getItem('journalEditTab') || 'subtareas'; } catch (e) {}
+    showTab(initialTab);
+
+    // --- Detalles plegados por defecto en móvil (el trabajo diario son las pestañas) ---
+    const detailsPanel = document.getElementById('detailsPanel');
+    if (window.matchMedia('(max-width: 991.98px)').matches) {
+        detailsPanel.removeAttribute('open');
+    }
+
+    // Botón "añadir imagen" de la cabecera: abre Detalles y el selector de archivo
+    document.querySelector('.js-pick-image')?.addEventListener('click', () => {
+        detailsPanel.setAttribute('open', '');
+        document.getElementById('image').click();
+    });
+
+    // --- Barra "Cambios sin guardar" (el formulario puede estar plegado) ---
+    const taskForm = document.getElementById('taskForm');
+    const saveBar = document.getElementById('saveBar');
+    const markDirty = () => saveBar.classList.add('show');
+    document.querySelectorAll('[form="taskForm"], #taskForm input, #taskForm textarea').forEach(el => {
+        el.addEventListener('input', markDirty);
+        el.addEventListener('change', markDirty);
+    });
+    starBtn.addEventListener('click', markDirty);
+    // Ctrl/Cmd + S guarda la tarea
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            if (taskForm.reportValidity()) taskForm.requestSubmit();
+        }
+    });
+
+    // --- Contadores de pestañas y resumen de subtareas, siempre al día ---
+    const subProgress = document.getElementById('subProgress');
+    function updateCounts() {
+        const subs = subtaskList.querySelectorAll('.jt-subtask-item');
+        const done = subtaskList.querySelectorAll('.jt-subtask-item.is-done').length;
+        document.getElementById('countSubtareas').textContent = subs.length;
+        document.getElementById('countMateriales').textContent = materialesList.querySelectorAll('.jt-material-item').length;
+        document.getElementById('countEnlaces').textContent = linksList.querySelectorAll('.jt-material-item').length;
+        document.getElementById('heroSubs').textContent = done + '/' + subs.length;
+        subProgress.classList.toggle('d-none', subs.length === 0);
+        document.getElementById('subProgressBar').style.width = (subs.length ? Math.round(done / subs.length * 100) : 0) + '%';
+        document.getElementById('subProgressLabel').textContent = done + ' de ' + subs.length + ' hechas';
+    }
+    const countsObserver = new MutationObserver(updateCounts);
+    countsObserver.observe(subtaskList, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    countsObserver.observe(materialesList, { childList: true });
+    countsObserver.observe(linksList, { childList: true });
+    updateCounts();
 });
 </script>
 

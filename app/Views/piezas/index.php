@@ -606,6 +606,29 @@ $tokensDe = static function (array $v): array {
     return $tokens;
 };
 
+/**
+ * Filtro "qué ve sterclicks": a quién pertenece cada fila (categoría, pieza,
+ * variante). La visibilidad real es la cascada de los tres ojos (misma regla
+ * que SterclicksApi::catalogo), y se calcula en el navegador con los mapas de
+ * $visibilidadSt — así, al pulsar un ojo, el filtro sigue acertando sin
+ * recargar.
+ */
+$attrSt = static function (?array $categoria, array $familia, ?array $v): string {
+    return ' data-st-cat="' . ($categoria ? (int) $categoria['id'] : '') . '"'
+        . ' data-st-fam="' . (int) $familia['id'] . '"'
+        . ' data-st-var="' . ($v ? (int) $v['id'] : '') . '"';
+};
+$visibilidadSt = ['cat' => [], 'fam' => [], 'var' => []];
+foreach ($categorias as $c) {
+    $visibilidadSt['cat'][(int) $c['id']] = !empty($c['visible_sterclicks']);
+}
+foreach ($familias as $f) {
+    $visibilidadSt['fam'][(int) $f['id']] = !empty($f['visible_sterclicks']);
+    foreach ($f['variantes'] as $v) {
+        $visibilidadSt['var'][(int) $v['id']] = !empty($v['visible_sterclicks']);
+    }
+}
+
 /** Los de todas sus variantes juntos: la fila de la pieza representa a las de dentro. */
 $tokensDeFamilia = static function (array $familia) use ($tokensDe): array {
     $tokens = [];
@@ -625,12 +648,12 @@ $tokensDeFamilia = static function (array $familia) use ($tokensDe): array {
  * la tabla. Lleva data-buscar/data-tokens para que el buscador y los
  * filtros recorten también aquí (ver aplicarFiltros en el script).
  */
-$tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, string $buscar)
+$tarjetaGaleria = static function (array $v, array $familia, bool $conVariante, string $buscar, string $st = '')
     use ($colFoto, $colEstado, $colBlend, $colAviso, $botonTareas, $tokensDe): string {
     $nombre = esc($familia['nombre'] . ($conVariante ? ' · ' . $v['nombre'] : ''));
     $tira   = trim($colEstado($v) . ' ' . $colBlend($v) . ' ' . $colAviso($v));
 
-    return '<div class="galeria-tarjeta text-center" data-tarjeta'
+    return '<div class="galeria-tarjeta text-center" data-tarjeta' . $st
         . ' data-buscar="' . $buscar . '" data-tokens="' . implode(' ', $tokensDe($v)) . '">'
         . '<a href="' . site_url('piezas/variante/' . (int) $v['id']) . '" class="d-block text-decoration-none text-body">'
         . $colFoto($v, 132)
@@ -724,6 +747,22 @@ foreach ($grupos as $grupo) {
                 </button>
             <?php endif; ?>
         <?php endforeach; ?>
+
+        <?php // Otro eje, aparte de los de arriba: se combina con cualquiera de
+              // ellos (y = las dos cosas). Visible = los tres ojos encendidos
+              // (categoría, pieza y variante); los contadores los pone el JS,
+              // que es quien sabe cómo están los ojos después de pulsarlos. ?>
+        <div class="btn-group btn-group-sm ms-md-2" role="group" id="filtroSterclicks" aria-label="Qué ve sterclicks">
+            <button type="button" class="btn btn-outline-secondary active" data-st="" title="Visibles y ocultas en sterclicks">
+                <i class="bi bi-shop"></i> Todas
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-st="si" title="Las que sterclicks publica en su catálogo">
+                <i class="bi bi-eye"></i> En sterclicks <span class="badge text-bg-secondary" data-st-cuenta="si"></span>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-st="no" title="Las ocultas: su ojo, el de su pieza o el de su categoría está apagado">
+                <i class="bi bi-eye-slash"></i> Ocultas <span class="badge text-bg-secondary" data-st-cuenta="no"></span>
+            </button>
+        </div>
     </div>
     </div><?php // #barraPiezas ?>
 <?php endif; ?>
@@ -797,7 +836,7 @@ foreach ($grupos as $grupo) {
             <?php foreach ($grupo['piezas'] as $familia): ?>
                 <?php $variantes = $familia['variantes']; $buscar = esc($textoBuscable($familia), 'attr'); ?>
                 <?php $filaAlterna = !$filaAlterna; $claseAlterna = $filaAlterna ? '' : ' pieza-alt'; ?>
-                <tr id="familia-<?= (int) $familia['id'] ?>" class="pieza<?= $claseAlterna ?>" data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>">
+                <tr id="familia-<?= (int) $familia['id'] ?>" class="pieza<?= $claseAlterna ?>" data-pieza data-buscar="<?= $buscar ?>" data-tokens="<?= implode(' ', $tokensDeFamilia($familia)) ?>"<?= $attrSt($categoria, $familia, count($variantes) === 1 ? $variantes[0] : null) ?>>
                     <?php // Misma regla que el resto de columnas: la fila de la pieza solo
                           // habla de una variante cuando hay una sola. Con varias, cada una
                           // trae su foto en su propia subfila. ?>
@@ -875,7 +914,7 @@ foreach ($grupos as $grupo) {
                 <?php if (count($variantes) > 1): ?>
                     <?php // Solo cuando hay más de una: con una sola, la fila de arriba ya lo dice todo. ?>
                     <?php foreach ($variantes as $v): ?>
-                        <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= esc($textoBuscableVariante($familia, $v), 'attr') ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>">
+                        <tr class="pieza<?= $claseAlterna ?>" data-subpieza data-buscar="<?= esc($textoBuscableVariante($familia, $v), 'attr') ?>" data-tokens="<?= implode(' ', $tokensDe($v)) ?>"<?= $attrSt($categoria, $familia, $v) ?>>
                             <td class="pe-0 col-ojo" style="width: 1%;"><?= $botonOjo(site_url('piezas/variante/' . (int) $v['id'] . '/visibilidad'), !empty($v['visible_sterclicks'])) ?></td>
                             <td style="width: 48px;"><?= $colFoto($v) ?></td>
                             <td class="ps-4">
@@ -947,7 +986,7 @@ foreach ($grupos as $grupo) {
                         <?php foreach ($grupo['piezas'] as $familia): ?>
                             <?php $conVariante = count($familia['variantes']) > 1; ?>
                             <?php foreach ($familia['variantes'] as $v): ?>
-                                <?= $tarjetaGaleria($v, $familia, $conVariante, esc($textoBuscableVariante($familia, $v), 'attr')) ?>
+                                <?= $tarjetaGaleria($v, $familia, $conVariante, esc($textoBuscableVariante($familia, $v), 'attr'), $attrSt($categoria, $familia, $v)) ?>
                             <?php endforeach; ?>
                         <?php endforeach; ?>
                     </div>
@@ -1353,6 +1392,10 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
     }
 
     // ---- Toggle visibilidad sterclicks (categoría/familia/variante) --
+    // Estado de los tres ojos, para el filtro "En sterclicks / Ocultas":
+    // cada toggle lo actualiza aquí y vuelve a filtrar, sin recargar.
+    var visibilidadSt = <?= json_encode($visibilidadSt, JSON_FORCE_OBJECT) ?>;
+
     document.querySelectorAll('form[data-toggle-visibilidad]').forEach(function (form) {
         form.addEventListener('submit', function (e) {
             e.preventDefault();
@@ -1382,6 +1425,12 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
 
                     if (form.hasAttribute('data-con-texto')) {
                         boton.querySelector('[data-texto]').textContent = visible ? 'visible' : 'oculta';
+                    }
+
+                    var m = form.action.match(/\/(categoria|familia|variante)\/(\d+)\/visibilidad/);
+                    if (m) {
+                        visibilidadSt[{ categoria: 'cat', familia: 'fam', variante: 'var' }[m[1]]][m[2]] = visible;
+                        if (typeof aplicarFiltros === 'function' && typeof filtro !== 'undefined') aplicarFiltros();
                     }
                 })
                 .catch(function () {
@@ -1674,15 +1723,40 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
     if (!buscador && !cajaFiltros) return;
     var sinResultados = document.getElementById('sinResultados');
     var filtro = '';
+    var filtroSt = ''; // '' | 'si' | 'no'
+    var cajaSt = document.getElementById('filtroSterclicks');
 
     function sinTildes(t) {
         return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     }
 
+    // Cascada de los tres ojos: sin categor\u00eda o sin variante concreta (fila
+    // de una pieza con varias, que se rige por sus subfilas) cuenta como
+    // encendido ese nivel.
+    function visibleEnSt(el) {
+        var c = el.getAttribute('data-st-cat'), f = el.getAttribute('data-st-fam'), v = el.getAttribute('data-st-var');
+        return (!c || visibilidadSt.cat[c] !== false)
+            && (!f || visibilidadSt.fam[f] !== false)
+            && (!v || visibilidadSt['var'][v] !== false);
+    }
+
+    // Contadores: una tarjeta de la cuadr\u00edcula por variante, est\u00e9n a la
+    // vista o no \u2014 es la lista completa.
+    function contarSt() {
+        if (!cajaSt) return;
+        var si = 0, no = 0;
+        document.querySelectorAll('[data-tarjeta]').forEach(function (t) {
+            if (visibleEnSt(t)) si++; else no++;
+        });
+        cajaSt.querySelector('[data-st-cuenta="si"]').textContent = si;
+        cajaSt.querySelector('[data-st-cuenta="no"]').textContent = no;
+    }
+
     function aplicarFiltros() {
         var q = buscador ? sinTildes(buscador.value.trim()) : '';
         var encontradas = 0;
-        var recortando = q !== '' || filtro !== '';
+        var recortando = q !== '' || filtro !== '' || filtroSt !== '';
+        contarSt();
 
         // Filas de pieza (una por familia), de variante (subfilas, cuando
         // hay más de una) y tarjetas de la cuadrícula ([data-tarjeta]). Cada
@@ -1696,6 +1770,10 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
 
             if (visible && filtro !== '') {
                 visible = (fila.getAttribute('data-tokens') || '').split(' ').indexOf(filtro) !== -1;
+            }
+
+            if (visible && filtroSt !== '') {
+                visible = visibleEnSt(fila) === (filtroSt === 'si');
             }
 
             fila.classList.toggle('d-none', !visible);
@@ -1782,6 +1860,19 @@ $calcPorCapa = $calcTiempo['minutosPorCapa'];
 
             aplicarFiltros();
         });
+    }
+
+    if (cajaSt) {
+        cajaSt.addEventListener('click', function (e) {
+            var boton = e.target.closest('[data-st]');
+            if (!boton) return;
+            filtroSt = boton.getAttribute('data-st');
+            cajaSt.querySelectorAll('[data-st]').forEach(function (uno) {
+                uno.classList.toggle('active', uno.getAttribute('data-st') === filtroSt);
+            });
+            aplicarFiltros();
+        });
+        contarSt();
     }
 
     // ---- Calculadora de tiempo estimado por capas ---------------------

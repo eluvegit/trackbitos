@@ -1128,6 +1128,10 @@ def cmd_ver(args) -> int:
     return _bajar(args, "consulta")
 
 
+# Por encima de este tamaño, `subir` pide una segunda confirmación.
+UMBRAL_AVISO_SUBIDA = 10 * 1024 * 1024
+
+
 def cmd_subir(args) -> int:
     directorio = _directorio(args)
     config = cargar_config()
@@ -1154,6 +1158,21 @@ def cmd_subir(args) -> int:
     if respuesta_y not in ("y", "yes"):
         print("\n  ✗ No se ha subido nada.\n")
         return 1
+
+    # Segundo aviso por tamaño: un .blend que pasa de ~10 MB suele llevar
+    # dentro un STL importado sin decimate. Misma regla que arriba: hace falta
+    # una "y" explícita, Enter a secas no sube.
+    tamano = blend.stat().st_size
+    if tamano > UMBRAL_AVISO_SUBIDA:
+        print(f"\n  ⚠ OJO: {blend.name} pesa {tamano / (1024 * 1024):.1f} MB (más de {UMBRAL_AVISO_SUBIDA // (1024 * 1024)} MB).")
+        print("    ¿Hay algún STL sin decimate dentro?")
+        try:
+            respuesta_y = input("  ¿Subirlo igualmente? [y/N] ").strip().lower()
+        except EOFError:
+            respuesta_y = ""
+        if respuesta_y not in ("y", "yes"):
+            print("\n  ✗ No se ha subido nada.\n")
+            return 1
 
     sesion_id = sentinel.get("sesion_id")
     if not sesion_id:

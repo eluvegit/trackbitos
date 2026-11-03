@@ -760,7 +760,7 @@ class Journal extends BaseController
     }
 
     /**
-     * Edita el título y/o la descripción de un enlace (la URL no se toca).
+     * Edita la URL (opcional), el título, la descripción y la subtarea de un enlace.
      */
     public function taskLinkUpdate(int $linkId)
     {
@@ -774,11 +774,22 @@ class Journal extends BaseController
         $descripcion = trim($input['descripcion'] ?? '');
         $subtaskId = $this->resolveSubtaskId((int) $link['task_id'], $input['subtask_id'] ?? null);
 
-        $this->taskLinkModel->update($linkId, [
+        $datos = [
             'titulo'      => $titulo !== '' ? $titulo : null,
             'descripcion' => $descripcion !== '' ? $descripcion : null,
             'subtask_id'  => $subtaskId,
-        ]);
+        ];
+
+        // La URL es opcional en la petición: si viene, no puede quedar vacía.
+        if (array_key_exists('url', $input)) {
+            $url = trim((string) $input['url']);
+            if ($url === '') {
+                return $this->response->setJSON(['success' => false, 'error' => 'La URL no puede quedar vacía.']);
+            }
+            $datos['url'] = $url;
+        }
+
+        $this->taskLinkModel->update($linkId, $datos);
 
         $row = $this->taskLinkModel->find($linkId);
         $row['subtask_title'] = $subtaskId ? ($this->subtaskModel->find($subtaskId)['title'] ?? null) : null;
