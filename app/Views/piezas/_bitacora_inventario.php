@@ -24,6 +24,18 @@ $colocacionHuecos = $colocacionHuecos ?? [];
           // movimiento. Formulario propio, fuera del <form> de la
           // bitácora — mismo patrón que la subida de fotos. ?>
     <div class="mt-3 pt-2 border-top d-flex flex-wrap align-items-center gap-2">
+        <?php if ($placa['inventario_en_recuento']): ?>
+            <span class="text-muted small">
+                <i class="bi bi-clipboard-check text-success"></i>
+                Contada en el recuento a mano (marcada el <?= esc(substr((string) $placa['inventario_en_recuento'], 0, 16)) ?>): no se da de alta.
+            </span>
+            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario/recuento') ?>"
+                data-ajax-form="inventario-recuento"
+                data-confirmar="¿Desmarcar del recuento? Podrás darla de alta en el inventario.">
+                <?= csrf_field() ?>
+                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i> Desmarcar</button>
+            </form>
+        <?php else: ?>
         <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario') ?>"
             data-ajax-form="inventario-sincronizar" class="d-flex gap-1 align-items-center">
             <?= csrf_field() ?>
@@ -49,6 +61,16 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                     <i class="bi bi-x-lg"></i> Quitar del inventario
                 </button>
             </form>
+        <?php else: ?>
+            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario/recuento') ?>"
+                data-ajax-form="inventario-recuento"
+                data-confirmar="¿Marcar como ya contada en el recuento? No se sumará al stock.">
+                <?= csrf_field() ?>
+                <button class="btn btn-sm btn-outline-secondary" title="Sus piezas ya entraron con un alta a mano">
+                    <i class="bi bi-clipboard-check"></i> Ya contada en el recuento
+                </button>
+            </form>
+        <?php endif; ?>
         <?php endif; ?>
         <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="btn btn-sm btn-outline-secondary" title="Lo impreso pendiente de guardar">
             <i class="bi bi-box-seam"></i> Cajas

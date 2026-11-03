@@ -624,7 +624,32 @@ class Web extends BaseController
             'periodos'       => $periodos,
             'periodo'        => $periodo,
             'evolucion'      => $this->evolucionImpresiones($desde),
+            'sinInventario'  => $this->placasSinInventario(),
         ]);
+    }
+
+    private function placasSinInventario(): array
+    {
+        $placas = $this->placaModel->select('id, nombre, impresa_en')
+            ->where('impresa_en IS NOT NULL')->where('inventario_sincronizado_en', null)->where('inventario_en_recuento', null)
+            ->orderBy('impresa_en', 'DESC')->findAll();
+        if ($placas === []) {
+            return ['placas' => [], 'unidades' => 0];
+        }
+
+        $servibles = [];
+        foreach ($this->placaVersionModel->whereIn('placa_id', array_column($placas, 'id'))->findAll() as $fila) {
+            $servibles[$fila['placa_id']] = ($servibles[$fila['placa_id']] ?? 0) + max(0, (int) $fila['cantidad'] - (int) $fila['fallidas']);
+        }
+
+        $lista = [];
+        foreach ($placas as $p) {
+            if (($servibles[$p['id']] ?? 0) > 0) {
+                $lista[] = $p + ['unidades' => $servibles[$p['id']]];
+            }
+        }
+
+        return ['placas' => $lista, 'unidades' => array_sum(array_column($lista, 'unidades'))];
     }
 
     private function evolucionImpresiones(?string $desde): array
@@ -731,7 +756,8 @@ class Web extends BaseController
     /**
      * Lo que se gasta: bajas de existencias (delta < 0) por variante, frente
      * a lo que entró en el mismo periodo (impresiones servibles + altas a
-     * mano) y el stock que queda hoy. Top 20 por unidades gastadas.
+     * mano) y el stock que queda hoy. Top 20 por unidades gastadas. Los
+     * traslados (guardado / cambio_caja) son pares −n/+n y no cuentan.
      *
      * @return array{filas: list<array>, gastadas: int, stock: int}
      */
@@ -740,7 +766,8 @@ class Web extends BaseController
         $movimientos = new \App\Models\PiezaStockMovimientoModel();
         $stock = $movimientos->stockPorVariante();
 
-        $q = $movimientos->select('variante_id, delta, creado_en');
+        $q = $movimientos->select('variante_id, delta, creado_en')
+            ->groupStart()->whereNotIn('motivo', ['guardado', 'cambio_caja'])->orWhere('motivo', null)->groupEnd();
         if ($desde !== null) {
             $q->where('creado_en >=', $desde);
         }
@@ -3521,6 +3548,14 @@ class Web extends BaseController
                 : redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
+        if ($placa['inventario_en_recuento'] !== null) {
+            $mensaje = 'Esta placa ya está contada en el recuento: desmárcala antes de darla de alta.';
+
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
+                : redirect()->back()->with('error', $mensaje);
+        }
+
         $caja = $this->request->getPost('caja') === 'pedido' ? 'pedido' : 'impresas';
         $r = (new PiezaInventario())->sincronizarPlaca($id, $caja);
 
@@ -3566,6 +3601,49 @@ class Web extends BaseController
         }
 
         return redirect()->back()->with('success', $mensaje);
+    }
+
+    /** Marca / desmarca una placa como ya contada en un recuento a mano. */
+    public function inventarioRecuento(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => 'Esa placa ya no existe.'])
+                : redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+        if ($placa['inventario_en_recuento'] === null && $placa['inventario_sincronizado_en'] !== null) {
+            $mensaje = 'Esta placa ya está dada de alta: quítala del inventario antes de marcarla como contada.';
+
+            return $this->request->isAJAX()
+                ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $mensaje])
+                : redirect()->back()->with('error', $mensaje);
+        }
+
+        $marcar = $placa['inventario_en_recuento'] === null;
+        $this->placaModel->update($id, ['inventario_en_recuento' => $marcar ? date('Y-m-d H:i:s') : null]);
+        $mensaje = $marcar ? 'Placa marcada como contada en el recuento.' : 'Placa desmarcada del recuento.';
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'ok'      => true,
+                'mensaje' => $mensaje,
+                'html'    => $this->panelInventarioHtml($this->placaModel->find($id)),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $mensaje);
+    }
+
+    public function recuentoPlacasSinInventario()
+    {
+        $ids = array_column($this->placasSinInventario()['placas'], 'id');
+        if ($ids !== []) {
+            $this->placaModel->whereIn('id', $ids)->set('inventario_en_recuento', date('Y-m-d H:i:s'))->update();
+        }
+
+        return redirect()->to(site_url('piezas/estadisticas'))
+            ->with('success', count($ids) . ' placa(s) marcadas como contadas en el recuento.');
     }
 
     /** Repinta el panel de inventario/colocación de una placa (ver _bitacora_inventario.php). */

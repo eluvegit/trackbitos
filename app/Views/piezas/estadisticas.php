@@ -67,6 +67,31 @@ $rankingsPeso = [
     <?php endforeach; ?>
 </div>
 
+<?php if ($sinInventario['placas'] !== []): ?>
+    <div class="alert alert-warning py-2 mb-3">
+        <details>
+            <summary class="small">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong><?= $plural($sinInventario['unidades'], 'unidad', 'unidades') ?></strong>
+                de <?= $plural(count($sinInventario['placas']), 'placa impresa', 'placas impresas') ?> sin pasar al inventario: no cuentan en el stock.
+            </summary>
+            <ul class="list-unstyled small mb-0 mt-2">
+                <?php foreach ($sinInventario['placas'] as $p): ?>
+                    <li class="d-flex gap-2">
+                        <a href="<?= site_url('piezas/placa/' . (int) $p['id'] . '/bitacora/editar') ?>" class="text-truncate"><?= esc($p['nombre']) ?></a>
+                        <span class="text-muted ms-auto text-nowrap"><?= $fecha($p['impresa_en']) ?> · <?= $plural($p['unidades'], 'ud.', 'uds.') ?></span>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <form method="post" action="<?= site_url('piezas/estadisticas/recuento') ?>" class="mt-2"
+                onsubmit="return confirm('¿Marcar estas <?= count($sinInventario['placas']) ?> placas como ya contadas en el recuento? No se sumarán al stock.');">
+                <?= csrf_field() ?>
+                <button class="btn btn-sm btn-outline-dark"><i class="bi bi-clipboard-check"></i> Marcar todas como contadas en el recuento</button>
+            </form>
+        </details>
+    </div>
+<?php endif; ?>
+
 <?php if (!empty($evolucion['etiquetas'])): ?>
     <?php $porCubo = ['dia' => 'por día', 'semana' => 'por semana', 'mes' => 'por mes'][$evolucion['agrupado']]; ?>
     <div class="row g-2 g-md-3 mb-3">

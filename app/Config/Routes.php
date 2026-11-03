@@ -774,6 +774,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('estadisticas', 'Web::estadisticas');
     $routes->GET('estadisticas/backup', 'Web::backupDescargar');
+    $routes->POST('estadisticas/recuento', 'Web::recuentoPlacasSinInventario');
     $routes->GET('sesiones-activas', 'Web::sesionesActivas');
     $routes->GET('variante/(:num)', 'Web::variante/$1');
     $routes->POST('variante/(:num)/nombre', 'Web::renombrarVariante/$1');
@@ -1021,6 +1022,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // Re-ejecutable: no apila movimientos, reajusta los que ya hay.
     $routes->POST('placa/(:num)/inventario', 'Web::inventarioSincronizar/$1');
     $routes->POST('placa/(:num)/inventario/quitar', 'Web::inventarioDesvincular/$1');
+    $routes->POST('placa/(:num)/inventario/recuento', 'Web::inventarioRecuento/$1');
     $routes->POST('placa/(:num)/renombrar', 'Web::placaRenombrar/$1');
     $routes->POST('placa/(:num)/borrar', 'Web::placaBorrar/$1');
     // No cupo entera en la plataforma: mueve un subconjunto de piezas a una

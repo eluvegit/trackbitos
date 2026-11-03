@@ -39,7 +39,7 @@ class PiezaPlacaModel extends Model
         'resina', 'resina_id', 'temperatura', 'veredicto',
         'minutos_estimados', 'minutos_previstos', 'minutos_reales', 'numero_capas', 'resina_estimada',
         'origen_placa_id', 'es_reparto', 'descargada_en',
-        'inventario_sincronizado_en',
+        'inventario_sincronizado_en', 'inventario_en_recuento',
         'enviada_en', 'enviada_a', 'impresora', 'poner_en', 'acaba_en',
     ];
 
