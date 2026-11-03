@@ -678,6 +678,13 @@ class UbicacionesController extends BaseController
         return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) guardada(s) en su hueco.');
     }
 
+    public function cuadrarCajas()
+    {
+        $n = $this->inventario->cuadrarCajas();
+
+        return redirect()->to(site_url('piezas/ubicaciones/cajas'))->with('success', $n . ' pieza(s) en negativo puestas a 0; su hueco se ha corregido.');
+    }
+
     /** Guarda de golpe todo lo de una caja que ya tiene hueco. */
     public function guardarCajaEntera()
     {

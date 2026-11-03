@@ -68,6 +68,7 @@ class InventarioCatalogo
             $piezas[] = [
                 'id'           => $id,
                 'nombre'       => $this->nombreVisible($familia['nombre'] . ' ' . $v['nombre']),
+                'sku'          => $v['sku'] ?? null,
                 'categoria_id' => $familia['categoria_id'] !== null ? (int) $familia['categoria_id'] : null,
                 'stock'        => max(0, $stock[$id] ?? 0),
                 'hueco_id'     => $huecoId,

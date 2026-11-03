@@ -65,6 +65,7 @@ class PiezaInventario
     {
         $ahora = date('Y-m-d H:i:s');
         $res = ['altas' => 0, 'ajustes' => 0, 'retiradas' => 0, 'unidades' => 0];
+        $tocadas = array_map('intval', array_column($this->movimientos->select('variante_id')->where('placa_id', $placaId)->findAll(), 'variante_id'));
 
         foreach ($this->placaVersiones->where('placa_id', $placaId)->findAll() as $linea) {
             $servibles = max(0, (int) $linea['cantidad'] - (int) $linea['fallidas']);
@@ -83,6 +84,7 @@ class PiezaInventario
                 continue;   // la version ya no existe: nada que contar
             }
             $varianteId = (int) $version['variante_id'];
+            $tocadas[]  = $varianteId;
 
             if ($existente) {
                 if ((int) $existente['delta'] !== $servibles || (int) $existente['variante_id'] !== $varianteId) {
@@ -114,6 +116,7 @@ class PiezaInventario
         }
 
         $this->placas->update($placaId, ['inventario_sincronizado_en' => $ahora]);
+        $this->cuadrarCajas(array_values(array_unique($tocadas)));
 
         return $res;
     }
@@ -278,11 +281,42 @@ class PiezaInventario
     /** Quita del inventario todo lo que aportaba una placa. */
     public function desvincularPlaca(int $placaId): int
     {
-        $n = $this->movimientos->where('placa_id', $placaId)->countAllResults(false);
+        $tocadas = array_map('intval', array_column($this->movimientos->select('variante_id')->where('placa_id', $placaId)->findAll(), 'variante_id'));
         $this->movimientos->where('placa_id', $placaId)->delete();
         $this->placas->update($placaId, ['inventario_sincronizado_en' => null]);
+        if ($tocadas !== []) {
+            $this->cuadrarCajas(array_values(array_unique($tocadas)));
+        }
 
-        return $n;
+        return count($tocadas);
+    }
+
+    /**
+     * Caja en negativo = se guardaron / sacaron piezas cuya alta luego se
+     * quitó o bajó (placa quitada del inventario, fallidas). Se deshace ese
+     * guardado: +n caja / -n en su hueco. El total de la pieza no cambia.
+     * Devuelve cuántas filas cuadró.
+     */
+    public function cuadrarCajas(array $varianteIds = []): int
+    {
+        $ahora = date('Y-m-d H:i:s');
+        $filas = [];
+        foreach ($this->stockEnCajas($varianteIds) as $caja => $porVariante) {
+            foreach ($porVariante as $vid => $n) {
+                if ($n >= 0) {
+                    continue;
+                }
+                $filas[] = ['variante_id' => $vid, 'ubicacion_id' => null, 'caja' => $caja, 'origen' => 'manual', 'delta' => -$n,
+                    'motivo' => 'guardado', 'nota' => 'Cuadre: caja en negativo', 'creado_en' => $ahora];
+                $filas[] = ['variante_id' => $vid, 'ubicacion_id' => $this->huecoDeVariante($vid), 'caja' => null, 'origen' => 'manual', 'delta' => $n,
+                    'motivo' => 'guardado', 'nota' => 'Cuadre: caja ' . $caja . ' en negativo', 'creado_en' => $ahora];
+            }
+        }
+        if ($filas !== []) {
+            $this->movimientos->insertBatch($filas);
+        }
+
+        return intdiv(count($filas), 2);
     }
 
     /**

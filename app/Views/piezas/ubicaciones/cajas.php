@@ -25,6 +25,19 @@
     <div class="alert alert-danger py-2"><?= esc(session('error')) ?></div>
 <?php endif; ?>
 
+<?php $negativas = 0; foreach ($cajas as $filas) { $negativas += count(array_filter($filas, static fn ($f) => $f['cantidad'] < 0)); } ?>
+<?php if ($negativas > 0): ?>
+    <div class="alert alert-warning py-2 d-flex align-items-center gap-2 flex-wrap">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span><?= $negativas ?> pieza(s) en negativo: salieron de la caja piezas cuya alta se quitó después. Al cuadrar, la caja queda a 0 y se restan de su hueco (el total no cambia).</span>
+        <form method="post" action="<?= site_url('piezas/ubicaciones/cajas/cuadrar') ?>" class="ms-auto"
+            onsubmit="return confirm('¿Poner a 0 las piezas en negativo y restarlas de su hueco?');">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-check2-square"></i> Cuadrar negativas</button>
+        </form>
+    </div>
+<?php endif; ?>
+
 <div class="row g-3">
     <?php foreach ($cajas as $caja => $filas): ?>
         <?php

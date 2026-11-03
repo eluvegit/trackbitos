@@ -429,6 +429,9 @@ button { font: inherit; color: inherit; }
 .inv-codigo.grande { font-size: 2rem; }
 .inv-codigo.grande.sin { font-size: 1rem; padding: 10px 16px; }
 
+.inv-sku { color: var(--gris); font-size: .85rem; font-weight: 500; letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+.inv-hueco-nombre .inv-sku { display: block; }
+
 .inv-stock { color: var(--gris); font-size: .95rem; }
 .inv-stock strong { font-size: 1.5rem; color: var(--verde); margin-right: 2px; }
 .inv-stock.cero strong { color: var(--gris); }

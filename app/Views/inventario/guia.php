@@ -42,6 +42,7 @@
         <div class="inv-resultado-datos">
             <span class="inv-resultado-etiqueta"><i class="bi bi-check-circle-fill"></i> Tu pieza es</span>
             <h2><?= esc($p['nombre']) ?></h2>
+            <?php if (!empty($p['sku'])): ?><span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?>
             <?php if ($enlace): ?>
                 <a href="<?= esc($enlace, 'attr') ?>" class="inv-codigo grande" title="Ver en el estuche"><?= esc($codigo) ?> <i class="bi bi-box-arrow-up-right"></i></a>
             <?php else: ?>

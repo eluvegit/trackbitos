@@ -106,6 +106,7 @@
     piezas.forEach(function (p) {
         p._nombre = normalizar(p.dataset.nombre);
         p._codigo = normalizar(p.dataset.codigo || '');
+        p._sku = normalizar(p.dataset.sku || '');
     });
 
     // "E1H2" (o "e1 h2") es ese hueco; "E1" todo el estuche. Tras lo escrito
@@ -127,7 +128,7 @@
 
         piezas.forEach(function (p) {
             var okCat = catActiva === '0' || p.dataset.cat === catActiva;
-            var okTexto = palabras.every(function (w) { return p._nombre.indexOf(w) !== -1; })
+            var okTexto = palabras.every(function (w) { return p._nombre.indexOf(w) !== -1 || p._sku.indexOf(w) !== -1; })
                 || (compacto !== '' && esDeHueco(p._codigo, compacto));
             var okStock = !soloStock || p.dataset.stock !== '0';
             var ver = okCat && okTexto && okStock;

@@ -37,7 +37,7 @@ Estuche <?= esc($estuche['codigo']) ?>
                                     <i class="bi bi-image"></i>
                                 <?php endif; ?>
                             </button>
-                            <span class="inv-hueco-nombre"><?= esc($p['nombre']) ?></span>
+                            <span class="inv-hueco-nombre"><?= esc($p['nombre']) ?><?php if (!empty($p['sku'])): ?> <span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?></span>
                             <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.</span>
                         </li>
                     <?php endforeach; ?>

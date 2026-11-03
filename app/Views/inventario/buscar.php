@@ -5,7 +5,7 @@
 <?= $this->section('cabecera') ?>
 <div class="inv-buscador" data-buscador>
     <i class="bi bi-search"></i>
-    <input type="search" placeholder="Nombre o hueco (E1H2)…" value="<?= esc($q, 'attr') ?>"
+    <input type="search" placeholder="Nombre, SK o hueco (E1H2)…" value="<?= esc($q, 'attr') ?>"
         autocomplete="off" enterkeyhint="search" data-buscar>
     <button type="button" class="inv-limpiar" data-limpiar aria-label="Borrar" hidden><i class="bi bi-x-circle-fill"></i></button>
 </div>

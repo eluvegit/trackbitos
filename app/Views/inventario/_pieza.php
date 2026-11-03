@@ -6,6 +6,7 @@
 <article class="inv-pieza" data-pieza
     data-nombre="<?= esc($p['nombre'], 'attr') ?>"
     data-codigo="<?= esc($codigo ?? '', 'attr') ?>"
+    data-sku="<?= esc($p['sku'] ?? '', 'attr') ?>"
     data-stock="<?= (int) $p['stock'] ?>"
     data-cat="<?= (int) ($p['categoria_id'] ?? 0) ?>">
     <button type="button" class="inv-pieza-foto" data-foto
@@ -30,6 +31,7 @@
             <span class="inv-codigo sin">Sin ubicación</span>
         <?php endif; ?>
         <h3><?= esc($p['nombre']) ?></h3>
+        <?php if (!empty($p['sku'])): ?><span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?>
         <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.</span>
     </div>
 </article>

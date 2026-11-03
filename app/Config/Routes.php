@@ -980,6 +980,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->GET('ubicaciones/cajas', 'UbicacionesController::cajas');
     $routes->POST('ubicaciones/cajas/guardar', 'UbicacionesController::guardarCaja');
     $routes->POST('ubicaciones/cajas/guardar-todo', 'UbicacionesController::guardarCajaEntera');
+    $routes->POST('ubicaciones/cajas/cuadrar', 'UbicacionesController::cuadrarCajas');
     $routes->POST('ubicaciones/cajas/cambiar', 'UbicacionesController::moverDeCaja');
     $routes->POST('ubicaciones/cajas/salida', 'UbicacionesController::salidaCaja');
     $routes->POST('ubicaciones/cajas/meter', 'UbicacionesController::meterEnCaja');
