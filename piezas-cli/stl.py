@@ -222,6 +222,14 @@ def purgar_papelera_entregas(base_dir: Path, dias: int = DIAS_PAPELERA_ENTREGAS)
 # Nombres de carpeta y ficheros de estado
 # --------------------------------------------------------------------------
 
+def _plegar(texto) -> str:
+    """Para comparar nombres sin que importen mayúsculas ni tildes:
+    "estándar" == "estandar" == "ESTANDAR". Solo para buscar, nunca para
+    mostrar ni guardar."""
+    plano = unicodedata.normalize("NFKD", texto or "")
+    return "".join(c for c in plano if not unicodedata.combining(c)).casefold()
+
+
 def _slug(texto: Optional[str]) -> str:
     """Mismo criterio que Api::paraNombreDeArchivo() en el servidor: solo lo que sobrevive intacto a cualquier sistema de ficheros."""
     plano = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
@@ -589,8 +597,8 @@ def resolver_placa(config: dict, texto: str) -> dict:
     if texto.isdigit():
         exactas = [p for p in placas if p["id"] == int(texto)]
     else:
-        texto_l = texto.lower()
-        exactas = [p for p in placas if texto_l in p["nombre"].lower()]
+        texto_l = _plegar(texto)
+        exactas = [p for p in placas if texto_l in _plegar(p["nombre"])]
 
     if len(exactas) == 1:
         return exactas[0]

@@ -135,6 +135,14 @@ def a_papelera(ruta: Path) -> Path:
     return destino
 
 
+def _plegar(texto) -> str:
+    """Para comparar nombres sin que importen mayúsculas ni tildes:
+    "estándar" == "estandar" == "ESTANDAR". Solo para buscar, nunca para
+    mostrar ni guardar."""
+    plano = unicodedata.normalize("NFKD", texto or "")
+    return "".join(c for c in plano if not unicodedata.combining(c)).casefold()
+
+
 def _slug(texto: str) -> str:
     """Sin acentos ni espacios: la ruta acaba escrita a mano en la terminal y
     pegada en rutas de Blender, y las dos máquinas son Windows y macOS —
@@ -515,23 +523,23 @@ def resolver_variante(config: dict, texto: str) -> dict:
     categorias_orden = respuesta.get("categorias", [])
 
     def buscable(v: dict) -> str:
-        return f"{v.get('familia_nombre') or ''} {v['nombre']}".lower()
+        return _plegar(f"{v.get('familia_nombre') or ''} {v['nombre']}")
 
     if texto.isdigit():
         exactas = [v for v in variantes if v["id"] == int(texto)]
     else:
-        texto_l = texto.lower()
+        texto_l = _plegar(texto)
 
         # 1) El nombre exacto de variante gana siempre: si tienes una
         # variante llamada "estandar" y escribes "estandar", es esa, aunque
         # el texto también aparezca dentro del nombre de otras piezas.
-        exactas = [v for v in variantes if v["nombre"].lower() == texto_l]
+        exactas = [v for v in variantes if _plegar(v["nombre"]) == texto_l]
 
         # 2) El nombre exacto de PIEZA gana sobre cualquiera que solo lo
         # contenga como subcadena: escribir "Brazo" no debe traer también
         # "Brazo integral" o "Brazo y mano" solo por compartir la palabra.
         if not exactas:
-            exactas = [v for v in variantes if (v.get("familia_nombre") or "").lower() == texto_l]
+            exactas = [v for v in variantes if _plegar(v.get("familia_nombre")) == texto_l]
 
         # 2b) Pieza exacta con varias variantes: la que se crea sola ("base")
         # es la respuesta por defecto. Sin esto, en cuanto una pieza gana una
@@ -539,7 +547,7 @@ def resolver_variante(config: dict, texto: str) -> dict:
         # resolver. Para la derivada se escribe su nombre ("brazos desnudos
         # cristo"), que ya resuelve por el paso 4.
         if len(exactas) > 1:
-            bases = [v for v in exactas if v["nombre"].lower() == "base"]
+            bases = [v for v in exactas if _plegar(v["nombre"]) == "base"]
             if len(bases) == 1:
                 exactas = bases
 
@@ -555,8 +563,8 @@ def resolver_variante(config: dict, texto: str) -> dict:
                 variante_txt = " ".join(palabras[corte:])
                 exactas = [
                     v for v in variantes
-                    if (v.get("familia_nombre") or "").lower() == familia_txt
-                    and v["nombre"].lower() == variante_txt
+                    if _plegar(v.get("familia_nombre")) == familia_txt
+                    and _plegar(v["nombre"]) == variante_txt
                 ]
                 if exactas:
                     break
@@ -1472,14 +1480,14 @@ def cmd_variantes(args) -> int:
         return 0
 
     familias = sorted({v["familia_nombre"] for v in todas if v.get("familia_nombre")})
-    texto = args.pieza.lower()
+    texto = _plegar(args.pieza)
 
     # Mismo criterio que resolver_variante: el nombre exacto gana siempre
     # (para que "silla" no se ambigüe consigo misma), y si no hay exacto se
     # prueba por trozos del nombre.
-    exactas = [f for f in familias if f.lower() == texto]
+    exactas = [f for f in familias if _plegar(f) == texto]
     if not exactas:
-        exactas = [f for f in familias if texto in f.lower()]
+        exactas = [f for f in familias if texto in _plegar(f)]
 
     if not exactas:
         raise RuntimeError(f"no hay ninguna pieza que sea '{args.pieza}'. Hay: {', '.join(familias)}")
