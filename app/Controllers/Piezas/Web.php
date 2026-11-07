@@ -1502,7 +1502,12 @@ class Web extends BaseController
             }
         }
 
-        return view('piezas/variante', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('ficha_variante_nueva', $nueva === '1');
+        }
+
+        return view(session('ficha_variante_nueva') ? 'piezas/variante_nueva' : 'piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
             // Solo las de esta variante (más las de antes del cambio que
