@@ -3,7 +3,7 @@
 <?= $this->include('piezas/_nav') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=10">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=11">
 <link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=8">
 <?php
     $etiquetas = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];

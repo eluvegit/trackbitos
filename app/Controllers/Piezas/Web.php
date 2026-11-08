@@ -1822,7 +1822,12 @@ class Web extends BaseController
         }
         unset($g);
 
-        return view('piezas/revisar', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_revisar_nueva', $nueva === '1');
+        }
+
+        return view(session('piezas_revisar_nueva') !== false ? 'piezas/revisar_nueva' : 'piezas/revisar', [
             'filas'  => $filas,
             'grupos' => array_values($grupos),
             // variante_id => número de su versión validada. La vista lo lleva
