@@ -35,7 +35,10 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Galería</strong>
 
-    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Pedidos entrantes desde sterclicks">
+    <a href="<?= site_url('piezas/galeria?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la galería nueva">
+        <i class="bi bi-arrow-left-right"></i> Vista nueva
+    </a>
+    <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos
     </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas">

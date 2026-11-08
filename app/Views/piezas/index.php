@@ -131,6 +131,7 @@ $filaSesionActiva = static function (array $s): string {
           // en unas vistas sí y en otras no movía de sitio el mismo enlace. Para volver
           // al dashboard está el logo de la barra de arriba, que sí está en todas. ?>
     <strong class="fw-semibold">Piezas</strong>
+    <a href="<?= site_url('piezas?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php

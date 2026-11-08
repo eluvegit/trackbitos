@@ -306,7 +306,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=9">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=10">
 
 <div class="fv" id="fv">
     <?php if (session('success')): ?>
@@ -386,7 +386,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
     <main class="fv-grid">
         <!-- ============ PIEZA ============ -->
         <div class="fv-col fv-col-pieza">
-            <section class="fv-panel fv-media" data-sec="pieza">
+            <section class="fv-panel fv-media" data-m="2" data-sec="pieza">
                 <?php if ($imgPrincipal): ?>
                     <a class="fv-escena" href="<?= imagen_pieza($imgPrincipal, $imgTipo, 'v') ?>" target="_blank" data-foto-grande>
                         <img src="<?= imagen_pieza($imgPrincipal, $imgTipo, 'v') ?>" alt="<?= esc($variante['nombre'], 'attr') ?>">
@@ -452,7 +452,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 </div>
             </section>
 
-            <section class="fv-panel" data-sec="espacio">
+            <section class="fv-panel" data-m="12" data-sec="espacio">
                 <div class="fv-ph"><h3>Espacio en disco</h3><a class="fv-link der solo-todo" href="#" data-ir="espacio">Gestionar <i class="bi bi-chevron-right"></i></a></div>
                 <div class="fv-resumen-esp" title="<?= (int) $estadisticasPieza['intentos'] ?> intento(s) de impresión · <?= (int) $estadisticasPieza['sesiones'] ?> sesión(es) de trabajo · <?= (int) $estadisticasPieza['dias_vida'] ?> día(s) desde que se creó"><span class="v"><?= esc($tamanoLegible($peso['total']) ?: '0 KB') ?></span>
                     <span class="t2"><?= $liberable > 0 ? '· ' . esc($tamanoLegible($liberable)) . ' en sesiones cerradas' : '· sin sesiones cerradas que liberar' ?></span></div>
@@ -499,7 +499,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
 
 
 
-            <section class="fv-panel" data-sec="stock">
+            <section class="fv-panel" data-m="11" data-sec="stock">
                 <div class="fv-trio fv-duo-cifras">
                     <a href="#" data-ir="stock"><span class="k">Por hacer</span><span class="v"><?= $porServir ?><small>uds</small></span><span class="s"><?= count($pedidosAbiertos) ?> pedido(s)</span></a>
                     <a href="#" data-ir="impresiones"><span class="k">Placas</span><span class="v"><?= count($placasDeLaPieza) ?></span>
@@ -508,7 +508,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             </section>
 
 
-            <section class="fv-panel" data-sec="pieza">
+            <section class="fv-panel" data-m="13" data-sec="pieza">
                 <div class="fv-filas">
                     <details class="fv-mas">
                         <summary><i class="bi bi-box"></i>Compuesta de<span class="fv-mono t3 der"><?= count($componentes) ?></span><i class="bi bi-chevron-right ch"></i></summary>
@@ -547,7 +547,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
         <!-- ============ TRABAJO ============ -->
         <div class="fv-col fv-col-trabajo">
             <?php if (!empty($variante['advertencia'])): ?>
-                <div class="fv-aviso" data-sec="trabajo">
+                <div class="fv-aviso" data-m="1" data-sec="trabajo">
                     <i class="bi bi-exclamation-triangle"></i>
                     <span><?= esc($variante['advertencia']) ?></span>
                     <button class="fv-ibtn" type="button" data-bs-toggle="modal" data-bs-target="#modalTareas" aria-label="Editar advertencia"><i class="bi bi-pencil"></i></button>
@@ -588,7 +588,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 $pasoActual = ['empezar' => 1, 'modelar' => 1, 'sesion' => 1, 'descarga' => 1, 'promocionar' => 2, 'imprimir' => 3, 'juzgar' => 4, 'lista' => 5, 'parada' => -1][$est];
                 $tono = ['lista' => 'ok', 'juzgar' => 'juzga', 'sesion' => ($bloqueo['dias'] ?? 0) >= 3 ? 'bloq' : 'curso', 'descarga' => ($pendientes[0]['dias'] ?? 0) >= 3 ? 'bloq' : 'curso', 'parada' => 'calma'][$est] ?? '';
             ?>
-            <section class="fv-panel fv-ahora <?= $tono ?>" data-sec="trabajo" id="sesiones-trabajo" data-estado="<?= $est ?>">
+            <section class="fv-panel fv-ahora <?= $tono ?>" data-m="3" data-sec="trabajo" id="sesiones-trabajo" data-estado="<?= $est ?>">
                 <?php if ($est === 'sesion'): ?>
                     <span class="eti"><?= $tono === 'bloq' ? 'Sesión olvidada' : 'Trabajando' ?></span>
                     <h2>Sesión <?= (int) $bloqueo['numero'] ?> abierta en <?= esc($bloqueo['maquina']) ?></h2>
@@ -698,7 +698,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 <?php endif; ?>
             </section>
 
-            <section class="fv-panel" data-sec="trabajo">
+            <section class="fv-panel" data-m="5" data-sec="trabajo">
                 <div class="fv-ph"><h3>Tareas</h3><span class="cuenta" id="fvNTareas"><?= $nTareasCabecera ?></span>
                     <button class="fv-ibtn der" type="button" data-bs-toggle="modal" data-bs-target="#modalTareas" title="Editar tareas y advertencia"><i class="bi bi-pencil"></i></button></div>
                 <div id="fvTareas">
@@ -716,7 +716,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 <script type="application/json" id="fvTareasDatos"><?= json_encode(array_values($tareasLineas), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?></script>
             </section>
 
-            <section class="fv-panel" data-sec="versiones">
+            <section class="fv-panel" data-m="8" data-sec="versiones">
                 <div class="fv-ph"><h3>Versiones</h3><span class="cuenta"><?= count($versiones) ?></span>
                     <?php if ($nDescartadas): ?><button class="fv-link der solo-todo" type="button" id="fvVerDesc">Mostrar descartadas (<?= $nDescartadas ?>)</button><?php endif; ?></div>
                 <?php if (empty($versiones)): ?>
@@ -822,7 +822,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
         <!-- ============ SEGUIMIENTO ============ -->
         <div class="fv-col fv-col-seg">
             <?php if ($verBuena): ?>
-                <div class="fv-duo" data-sec="versiones">
+                <div class="fv-duo" data-m="4" data-sec="versiones">
                     <button class="fv-btn fv-btn-pri" type="button" data-bs-toggle="modal" data-bs-target="#modalDescargarBlend<?= (int) $verBuena['id'] ?>">
                         <i class="bi bi-download"></i><span>Descargar .blend<small><?= $etiqueta($verBuena) ?><?= $verBuena['tamano_blend'] !== null ? ' · ' . $tamanoLegible($verBuena['tamano_blend']) : '' ?></small></span>
                     </button>
@@ -832,7 +832,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 </div>
             <?php endif; ?>
             <?php if (!empty($familia['notas']) || !empty($variante['notas'])): ?>
-                <section class="fv-panel" data-sec="trabajo">
+                <section class="fv-panel" data-m="6" data-sec="trabajo">
                     <div class="fv-ph"><h3>Notas</h3><button class="fv-ibtn der" type="button" data-bs-toggle="modal" data-bs-target="#modalSku" aria-label="Editar notas"><i class="bi bi-pencil"></i></button></div>
                     <div class="fv-notas">
                         <?php if (!empty($familia['notas'])): ?><div><div class="de">De la pieza</div><?= nl2br(esc($familia['notas'])) ?></div><?php endif; ?>
@@ -841,7 +841,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 </section>
             <?php endif; ?>
 
-            <section class="fv-panel fv-panel-stock" data-sec="stock">
+            <section class="fv-panel fv-panel-stock" data-m="7" data-sec="stock">
                 <div class="fv-ph"><h3>Stock</h3><a class="fv-link der" href="<?= site_url('piezas/existencias/' . $vid) ?>">Existencias <i class="bi bi-chevron-right"></i></a></div>
                 <div class="fv-stock">
                     <div class="grande" style="color: <?= $colorStockFv ?>"><?= (int) $existencias['stock'] ?><small>uds</small></div>
@@ -863,7 +863,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             </section>
 
 
-            <section class="fv-panel" data-sec="stock">
+            <section class="fv-panel" data-m="9" data-sec="stock">
                 <div class="fv-ph"><h3>Pedidos</h3><span class="cuenta"><?= count($pedidosAbiertos) ?> abiertos</span>
                     <?php if (count($pedidosDeLaPieza) > count($pedidosAbiertos)): ?><a class="fv-link der solo-todo" href="#" data-ir="stock">Todos (<?= count($pedidosDeLaPieza) ?>) <i class="bi bi-chevron-right"></i></a><?php endif; ?></div>
                 <?php if (empty($pedidosDeLaPieza)): ?>
@@ -885,7 +885,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                 <?php endif; ?>
             </section>
 
-            <section class="fv-panel" data-sec="impresiones" id="capturas">
+            <section class="fv-panel" data-m="10" data-sec="impresiones" id="capturas">
                 <div class="fv-ph"><h3>Impresiones</h3><span class="cuenta"><?= count($placasDeLaPieza) ?></span>
                     <?php if (count($placasDeLaPieza) > 4): ?><a class="fv-link der solo-todo" href="#" data-ir="impresiones">Todas <i class="bi bi-chevron-right"></i></a><?php endif; ?></div>
                 <?php if (empty($placasDeLaPieza)): ?>

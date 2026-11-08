@@ -236,7 +236,12 @@ class Web extends BaseController
         }
         unset($familia);
 
-        return view('piezas/index', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_index_nueva', $nueva === '1');
+        }
+
+        return view(session('piezas_index_nueva') !== false ? 'piezas/index_nueva' : 'piezas/index', [
             'categorias'       => $this->categoriaModel->ordenadas(),
             'grupos'           => $this->agruparPorCategoria($familias),
             'familias'         => $familias,
@@ -1507,7 +1512,7 @@ class Web extends BaseController
             session()->set('ficha_variante_nueva', $nueva === '1');
         }
 
-        return view(session('ficha_variante_nueva') ? 'piezas/variante_nueva' : 'piezas/variante', [
+        return view(session('ficha_variante_nueva') !== false ? 'piezas/variante_nueva' : 'piezas/variante', [
             'variante'  => $variante,
             'familia'   => $this->familiaModel->find($variante['familia_id']),
             // Solo las de esta variante (más las de antes del cambio que
@@ -1939,7 +1944,12 @@ class Web extends BaseController
             $desfasadas[(int) $nueva['variante_id']] = $viejaId;
         }
 
-        return view('piezas/galeria', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_galeria_nueva', $nueva === '1');
+        }
+
+        return view(session('piezas_galeria_nueva') !== false ? 'piezas/galeria_nueva' : 'piezas/galeria', [
             // Filas de una variante suelta (no piezas con `variantes` dentro)
             // y ya ordenadas alfabéticamente: sin el reordenado por madurez,
             // que es cosa del índice.

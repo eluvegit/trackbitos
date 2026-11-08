@@ -241,6 +241,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                 <i class="bi bi-trash"></i>
             </button>
         </div>
+        <a href="<?= current_url() ?>?nueva=1" class="btn btn-sm btn-outline-secondary" title="Ir a la ficha nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
     </h5>
     <form id="formBorrarVariante" method="post" action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/borrar') ?>" class="d-none"
         onsubmit="return confirm('¿Mandar «<?= esc($familia['nombre'] . ' / ' . $variante['nombre'], 'attr') ?>» a la papelera? Se puede restaurar durante 30 días.');">
