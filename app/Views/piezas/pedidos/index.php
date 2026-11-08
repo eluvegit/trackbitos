@@ -17,6 +17,7 @@
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas (guardadas y descargadas)">
         <i class="bi bi-printer"></i> Placas
     </a>
+    <a href="<?= site_url('piezas/pedidos?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir al tablero nuevo"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php

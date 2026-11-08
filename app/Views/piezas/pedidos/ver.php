@@ -161,7 +161,8 @@
             <a href="<?= site_url('piezas/pedidos') ?>">Pedidos</a>
         </nav>
         <?php // Las migas se quedan pequeñas para el pulgar: volver, también a la derecha. ?>
-        <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-auto" title="Volver al tablero de pedidos">
+        <a href="<?= current_url() ?>?nueva=1" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-auto" title="Ir a la ficha nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
+        <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="Volver al tablero de pedidos">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
     </div>

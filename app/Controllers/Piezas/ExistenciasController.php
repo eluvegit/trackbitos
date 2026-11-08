@@ -46,6 +46,12 @@ class ExistenciasController extends BaseController
 
     public function index()
     {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_existencias_nueva', $nueva === '1');
+        }
+        $vistaNueva = session('piezas_existencias_nueva') !== false;
+
         $vista  = $this->request->getGet('vista') === 'lista' ? 'lista' : 'galeria';
         $filtro = in_array($this->request->getGet('filtro'), self::FILTROS, true)
             ? $this->request->getGet('filtro')
@@ -145,7 +151,7 @@ class ExistenciasController extends BaseController
         // una sola pasada para toda la galería: el código del hueco de cada
         // una, para verlo de un vistazo sin entrar pieza por pieza.
         $ubicaciones = [];
-        if ($vista === 'galeria' && $filas !== []) {
+        if (($vista === 'galeria' || $vistaNueva) && $filas !== []) {
             $ids = array_map(static fn (array $f) => (int) $f['variante']['id'], $filas);
             foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
                 $vid = (int) $r['variante_id'];
@@ -170,7 +176,7 @@ class ExistenciasController extends BaseController
             }
         }
 
-        return view('piezas/existencias/index', [
+        return view($vistaNueva ? 'piezas/existencias/index_nueva' : 'piezas/existencias/index', [
             'filas'        => $filas,
             'vista'        => $vista,
             'filtro'       => $filtro,

@@ -31,6 +31,19 @@ class PedidosController extends BaseController
     // Cuántos de "Hecho" trae el tablero de golpe; el resto, al bajar.
     private const HECHOS_POR_TANDA = 15;
 
+    private function recordarVista(): void
+    {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_pedidos_nueva', $nueva === '1');
+        }
+    }
+
+    private function vista(string $nombre): string
+    {
+        return 'piezas/pedidos/' . $nombre . (session('piezas_pedidos_nueva') !== false ? '_nueva' : '');
+    }
+
     public function index()
     {
         $pedidoModel = new PiezaPedidoModel();
@@ -55,7 +68,8 @@ class PedidosController extends BaseController
         }
         unset($columna);
 
-        return view('piezas/pedidos/index', ['columnas' => $columnas, 'estados' => PiezaPedidoModel::ESTADOS]);
+        $this->recordarVista();
+        return view($this->vista('index'), ['columnas' => $columnas, 'estados' => PiezaPedidoModel::ESTADOS]);
     }
 
     /**
@@ -70,7 +84,7 @@ class PedidosController extends BaseController
 
         $html = '';
         foreach ($pedidos as $pedido) {
-            $html .= view('piezas/pedidos/_tarjeta', ['pedido' => $pedido]);
+            $html .= view($this->vista('_tarjeta'), ['pedido' => $pedido]);
         }
         $total = $pedidoModel->where('estado', 'completado')->countAllResults();
 
@@ -227,7 +241,8 @@ class PedidosController extends BaseController
             ->orderBy('creado_en', 'DESC')
             ->findAll(30);
 
-        return view('piezas/pedidos/ver', [
+        $this->recordarVista();
+        return view($this->vista('ver'), [
             'pedido'          => $pedido,
             'estados'         => PiezaPedidoModel::ESTADOS,
             'placas'          => $placas,
@@ -454,7 +469,7 @@ class PedidosController extends BaseController
                 'ok'       => true,
                 'mensaje'  => 'Línea añadida.',
                 'formHtml' => view('piezas/pedidos/_linea_form', ['linea' => $linea]),
-                'rowHtml'  => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+                'rowHtml'  => view($this->vista('_linea_fila'), ['linea' => $linea]),
             ]);
         }
 
@@ -517,7 +532,7 @@ class PedidosController extends BaseController
             return $this->response->setJSON([
                 'ok'      => true,
                 'mensaje' => 'Línea actualizada.',
-                'rowHtml' => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+                'rowHtml' => view($this->vista('_linea_fila'), ['linea' => $linea]),
             ]);
         }
 
@@ -579,7 +594,7 @@ class PedidosController extends BaseController
                 'ok'          => true,
                 'mensaje'     => $mensaje,
                 'urlVariante' => site_url('piezas/variante/' . $variante['id']),
-                'rowHtml'     => view('piezas/pedidos/_linea_fila', ['linea' => $this->enriquecerLinea($lineaModel->find($lineaId))]),
+                'rowHtml'     => view($this->vista('_linea_fila'), ['linea' => $this->enriquecerLinea($lineaModel->find($lineaId))]),
             ]);
         }
 
@@ -758,7 +773,7 @@ class PedidosController extends BaseController
 
             return $this->response->setJSON([
                 'ok'      => true,
-                'rowHtml' => view('piezas/pedidos/_linea_fila', ['linea' => $linea]),
+                'rowHtml' => view($this->vista('_linea_fila'), ['linea' => $linea]),
             ]);
         }
 

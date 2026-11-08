@@ -74,6 +74,7 @@
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas">
         <i class="bi bi-printer"></i> Placas
     </a>
+    <a href="<?= site_url('piezas/existencias?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <p class="text-muted small">
