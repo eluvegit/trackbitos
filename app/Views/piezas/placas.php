@@ -23,6 +23,7 @@
     <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary " title="Galería de piezas">
         <i class="bi bi-grid-3x3-gap"></i> Galería
     </a>
+    <a href="<?= site_url('piezas/placas?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <p class="text-muted small">

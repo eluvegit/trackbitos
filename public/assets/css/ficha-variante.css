@@ -400,3 +400,11 @@ body:has(.fv) :is(.modal-content, .offcanvas) .alert-success { background: rgb(6
 body:has(.fv) :is(.modal-content, .offcanvas) .btn-group .btn-check:checked + .btn { background: rgb(255 255 255 / .1); color: var(--bs-emphasis-color); border-color: var(--m-bord); }
 body:has(.fv) .modal-content .btn-close, body:has(.fv) .offcanvas .btn-close { opacity: .45; box-shadow: none; }
 body:has(.fv) .modal-content .btn-close:hover, body:has(.fv) .offcanvas .btn-close:hover { opacity: .9; }
+body:has(.fv) :is(.modal-content, .offcanvas) .list-group { --bs-list-group-bg: transparent; --bs-list-group-border-color: rgb(255 255 255 / .07); --bs-list-group-color: var(--bs-emphasis-color); background: rgb(0 0 0 / .2); border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; overflow: hidden; }
+body:has(.fv) :is(.modal-content, .offcanvas) .list-group > .list-group-item { padding: 10px 14px !important; font-size: 13px; line-height: 1.4; }
+body:has(.fv) :is(.modal-content, .offcanvas) .list-group-flush > .list-group-item:last-child { border-bottom: 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) .list-group-item-action:hover { background: rgb(255 255 255 / .05); }
+body:has(.fv) .modal-content .modal-body > p.small:first-child { margin-bottom: 12px; }
+body:has(.fv) select { color-scheme: dark; }
+body:has(.fv) select option, body:has(.fv) select optgroup { background-color: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
+body:has(.fv) select option:checked { background-color: #ff6a3d; color: #fff; }

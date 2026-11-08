@@ -38,6 +38,7 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Editar</strong>
     <span class="ms-auto"><?= view('piezas/_placa_vecinas', ['vecinas' => $vecinas, 'sufijo' => '/bitacora/editar']) ?></span>
+    <a href="<?= current_url() ?>?nueva=1" class="btn btn-sm btn-outline-secondary" title="Ir a la bitácora nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
     <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-send"></i> Enviar placa<?= $placa['enviada_en'] ? ' <i class="bi bi-check2" title="Ya enviada"></i>' : '' ?>
     </a>

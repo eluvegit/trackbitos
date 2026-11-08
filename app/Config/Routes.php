@@ -903,6 +903,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // version/(:num)/impresa, /validar y /descartar, que ya responden JSON en
     // AJAX.
     $routes->GET('revisar', 'Web::revisarImpresiones');
+    $routes->GET('modales-barra', 'Web::modalesBarra');
     // Única acción propia: barrer los borradores atrasados con el mismo
     // criterio con el que promocionar ya los descarta solo.
     $routes->POST('revisar/descartar-atrasados', 'Web::descartarBorradoresAtrasados');

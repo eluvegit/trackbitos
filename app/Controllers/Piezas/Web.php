@@ -274,6 +274,28 @@ class Web extends BaseController
      * de los dos verbos ("Ya existe" / "Crear pieza"): para eso está la
      * pantalla completa, a la que lleva "Ir a pendientes".
      */
+    private function volverDelMenu(): string
+    {
+        $volver = (string) $this->request->getPost('volver');
+
+        return $volver !== '' && str_starts_with($volver, site_url('piezas')) ? $volver : site_url('piezas');
+    }
+
+    public function modalesBarra()
+    {
+        $config = new PiezaConfigModel();
+
+        return view('piezas/_modales_barra', [
+            'categorias'        => $this->categoriaModel->ordenadas(),
+            'ultimoPedido'      => $this->ultimoPedidoEntrante(),
+            'pendientesResumen' => $this->pendientesResumen(),
+            'pautasTexto'       => $config->find(1)['pautas_promocion'] ?? '',
+            'calcTiempo'        => $config->calculadoraTiempo(),
+            'reglasTiempo'      => $this->placaModel->reglasTiempo(),
+            'resinaConfig'      => $config->resina(),
+        ]);
+    }
+
     private function pendientesResumen(): array
     {
         $tareaId = (new PiezaConfigModel())->tareaJournalId();
@@ -1237,7 +1259,7 @@ class Web extends BaseController
 
                 return true;
             },
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             fn() => 'Pautas guardadas.'
         );
     }
@@ -1259,7 +1281,7 @@ class Web extends BaseController
 
                 return true;
             },
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             fn() => 'Ajustes de la calculadora guardados.'
         );
     }
@@ -1283,7 +1305,7 @@ class Web extends BaseController
 
                 return true;
             },
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             fn() => 'Ajustes de resina guardados.'
         );
     }
@@ -1292,7 +1314,7 @@ class Web extends BaseController
     {
         return $this->ejecutar(
             fn() => $this->servicio->crearCategoria((string) $this->request->getPost('nombre')),
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             fn($categoria) => 'Categoría "' . $categoria['nombre'] . '" creada.'
         );
     }
@@ -1366,7 +1388,7 @@ class Web extends BaseController
     {
         return $this->ejecutar(
             fn() => $this->servicio->renombrarCategoria($id, (string) $this->request->getPost('nombre')),
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             fn($categoria) => 'Categoría renombrada a "' . $categoria['nombre'] . '".'
         );
     }
@@ -1375,7 +1397,7 @@ class Web extends BaseController
     {
         return $this->ejecutar(
             fn() => $this->servicio->borrarCategoria($id),
-            fn() => site_url('piezas'),
+            fn() => $this->volverDelMenu(),
             // Decir cuántas piezas se han quedado sueltas evita el susto de
             // verlas aparecer de golpe al final del índice.
             fn($resultado) => sprintf(
@@ -2401,7 +2423,12 @@ class Web extends BaseController
             (int) ($this->placaModel->selectMax('id', 'maxId')->first()['maxId'] ?? 0)
         );
 
-        return view('piezas/placas', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_placas_nueva', $nueva === '1');
+        }
+
+        return view(session('piezas_placas_nueva') !== false ? 'piezas/placas_nueva' : 'piezas/placas', [
             'piezas'             => $piezas,
             'resumenes'          => $resumenes,
             'origenNombres'      => $origenNombres,
@@ -2843,7 +2870,12 @@ class Web extends BaseController
             return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
         }
 
-        return view('piezas/bitacora_editar', $this->datosDeLaBitacora($placa) + ['vecinas' => $this->vecinasDePlaca($placa)]);
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_bitacora_nueva', $nueva === '1');
+        }
+
+        return view(session('piezas_bitacora_nueva') !== false ? 'piezas/bitacora_nueva' : 'piezas/bitacora_editar', $this->datosDeLaBitacora($placa) + ['vecinas' => $this->vecinasDePlaca($placa)]);
     }
 
     // ---- Enviar placa por correo ------------------------------------------
