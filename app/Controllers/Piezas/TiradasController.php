@@ -43,7 +43,11 @@ class TiradasController extends BaseController
             ];
         }
 
-        return view('piezas/tiradas/index', ['filas' => $filas]);
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_tiradas_nueva', $nueva === '1');
+        }
+        return view(session('piezas_tiradas_nueva') !== false ? 'piezas/tiradas/index_nueva' : 'piezas/tiradas/index', ['filas' => $filas]);
     }
 
     /** Alta con solo el nombre; "copiar de" trae piezas, placas, máquinas y notas de otra tirada. */
@@ -98,7 +102,11 @@ class TiradasController extends BaseController
             return redirect()->to(site_url('piezas/tiradas'))->with('error', 'Esa tirada no existe.');
         }
 
-        return view('piezas/tiradas/ver', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_tiradas_nueva', $nueva === '1');
+        }
+        return view(session('piezas_tiradas_nueva') !== false ? 'piezas/tiradas/ver_nueva' : 'piezas/tiradas/ver', [
             'tirada'   => $tirada,
             'maquinas' => PiezaTiradaModel::maquinas((string) $tirada['maquinas']),
             'piezas'   => $this->piezas->deTirada($id),

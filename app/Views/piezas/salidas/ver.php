@@ -18,6 +18,7 @@
     <?php else: ?>
         <span class="badge text-bg-success">Confirmado <?= esc(substr((string) $salida['confirmada_en'], 0, 16)) ?></span>
     <?php endif; ?>
+    <a href="<?= site_url('piezas/salidas/' . $id . '?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

@@ -8,6 +8,7 @@
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Albaranes de salida</strong>
     <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary ms-auto"><i class="bi bi-geo-alt"></i> Ubicaciones</a>
+    <a href="<?= site_url('piezas/salidas?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

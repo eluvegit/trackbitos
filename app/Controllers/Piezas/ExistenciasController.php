@@ -222,7 +222,19 @@ class ExistenciasController extends BaseController
 
         $huecoId = $this->inventario->huecoDeVariante($id);
 
-        return view('piezas/existencias/variante', [
+        $imagen = null;
+        foreach ($this->renders->where('variante_id', $id)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+            if (!empty($r['ruta_imagen']) || !empty($r['hash_imagen'])) {
+                $imagen = ['vista' => imagen_pieza($r, 'render', 'v'), 'original' => site_url('piezas/render/' . (int) $r['id'] . '/imagen')];
+                break;
+            }
+        }
+
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_existencias_nueva', $nueva === '1');
+        }
+        return view(session('piezas_existencias_nueva') !== false ? 'piezas/existencias/variante_nueva' : 'piezas/existencias/variante', [
             'variante'   => $variante,
             'familia'    => $this->familias->find($variante['familia_id']),
             'stock'      => $stock,
@@ -231,6 +243,7 @@ class ExistenciasController extends BaseController
             'historial'  => $this->inventario->historialDeVariante($id),
             'hueco'      => $huecoId !== null ? ($huecosPorId[$huecoId] ?? null) : null,
             'huecosDisponibles' => $huecosDisponibles,
+            'imagen'     => $imagen,
         ]);
     }
 

@@ -17,6 +17,7 @@
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Borrar guía</button>
     </form>
+    <a href="<?= site_url('piezas/guias/' . $gid . '?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

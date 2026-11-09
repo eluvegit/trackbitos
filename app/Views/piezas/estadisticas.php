@@ -35,7 +35,8 @@ $rankingsPeso = [
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Estadísticas</strong>
 
-    <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Periodo">
+    <a href="<?= site_url('piezas/estadisticas?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Periodo">
         <?php foreach ($periodos as $clave => $etiqueta): ?>
             <a href="<?= site_url('piezas/estadisticas') . ($clave === 'todo' ? '' : '?periodo=' . $clave) ?>"
                 class="btn <?= $clave === $periodo ? 'btn-primary' : 'btn-outline-secondary' ?> estad-periodo"><?= $etiqueta ?></a>

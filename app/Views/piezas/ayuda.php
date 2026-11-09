@@ -137,7 +137,7 @@
 <section class="pa-portada">
     <span class="pa-portada-icono"><i class="bi bi-life-preserver"></i></span>
     <div>
-        <h1>Ayuda de <strong>Piezas</strong></h1>
+        <h1>Ayuda de <strong>Piezas</strong> <a href="<?= site_url('piezas/ayuda?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-2 align-middle" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a></h1>
         <p>Todo el recorrido de una pieza: del <code>.blend</code> en Blender a la placa de impresión, el inventario, el hueco donde se guarda y los pedidos. Busca lo que quieres hacer o baja por las secciones.</p>
     </div>
 </section>

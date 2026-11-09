@@ -405,6 +405,54 @@ body:has(.fv) :is(.modal-content, .offcanvas) .list-group > .list-group-item { p
 body:has(.fv) :is(.modal-content, .offcanvas) .list-group-flush > .list-group-item:last-child { border-bottom: 0; }
 body:has(.fv) :is(.modal-content, .offcanvas) .list-group-item-action:hover { background: rgb(255 255 255 / .05); }
 body:has(.fv) .modal-content .modal-body > p.small:first-child { margin-bottom: 12px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .modal-title .bi { color: var(--bs-tertiary-color); margin-right: 4px; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.form-control-sm, .form-select-sm) { font-size: 12.5px; padding-top: 6px; padding-bottom: 6px; border-radius: 8px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .form-control[type="file"] { padding: 6px 8px; font-size: 12.5px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .form-control::file-selector-button { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); border: 1px solid var(--m-bord); border-radius: 6px; padding: 4px 10px; margin: 0 10px 0 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) .form-control:hover:not(:disabled)::file-selector-button { background: rgb(255 255 255 / .08); }
+body:has(.fv) :is(.modal-content, .offcanvas) input[type="date"], body:has(.fv) :is(.modal-content, .offcanvas) input[type="time"] { color-scheme: dark; }
+body:has(.fv) :is(.modal-content, .offcanvas) .form-text { font-size: 11.5px; color: var(--bs-tertiary-color); margin-top: 6px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .input-group > :not(:first-child) { margin-left: -1px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .input-group-text { background: var(--m-inset); border: 1px solid var(--m-bord); color: var(--bs-tertiary-color); font-size: 12.5px; border-radius: 10px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .input-group > :is(.form-control, .form-select, .input-group-text, .btn):not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) .input-group > :is(.form-control, .form-select, .input-group-text, .btn):not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-warning { --bs-btn-bg: rgb(245 165 36 / .14); --bs-btn-border-color: rgb(245 165 36 / .4); --bs-btn-color: #f5a524; --bs-btn-hover-bg: rgb(245 165 36 / .24); --bs-btn-hover-border-color: #f5a524; --bs-btn-hover-color: #ffc04d; --bs-btn-active-bg: rgb(245 165 36 / .3); --bs-btn-active-color: #ffc04d; --bs-btn-disabled-bg: rgb(245 165 36 / .14); --bs-btn-disabled-color: #f5a524; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-outline-primary { --bs-btn-color: #ff7d55; --bs-btn-border-color: rgb(255 106 61 / .45); --bs-btn-hover-bg: rgb(255 106 61 / .12); --bs-btn-hover-color: #ff7d55; --bs-btn-hover-border-color: #ff6a3d; --bs-btn-active-bg: rgb(255 106 61 / .2); --bs-btn-active-color: #ff7d55; --bs-btn-active-border-color: #ff6a3d; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-outline-danger { --bs-btn-color: #f0553f; --bs-btn-border-color: rgb(240 85 63 / .4); --bs-btn-hover-bg: rgb(240 85 63 / .12); --bs-btn-hover-color: #ff7a66; --bs-btn-hover-border-color: #f0553f; --bs-btn-active-bg: rgb(240 85 63 / .2); --bs-btn-active-color: #ff7a66; --bs-btn-active-border-color: #f0553f; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-outline-success { --bs-btn-color: #3ecf8e; --bs-btn-border-color: rgb(62 207 142 / .4); --bs-btn-hover-bg: rgb(62 207 142 / .12); --bs-btn-hover-color: #3ecf8e; --bs-btn-hover-border-color: #3ecf8e; --bs-btn-active-bg: rgb(62 207 142 / .2); --bs-btn-active-color: #3ecf8e; --bs-btn-active-border-color: #3ecf8e; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-outline-warning { --bs-btn-color: #f5a524; --bs-btn-border-color: rgb(245 165 36 / .4); --bs-btn-hover-bg: rgb(245 165 36 / .12); --bs-btn-hover-color: #ffc04d; --bs-btn-hover-border-color: #f5a524; --bs-btn-active-bg: rgb(245 165 36 / .2); --bs-btn-active-color: #ffc04d; --bs-btn-active-border-color: #f5a524; }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-outline-light { --bs-btn-color: var(--bs-secondary-color); --bs-btn-border-color: var(--m-bord); --bs-btn-hover-bg: rgb(255 255 255 / .08); --bs-btn-hover-color: var(--bs-emphasis-color); --bs-btn-hover-border-color: var(--m-bord); }
+body:has(.fv) :is(.modal-content, .offcanvas) .btn-link.text-danger:hover { color: #ff7a66 !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .alert-info { background: rgb(142 140 255 / .1); border-color: rgb(142 140 255 / .3); color: #a9a8ff; }
+body:has(.fv) :is(.modal-content, .offcanvas) .alert-secondary, body:has(.fv) :is(.modal-content, .offcanvas) .alert-light { background: rgb(0 0 0 / .2); border-color: var(--m-bord); color: var(--bs-secondary-color); }
+body:has(.fv) :is(.modal-content, .offcanvas) .badge { font-weight: 500; font-size: 11px; border-radius: 6px; padding: 3px 7px; letter-spacing: 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-secondary, .text-bg-dark, .text-bg-light):not(.position-absolute) { background: rgb(255 255 255 / .08) !important; color: var(--bs-secondary-color) !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-success, .bg-success) { background: rgb(62 207 142 / .14) !important; color: #3ecf8e !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-warning, .bg-warning) { background: rgb(245 165 36 / .14) !important; color: #f5a524 !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-danger, .bg-danger) { background: rgb(240 85 63 / .14) !important; color: #f0553f !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-info, .bg-info) { background: rgb(142 140 255 / .14) !important; color: #a9a8ff !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.text-bg-primary, .bg-primary) { background: rgb(255 106 61 / .14) !important; color: #ff7d55 !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .text-success { color: #3ecf8e !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .text-warning { color: #f5a524 !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .text-danger { color: #f0553f !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .text-primary { color: #ff7d55 !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .text-info { color: #a9a8ff !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .table { --bs-table-bg: transparent; --bs-table-color: var(--bs-secondary-color); --bs-table-border-color: rgb(255 255 255 / .07); --bs-table-hover-bg: rgb(255 255 255 / .04); --bs-table-striped-bg: rgb(255 255 255 / .02); font-size: 13px; font-variant-numeric: tabular-nums; }
+body:has(.fv) :is(.modal-content, .offcanvas) .table > :not(caption) > * > * { padding: 8px 10px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .table thead th { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .07em; color: var(--bs-tertiary-color); }
+body:has(.fv) :is(.modal-content, .offcanvas) .table :is(th, td) strong, body:has(.fv) :is(.modal-content, .offcanvas) .table .fw-semibold { color: var(--bs-emphasis-color); font-weight: 500; }
+body:has(.fv) :is(.modal-content, .offcanvas) .table tbody tr:last-child > * { border-bottom: 0; }
+body:has(.fv) :is(.modal-content, .offcanvas) .progress { --bs-progress-bg: rgb(255 255 255 / .08); --bs-progress-bar-bg: #ff6a3d; height: 6px; border-radius: 99px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .nav-tabs { --bs-nav-tabs-border-color: rgb(255 255 255 / .07); --bs-nav-tabs-link-active-bg: transparent; --bs-nav-tabs-link-active-color: var(--bs-emphasis-color); --bs-nav-tabs-link-active-border-color: transparent transparent #ff6a3d; --bs-nav-link-color: var(--bs-tertiary-color); --bs-nav-link-hover-color: var(--bs-emphasis-color); --bs-nav-tabs-link-hover-border-color: transparent; font-size: 13px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .nav-tabs .nav-link { border-width: 0 0 2px; font-weight: 500; }
+body:has(.fv) :is(.modal-content, .offcanvas) .nav-pills { --bs-nav-pills-link-active-bg: rgb(255 255 255 / .1); --bs-nav-pills-link-active-color: var(--bs-emphasis-color); --bs-nav-link-color: var(--bs-secondary-color); --bs-nav-link-hover-color: var(--bs-emphasis-color); font-size: 13px; }
+body:has(.fv) :is(.modal-content, .offcanvas) .card { --bs-card-bg: rgb(0 0 0 / .18); --bs-card-border-color: var(--m-bord); --bs-card-cap-bg: transparent; border-radius: 12px; box-shadow: none; }
+body:has(.fv) :is(.modal-content, .offcanvas) .card-header { font-size: 12px; font-weight: 500; color: var(--bs-secondary-color); }
+body:has(.fv) :is(.modal-content, .offcanvas) hr { border-color: var(--m-bord-2); opacity: 1; }
+body:has(.fv) :is(.modal-content, .offcanvas) code { color: #ff7d55; font-family: "Geist Mono", ui-monospace, monospace; font-size: .9em; }
+body:has(.fv) :is(.modal-content, .offcanvas) :is(.border, .border-top, .border-bottom) { border-color: var(--m-bord-2) !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .bg-body-tertiary, body:has(.fv) :is(.modal-content, .offcanvas) .bg-body-secondary { background: rgb(0 0 0 / .18) !important; }
+body:has(.fv) :is(.modal-content, .offcanvas) .dropdown-menu { --bs-dropdown-bg: var(--bs-secondary-bg); --bs-dropdown-border-color: var(--m-bord); --bs-dropdown-link-hover-bg: rgb(255 255 255 / .06); --bs-dropdown-font-size: 13px; border-radius: 10px; }
 body:has(.fv) select { color-scheme: dark; }
 body:has(.fv) select option, body:has(.fv) select optgroup { background-color: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
 body:has(.fv) select option:checked { background-color: #ff6a3d; color: #fff; }

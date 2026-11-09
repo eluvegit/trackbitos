@@ -45,7 +45,11 @@ class GuiasController extends BaseController
             ];
         }
 
-        return view('piezas/guias/index', ['filas' => $filas]);
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_guias_nueva', $nueva === '1');
+        }
+        return view(session('piezas_guias_nueva') !== false ? 'piezas/guias/index_nueva' : 'piezas/guias/index', ['filas' => $filas]);
     }
 
     public function crear()
@@ -98,7 +102,11 @@ class GuiasController extends BaseController
 
         $old = session('filas_guia');
 
-        return view('piezas/guias/editar', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_guias_nueva', $nueva === '1');
+        }
+        return view(session('piezas_guias_nueva') !== false ? 'piezas/guias/editar_nueva' : 'piezas/guias/editar', [
             'guia'      => $estructura['guia'],
             'pasos'     => $estructura['pasos'],
             'filas'     => is_array($old) ? $old : $filas,

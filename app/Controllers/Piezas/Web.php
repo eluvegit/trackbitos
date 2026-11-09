@@ -551,7 +551,11 @@ class Web extends BaseController
         }
         unset($maquina);
 
-        return view('piezas/maquinas', ['maquinas' => $maquinas]);
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_maquinas_nueva', $nueva === '1');
+        }
+        return view(session('piezas_maquinas_nueva') !== false ? 'piezas/maquinas_nueva' : 'piezas/maquinas', ['maquinas' => $maquinas]);
     }
 
     public function renombrarMaquina(int $id)
@@ -636,7 +640,11 @@ class Web extends BaseController
         $impresas = $this->rankingUnidadesImpresas($desde);
         $gastadas = $this->rankingGastadas($desde);
 
-        return view('piezas/estadisticas', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_estadisticas_nueva', $nueva === '1');
+        }
+        return view(session('piezas_estadisticas_nueva') !== false ? 'piezas/estadisticas_nueva' : 'piezas/estadisticas', [
             'total'          => $this->almacen->tamanoTotal(),
             'totalPapelera'  => $this->almacen->tamanoPapelera(),
             'pesanVariante'  => array_slice($pesanVariante, 0, 20),
@@ -2297,7 +2305,11 @@ class Web extends BaseController
      */
     public function ayuda()
     {
-        return view('piezas/ayuda');
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_ayuda_nueva', $nueva === '1');
+        }
+        return view(session('piezas_ayuda_nueva') !== false ? 'piezas/ayuda_nueva' : 'piezas/ayuda');
     }
 
     public function placas()
@@ -4359,7 +4371,11 @@ class Web extends BaseController
         }
         unset($variante);
 
-        return view('piezas/papelera', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_papelera_nueva', $nueva === '1');
+        }
+        return view((session('piezas_papelera_nueva') !== false ? 'piezas/papelera_nueva' : 'piezas/papelera'), [
             'familias' => $this->familiaModel
                 ->where('borrado_en IS NOT NULL')
                 ->orderBy('borrado_en', 'DESC')
@@ -4394,7 +4410,11 @@ class Web extends BaseController
         }
         unset($variante);
 
-        return view('piezas/nevera', ['variantes' => $variantes]);
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_nevera_nueva', $nueva === '1');
+        }
+        return view((session('piezas_nevera_nueva') !== false ? 'piezas/nevera_nueva' : 'piezas/nevera'), ['variantes' => $variantes]);
     }
 
     /**

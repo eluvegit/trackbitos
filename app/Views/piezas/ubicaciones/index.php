@@ -159,6 +159,7 @@
     <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#modalEstuche">
         <i class="bi bi-plus-lg"></i> Nuevo estuche
     </button>
+    <a href="<?= site_url('piezas/ubicaciones?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

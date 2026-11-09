@@ -16,6 +16,7 @@ $texto = static fn (string $t) => nl2br(esc($t));
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Cuaderno</strong>
     <span class="text-muted small fw-normal ms-2"><?= count($entradas) ?> placas con anotaciones</span>
+    <a href="<?= site_url('piezas/cuaderno?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <style>

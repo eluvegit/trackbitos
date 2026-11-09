@@ -18,11 +18,15 @@ class CuadernoController extends BaseController
 {
     public function index()
     {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_cuaderno_nueva', $nueva === '1');
+        }
         $db = db_connect();
 
         $placas = (new PiezaPlacaModel())->findAll();
         if ($placas === []) {
-            return view('piezas/cuaderno', ['entradas' => [], 'pendientes' => [], 'familias' => []]);
+            return view((session('piezas_cuaderno_nueva') !== false ? 'piezas/cuaderno_nueva' : 'piezas/cuaderno'), ['entradas' => [], 'pendientes' => [], 'familias' => []]);
         }
         $ids = array_column($placas, 'id');
 
@@ -109,7 +113,7 @@ class CuadernoController extends BaseController
         usort($entradas, static fn (array $a, array $b) => strcmp((string) $b['fecha'], (string) $a['fecha']));
         usort($pendientes, static fn (array $a, array $b) => strcmp((string) $b['fecha'], (string) $a['fecha']));
 
-        return view('piezas/cuaderno', [
+        return view((session('piezas_cuaderno_nueva') !== false ? 'piezas/cuaderno_nueva' : 'piezas/cuaderno'), [
             'entradas'   => $entradas,
             'pendientes' => $pendientes,
             'familias'   => $familias,

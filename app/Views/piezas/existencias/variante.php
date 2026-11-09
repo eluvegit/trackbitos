@@ -44,6 +44,7 @@
     <a href="<?= site_url('piezas/variante/' . $idVar) ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ficha de la variante">
         <i class="bi bi-box-arrow-up-right"></i> Ficha
     </a>
+    <a href="<?= site_url('piezas/existencias/' . $idVar . '?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

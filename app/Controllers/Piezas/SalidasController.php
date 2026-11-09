@@ -57,7 +57,11 @@ class SalidasController extends BaseController
         $usos = array_column($this->salidas->select('destino_id, COUNT(*) AS n')->where('destino_id IS NOT NULL', null, false)
             ->groupBy('destino_id')->findAll(), 'n', 'destino_id');
 
-        return view('piezas/salidas/index', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_salidas_nueva', $nueva === '1');
+        }
+        return view((session('piezas_salidas_nueva') !== false ? 'piezas/salidas/index_nueva' : 'piezas/salidas/index'), [
             'salidas'  => $salidas,
             'resumen'  => $resumen,
             'destinos' => $this->destinos->lista(),
@@ -114,7 +118,11 @@ class SalidasController extends BaseController
         }
         unset($l);
 
-        return view('piezas/salidas/ver', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_salidas_nueva', $nueva === '1');
+        }
+        return view((session('piezas_salidas_nueva') !== false ? 'piezas/salidas/ver_nueva' : 'piezas/salidas/ver'), [
             'salida'   => $salida,
             'lineas'   => $lineas,
             'cajas'    => $salida['estado'] === 'borrador' ? $this->disponibleEnCajas($id) : [],

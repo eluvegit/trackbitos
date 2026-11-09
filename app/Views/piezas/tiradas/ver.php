@@ -14,6 +14,7 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalPlacas"><i class="bi bi-list-ol"></i> Placas</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAjustes" title="Ajustes de la tirada"><i class="bi bi-gear"></i></button>
     </span>
+    <a href="<?= site_url('piezas/tiradas/' . (int) $tirada['id'] . '?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php if (session('error')): ?>

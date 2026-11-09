@@ -129,7 +129,11 @@ class UbicacionesController extends BaseController
             usort($huerfanas, static fn ($a, $b) => ($b['stock'] > 0) <=> ($a['stock'] > 0) ?: $a['nombre'] <=> $b['nombre']);
         }
 
-        return view('piezas/ubicaciones/index', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_ubicaciones_nueva', $nueva === '1');
+        }
+        return view(session('piezas_ubicaciones_nueva') !== false ? 'piezas/ubicaciones/index_nueva' : 'piezas/ubicaciones/index', [
             'filas'     => $filas,
             'huerfanas' => $huerfanas,
             'cajas'     => $this->contenidoDeCajas($huecos = $this->codigosDeHuecos()),
@@ -468,7 +472,11 @@ class UbicacionesController extends BaseController
         $destinos = $codigoPorHuecoId;
         unset($destinos[$id]);
 
-        return view('piezas/ubicaciones/hueco', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_ubicaciones_nueva', $nueva === '1');
+        }
+        return view(session('piezas_ubicaciones_nueva') !== false ? 'piezas/ubicaciones/hueco_nueva' : 'piezas/ubicaciones/hueco', [
             'hueco'    => $hueco,
             'estuche'  => $estuche,
             'codigo'   => $estuche ? PiezaHuecoModel::codigoCompleto($estuche, $hueco) : $hueco['codigo'],
@@ -649,7 +657,11 @@ class UbicacionesController extends BaseController
     {
         $huecos = $this->codigosDeHuecos();
 
-        return view('piezas/ubicaciones/cajas', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_ubicaciones_nueva', $nueva === '1');
+        }
+        return view(session('piezas_ubicaciones_nueva') !== false ? 'piezas/ubicaciones/cajas_nueva' : 'piezas/ubicaciones/cajas', [
             'cajas'        => $this->contenidoDeCajas($huecos),
             'huecos'       => $huecos,
             'huecosLibres' => array_diff_key($huecos, $this->inventario->huecosOcupados()),

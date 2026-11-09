@@ -3,7 +3,7 @@
 <?= $this->include('piezas/_nav') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=13">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
 <link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=8">
 <?php
     $tonos = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];

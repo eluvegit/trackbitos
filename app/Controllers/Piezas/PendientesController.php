@@ -67,7 +67,11 @@ class PendientesController extends BaseController
         }
         unset($p);
 
-        return view('piezas/pendientes/index', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_pendientes_nueva', $nueva === '1');
+        }
+        return view(session('piezas_pendientes_nueva') !== false ? 'piezas/pendientes/index_nueva' : 'piezas/pendientes/index', [
             'tarea'          => $tarea,
             'tareaEnlazada'  => $tareaId,
             'pendientes'     => $pendientes,

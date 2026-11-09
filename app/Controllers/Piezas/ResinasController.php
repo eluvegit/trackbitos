@@ -22,7 +22,11 @@ class ResinasController extends BaseController
             $usos[(int) $u['resina_id']] = $u;
         }
 
-        return view('piezas/resinas', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_resinas_nueva', $nueva === '1');
+        }
+        return view((session('piezas_resinas_nueva') !== false ? 'piezas/resinas_nueva' : 'piezas/resinas'), [
             'resinas' => $this->resinas->orderBy('archivada')->orderBy('nombre')->findAll(),
             'usos'    => $usos,
             'enMaquina' => $this->resinas->enCadaImpresora(),
