@@ -2878,6 +2878,38 @@ class Web extends BaseController
         return view(session('piezas_bitacora_nueva') !== false ? 'piezas/bitacora_nueva' : 'piezas/bitacora_editar', $this->datosDeLaBitacora($placa) + ['vecinas' => $this->vecinasDePlaca($placa)]);
     }
 
+    public function bitacoraDual(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $con  = $this->request->getGet('con');
+        $otra = null;
+        if ($con === null) {
+            $otra = $this->parejaDelDia($placa);
+        } elseif ((int) $con && (int) $con !== $id) {
+            $otra = $this->placaModel->find((int) $con);
+        }
+
+        $placas = [$placa];
+        if ($otra) {
+            $placas[] = $otra;
+            if ($placa['impresora'] === 'OLD' && $otra['impresora'] === 'NEW') {
+                $placas = array_reverse($placas);
+            }
+        }
+
+        return view('piezas/bitacora_dual', [
+            'placa'      => $placa,
+            'placas'     => $placas,
+            'con'        => $otra ? (int) $otra['id'] : 0,
+            'candidatas' => $this->placaModel->select('id, nombre, impresora, impresa_en, creado_en')
+                ->where('id !=', $id)->orderBy('id', 'DESC')->findAll(80),
+        ]);
+    }
+
     // ---- Enviar placa por correo ------------------------------------------
 
     public function placaEnviarForm(int $id)
@@ -2895,6 +2927,11 @@ class Web extends BaseController
             $otra = $this->placaModel->find((int) $con);
         }
 
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('piezas_enviar_nueva', $nueva === '1');
+        }
+
         $envios = [$this->datosEnvio($placa)];
         if ($otra) {
             $envios[] = $this->datosEnvio($otra);
@@ -2903,7 +2940,7 @@ class Web extends BaseController
             }
         }
 
-        return view('piezas/placa_enviar', [
+        return view(session('piezas_enviar_nueva') !== false ? 'piezas/placa_enviar_nueva' : 'piezas/placa_enviar', [
             'placa'      => $placa,
             'envios'     => $envios,
             'con'        => $otra ? (int) $otra['id'] : 0,
@@ -3029,6 +3066,10 @@ class Web extends BaseController
         }
 
         if ($placa['enviada_en'] && !$this->request->getPost('desbloqueado')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON(['ok' => false, 'error' => 'Enviada: abre el candado para editarla.']);
+            }
+
             return redirect()->back()->with('error', 'La placa ya está enviada: abre el candado para editarla.');
         }
 
@@ -3059,6 +3100,9 @@ class Web extends BaseController
             $this->placaModel->update($id, $datos);
             if ($enlace !== null) {
                 $this->guardarEnlaceDePlaca($id, $enlace, $nombre);
+            }
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON(['ok' => true, 'nombre' => $nombre]);
             }
 
             return redirect()->to($this->urlVueltaEnvio($id))

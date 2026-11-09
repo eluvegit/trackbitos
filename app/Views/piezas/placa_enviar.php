@@ -32,6 +32,7 @@ $volver = (string) current_url(true);
     <strong class="fw-semibold">Enviar placa</strong>
     <span class="ms-auto">
         <?= view('piezas/_placa_vecinas', ['vecinas' => $vecinas, 'sufijo' => '/enviar']) ?>
+        <a href="<?= current_url() ?>?nueva=1" class="btn btn-sm btn-outline-secondary ms-1" title="Probar la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
     </span>
 </h5>
 

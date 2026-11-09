@@ -1040,6 +1040,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // modal intermedio, fase 55) — es la única pantalla de la bitácora desde
     // la fase 50 (se quitó la versión imprimible: solo la editable).
     $routes->GET('placa/(:num)/bitacora/editar', 'Web::bitacoraEditar/$1');
+    $routes->GET('placa/(:num)/bitacora/dual', 'Web::bitacoraDual/$1');
     $routes->POST('placa/(:num)/bitacora', 'Web::bitacoraGuardar/$1');
     $routes->GET('placa/(:num)/enviar', 'Web::placaEnviarForm/$1');
     $routes->POST('placa/(:num)/enviar', 'Web::placaEnviar/$1');

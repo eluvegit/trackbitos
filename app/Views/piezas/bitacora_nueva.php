@@ -1,10 +1,20 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
-<?= $this->include('piezas/_nav') ?>
+<script>
+if (window.top !== window.self) {
+    document.documentElement.classList.add('bt-embebida');
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest('a[href]');
+        if (!a || a.target || a.getAttribute('href').charAt(0) === '#') return;
+        a.target = '_top';
+    });
+}
+</script>
+<div class="bt-solo-top"><?= $this->include('piezas/_nav') ?></div>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=13">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-bitacora.css') ?>?v=8">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-bitacora.css') ?>?v=9">
 <?php
     $idPlaca  = (int) $placa['id'];
     $idForm   = 'bitacora-form-' . $idPlaca;
@@ -124,6 +134,7 @@
                 <?= csrf_field() ?>
                 <button class="fv-gbtn peligro"><i class="bi bi-trash"></i> <span class="lbl-m">Borrar</span></button>
             </form>
+            <a href="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora/dual') ?>" class="fv-gbtn" title="Ver esta placa en paralelo con otra"><i class="bi bi-layout-split"></i> <span class="lbl-m">Vista dual</span></a>
             <span class="fv-vsep"></span>
             <a href="<?= current_url() ?>?nueva=0" class="fv-gbtn" title="Volver a la bitácora de siempre"><i class="bi bi-arrow-left-right"></i> <span class="lbl-m">Vista clásica</span></a>
         </div>
@@ -140,6 +151,9 @@
         <?php if ($impActual): ?><span class="bt-maq <?= esc($impActual, 'attr') ?>"><?= esc($impActual) ?></span><?php endif; ?>
         <span class="fv-dot"></span>
         <span>creada <b><?= esc(date('d/m H:i', strtotime($placa['creado_en']))) ?></b></span>
+        <span class="fv-dot"></span>
+        <span class="bt-imp-en">impresa <input type="datetime-local" name="impresa_en" form="<?= $idForm ?>" class="bt-ed" value="<?= esc($paraInput($placa['impresa_en']), 'attr') ?>">
+            <button type="button" class="fv-btn fv-btn-sm" data-ahora>Ahora</button></span>
         <span class="fv-dot"></span>
         <span class="fv-estado e-ok" id="btGuardado">Guardado</span>
     </div>
@@ -210,6 +224,8 @@
             </label>
             <label class="bt-campo"><span class="bt-lbl">Tiempos de exposición</span>
                 <input type="text" name="exposicion" form="<?= $idForm ?>" class="bt-ed fv-mono" maxlength="255" placeholder="3.2s capa / 30s base, 0.05mm" value="<?= esc((string) $placa['exposicion'], 'attr') ?>"></label>
+            <label class="bt-campo"><span class="bt-lbl">Tiempo real <span class="t3" data-calculado></span></span>
+                <input type="text" name="minutos_reales" form="<?= $idForm ?>" class="bt-ed" data-tiempo placeholder="1h 44" value="<?= esc($duracion($placa['minutos_reales']), 'attr') ?>"></label>
         </div>
 
         <div class="bt-enlaces d-none" data-enlaces-panel>
@@ -336,17 +352,6 @@
                 <button type="button" data-momento="antes">Antes de imprimir<?= $pos < 3 ? ' <span class="n">ahora</span>' : '' ?></button>
                 <button type="button" data-momento="despues">Resultado<?= $pos >= 3 ? ' <span class="n">ahora</span>' : '' ?></button>
             </div>
-
-            <section class="fv-panel solo-despues">
-                <div class="fv-ph"><h3>Al sacarla</h3></div>
-                <div class="bt-dos">
-                    <label class="bt-campo"><span class="bt-lbl">Impresa el</span>
-                        <span class="bt-ed-g"><input type="datetime-local" name="impresa_en" form="<?= $idForm ?>" class="bt-ed" value="<?= esc($paraInput($placa['impresa_en']), 'attr') ?>">
-                            <button type="button" class="fv-btn fv-btn-sm" data-ahora>Ahora</button></span></label>
-                    <label class="bt-campo"><span class="bt-lbl">Tiempo real <span class="t3" data-calculado></span></span>
-                        <input type="text" name="minutos_reales" form="<?= $idForm ?>" class="bt-ed" data-tiempo placeholder="1h 44" value="<?= esc($duracion($placa['minutos_reales']), 'attr') ?>"></label>
-                </div>
-            </section>
 
             <section class="fv-panel" id="piezas">
                 <div class="fv-ph">
