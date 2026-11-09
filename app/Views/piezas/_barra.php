@@ -57,6 +57,12 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
                     </a>
                 </li>
             <?php endif; ?>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Estilo del menú</h6></li>
+            <?php foreach (['clasica' => 'Clásica', 'a' => 'A · Barra pulida', 'b' => 'B · Áreas', 'c' => 'C · Riel lateral', 'd' => 'D · Mínima con buscador'] as $claveMenu => $nombreMenu): ?>
+                <li><button type="button" class="dropdown-item" data-pz-menu="<?= $claveMenu ?>"><i class="bi <?= $claveMenu === 'clasica' ? 'bi-check2' : 'bi-dot' ?>"></i> <?= $nombreMenu ?></button></li>
+            <?php endforeach; ?>
+            <li><button type="button" class="dropdown-item" data-pz-buscar><i class="bi bi-search"></i> Buscar <span class="text-muted small">Ctrl K</span></button></li>
         </ul>
     </div>
 

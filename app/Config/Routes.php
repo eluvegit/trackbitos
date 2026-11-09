@@ -734,6 +734,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // aparcadas fuera del índice sin caducidad (no es un aviso de borrado,
     // no la purga nadie). Misma razón de orden que 'papelera'.
     $routes->GET('nevera', 'Web::nevera');
+    $routes->GET('buscar', 'MenuController::buscar');
     $routes->POST('familia/(:num)/nombre', 'Web::renombrarFamilia/$1');
     $routes->POST('familia/(:num)/notas', 'Web::editarNotasFamilia/$1');
     $routes->POST('familia/(:num)/borrar', 'Web::borrarFamilia/$1');

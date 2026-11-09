@@ -1,8 +1,5 @@
 <?php $enIndex ??= uri_string() === 'piezas'; ?>
-<div class="d-flex align-items-center gap-2 flex-wrap mb-3">
-    <a href="<?= site_url('piezas') ?>" class="btn btn-sm btn-outline-secondary" title="Piezas"><i class="bi bi-box"></i></a>
-    <?= $this->include('piezas/_barra') ?>
-</div>
+<?= $this->include('piezas/_menu') ?>
 <?php if (!$enIndex): ?>
 <script src="<?= base_url('assets/js/piezas-modales.js') ?>?v=1"></script>
 <script>
