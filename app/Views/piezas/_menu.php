@@ -10,24 +10,20 @@ $carritoCount ??= count(array_unique((array) session('piezas_carrito')));
 $url = static fn (string $r): string => $r === '@tpv' ? site_url('inventario') : site_url('piezas' . ($r === '' ? '' : '/' . $r));
 
 $areas = [
-    'diseno' => ['n' => 'Diseño', 'c' => '#f59f00', 'i' => 'bi-pencil', 'extra' => ['variante', 'familia'], 'items' => [
-        ['n' => 'Pendientes de crear', 'r' => 'pendientes', 'i' => 'bi-list-check', 'ojo' => '#modalPendientes'],
-        ['n' => 'Revisar', 'r' => 'revisar', 'i' => 'bi-clipboard-check'],
+    'pedidos' => ['n' => 'Pedidos', 'c' => '#a370f7', 'i' => 'bi-cart-check', 'extra' => [], 'items' => [
+        ['n' => 'Pedidos', 'r' => 'pedidos', 'i' => 'bi-cart-check'],
     ]],
-    'impresion' => ['n' => 'Impresión', 'c' => '#3d8bfd', 'i' => 'bi-printer', 'extra' => ['placa'], 'items' => [
+    'impresion' => ['n' => 'Impresión', 'c' => '#3d8bfd', 'i' => 'bi-printer', 'extra' => ['placa', 'tiradas'], 'items' => [
         ['n' => 'Galería', 'r' => 'galeria', 'i' => 'bi-grid-3x3-gap', 'carrito' => true],
         ['n' => 'Placas', 'r' => 'placas', 'i' => 'bi-printer'],
+        ['n' => 'Revisar', 'r' => 'revisar', 'i' => 'bi-clipboard-check'],
         ['n' => 'Cuaderno', 'r' => 'cuaderno', 'i' => 'bi-journal-bookmark'],
-        ['n' => 'Tiradas', 'r' => 'tiradas', 'i' => 'bi-calendar-range'],
     ]],
     'inventario' => ['n' => 'Inventario', 'c' => '#20c997', 'i' => 'bi-boxes', 'extra' => [], 'items' => [
         ['n' => 'Existencias', 'r' => 'existencias', 'i' => 'bi-boxes'],
         ['n' => 'Ubicaciones', 'r' => 'ubicaciones', 'i' => 'bi-geo-alt'],
         ['n' => 'Cajas', 'r' => 'ubicaciones/cajas', 'i' => 'bi-box-seam'],
         ['n' => 'Albaranes', 'r' => 'salidas', 'i' => 'bi-receipt'],
-    ]],
-    'pedidos' => ['n' => 'Pedidos', 'c' => '#a370f7', 'i' => 'bi-cart-check', 'extra' => [], 'items' => [
-        ['n' => 'Pedidos', 'r' => 'pedidos', 'i' => 'bi-cart-check', 'ojo' => '#modalUltimoPedido'],
     ]],
     'tpv' => ['n' => 'TPV', 'c' => '#ef5b5b', 'i' => 'bi-shop', 'extra' => [], 'items' => [
         ['n' => 'TPV', 'r' => '@tpv', 'i' => 'bi-shop', 'fuera' => true],
@@ -59,8 +55,7 @@ if ($activoArea === null) {
 $puedeOrganizar = !$enIndex || !empty($familias);
 $mas = [
     'Herramientas' => array_values(array_filter([
-        ['n' => 'Ver pendientes de crear', 'm' => '#modalPendientes', 'i' => 'bi-eye'],
-        ['n' => 'Ver el último pedido', 'm' => '#modalUltimoPedido', 'i' => 'bi-eye'],
+        ['n' => 'Pendientes de crear', 'r' => 'pendientes', 'i' => 'bi-list-check'],
         ['n' => 'Calcular tiempo de placa', 'm' => '#modalCalcTiempo', 'i' => 'bi-stopwatch'],
         $puedeOrganizar ? ['n' => 'Organizar el índice', 'org' => true, 'i' => 'bi-arrows-move'] : null,
         ['n' => 'Categorías', 'm' => '#modalCategorias', 'i' => 'bi-folder'],
@@ -73,6 +68,7 @@ $mas = [
     ],
     'Archivo' => [
         ['n' => 'Estadísticas', 'r' => 'estadisticas', 'i' => 'bi-bar-chart-line'],
+        ['n' => 'Tiradas', 'r' => 'tiradas', 'i' => 'bi-calendar-range'],
         ['n' => 'Copia de seguridad', 'r' => 'estadisticas/backup', 'i' => 'bi-download', 'titulo' => 'El .blend de referencia de cada pieza más su historial en texto. Sin STL ni fotos.'],
         ['n' => 'Nevera', 'r' => 'nevera', 'i' => 'bi-snow'],
         ['n' => 'Papelera', 'r' => 'papelera', 'i' => 'bi-trash'],
@@ -128,7 +124,6 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
             . '<i class="bi ' . $a['i'] . '"></i>' . esc($a['n']) . '</a>';
     }
     $h .= '</div><div class="pzm-der">' . $botonBuscar('compacto')
-        . '<a href="' . site_url('piezas/ayuda') . '" class="pzm-ibtn" title="Ayuda" aria-label="Ayuda"><i class="bi bi-question-circle"></i></a>'
         . $botonMas($conId) . $botonNueva . '</div></div>';
     if ($activoArea !== null && count($areas[$activoArea]['items']) > 1) {
         $h .= '<div class="pzm-b-sub">';
@@ -142,7 +137,7 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-menu.css') ?>?v=3">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-menu.css') ?>?v=6">
 
 <?php if ($modo === 'clasica'): ?>
     <div class="d-flex align-items-center gap-2 flex-wrap mb-3 pzm-escritorio">
@@ -159,17 +154,10 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
                     <div class="pzm-a-btns">
                         <?php foreach ($a['items'] as $it): ?>
                             <a <?= $enlace($it) ?> class="pzm-a-btn<?= $esActivo($it) ? ' on' : '' ?>" title="<?= esc($it['n'], 'attr') ?>" aria-label="<?= esc($it['n'], 'attr') ?>"><i class="bi <?= $it['i'] ?>"></i><?= $badge($it) ?></a>
-                            <?php if (!empty($it['ojo'])): ?>
-                                <button type="button" class="pzm-a-ojo" data-bs-toggle="modal" data-bs-target="<?= $it['ojo'] ?>" title="Vistazo rápido" aria-label="Vistazo rápido a <?= esc($it['n'], 'attr') ?>"><i class="bi bi-chevron-down"></i></button>
-                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
-            <div class="pzm-a-grupo" style="--pzm-c: #0dcaf0">
-                <span class="pzm-a-et"><i></i>Ayuda</span>
-                <div class="pzm-a-btns"><a href="<?= site_url('piezas/ayuda') ?>" class="pzm-a-btn<?= $sub === 'ayuda' ? ' on' : '' ?>" title="Ayuda" aria-label="Ayuda"><i class="bi bi-question-circle"></i></a></div>
-            </div>
         </div>
         <button type="button" class="pzm-ibtn" data-pz-buscar title="Buscar (Ctrl K)" aria-label="Buscar"><i class="bi bi-search"></i></button>
         <?= $botonMas(true, 'pzm-ibtn pzm-ibtn-borde') ?>
@@ -197,7 +185,6 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
         <div class="pzm-c-pie">
             <button type="button" class="pzm-ibtn" data-bs-toggle="modal" data-bs-target="#modalCalcTiempo" title="Calcular tiempo de placa" aria-label="Calcular tiempo de placa"><i class="bi bi-stopwatch"></i></button>
             <?= $botonMas(true, 'pzm-ibtn', 'dropdown-menu-start', ' dropup') ?>
-            <a href="<?= site_url('piezas/ayuda') ?>" class="pzm-ibtn" title="Ayuda" aria-label="Ayuda"><i class="bi bi-question-circle"></i></a>
             <button type="button" class="pzm-ibtn" data-pz-plegar title="Plegar o desplegar el menú" aria-label="Plegar o desplegar el menú"><i class="bi bi-layout-sidebar"></i></button>
         </div>
     </aside>
@@ -206,7 +193,7 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
         <?= $casa ?>
         <?= $botonBuscar('ancho') ?>
         <div class="pzm-der">
-            <?php foreach ([['diseno', 0], ['impresion', 0], ['impresion', 1], ['inventario', 0], ['pedidos', 0]] as [$ak, $n]): ?>
+            <?php foreach ([['pedidos', 0], ['impresion', 0], ['impresion', 1], ['inventario', 0]] as [$ak, $n]): ?>
                 <?php $it = $areas[$ak]['items'][$n]; ?>
                 <a <?= $enlace($it) ?> class="pzm-a-btn<?= $esActivo($it) ? ' on' : '' ?>" style="--pzm-c: <?= $areas[$ak]['c'] ?>" title="<?= esc($it['n'], 'attr') ?>" aria-label="<?= esc($it['n'], 'attr') ?>"><i class="bi <?= $it['i'] ?>"></i><?= $badge($it) ?></a>
             <?php endforeach; ?>

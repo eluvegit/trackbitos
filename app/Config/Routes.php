@@ -130,7 +130,7 @@ $routes->group('compras', ['filter' => 'admin'], function ($routes) {
     $routes->POST('supermercados/guardar', 'Compras::crearSupermercado');
     $routes->GET('supermercados/editar/(:num)', 'Compras::editarSupermercado/$1');
     $routes->POST('supermercados/actualizar/(:num)', 'Compras::guardarSupermercado/$1');
-    $routes->POST('supermercados/(:num)/borrar', 'Compras::eliminarSupermercado');
+    $routes->POST('supermercados/(:num)/borrar', 'Compras::eliminarSupermercado/$1');
 
     // Gestión: reordenar y ocultar del menú
     $routes->GET('supermercados/gestionar', 'Compras::gestionarSupermercados');
@@ -154,7 +154,11 @@ $routes->group('compras', ['filter' => 'admin'], function ($routes) {
 
     $routes->GET('(:num)/faltantes', 'Compras::faltantes/$1');
     $routes->GET('(:num)/comprados', 'Compras::comprados/$1');
-    $routes->POST('limpiar/faltantes/(:num)', 'Compras::limpiarFaltantes/$1');
+    $routes->GET('(:num)', 'Compras::lista/$1');
+    $routes->POST('(:num)/terminar', 'Compras::terminarCompra/$1');
+    $routes->POST('sueltos/nuevo', 'Compras::crearSuelto');
+    $routes->POST('sueltos/(:num)/comprado', 'Compras::toggleSuelto/$1');
+    $routes->POST('sueltos/(:num)/borrar', 'Compras::eliminarSuelto/$1');
 
 
 
@@ -163,7 +167,7 @@ $routes->group('compras', ['filter' => 'admin'], function ($routes) {
     $routes->GET('productos/editar/(:num)', 'Compras::editarProducto/$1');
     $routes->POST('productos/(:num)/actualizar', 'Compras::actualizarProducto/$1');
 
-    $routes->POST('precios/(:num)/borrar', 'Compras::eliminarPrecio');
+    $routes->POST('precios/(:num)/borrar', 'Compras::eliminarPrecio/$1');
 
     // Estado de productos
     $routes->POST('producto/(:num)/marcar-faltante', 'Compras::marcarFaltante/$1');

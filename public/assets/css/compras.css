@@ -1,0 +1,83 @@
+.fv.cp { max-width: 760px; width: 100%; margin-inline: auto; gap: 18px; }
+.fv.cp .cp-mono { font-family: var(--fv-mono); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.cp [hidden] { display: none !important; }
+
+.cp-barra { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; padding: 8px 0; background: var(--fv-bg); }
+.cp-campo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; margin: 0; background: var(--fv-inset); border: 1px solid var(--fv-border-2); border-radius: var(--fv-r-md); color: var(--fv-text-3); }
+.cp-campo:focus-within { border-color: var(--fv-accent); box-shadow: 0 0 0 3px var(--fv-accent-weak); }
+.cp-campo input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--fv-text); font: inherit; font-size: 16px; }
+.cp-campo input:focus-visible { outline: 0; }
+.cp-campo input::placeholder { color: var(--fv-text-3); font-size: 14px; }
+.cp-chip { flex: none; height: 44px; padding: 0 12px !important; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--fv-border-2) !important; border-radius: var(--fv-r-md); color: var(--fv-text-2); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.cp-chip.on { color: var(--fv-text); background: var(--fv-raised); }
+.cp-chip.on .bi { color: var(--fv-warn); }
+
+.cp-cuerpo { display: grid; gap: 4px; align-content: start; min-height: 45vh; }
+.cp-zona { display: flex; gap: 8px; align-items: baseline; padding: 16px 8px 6px; font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--fv-text-3); }
+.cp-zona:first-child { padding-top: 4px; }
+.cp-zona .n { font-family: var(--fv-mono); letter-spacing: 0; }
+.cp-g { display: grid; gap: 2px; }
+.cp-it { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 6px 8px !important; border-radius: var(--fv-r-md); border: 1px solid transparent !important; text-align: left; transition: background .12s; -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) { .cp-it:hover { background: var(--fv-hover); } }
+.cp-th { flex: none; width: 42px; height: 42px; border-radius: var(--fv-r-sm); background: var(--fv-inset); border: 1px solid var(--fv-border); display: grid; place-items: center; overflow: hidden; font-family: var(--fv-mono); font-size: 14px; color: var(--fv-text-3); }
+.cp-th img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.cp-th.suelto { border-style: dashed; border-color: var(--fv-border-2); background: none; }
+.cp-nm { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; color: var(--fv-text); }
+.cp-nm small { display: block; font-size: 11px; font-weight: 400; color: var(--fv-text-3); }
+.cp-pr { flex: none; font-family: var(--fv-mono); font-size: 12px; color: var(--fv-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cp-pr.no { color: var(--fv-text-3); }
+.cp-ck { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--fv-border-2); display: grid; place-items: center; color: transparent; font-size: 15px; }
+.cp-it.on { background: color-mix(in srgb, var(--fv-warn) 16%, transparent); border-color: color-mix(in srgb, var(--fv-warn) 60%, transparent) !important; }
+.cp-it.on .cp-ck { border-color: var(--fv-warn); background: var(--fv-warn); color: #1f1500; }
+.cp-it.hecho .cp-nm { text-decoration: line-through; color: var(--fv-text-3); font-weight: 400; }
+.cp-it.hecho .cp-th, .cp-it.hecho .cp-pr { opacity: .5; }
+.cp-it.hecho .cp-ck { border-color: var(--fv-ok); background: color-mix(in srgb, var(--fv-ok) 18%, transparent); color: var(--fv-ok); }
+
+.cp-g.rej { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.cp-g.rej .cp-it { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px !important; min-height: 0; background: var(--fv-panel); border-color: var(--fv-border) !important; }
+.cp-g.rej .cp-it.on { background: color-mix(in srgb, var(--fv-warn) 18%, var(--fv-panel)); border-color: color-mix(in srgb, var(--fv-warn) 70%, transparent) !important; }
+.cp-g.rej .cp-it.on .cp-ck { background-color: var(--fv-warn); }
+.cp-g.rej .cp-th { width: 100%; height: auto; aspect-ratio: 1; font-size: 26px; }
+.cp-g.rej .cp-nm { font-size: 13px; flex: none; }
+.cp-g.rej .cp-ck { position: absolute; top: 12px; right: 12px; background-color: var(--fv-panel); }
+
+.cp-cat .cp-g { min-height: 44px; border-radius: var(--fv-r-md); }
+.cp-cat .cp-g:empty { border: 1px dashed var(--fv-border-2); }
+.cp-cat .cp-g:empty::before { content: "Arrastra aquí productos de esta zona"; padding: 11px 12px; font-size: 13px; color: var(--fv-text-3); }
+.cp-grip { flex: none; width: 28px; height: 42px; display: grid; place-items: center; color: var(--fv-text-3); cursor: grab; touch-action: none; }
+.cp-cat .cp-nm:hover { text-decoration: underline; }
+.cp-cat button.cp-pr { height: 36px; padding: 0 8px !important; border-radius: var(--fv-r-sm); }
+.cp-cat button.cp-pr:hover { background: var(--fv-hover); color: var(--fv-text); }
+.cp-star { flex: none; width: 40px; height: 40px; display: grid; place-items: center; color: var(--fv-text-3); border-radius: var(--fv-r-sm); font-size: 16px; }
+.cp-star.on { color: var(--fv-warn); }
+.cp-it.sortable-ghost { opacity: .35; }
+.cp-it.sortable-chosen { background: var(--fv-hover); }
+
+.cp-alta { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 2fr) auto; gap: 8px; margin: 0; }
+.cp-alta .fv-input, .cp-alta .fv-btn { height: 44px; font-size: 14px; }
+.cp-alta select.fv-input { padding-right: 8px; }
+@media (max-width: 620px) { .cp-alta { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+.cp-vacio { padding: 20px 8px; color: var(--fv-text-3); font-size: 13px; }
+.cp-bloque { display: grid; gap: 8px; margin: 12px 0 0; }
+.cp-bloque .fv-btn { height: 48px; font-size: 14px; width: 100%; }
+.cp-suelto-btn { justify-content: flex-start !important; border-style: dashed !important; background: none !important; color: var(--fv-text-2) !important; white-space: normal !important; text-align: left; }
+.cp-suelto-btn b { color: var(--fv-text); font-weight: 600; }
+.cp-plegar { display: flex; align-items: center; gap: 8px; padding: 18px 8px 6px !important; font-size: 12px; color: var(--fv-text-3); font-weight: 500; width: 100%; }
+
+.cp-pie { position: sticky; bottom: 8px; z-index: 6; display: grid; gap: 8px; padding: 10px 12px 12px; background: var(--fv-panel); border: 1px solid var(--fv-border-2); border-radius: var(--fv-r-lg); box-shadow: inset 0 1px 0 rgb(255 255 255 / .04), 0 10px 30px rgb(0 0 0 / .45); margin-bottom: env(safe-area-inset-bottom, 0px); }
+.cp-total { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--fv-text-2); padding: 0 4px; }
+.cp-nivel { height: 4px; border-radius: 2px; background: var(--fv-inset); overflow: hidden; }
+.cp-nivel i { display: block; height: 100%; width: 0; background: var(--fv-ok); border-radius: 2px; transition: width .2s; }
+.cp-modo { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--fv-inset); border-radius: 12px; }
+.cp-modo button { height: 46px; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--fv-text-3); font-weight: 500; font-size: 14px; }
+.cp-modo button.on { background: var(--fv-raised); color: var(--fv-text); box-shadow: inset 0 1px 0 rgb(255 255 255 / .06); }
+.cp-modo .n { font-family: var(--fv-mono); font-size: 12px; color: var(--fv-text-3); }
+
+.cp-supers { display: grid; gap: 2px; }
+.cp-super { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 12px; border-radius: var(--fv-r-md); transition: background .12s; }
+.cp-super:hover { background: var(--fv-hover); }
+.cp-super .nom { flex: 1; min-width: 0; font-size: 17px; font-weight: 500; letter-spacing: -.01em; color: var(--fv-text); }
+.cp-super .nom small { display: block; font-size: 12px; font-weight: 400; color: var(--fv-text-3); letter-spacing: 0; }
+.cp-super > .bi { color: var(--fv-text-3); font-size: 12px; }
+.cp-super .cp-pr { font-size: 13px; }

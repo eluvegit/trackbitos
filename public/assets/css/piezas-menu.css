@@ -47,10 +47,9 @@
 .pzm-a-et i { width: 6px; height: 6px; border-radius: 50%; background: var(--pzm-c); }
 .pzm-a-btns { display: flex; gap: 1px; }
 .pzm-a-btn { height: 32px; min-width: 32px; padding: 0 7px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--pzm-c) !important; font-size: 15px; transition: background .12s; }
+button.pzm-a-btn { border: 0; background: none; }
 .pzm-a-btn:hover { background: color-mix(in srgb, var(--pzm-c) 14%, transparent); }
 .pzm-a-btn.on { background: color-mix(in srgb, var(--pzm-c) 18%, transparent); box-shadow: inset 0 -2px 0 var(--pzm-c); }
-.pzm-a-ojo { width: 16px; height: 32px; margin-left: -3px; border: 0; background: none; border-radius: 6px; color: var(--pzm-t3); font-size: 9px; display: inline-grid; place-items: center; cursor: pointer; }
-.pzm-a-ojo:hover { color: var(--pzm-t1); background: var(--pzm-hover); }
 .pzm-a > .pzm-ibtn, .pzm-a > .dropdown, .pzm-a > .pzm-nueva { align-self: center; }
 
 .pzm-b { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -81,6 +80,7 @@
 .pzm-c-item { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: 8px; color: var(--pzm-t2) !important; white-space: nowrap; transition: background .12s; }
 .pzm-c-item .bi { color: var(--pzm-c); font-size: 15px; width: 18px; text-align: center; flex: none; }
 .pzm-c-item .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+button.pzm-c-item { border: 0; background: none; width: 100%; text-align: left; }
 .pzm-c-item:hover { background: var(--pzm-hover); color: var(--pzm-t1) !important; }
 .pzm-c-item.on { background: var(--pzm-raised); color: var(--pzm-t1) !important; font-weight: 500; box-shadow: inset 2px 0 0 var(--pzm-acc); }
 .pzm-c-pie { border-top: 1px solid var(--pzm-borde); padding-top: 8px; display: flex; justify-content: space-between; }

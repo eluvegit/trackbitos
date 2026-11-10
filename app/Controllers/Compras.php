@@ -8,6 +8,7 @@ use App\Models\CompraPrecioModel;
 use App\Models\CompraFaltanteModel;
 use App\Models\CompraCompradoModel;
 use App\Models\CompraZonaModel;
+use App\Models\CompraSueltoModel;
 use CodeIgniter\HTTP\RedirectResponse;
 
 class Compras extends BaseController
@@ -64,24 +65,171 @@ class Compras extends BaseController
     }
     public function index()
     {
-        $superModel = new CompraSupermercadoModel();
-        $data['supermercados'] = $superModel
-            ->where('visible', 1)
-            ->orderBy('orden', 'ASC')
-            ->orderBy('id', 'ASC')
-            ->findAll();
-        return view('compras/index', $data);
+        return $this->portada();
     }
 
     public function supermercados()
     {
-        $superModel = new CompraSupermercadoModel();
-        $data['supermercados'] = $superModel
+        return $this->portada();
+    }
+
+    private function esNueva(): bool
+    {
+        return session('compras_nueva') !== false;
+    }
+
+    private function urlSuper($supermercadoId, string $ancla = ''): string
+    {
+        return $this->esNueva()
+            ? site_url('compras/' . $supermercadoId) . $ancla
+            : site_url('compras/productos/' . $supermercadoId);
+    }
+
+    private function portada()
+    {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('compras_nueva', $nueva === '1');
+        }
+
+        $supermercados = (new CompraSupermercadoModel())
             ->where('visible', 1)
             ->orderBy('orden', 'ASC')
             ->orderBy('id', 'ASC')
             ->findAll();
-        return view('compras/index', $data);
+
+        if (!$this->esNueva()) {
+            return view('compras/index', ['supermercados' => $supermercados]);
+        }
+
+        $db = db_connect();
+        $faltan = array_column($db->query(
+            'SELECT p.supermercado_id AS sid, COUNT(*) AS n, COALESCE(SUM(p.precio), 0) AS total
+               FROM compra_faltantes f JOIN compra_productos p ON p.id = f.producto_id
+              GROUP BY p.supermercado_id'
+        )->getResultArray(), null, 'sid');
+        $sueltos = array_column($db->query(
+            'SELECT supermercado_id AS sid, COUNT(*) AS n FROM compra_sueltos GROUP BY supermercado_id'
+        )->getResultArray(), 'n', 'sid');
+        $catalogo = array_column($db->query(
+            'SELECT supermercado_id AS sid, COUNT(*) AS n FROM compra_productos GROUP BY supermercado_id'
+        )->getResultArray(), 'n', 'sid');
+
+        foreach ($supermercados as &$s) {
+            $s['faltan']   = (int) ($faltan[$s['id']]['n'] ?? 0) + (int) ($sueltos[$s['id']] ?? 0);
+            $s['total']    = (float) ($faltan[$s['id']]['total'] ?? 0);
+            $s['catalogo'] = (int) ($catalogo[$s['id']] ?? 0);
+        }
+        unset($s);
+
+        usort($supermercados, fn ($a, $b) => ($b['faltan'] > 0) <=> ($a['faltan'] > 0));
+
+        return view('compras/index_nueva', ['supermercados' => $supermercados]);
+    }
+
+    public function lista($supermercadoId)
+    {
+        $supermercado = (new CompraSupermercadoModel())->find($supermercadoId);
+        if (!$supermercado) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Supermercado no encontrado');
+        }
+        session()->set('compras_nueva', true);
+
+        $zonas = (new CompraZonaModel())
+            ->where('supermercado_id', $supermercadoId)
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
+
+        $productos = (new CompraProductoModel())
+            ->where('supermercado_id', $supermercadoId)
+            ->orderBy('orden', 'ASC')
+            ->orderBy('nombre', 'ASC')
+            ->findAll();
+
+        $ids = array_column($productos, 'id');
+        $faltan = $comprados = [];
+        if ($ids) {
+            $faltan = array_flip(array_column((new CompraFaltanteModel())->whereIn('producto_id', $ids)->findAll(), 'producto_id'));
+            $comprados = array_flip(array_column((new CompraCompradoModel())->whereIn('producto_id', $ids)->findAll(), 'producto_id'));
+        }
+
+        $zonaIds = array_flip(array_column($zonas, 'id'));
+
+        return view('compras/lista_nueva', [
+            'supermercado' => $supermercado,
+            'zonas' => array_map(fn ($z) => ['id' => (int) $z['id'], 'n' => $z['nombre']], $zonas),
+            'productos' => array_map(fn ($p) => [
+                'id'    => (int) $p['id'],
+                'n'     => $p['nombre'],
+                'z'     => $p['zona_id'] !== null && isset($zonaIds[$p['zona_id']]) ? (int) $p['zona_id'] : null,
+                'fav'   => (bool) $p['favorito'],
+                'pr'    => $p['precio'] !== null ? (float) $p['precio'] : null,
+                'img'   => (string) $p['imagen'],
+                'falta' => isset($faltan[$p['id']]),
+                'hecho' => isset($comprados[$p['id']]),
+            ], $productos),
+            'sueltos' => array_map(fn ($x) => [
+                'id' => (int) $x['id'],
+                'n'  => $x['nombre'],
+                'h'  => (bool) $x['comprado'],
+            ], (new CompraSueltoModel())->where('supermercado_id', $supermercadoId)->orderBy('id', 'ASC')->findAll()),
+        ]);
+    }
+
+    public function crearSuelto()
+    {
+        $data = $this->request->getJSON(true) ?? [];
+        $nombre = trim((string) ($data['nombre'] ?? ''));
+        $supermercadoId = (int) ($data['supermercado_id'] ?? 0);
+
+        if ($nombre === '' || !(new CompraSupermercadoModel())->find($supermercadoId)) {
+            return $this->response->setStatusCode(400)->setJSON(['ok' => false]);
+        }
+
+        $id = (new CompraSueltoModel())->insert([
+            'supermercado_id' => $supermercadoId,
+            'nombre'          => mb_substr($nombre, 0, 255),
+            'created_at'      => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON(['ok' => true, 'id' => (int) $id]);
+    }
+
+    public function toggleSuelto($id)
+    {
+        $model = new CompraSueltoModel();
+        $suelto = $model->find($id);
+        if (!$suelto) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        $comprado = $suelto['comprado'] ? 0 : 1;
+        $model->update($id, ['comprado' => $comprado]);
+
+        return $this->response->setJSON(['ok' => true, 'comprado' => (bool) $comprado]);
+    }
+
+    public function eliminarSuelto($id)
+    {
+        (new CompraSueltoModel())->delete($id);
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    public function terminarCompra($supermercadoId)
+    {
+        $ids = array_column((new CompraProductoModel())->where('supermercado_id', $supermercadoId)->findAll(), 'id');
+        if ($ids) {
+            $compradoModel = new CompraCompradoModel();
+            $hechos = array_column($compradoModel->whereIn('producto_id', $ids)->findAll(), 'producto_id');
+            if ($hechos) {
+                (new CompraFaltanteModel())->whereIn('producto_id', $hechos)->delete();
+                $compradoModel->whereIn('producto_id', $hechos)->delete();
+            }
+        }
+        (new CompraSueltoModel())->where('supermercado_id', $supermercadoId)->where('comprado', 1)->delete();
+
+        return redirect()->to(site_url('compras/' . $supermercadoId))->with('message', 'Compra terminada.');
     }
 
     public function gestionarSupermercados()
@@ -235,7 +383,7 @@ class Compras extends BaseController
 
         $productoModel->insert($data);
 
-        return redirect()->to(site_url('compras/productos/' . $data['supermercado_id']));
+        return redirect()->to($this->urlSuper($data['supermercado_id'], '#catalogo'));
     }
 
     // Guarda, tras arrastrar, el orden (y la zona) de los productos de una zona/dropzone.
@@ -301,11 +449,12 @@ class Compras extends BaseController
         $productoModel = new CompraProductoModel();
         $producto = $productoModel->find($id);
 
-        if ($producto) {
-            $productoModel->delete($id);
+        if (!$producto) {
+            return redirect()->to(site_url('compras'));
         }
+        $productoModel->delete($id);
 
-        return redirect()->to(site_url('compras/productos/' . $producto['supermercado_id']));
+        return redirect()->to($this->urlSuper($producto['supermercado_id'], '#catalogo'));
     }
 
     public function editarProducto($id)
@@ -353,7 +502,7 @@ class Compras extends BaseController
 
         $productoModel->update($id, $data);
 
-        return redirect()->to(site_url('compras/productos/' . $producto['supermercado_id']))->with('message', 'Producto actualizado.');
+        return redirect()->to($this->urlSuper($producto['supermercado_id'], '#catalogo'))->with('message', 'Producto actualizado.');
     }
 
 
@@ -571,6 +720,7 @@ class Compras extends BaseController
             // Borrar también todos los registros comprados de los mismos productos
             $compradoModel->whereIn('producto_id', $productoIds)->delete();
         }
+        (new CompraSueltoModel())->where('supermercado_id', $supermercadoId)->delete();
 
         return redirect()->back()->with('message', 'Faltantes y comprados reiniciados.');
     }
