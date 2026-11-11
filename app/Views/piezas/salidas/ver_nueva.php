@@ -299,7 +299,8 @@
                         if (p.hay.hueco) donde.push((p.hueco || 'sin ubic.') + ': ' + p.hay.hueco);
                         if (p.hay.impresas) donde.push('impresas: ' + p.hay.impresas);
                         if (p.hay.pedido) donde.push('pedido: ' + p.hay.pedido);
-                        b.lastChild.textContent = donde.join(' · ') || 'sin unidades';
+                        var totalPieza = p.hay.hueco + p.hay.impresas + p.hay.pedido;
+                        b.lastChild.textContent = donde.length ? totalPieza + ' en total — ' + donde.join(' · ') : 'sin unidades';
                         b.addEventListener('click', function () { elegir(p, origen); });
                         lista.appendChild(b);
                     });

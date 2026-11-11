@@ -3,6 +3,7 @@
 <?= $this->include('piezas/_nav') ?>
 
 <?= $this->include('piezas/_fv_head') ?>
+<?php helper('piezas_stock'); ?>
 <style>
     /* Huecos como casillas cuadradas dentro de su estuche, en vez de la
        lista de badges anterior — se ve de un vistazo cuántos hay y cuáles
@@ -62,6 +63,8 @@
         .hueco-tile.huerfanas .miniatura { width: 3.2rem; height: 3.2rem; border-radius: .4rem; }
         .hueco-tile.huerfanas .cantidad { font-size: 1rem; }
     }
+    .hueco-tile .st-des { display: flex; font-size: .68rem; }
+    .caja-card .btn-baja-caja { padding-inline: .45rem; }
     .hueco-tile .vacio { font-size: .7rem; color: var(--fv-text-3); font-style: italic; }
 
     .hueco-del-form { position: absolute; top: -.5rem; left: -.5rem; margin: 0; }
@@ -204,7 +207,7 @@ $titulosCaja = [
                         <span class="estuche-titulo"><?= $titulo ?></span>
                         
                         <span class="text-muted small">
-                            <?= $piezas === [] ? 'vacía' : count($piezas) . ' piezas · ' . array_sum(array_column($piezas, 'cantidad')) . ' ud.' ?>
+                            <?= $piezas === [] ? 'vacía' : count($piezas) . ' piezas · ' . array_sum(array_column($piezas, 'cantidad')) . ' ud. en esta caja' ?>
                         </span>
                         <?php if ($piezas !== []): ?><i class="bi bi-chevron-down chevron"></i><?php endif; ?>
                     </button>
@@ -231,9 +234,10 @@ $titulosCaja = [
                                                 <?php else: ?>
                                                     <span class="destino sin"><i class="bi bi-exclamation-triangle"></i> sin hueco</span>
                                                 <?php endif; ?>
+                                                <?= stock_desglose($c['desglose'], $caja, $c['hueco'] !== null ? 'en hueco' : 'sin ubicación') ?>
                                             </span>
                                         </a>
-                                        <span class="cantidad<?= (int) $c['cantidad'] <= 0 ? ' cero' : '' ?>"><?= (int) $c['cantidad'] ?></span>
+                                        <span class="cantidad<?= (int) $c['cantidad'] <= 0 ? ' cero' : '' ?>" title="Total de la pieza; en esta caja hay <?= (int) $c['cantidad'] ?>"><?= (int) $c['desglose']['total'] ?></span>
                                         <?php if ((int) $c['cantidad'] > 0): ?>
                                             <span class="acciones-caja">
                                                 <?php if ($c['hueco'] !== null): ?>
@@ -271,6 +275,10 @@ $titulosCaja = [
                                                     data-caja="<?= $caja ?>" data-variante="<?= (int) $c['id'] ?>" data-nombre="<?= esc($c['nombre'], 'attr') ?>"
                                                     data-cantidad="<?= (int) $c['cantidad'] ?>" title="Alguien se lleva algunas o todas">
                                                     <i class="bi bi-box-arrow-right"></i> Se las lleva
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary btn-baja-caja" title="Dar de baja de esta caja (rotura, descuadre…), sin albarán"
+                                                    <?= stock_mov_attrs((int) $c['id'], $c['nombre'], $c['desglose'], 'baja', $caja, $c['hueco'] !== null) ?>>
+                                                    <i class="bi bi-dash-lg"></i>
                                                 </button>
                                             </span>
                                         <?php endif; ?>
@@ -314,7 +322,7 @@ $titulosCaja = [
                                     <div class="cabecera">
                                         <span class="codigo"><?= esc($h['codigo']) ?></span>
                                         <?php if ($h['contenido'] !== []): ?>
-                                            <span class="total"><?= (int) $h['unidades'] ?> ud.</span>
+                                            <span class="total" title="Total de las piezas de este hueco<?= (int) $h['total'] !== (int) $h['unidades'] ? '; el resto está en las cajas' : '' ?>"><?= (int) $h['total'] ?> ud.<?= (int) $h['total'] !== (int) $h['unidades'] ? ' · ' . (int) $h['unidades'] . ' aquí' : '' ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <?php if ($h['contenido'] === []): ?>
@@ -327,9 +335,9 @@ $titulosCaja = [
                                                         <?php if ($c['img']): ?>
                                                             <img src="<?= esc($c['img'], 'attr') ?>" alt="" class="miniatura" loading="lazy">
                                                         <?php endif; ?>
-                                                        <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                                        <span class="nombre"><?= esc($c['nombre']) ?><?= stock_desglose($c['desglose'], 'hueco', 'aquí', true) ?></span>
                                                     </span>
-                                                    <span class="cantidad<?= (int) $c['stock'] <= 0 ? ' cero' : '' ?>"><?= (int) $c['stock'] ?></span>
+                                                    <span class="cantidad<?= (int) $c['desglose']['total'] <= 0 ? ' cero' : '' ?>" title="Total de la pieza"><?= (int) $c['desglose']['total'] ?></span>
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
@@ -353,6 +361,8 @@ $titulosCaja = [
                     </div>
 
                     <div class="text-start mt-2">
+                        <a href="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id']) ?>" class="btn btn-sm btn-link link-secondary small text-decoration-none p-0"><i class="bi bi-box-arrow-up-right"></i> Abrir estuche</a>
+                        <span class="text-muted small"> · </span>
                         <button type="button" class="btn btn-sm btn-link link-secondary small text-decoration-none p-0"
                             data-bs-toggle="modal" data-bs-target="#modalEditarEstuche<?= (int) $estuche['id'] ?>">Editar</button>
                         <span class="text-muted small"> · </span>
@@ -418,7 +428,7 @@ $gruposHuerfanas = [
                     <i class="bi bi-question-square fs-5 <?= $g['icono'] ?>"></i>
                     <span class="estuche-titulo"><?= $g['titulo'] ?></span>
                     <span class="text-muted small">
-                        <?= count($g['piezas']) ?> piezas<?php if ($g['clave'] === 'sin-hueco-con'): ?> · <span data-total-con><?= array_sum(array_column($g['piezas'], 'stock')) ?></span> ud.<?php endif; ?>
+                        <?= count($g['piezas']) ?> piezas<?php if ($g['clave'] === 'sin-hueco-con'): ?> · <?= array_sum(array_column($g['piezas'], 'stock')) ?> ud. sin ubicación<?php endif; ?>
                     </span>
                     <i class="bi bi-chevron-down chevron"></i>
                 </button>
@@ -444,9 +454,13 @@ $gruposHuerfanas = [
                                     <?php if ($c['img']): ?>
                                         <img src="<?= esc($c['img'], 'attr') ?>" alt="" class="miniatura" loading="lazy">
                                     <?php endif; ?>
-                                    <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                    <span class="nombre"><?= esc($c['nombre']) ?><?= stock_desglose($c['desglose'], 'hueco', 'sin ubicación', true) ?></span>
                                 </a>
                                 <span class="acciones-sin">
+                                    <button type="button" class="btn btn-sm btn-outline-success" title="Dar de alta"
+                                        <?= stock_mov_attrs((int) $c['id'], $c['nombre'], $c['desglose'], 'alta', null, false) ?>>
+                                        <i class="bi bi-plus-lg"></i> Alta
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-outline-primary" title="Asignarle hueco"
                                         data-bs-toggle="modal" data-bs-target="#modalColocar"
                                         data-variante="<?= (int) $c['id'] ?>" data-nombre="<?= esc($c['nombre'], 'attr') ?>">
@@ -460,12 +474,11 @@ $gruposHuerfanas = [
                                         </button>
                                     <?php endif; ?>
                                 </span>
-                                <?php if ((int) $c['stock'] > 0): ?>
-                                    <button type="button" class="cantidad btn-baja" title="Dar de baja"
-                                        data-bs-toggle="modal" data-bs-target="#modalBaja"
-                                        data-variante="<?= (int) $c['id'] ?>" data-nombre="<?= esc($c['nombre'], 'attr') ?>" data-stock="<?= (int) $c['stock'] ?>"><?= (int) $c['stock'] ?></button>
+                                <?php if ((int) $c['desglose']['total'] > 0): ?>
+                                    <button type="button" class="cantidad btn-baja" title="Total de la pieza. Pulsa para dar de baja"
+                                        <?= stock_mov_attrs((int) $c['id'], $c['nombre'], $c['desglose'], 'baja', null, false) ?>><?= (int) $c['desglose']['total'] ?></button>
                                 <?php else: ?>
-                                    <span class="cantidad cero"><?= (int) $c['stock'] ?></span>
+                                    <span class="cantidad cero"><?= (int) $c['desglose']['total'] ?></span>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
@@ -495,8 +508,8 @@ $gruposHuerfanas = [
                 </div>
                 <div data-elegir-hueco>
                     <label class="form-label small mb-1">Hueco</label>
-                    <select name="hueco_id" class="form-select form-select-sm">
-                        <option value="">Elige…</option>
+                    <select name="hueco_id" class="form-select form-select-sm" data-hueco>
+                        <option value="">Elige hueco…</option>
                         <?php foreach ($huecos as $hid => $codigo): ?>
                             <option value="<?= (int) $hid ?>"><?= esc($codigo) ?><?= isset($huecosLibres[$hid]) ? ' (libre)' : '' ?></option>
                         <?php endforeach; ?>
@@ -523,8 +536,8 @@ $gruposHuerfanas = [
             </div>
             <div class="modal-body">
                 <p class="small fw-semibold mb-2" data-nombre></p>
-                <select name="hueco_id" class="form-select form-select-sm" required>
-                    <option value="">Elige…</option>
+                <select name="hueco_id" class="form-select form-select-sm" required data-hueco data-hueco-enviar>
+                    <option value="">Elige hueco…</option>
                     <?php foreach ($huecos as $hid => $codigo): ?>
                         <option value="<?= (int) $hid ?>"><?= esc($codigo) ?><?= isset($huecosLibres[$hid]) ? ' (libre)' : '' ?></option>
                     <?php endforeach; ?>
@@ -756,50 +769,7 @@ $gruposHuerfanas = [
     })();
 </script>
 
-<div class="toast-container position-fixed bottom-0 end-0 p-3">
-    <div class="toast align-items-center border-0" id="toastBaja" role="status" aria-live="polite">
-        <div class="d-flex">
-            <div class="toast-body" data-toast-texto></div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="modalBaja" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <form method="post" action="<?= site_url('piezas/existencias/movimiento') ?>" class="modal-content" data-baja-form>
-            <?= csrf_field() ?>
-            <input type="hidden" name="variante_id" data-baja-variante>
-            <input type="hidden" name="sentido" value="baja">
-            <input type="hidden" name="volver" value="ubicaciones">
-            <div class="modal-header">
-                <h6 class="modal-title">Dar de baja · <span data-baja-nombre></span></h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label small mb-1">Cantidad <span class="text-muted">(hay <span data-baja-stock></span>)</span></label>
-                    <input type="number" name="cantidad" min="1" step="1" value="1" required
-                        class="form-control" autocomplete="off" data-baja-cantidad>
-                </div>
-                <div class="mb-1">
-                    <label class="form-label small mb-1">Motivo</label>
-                    <div class="d-flex flex-wrap gap-1 mb-2">
-                        <?php foreach (['Se lo llevó Esther', 'Recuento por descuadre', 'Rotura', 'Se lleva a pintura'] as $sug): ?>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-baja-sugerencia><?= esc($sug) ?></button>
-                        <?php endforeach; ?>
-                    </div>
-                    <textarea name="nota" rows="3" required class="form-control" data-baja-nota
-                        placeholder="Por qué se da de baja (rotura, regalo, recuento…)"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-sm btn-danger" data-baja-enviar>Dar de baja</button>
-            </div>
-        </form>
-    </div>
-</div>
+<?= $this->include('piezas/_modal_mov_stock') ?>
 
 <div class="modal fade" id="modalEstuche" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -841,72 +811,6 @@ $gruposHuerfanas = [
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        var modalBaja = document.getElementById('modalBaja');
-        if (modalBaja) {
-            var notaBaja = modalBaja.querySelector('[data-baja-nota]');
-            var formBaja = modalBaja.querySelector('[data-baja-form]');
-            var enviarBaja = modalBaja.querySelector('[data-baja-enviar]');
-            var toastEl = document.getElementById('toastBaja');
-            var botonOrigen = null;
-
-            function avisar(texto, ok) {
-                toastEl.querySelector('[data-toast-texto]').textContent = texto;
-                toastEl.classList.toggle('text-bg-success', ok);
-                toastEl.classList.toggle('text-bg-danger', !ok);
-                bootstrap.Toast.getOrCreateInstance(toastEl).show();
-            }
-
-            formBaja.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (!botonOrigen) return;
-                var cantidad = parseInt(formBaja.cantidad.value, 10) || 0;
-                enviarBaja.disabled = true;
-                fetch(formBaja.action, {
-                    method: 'POST',
-                    body: new FormData(formBaja),
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (res) {
-                        if (!res.ok) { avisar(res.mensaje || 'No se pudo registrar.', false); return; }
-                        var stock = res.stock;
-                        if (stock > 0) {
-                            botonOrigen.textContent = stock;
-                            botonOrigen.dataset.stock = stock;
-                        } else {
-                            var cero = document.createElement('span');
-                            cero.className = 'cantidad cero';
-                            cero.textContent = stock;
-                            botonOrigen.replaceWith(cero);
-                        }
-                        var total = document.querySelector('[data-total-con]');
-                        if (total) total.textContent = Math.max(0, (parseInt(total.textContent, 10) || 0) - cantidad);
-                        bootstrap.Modal.getOrCreateInstance(modalBaja).hide();
-                        avisar(res.mensaje, true);
-                    })
-                    .catch(function () { avisar('Error de conexión, no se registró la baja.', false); })
-                    .finally(function () { enviarBaja.disabled = false; });
-            });
-
-            modalBaja.addEventListener('show.bs.modal', function (ev) {
-                botonOrigen = ev.relatedTarget;
-                var d = ev.relatedTarget.dataset;
-                modalBaja.querySelector('[data-baja-variante]').value = d.variante;
-                modalBaja.querySelector('[data-baja-nombre]').textContent = d.nombre;
-                modalBaja.querySelector('[data-baja-stock]').textContent = d.stock;
-                var cantidad = modalBaja.querySelector('[data-baja-cantidad]');
-                cantidad.value = 1;
-                cantidad.max = d.stock;
-                notaBaja.value = '';
-            });
-            modalBaja.querySelectorAll('[data-baja-sugerencia]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    notaBaja.value = btn.textContent.trim();
-                    notaBaja.focus();
-                });
-            });
-        }
-
         // Recuerda qué estuches se han plegado, por estuche, entre visitas
         // — solo en este navegador (localStorage), no afecta a nadie más.
         var plegables = [];

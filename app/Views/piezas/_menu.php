@@ -14,8 +14,8 @@ $areas = [
         ['n' => 'Pedidos', 'r' => 'pedidos', 'i' => 'bi-cart-check'],
     ]],
     'impresion' => ['n' => 'Impresión', 'c' => '#3d8bfd', 'i' => 'bi-printer', 'extra' => ['placa', 'tiradas'], 'items' => [
-        ['n' => 'Galería', 'r' => 'galeria', 'i' => 'bi-grid-3x3-gap', 'carrito' => true],
         ['n' => 'Placas', 'r' => 'placas', 'i' => 'bi-printer'],
+        ['n' => 'Galería', 'r' => 'galeria', 'i' => 'bi-grid-3x3-gap', 'carrito' => true],
         ['n' => 'Revisar', 'r' => 'revisar', 'i' => 'bi-clipboard-check'],
         ['n' => 'Cuaderno', 'r' => 'cuaderno', 'i' => 'bi-journal-bookmark'],
     ]],
@@ -268,7 +268,7 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
         var t = plano(q.value.trim());
         var est = ESTATICOS.filter(function (x) { return !t || plano(x.n + ' ' + x.d).indexOf(t) >= 0; });
         if (!t) est = est.filter(function (x) { return x.g === 'Ir a' && x.d !== 'Archivo' && x.d !== 'Taller'; }).concat(ESTATICOS.filter(function (x) { return x.g === 'Hacer'; }).slice(0, 3));
-        lista = piezas.map(function (p) { return { g: 'Piezas', n: p.nombre, d: p.dato, img: p.img, u: p.url, i: 'bi-box' }; }).concat(est.slice(0, 12));
+        lista = piezas.map(function (p) { return { g: 'Piezas', n: p.nombre, d: p.dato, img: p.img, u: p.url, i: 'bi-box', pieza: true, hueco: p.hueco, uds: p.uds, cajas: p.cajas }; }).concat(est.slice(0, 12));
         sel = 0;
         res.innerHTML = '';
         var grupo = null;
@@ -304,6 +304,21 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
             d.className = 'd';
             d.textContent = x.d || '';
             b.appendChild(ico); b.appendChild(n); b.appendChild(d);
+            // Piezas: su hueco y las unidades que hay (el total; entre
+            // paréntesis lo que todavía está en las cajas).
+            if (x.pieza) {
+                var h = document.createElement('span');
+                h.className = 'd';
+                h.style.cssText = 'font-family: "Geist Mono", ui-monospace, monospace;' + (x.hueco ? ' color: var(--bs-secondary-color);' : '');
+                h.textContent = x.hueco || 'sin hueco';
+                h.title = x.hueco ? 'Su hueco' : 'No tiene hueco asignado';
+                var u = document.createElement('span');
+                u.className = 'd';
+                u.style.cssText = 'min-width: 3.2em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: ' + (x.uds > 0 ? 'var(--bs-emphasis-color)' : '#f0553f') + ';';
+                u.textContent = x.uds + ' ud.' + (x.cajas > 0 ? ' (' + x.cajas + ' en caja)' : '');
+                u.title = 'Unidades que existen en total' + (x.cajas > 0 ? '; ' + x.cajas + ' aún en las cajas' : '');
+                b.appendChild(h); b.appendChild(u);
+            }
             res.appendChild(b);
         });
         if (!lista.length) {

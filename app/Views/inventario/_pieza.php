@@ -32,6 +32,6 @@
         <?php endif; ?>
         <h3><?= esc($p['nombre']) ?></h3>
         <?php if (!empty($p['sku'])): ?><span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?>
-        <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.</span>
+        <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.<?php if (($p['en_cajas'] ?? 0) > 0): ?> <small style="font-weight: 400; opacity: .75;" title="Aún no están guardadas en su hueco">(<?= (int) $p['en_cajas'] ?> en caja)</small><?php endif; ?></span>
     </div>
 </article>

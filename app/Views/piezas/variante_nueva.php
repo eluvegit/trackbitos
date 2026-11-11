@@ -844,14 +844,15 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             <section class="fv-panel fv-panel-stock" data-m="7" data-sec="stock">
                 <div class="fv-ph"><h3>Stock</h3><a class="fv-link der" href="<?= site_url('piezas/existencias/' . $vid) ?>">Existencias <i class="bi bi-chevron-right"></i></a></div>
                 <div class="fv-stock">
-                    <div class="grande" style="color: <?= $colorStockFv ?>"><?= (int) $existencias['stock'] ?><small>uds</small></div>
+                    <div class="grande" style="color: <?= $colorStockFv ?>" title="Todas las unidades que existen de esta pieza"><?= (int) $existencias['stock'] ?><small>uds en total</small></div>
                     <dl class="fv-kv">
-                        <div><dt>Hueco</dt><dd>
+                        <div><dt>
                             <?php if ($existencias['hueco']): ?>
-                                <a class="fv-mono" href="<?= site_url('piezas/ubicaciones/huecos/' . $existencias['hueco']['id']) ?>"><?= esc($existencias['hueco']['codigo']) ?></a>
-                            <?php else: ?>—<?php endif; ?>
-                        </dd></div>
-                        <div><dt>Sin hueco</dt><dd><?= (int) $existencias['sueltas'] ?></dd></div>
+                                En su hueco <a class="fv-mono" href="<?= site_url('piezas/ubicaciones/huecos/' . $existencias['hueco']['id']) ?>"><?= esc($existencias['hueco']['codigo']) ?></a>
+                            <?php else: ?>Sin ubicación<?php endif; ?>
+                        </dt><dd><?= (int) $existencias['desglose']['hueco'] ?></dd></div>
+                        <div><dt><a href="<?= site_url('piezas/ubicaciones/cajas') ?>">Caja de impresas</a></dt><dd><?= (int) $existencias['desglose']['impresas'] ?></dd></div>
+                        <div><dt><a href="<?= site_url('piezas/ubicaciones/cajas') ?>">Caja de pedido</a></dt><dd><?= (int) $existencias['desglose']['pedido'] ?></dd></div>
                         <div><dt>Mínimo</dt><dd><?= $existencias['minimo'] > 0 ? (int) $existencias['minimo'] : '—' ?></dd></div>
                     </dl>
                     <div class="fv-nivel">
@@ -859,6 +860,11 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                         <?php if ($existencias['minimo'] > 0): ?><b style="left: <?= round($existencias['minimo'] * 100 / $stockMax) ?>%"></b><?php endif; ?>
                     </div>
                     <?php if ($existencias['estado'] === 'bajo'): ?><div class="fv-aviso-mini">Por debajo del stock mínimo.</div><?php endif; ?>
+                </div>
+                <?php helper('piezas_stock'); $nombreMovStock = trim(($familia['nombre'] ?? '') . ' ' . ($variante['nombre'] ?? '')); ?>
+                <div class="fv-duo" style="margin-top: 14px">
+                    <button type="button" class="fv-btn"<?= stock_mov_attrs($vid, $nombreMovStock, $existencias['desglose'], 'alta', null, (bool) $existencias['hueco']) ?>><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta</span></button>
+                    <button type="button" class="fv-btn"<?= stock_mov_attrs($vid, $nombreMovStock, $existencias['desglose'], 'baja', null, (bool) $existencias['hueco']) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja</span></button>
                 </div>
             </section>
 
@@ -1043,6 +1049,8 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
     }
 })();
 </script>
+
+<?= $this->include('piezas/_modal_mov_stock') ?>
 
 <div class="modal fade" id="modalSku" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">

@@ -102,14 +102,14 @@ $activa  = static fn (string $s) => ($ruta === 'piezas/' . $s || str_starts_with
     </div>
 
     <div class="btn-group">
+        <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('placas') ?>" title="Placas">
+            <i class="bi bi-printer"></i>
+        </a>
         <a href="<?= site_url('piezas/galeria') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('galeria') ?>" title="Galería">
             <i class="bi bi-grid-3x3-gap"></i>
             <?php if (!empty($carritoCount)): ?>
                 <span class="badge text-bg-primary"><?= (int) $carritoCount ?></span>
             <?php endif; ?>
-        </a>
-        <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('placas') ?>" title="Placas">
-            <i class="bi bi-printer"></i>
         </a>
         <a href="<?= site_url('piezas/cuaderno') ?>" class="btn btn-sm btn-outline-secondary pz-c pz-imprimir<?= $activa('cuaderno') ?>" title="Cuaderno: todas las pruebas, conclusiones y notas de las bitácoras de golpe">
             <i class="bi bi-journal-bookmark"></i>

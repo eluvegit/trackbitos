@@ -227,7 +227,8 @@ class Web extends BaseController
 
         // Existencias por variante (fase 60): el número de unidades físicas,
         // al lado del SKU en el listado. Una sola consulta para todas.
-        $stockPorVariante = (new PiezaInventario())->stockPorVariante();
+        $inventario = new PiezaInventario();
+        $stockPorVariante = $inventario->stockPorVariante();
         foreach ($familias as &$familia) {
             foreach ($familia['variantes'] as &$v) {
                 $v['unidades'] = $stockPorVariante[(int) $v['id']] ?? 0;
@@ -246,6 +247,8 @@ class Web extends BaseController
             'grupos'           => $this->agruparPorCategoria($familias),
             'familias'         => $familias,
             'carritoCount'     => count($this->carritoActual()),
+            // Todo lo que existe, también lo de la nevera (que este listado no pinta).
+            'stockTotal'       => $inventario->totalGlobal(),
             'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
                 + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
             'neveraCount'      => $this->varianteModel->where('congelado_en IS NOT NULL')->countAllResults(),
@@ -848,7 +851,8 @@ class Web extends BaseController
         return [
             'filas'    => array_slice($filas, 0, 20),
             'gastadas' => $totalGastadas,
-            'stock'    => array_sum(array_map(static fn($n) => max(0, $n), $stock)),
+            // Mismo total que el índice y Existencias: sin la papelera.
+            'stock'    => (new PiezaInventario())->totalGlobal(),
         ];
     }
 
@@ -4264,6 +4268,7 @@ class Web extends BaseController
             'minimo'   => $minimo,
             'estado'   => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'hueco'    => $codigo($inventario->huecoDeVariante($id)),
+            'desglose' => $inventario->desgloseDe($id),
             'sueltas'  => max(0, $inventario->stockPorHueco($id)[0] ?? 0),
         ];
     }

@@ -70,6 +70,9 @@ class ExistenciasController extends BaseController
         $soloSterclicks = $this->request->getGet('sterclicks') !== '0';
 
         $stock = $this->inventario->stockPorVariante();
+        // Lo que de cada pieza está en una caja: el resto del total está en
+        // su hueco (o sin ubicación). Se pinta en pequeño junto al total.
+        $enCajas = $this->inventario->stockEnCajas();
 
         $familias = [];
         foreach ($this->familias->findAll() as $f) {
@@ -122,6 +125,12 @@ class ExistenciasController extends BaseController
                 'familia'  => $familia,
                 'nombre'   => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
                 'stock'    => $s,
+                'desglose' => [
+                    'total'    => $s,
+                    'hueco'    => $s - ($enCajas['impresas'][(int) $v['id']] ?? 0) - ($enCajas['pedido'][(int) $v['id']] ?? 0),
+                    'impresas' => $enCajas['impresas'][(int) $v['id']] ?? 0,
+                    'pedido'   => $enCajas['pedido'][(int) $v['id']] ?? 0,
+                ],
                 'minimo'   => $minimo,
                 'estado'   => $s <= 0 ? 'cero' : ($minimo > 0 && $s < $minimo ? 'bajo' : 'ok'),
                 // "Bajo mínimo" = por debajo del mínimo fijado, incluidas las
@@ -186,6 +195,9 @@ class ExistenciasController extends BaseController
             'categoriaSel'   => $categoriaSel,
             'soloSterclicks' => $soloSterclicks,
             'totales'        => [
+                // Todo lo que existe, con o sin filtros; 'unidades' es solo
+                // lo de la categoría / visibilidad elegidas.
+                'unidadesTotal' => $this->inventario->totalGlobal(),
                 'unidades' => array_sum(array_map(static fn (array $f) => max(0, $f['stock']), $todas)),
                 'conStock' => count(array_filter($todas, static fn (array $f) => $f['stock'] > 0)),
                 'bajo'     => count(array_filter($todas, static fn (array $f) => $f['bajoMinimo'])),
@@ -238,6 +250,7 @@ class ExistenciasController extends BaseController
             'variante'   => $variante,
             'familia'    => $this->familias->find($variante['familia_id']),
             'stock'      => $stock,
+            'desglose'   => $this->inventario->desgloseDe($id),
             'minimo'     => $minimo,
             'estado'     => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'historial'  => $this->inventario->historialDeVariante($id),
@@ -301,10 +314,13 @@ class ExistenciasController extends BaseController
         $nota       = trim((string) $this->request->getPost('nota'));
         $huecoId    = (int) $this->request->getPost('ubicacion_id') ?: null;
 
-        // Una baja quita stock del total y punto — no va ligada a ningún
-        // hueco. Las asignaciones de hueco son solo para saber dónde está
-        // lo que queda (distribución), no cuentan para el stock, así que
-        // no se tocan al dar de baja.
+        // De dónde sale una baja: del hueco de la pieza (o de lo que tiene
+        // sin ubicación) o de una de las dos cajas. Por defecto, el hueco.
+        // Una baja del hueco no lleva ubicación: se resta de donde viva la
+        // pieza (PiezaStockMovimientoModel::reparto()).
+        $origen = (string) $this->request->getPost('origen');
+        $caja   = $sentido === 'baja' && in_array($origen, ['impresas', 'pedido'], true) ? $origen : null;
+
         if ($sentido === 'baja') {
             $huecoId = null;
         } elseif ($huecoId !== null && !$this->huecos->find($huecoId)) {
@@ -315,13 +331,25 @@ class ExistenciasController extends BaseController
         $volver   = $variante
             ? site_url('piezas/existencias/' . $varianteId)
             : site_url('piezas/existencias');
-        if ($this->request->getPost('volver') === 'ubicaciones') {
+        // El modal común (piezas/_modal_mov_stock) manda la pantalla desde
+        // la que se abrió, para volver a ella. Solo rutas de piezas/.
+        $pedido = (string) $this->request->getPost('volver');
+        if ($pedido === 'ubicaciones') {
             $volver = site_url('piezas/ubicaciones');
+        } elseif (preg_match('#^piezas(/[A-Za-z0-9_\-/]*)?(\?[A-Za-z0-9_\-=&%.]*)?$#', $pedido)) {
+            $volver = site_url($pedido);
         }
 
         $error = !$variante ? 'Esa variante no existe.'
             : (!in_array($sentido, ['alta', 'baja'], true) || $cantidad < 1 ? 'Indica una cantidad de al menos 1.'
             : ($nota === '' ? 'Escribe el motivo del movimiento.' : null));
+        // Una caja no puede quedar en negativo: de ahí solo sale lo que hay.
+        if ($error === null && $caja !== null) {
+            $hay = $this->inventario->desgloseDe($varianteId)[$caja];
+            if ($cantidad > $hay) {
+                $error = 'En la caja de ' . $caja . ' solo hay ' . $hay . ' de esa pieza.';
+            }
+        }
         if ($error !== null) {
             return $this->request->isAJAX()
                 ? $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $error])
@@ -341,14 +369,16 @@ class ExistenciasController extends BaseController
 
         $delta  = $sentido === 'alta' ? $cantidad : -$cantidad;
         $motivo = $sentido === 'alta' ? 'alta_manual' : 'baja_manual';
-        $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId);
+        $this->inventario->movimientoManual($varianteId, $delta, $motivo, $nota, $huecoId, $caja);
 
-        $nuevo = $this->inventario->stockDeVariante($varianteId);
-        $aviso = $nuevo < 0 ? ' Ojo: el stock queda en negativo.' : '';
-        $mensaje = 'Movimiento registrado. Stock actual: ' . $nuevo . '.' . $aviso;
+        $desglose = $this->inventario->desgloseDe($varianteId);
+        $nuevo    = $desglose['total'];
+        $aviso    = $nuevo < 0 ? ' Ojo: el stock queda en negativo.'
+            : ($desglose['hueco'] < 0 ? ' Ojo: fuera de las cajas queda en negativo; quizá la baja era de una caja.' : '');
+        $mensaje  = 'Movimiento registrado. Stock total: ' . $nuevo . '.' . $aviso;
 
         if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['ok' => true, 'stock' => $nuevo, 'mensaje' => $mensaje]);
+            return $this->response->setJSON(['ok' => true, 'stock' => $nuevo, 'desglose' => $desglose, 'mensaje' => $mensaje]);
         }
 
         return redirect()->to($volver)->with('success', $mensaje);

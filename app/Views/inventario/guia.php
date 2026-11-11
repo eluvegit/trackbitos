@@ -48,7 +48,7 @@
             <?php else: ?>
                 <span class="inv-codigo grande sin">Sin ubicación</span>
             <?php endif; ?>
-            <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.</span>
+            <span class="inv-stock <?= $p['stock'] > 0 ? '' : 'cero' ?>"><strong><?= (int) $p['stock'] ?></strong> uds.<?php if (($p['en_cajas'] ?? 0) > 0): ?> <small style="font-weight: 400; opacity: .75;" title="Aún no están guardadas en su hueco">(<?= (int) $p['en_cajas'] ?> en caja)</small><?php endif; ?></span>
             <a href="<?= $url('') ?>" class="inv-boton-texto"><i class="bi bi-arrow-counterclockwise"></i> Elegir otra</a>
         </div>
     </div>

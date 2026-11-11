@@ -113,7 +113,7 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                                 <form method="post" action="<?= site_url('piezas/existencias/' . $c['varianteId'] . '/hueco-defecto') ?>"
                                     data-ajax-form="hueco-defecto" class="d-flex gap-1 align-items-center">
                                     <?= csrf_field() ?>
-                                    <select name="hueco_id" required class="form-select form-select-sm" style="max-width: 12rem;">
+                                    <select name="hueco_id" required class="form-select form-select-sm" style="max-width: 14rem;" data-hueco data-hueco-enviar data-hueco-para="<?= esc($c['nombre'], 'attr') ?>">
                                         <option value="">¿Dónde va?</option>
                                         <?php $estucheActual = null; ?>
                                         <?php foreach ($colocacionHuecos as $hd): ?>

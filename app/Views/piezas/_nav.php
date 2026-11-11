@@ -1,5 +1,8 @@
 <?php $enIndex ??= uri_string() === 'piezas'; ?>
 <?= $this->include('piezas/_menu') ?>
+<?php // Selector de huecos: convierte los <select data-hueco> en un panel visual. ?>
+<script>window.PZ_HUECOS_URL = '<?= site_url('piezas/ubicaciones/huecos/mapa') ?>';</script>
+<script src="<?= base_url('assets/js/piezas-hueco-picker.js') ?>?v=2" defer></script>
 <?php if (!$enIndex): ?>
 <script src="<?= base_url('assets/js/piezas-modales.js') ?>?v=1"></script>
 <script>

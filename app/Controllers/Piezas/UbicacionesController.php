@@ -49,6 +49,9 @@ class UbicacionesController extends BaseController
 
         [$piezasPorHueco, $stock] = $this->piezasPorHueco();
         $varianteIds = array_keys($stock);
+        // $stock es solo lo que hay en el hueco; el desglose trae además el
+        // total de la pieza y lo que tiene en cada caja.
+        $desglose = $this->inventario->desglose($varianteIds);
 
         $familias = [];
         foreach ($this->familias->findAll() as $fam) {
@@ -83,9 +86,10 @@ class UbicacionesController extends BaseController
                 $contenido = [];
                 foreach ($piezasPorHueco[(int) $hueco['id']] ?? [] as $varianteId) {
                     $contenido[] = [
-                        'nombre' => $nombres[$varianteId],
-                        'stock'  => $stock[$varianteId],
-                        'img'    => $miniaturas[$varianteId] ?? null,
+                        'nombre'   => $nombres[$varianteId],
+                        'stock'    => $stock[$varianteId],
+                        'desglose' => $desglose[$varianteId],
+                        'img'      => $miniaturas[$varianteId] ?? null,
                     ];
                 }
                 usort($contenido, static fn ($a, $b) => $a['nombre'] <=> $b['nombre']);
@@ -94,6 +98,7 @@ class UbicacionesController extends BaseController
                     'hueco'     => $hueco,
                     'codigo'    => PiezaHuecoModel::codigoCompleto($estuche, $hueco),
                     'unidades'  => array_sum(array_column($contenido, 'stock')),
+                    'total'     => array_sum(array_map(static fn (array $c) => $c['desglose']['total'], $contenido)),
                     'contenido' => $contenido,
                 ];
             }
@@ -109,6 +114,7 @@ class UbicacionesController extends BaseController
         if ($sinHueco !== []) {
             $ids        = array_map(static fn ($v) => (int) $v['id'], $sinHueco);
             $stockSin   = array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
+            $desgloseSin = $this->inventario->desglose($ids);
             $imagenesSin = [];
             foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
                 $vid = (int) $r['variante_id'];
@@ -123,6 +129,7 @@ class UbicacionesController extends BaseController
                     'id'     => $vid,
                     'nombre' => trim(($familias[(int) $v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
                     'stock'  => $stockSin[$vid],
+                    'desglose' => $desgloseSin[$vid],
                     'img'    => $imagenesSin[$vid] ?? null,
                 ];
             }
@@ -302,7 +309,7 @@ class UbicacionesController extends BaseController
 
         $codigo = trim((string) $this->request->getPost('codigo'));
         if ($codigo === '') {
-            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'El código del estuche es obligatorio.');
+            return redirect()->to($this->volverAEstuche($id))->with('error', 'El código del estuche es obligatorio.');
         }
 
         // Mismo aviso explícito que en crear(): si el código ya lo tiene
@@ -310,7 +317,7 @@ class UbicacionesController extends BaseController
         // "código único" de la validación.
         $existente = $this->estuches->where('codigo', $codigo)->where('id !=', $id)->first();
         if ($existente) {
-            return redirect()->to(site_url('piezas/ubicaciones'))
+            return redirect()->to($this->volverAEstuche($id))
                 ->with('error', 'Ya existe otro estuche con el código «' . $existente['codigo'] . '» (mayúsculas/minúsculas no cuentan como distinto).');
         }
 
@@ -332,10 +339,10 @@ class UbicacionesController extends BaseController
         if (!$ok) {
             $errores = implode(' ', $this->estuches->errors());
 
-            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', $errores ?: 'No se pudo guardar.');
+            return redirect()->to($this->volverAEstuche($id))->with('error', $errores ?: 'No se pudo guardar.');
         }
 
-        return redirect()->to(site_url('piezas/ubicaciones'))->with('success', 'Estuche actualizado.');
+        return redirect()->to($this->volverAEstuche($id))->with('success', 'Estuche actualizado.');
     }
 
     public function borrar(int $id)
@@ -373,7 +380,7 @@ class UbicacionesController extends BaseController
         $notas = trim((string) $this->request->getPost('notas'));
 
         if ($this->huecos->where('estuche_id', $estucheId)->where('codigo', $codigo)->first()) {
-            return redirect()->to(site_url('piezas/ubicaciones'))
+            return redirect()->to($this->volverAEstuche($estucheId))
                 ->with('error', 'El estuche «' . $estuche['codigo'] . '» ya tiene un hueco «' . $codigo . '».');
         }
 
@@ -386,11 +393,125 @@ class UbicacionesController extends BaseController
         if (!$ok) {
             $errores = implode(' ', $this->huecos->errors());
 
-            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', $errores ?: 'No se pudo crear el hueco.');
+            return redirect()->to($this->volverAEstuche($estucheId))->with('error', $errores ?: 'No se pudo crear el hueco.');
         }
 
-        return redirect()->to(site_url('piezas/ubicaciones'))
+        return redirect()->to($this->volverAEstuche($estucheId))
             ->with('success', 'Hueco «' . PiezaHuecoModel::codigoCompleto($estuche, ['codigo' => $codigo]) . '» creado.');
+    }
+
+    /**
+     * Mapa de todos los huecos para el selector de huecos (piezas-hueco-picker.js):
+     * estuches en orden, y por hueco su código, si está libre y qué piezas
+     * viven en él con su total de unidades. Una sola petición por página.
+     */
+    public function mapaHuecos()
+    {
+        $estuches = $this->estuches->ordenados();
+        $familias = array_column($this->familias->findAll(), 'nombre', 'id');
+        $variantes = $this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id IS NOT NULL', null, false)->findAll();
+        $stock = $this->inventario->stockPorVariante(array_map(static fn (array $v) => (int) $v['id'], $variantes));
+
+        $piezas = [];
+        foreach ($variantes as $v) {
+            $piezas[(int) $v['hueco_predeterminado_id']][] = [
+                'n'   => trim(($familias[(int) $v['familia_id']] ?? '') . ' ' . $v['nombre']),
+                'sku' => $v['sku'] ?? '',
+                'uds' => max(0, $stock[(int) $v['id']] ?? 0),
+            ];
+        }
+
+        $salidaEstuches = [];
+        $salidaHuecos   = [];
+        foreach ($estuches as $orden => $e) {
+            $salidaEstuches[] = ['id' => (int) $e['id'], 'codigo' => $e['codigo'], 'zona' => $e['zona'] ?? ''];
+            foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
+                $lista = $piezas[(int) $h['id']] ?? [];
+                usort($lista, static fn ($a, $b) => strnatcasecmp($a['n'], $b['n']));
+                $salidaHuecos[(int) $h['id']] = [
+                    'codigo'  => PiezaHuecoModel::codigoCompleto($e, $h),
+                    'h'       => $h['codigo'],
+                    'estuche' => (int) $e['id'],
+                    'orden'   => $orden,
+                    'notas'   => $h['notas'] ?? '',
+                    'piezas'  => $lista,
+                    'uds'     => array_sum(array_column($lista, 'uds')),
+                ];
+            }
+        }
+
+        return $this->response->setJSON(['estuches' => $salidaEstuches, 'huecos' => (object) $salidaHuecos]);
+    }
+
+    /**
+     * Un solo estuche: sus huecos uno por uno, con lo que hay en cada uno
+     * (total de cada pieza y su desglose), y alta/baja desde la fila.
+     */
+    public function verEstuche(int $id)
+    {
+        $estuche = $this->estuches->find($id);
+        if (!$estuche) {
+            return redirect()->to(site_url('piezas/ubicaciones'))->with('error', 'Ese estuche no existe.');
+        }
+
+        $huecos   = $this->huecos->deEstuche($id);
+        $huecoIds = array_map(static fn (array $h) => (int) $h['id'], $huecos);
+        $variantes = $huecoIds === [] ? [] : $this->variantes->whereIn('hueco_predeterminado_id', $huecoIds)->where('borrado_en', null)->findAll();
+        $ids      = array_map(static fn (array $v) => (int) $v['id'], $variantes);
+        $aqui     = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
+        $desglose = $this->inventario->desglose($ids);
+
+        $familias = [];
+        if ($variantes !== []) {
+            foreach ($this->familias->whereIn('id', array_unique(array_column($variantes, 'familia_id')))->findAll() as $f) {
+                $familias[(int) $f['id']] = $f;
+            }
+        }
+        $miniaturas = [];
+        if ($ids !== []) {
+            foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
+                $vid = (int) $r['variante_id'];
+                if (!isset($miniaturas[$vid]) && (!empty($r['ruta_imagen']) || !empty($r['hash_imagen']))) {
+                    $miniaturas[$vid] = imagen_pieza($r, 'render', 't');
+                }
+            }
+        }
+
+        $porHueco = [];
+        foreach ($variantes as $v) {
+            $vid = (int) $v['id'];
+            $porHueco[(int) $v['hueco_predeterminado_id']][] = [
+                'id'       => $vid,
+                'nombre'   => trim(($familias[(int) $v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
+                'sku'      => $v['sku'] ?? null,
+                'aqui'     => $aqui[$vid],
+                'desglose' => $desglose[$vid],
+                'img'      => $miniaturas[$vid] ?? null,
+            ];
+        }
+
+        $filas = [];
+        foreach ($huecos as $h) {
+            $contenido = $porHueco[(int) $h['id']] ?? [];
+            usort($contenido, static fn ($a, $b) => strnatcasecmp($a['nombre'], $b['nombre']));
+            $filas[] = [
+                'hueco'     => $h,
+                'codigo'    => PiezaHuecoModel::codigoCompleto($estuche, $h),
+                'contenido' => $contenido,
+                'aqui'      => array_sum(array_column($contenido, 'aqui')),
+                'total'     => array_sum(array_map(static fn (array $c) => $c['desglose']['total'], $contenido)),
+            ];
+        }
+
+        // Para saltar a otro estuche sin volver al listado.
+        $todos = $this->estuches->ordenados();
+
+        return view('piezas/ubicaciones/estuche_nueva', [
+            'estuche'   => $estuche,
+            'filas'     => $filas,
+            'siguiente' => $this->huecos->siguienteCodigo($id),
+            'estuches'  => $todos,
+        ]);
     }
 
     public function borrarHueco(int $id)
@@ -402,7 +523,7 @@ class UbicacionesController extends BaseController
 
         $this->huecos->delete($id);
 
-        return redirect()->to(site_url('piezas/ubicaciones'))
+        return redirect()->to($this->volverAEstuche((int) $hueco['estuche_id']))
             ->with('success', 'Hueco borrado. El historial de stock que tenía queda sin asignar.');
     }
 
@@ -416,6 +537,7 @@ class UbicacionesController extends BaseController
 
         $ids   = array_map(static fn (array $v) => (int) $v['id'], $this->inventario->variantesDeHueco($id));
         $stock = $ids === [] ? [] : array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
+        $desglose = $this->inventario->desglose($ids);
 
         $familias = [];
         foreach ($this->familias->findAll() as $f) {
@@ -444,6 +566,7 @@ class UbicacionesController extends BaseController
                     'variante' => $v,
                     'nombre'   => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
                     'stock'    => $stock[(int) $v['id']],
+                    'desglose' => $desglose[(int) $v['id']],
                     'img'      => $miniaturas[(int) $v['id']] ?? null,
                 ];
             }
@@ -870,6 +993,12 @@ class UbicacionesController extends BaseController
             ->findAll(60);
     }
 
+    /** Tras editar el estuche o sus huecos: a la vista de ese estuche si se vino de ella. */
+    private function volverAEstuche(int $estucheId): string
+    {
+        return site_url($this->request->getPost('volver') === 'estuche' ? 'piezas/ubicaciones/' . $estucheId : 'piezas/ubicaciones');
+    }
+
     private function volverDeCaja(): string
     {
         return site_url($this->request->getPost('volver') === 'ubicaciones' ? 'piezas/ubicaciones' : 'piezas/ubicaciones/cajas');
@@ -899,6 +1028,7 @@ class UbicacionesController extends BaseController
         $ids = array_keys($ids);
 
         $variantes = $ids === [] ? [] : array_column($this->variantes->whereIn('id', $ids)->findAll(), null, 'id');
+        $desglose  = $this->inventario->desglose($ids);
         $familias  = [];
         $imagenes  = [];
         if ($ids !== []) {
@@ -924,7 +1054,9 @@ class UbicacionesController extends BaseController
                 $cajas[$caja][] = [
                     'id'       => $vid,
                     'nombre'   => trim(($familias[$v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
+                    'sku'      => $v['sku'] ?? null,
                     'cantidad' => $n,
+                    'desglose' => $desglose[$vid],
                     'hueco'    => $huecoId !== null ? ($codigosHuecos[$huecoId] ?? '?') : null,
                     'imagen'   => $imagenes[$vid] ?? null,
                 ];
