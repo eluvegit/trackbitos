@@ -108,7 +108,7 @@ class UbicacionesController extends BaseController
         $sinHueco  = $this->variantes->where('borrado_en', null)->where('hueco_predeterminado_id', null)->findAll();
         if ($sinHueco !== []) {
             $ids        = array_map(static fn ($v) => (int) $v['id'], $sinHueco);
-            $stockSin   = array_replace(array_fill_keys($ids, 0), $this->inventario->stockEnHuecos($ids));
+            $desgloseSin = $this->inventario->desglose($ids);
             $imagenesSin = [];
             foreach ($this->renders->whereIn('variante_id', $ids)->orderBy('subida_en', 'DESC')->findAll() as $r) {
                 $vid = (int) $r['variante_id'];
@@ -122,7 +122,8 @@ class UbicacionesController extends BaseController
                 $huerfanas[] = [
                     'id'     => $vid,
                     'nombre' => trim(($familias[(int) $v['familia_id']]['nombre'] ?? '') . ' ' . $v['nombre']),
-                    'stock'  => $stockSin[$vid],
+                    'stock'  => $desgloseSin[$vid]['hueco'] ?? 0,
+                    'cajas'  => ['hueco' => 0, 'impresas' => $desgloseSin[$vid]['impresas'] ?? 0, 'pedido' => $desgloseSin[$vid]['pedido'] ?? 0],
                     'img'    => $imagenesSin[$vid] ?? null,
                 ];
             }

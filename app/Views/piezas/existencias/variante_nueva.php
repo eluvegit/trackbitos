@@ -72,6 +72,9 @@
                     <dl class="fv-kv">
                         <div><dt>Mínimo</dt><dd><?= $minimo > 0 ? (int) $minimo : '—' ?></dd></div>
                         <div><dt>Hueco</dt><dd class="fv-mono"><?= $hueco ? esc($hueco['codigo']) : '—' ?></dd></div>
+                        <div><dt><?= $hueco ? 'En hueco' : 'Sin hueco' ?></dt><dd><?= (int) $desglose['hueco'] ?></dd></div>
+                        <div><dt>Caja impresas</dt><dd><?= (int) $desglose['impresas'] ?></dd></div>
+                        <div><dt>Caja pedido</dt><dd><?= (int) $desglose['pedido'] ?></dd></div>
                     </dl>
                     <div class="fv-nivel" title="<?= $minimo > 0 ? 'La marca es el mínimo' : '' ?>"><i style="width: <?= $llenado ?>%; background: <?= $color[$estado] ?>"></i><?php if ($marca !== null): ?><b style="left: <?= $marca ?>%"></b><?php endif; ?></div>
                 </div>
@@ -112,7 +115,7 @@
                         <?php if ($hueco): ?>
                             <a href="<?= site_url('piezas/ubicaciones/huecos/' . $huecoActualId) ?>" class="exv-hueco"><i class="bi bi-geo-alt"></i> <?= esc($hueco['codigo']) ?></a>
                         <?php else: ?>
-                            <span class="fv-estado e-warn">Sin hueco<?= $stock > 0 ? ' · ' . (int) $stock . ' sin colocar' : '' ?></span>
+                            <span class="fv-estado e-warn">Sin hueco<?= $desglose['hueco'] > 0 ? ' · ' . (int) $desglose['hueco'] . ' sin colocar' : '' ?></span>
                         <?php endif; ?>
                     </div>
                     <form method="post" action="<?= $accion ?>" class="fv-campo">

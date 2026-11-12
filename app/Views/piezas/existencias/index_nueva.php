@@ -42,10 +42,22 @@
         'sin-stock'   => ['Sin stock', 'e-bad'],
     ];
     $donde = static function (int $idVar, array $f) use ($ubicaciones): string {
+        $d      = $f['desglose'];
+        $partes = [];
         if (!empty($ubicaciones[$idVar])) {
-            return '<span class="ex-donde" title="' . esc(implode(', ', $ubicaciones[$idVar]), 'attr') . '"><i class="bi bi-geo-alt"></i> <span class="fv-mono">' . esc(implode(', ', $ubicaciones[$idVar])) . '</span></span>';
+            $partes[] = '<i class="bi bi-geo-alt"></i> <span class="fv-mono">' . esc(implode(', ', $ubicaciones[$idVar])) . '</span>'
+                . ($d['impresas'] || $d['pedido'] ? ' ' . (int) $d['hueco'] : '');
+        } elseif ($d['hueco'] > 0) {
+            $partes[] = '<span class="sin"><i class="bi bi-geo-alt"></i> Sin ubicación ' . (int) $d['hueco'] . '</span>';
         }
-        return $f['stock'] > 0 ? '<span class="ex-donde sin"><i class="bi bi-geo-alt"></i> Sin ubicación</span>' : '<span class="ex-donde"></span>';
+        if ($d['impresas']) {
+            $partes[] = '<i class="bi bi-box"></i> impresas ' . (int) $d['impresas'];
+        }
+        if ($d['pedido']) {
+            $partes[] = '<i class="bi bi-box"></i> pedido ' . (int) $d['pedido'];
+        }
+
+        return '<span class="ex-donde">' . implode(' · ', $partes) . '</span>';
     };
 ?>
 

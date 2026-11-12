@@ -851,7 +851,9 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                                 <a class="fv-mono" href="<?= site_url('piezas/ubicaciones/huecos/' . $existencias['hueco']['id']) ?>"><?= esc($existencias['hueco']['codigo']) ?></a>
                             <?php else: ?>—<?php endif; ?>
                         </dd></div>
-                        <div><dt>Sin hueco</dt><dd><?= (int) $existencias['sueltas'] ?></dd></div>
+                        <?php if ($existencias['hueco']): ?><div><dt>En hueco</dt><dd><?= (int) $existencias['enHueco'] ?></dd></div><?php else: ?><div><dt>Sin hueco</dt><dd><?= (int) $existencias['sueltas'] ?></dd></div><?php endif; ?>
+                        <div><dt>Caja impresas</dt><dd><?= (int) $existencias['impresas'] ?></dd></div>
+                        <div><dt>Caja pedido</dt><dd><?= (int) $existencias['pedido'] ?></dd></div>
                         <div><dt>Mínimo</dt><dd><?= $existencias['minimo'] > 0 ? (int) $existencias['minimo'] : '—' ?></dd></div>
                     </dl>
                     <div class="fv-nivel">

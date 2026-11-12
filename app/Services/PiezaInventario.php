@@ -128,21 +128,21 @@ class PiezaInventario
     }
 
     /**
-     * Stock guardado (fuera de las cajas) por variante.
-     *
      * @param list<int> $varianteIds
-     * @return array<int,int>
+     * @return array<int, array{total:int, hueco:int, impresas:int, pedido:int}>
+     */
+    public function desglose(array $varianteIds = []): array
+    {
+        return $this->movimientos->desglose($varianteIds);
+    }
+
+    /**
+     * @param list<int> $varianteIds
+     * @return array<int,int>  lo que está fuera de las cajas
      */
     public function stockEnHuecos(array $varianteIds = []): array
     {
-        $stock = $this->stockPorVariante($varianteIds);
-        foreach ($this->stockEnCajas($varianteIds) as $porVariante) {
-            foreach ($porVariante as $vid => $n) {
-                $stock[$vid] = ($stock[$vid] ?? 0) - $n;
-            }
-        }
-
-        return $stock;
+        return array_map(static fn (array $d) => $d['hueco'], $this->desglose($varianteIds));
     }
 
     /**
@@ -218,13 +218,9 @@ class PiezaInventario
     /** @return array{hueco:int, impresas:int, pedido:int}  dónde hay unidades de una pieza */
     public function dondeHay(int $varianteId): array
     {
-        $cajas = $this->stockEnCajas([$varianteId]);
+        $d = $this->desglose([$varianteId])[$varianteId] ?? ['hueco' => 0, 'impresas' => 0, 'pedido' => 0];
 
-        return [
-            'hueco'    => $this->stockEnHuecos([$varianteId])[$varianteId] ?? 0,
-            'impresas' => $cajas['impresas'][$varianteId] ?? 0,
-            'pedido'   => $cajas['pedido'][$varianteId] ?? 0,
-        ];
+        return ['hueco' => $d['hueco'], 'impresas' => $d['impresas'], 'pedido' => $d['pedido']];
     }
 
     /**
@@ -276,6 +272,29 @@ class PiezaInventario
     {
         $this->movimientos->where('salida_id', $salidaId)->delete();
         (new PiezaSalidaModel())->update($salidaId, ['estado' => 'borrador', 'confirmada_en' => null, 'actualizado_en' => date('Y-m-d H:i:s')]);
+    }
+
+    /** @return list<int> variantes con movimientos de esta placa */
+    public function variantesDePlaca(int $placaId): array
+    {
+        return array_values(array_unique(array_map('intval', array_column(
+            $this->movimientos->select('variante_id')->where('placa_id', $placaId)->findAll(), 'variante_id'))));
+    }
+
+    /**
+     * Tras tocar la bitácora: si la placa ya está dada de alta, recuadra su
+     * stock. $variantesAntes = las que tenía antes del cambio (una fila
+     * borrada se lleva su movimiento por cascada y su caja puede quedar en negativo).
+     */
+    public function resincronizarSiDadaDeAlta(int $placaId, array $variantesAntes = []): void
+    {
+        $placa = $this->placas->find($placaId);
+        if ($placa && $placa['inventario_sincronizado_en'] !== null) {
+            $this->sincronizarPlaca($placaId);
+        }
+        if ($variantesAntes !== []) {
+            $this->cuadrarCajas($variantesAntes);
+        }
     }
 
     /** Quita del inventario todo lo que aportaba una placa. */
@@ -368,27 +387,6 @@ class PiezaInventario
             'nota'         => $nota,
             'creado_en'    => date('Y-m-d H:i:s'),
         ], true);
-    }
-
-    /**
-     * Desglose por hueco del stock de una variante (0 = sin asignar).
-     *
-     * @return array<int,int>
-     */
-    public function stockPorHueco(int $varianteId): array
-    {
-        return $this->movimientos->stockPorHueco($varianteId);
-    }
-
-    /**
-     * Stock de todas las variantes desglosado por hueco, en una sola
-     * consulta (0 = sin asignar).
-     *
-     * @return array<int, array<int,int>>
-     */
-    public function stockPorVarianteYHueco(): array
-    {
-        return $this->movimientos->stockPorVarianteYHueco();
     }
 
     /** Mueve todas las piezas de un hueco a otro. Devuelve cuántas piezas movió. */

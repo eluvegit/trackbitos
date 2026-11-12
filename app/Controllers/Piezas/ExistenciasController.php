@@ -69,7 +69,7 @@ class ExistenciasController extends BaseController
         // encendido por defecto: se apaga explícitamente con sterclicks=0.
         $soloSterclicks = $this->request->getGet('sterclicks') !== '0';
 
-        $stock = $this->inventario->stockPorVariante();
+        $desglose = $this->inventario->desglose();
 
         $familias = [];
         foreach ($this->familias->findAll() as $f) {
@@ -101,7 +101,8 @@ class ExistenciasController extends BaseController
                 continue;
             }
 
-            $s      = $stock[(int) $v['id']] ?? 0;
+            $d      = $desglose[(int) $v['id']] ?? ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
+            $s      = $d['total'];
             $minimo = (int) ($v['stock_minimo'] ?? 0);
 
             // Visible en sterclicks = de verdad llega al catálogo: su propio
@@ -122,6 +123,7 @@ class ExistenciasController extends BaseController
                 'familia'  => $familia,
                 'nombre'   => trim(($familia['nombre'] ?? '') . ' ' . $v['nombre']),
                 'stock'    => $s,
+                'desglose' => $d,
                 'minimo'   => $minimo,
                 'estado'   => $s <= 0 ? 'cero' : ($minimo > 0 && $s < $minimo ? 'bajo' : 'ok'),
                 // "Bajo mínimo" = por debajo del mínimo fijado, incluidas las
@@ -200,8 +202,9 @@ class ExistenciasController extends BaseController
             return redirect()->to(site_url('piezas/existencias'))->with('error', 'Esa variante no existe.');
         }
 
-        $stock  = $this->inventario->stockDeVariante($id);
-        $minimo = (int) ($variante['stock_minimo'] ?? 0);
+        $desglose = $this->inventario->desglose([$id])[$id] ?? ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
+        $stock    = $desglose['total'];
+        $minimo   = (int) ($variante['stock_minimo'] ?? 0);
 
         // Huecos disponibles, agrupados por estuche para el <select> del
         // modal, con su código completo ("E1H2") ya resuelto.
@@ -238,6 +241,7 @@ class ExistenciasController extends BaseController
             'variante'   => $variante,
             'familia'    => $this->familias->find($variante['familia_id']),
             'stock'      => $stock,
+            'desglose'   => $desglose,
             'minimo'     => $minimo,
             'estado'     => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'historial'  => $this->inventario->historialDeVariante($id),

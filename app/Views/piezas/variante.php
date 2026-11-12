@@ -2082,9 +2082,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
                         <div class="text-muted small">hueco</div>
                     </div>
                 </div>
-                <?php if ($ex['sueltas'] > 0): ?>
-                    <div class="small text-muted mt-2"><?= (int) $ex['sueltas'] ?> uds. sin asignar a ningún hueco.</div>
-                <?php endif; ?>
+                <div class="mt-2"><?= view('piezas/_desglose_stock', ['d' => ['hueco' => $ex['enHueco'] + $ex['sueltas'], 'impresas' => $ex['impresas'], 'pedido' => $ex['pedido']], 'conHueco' => (bool) $ex['hueco']]) ?></div>
                 <?php if ($ex['estado'] === 'bajo'): ?>
                     <div class="small text-warning-emphasis mt-2">Por debajo del stock mínimo.</div>
                 <?php endif; ?>

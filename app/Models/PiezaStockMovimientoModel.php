@@ -51,47 +51,22 @@ class PiezaStockMovimientoModel extends Model
     }
 
     /**
-     * Stock por hueco que cuadra con el total. Cada pieza vive en un único
-     * hueco: las bajas (delta negativo, sin hueco) se restan de ese hueco.
-     * Lo que está en una caja (caja no nula) no cuenta en ningún hueco.
-     *
-     * @return array<int, array<int,int>>  varianteId => (huecoId => stock)
+     * @param list<int> $varianteIds
+     * @return array<int, array{total:int, hueco:int, impresas:int, pedido:int}>
      */
-    private function reparto(array $varianteIds = []): array
+    public function desglose(array $varianteIds = []): array
     {
-        $q = $this->select('variante_id, ubicacion_id, SUM(delta) AS total')
-            ->where('caja', null)
-            ->where('NOT (delta < 0 AND ubicacion_id IS NULL)', null, false)
-            ->groupBy(['variante_id', 'ubicacion_id']);
+        $q = $this->select('variante_id, caja, SUM(delta) AS total')->groupBy(['variante_id', 'caja']);
         if ($varianteIds !== []) {
             $q->whereIn('variante_id', $varianteIds);
         }
 
         $mapa = [];
         foreach ($q->findAll() as $fila) {
-            $mapa[(int) $fila['variante_id']][(int) ($fila['ubicacion_id'] ?? 0)] = (int) $fila['total'];
-        }
-
-        $q = $this->select('variante_id, SUM(-delta) AS total')
-            ->where('caja', null)
-            ->where('delta <', 0)
-            ->where('ubicacion_id', null)
-            ->groupBy('variante_id');
-        if ($varianteIds !== []) {
-            $q->whereIn('variante_id', $varianteIds);
-        }
-
-        foreach ($q->findAll() as $fila) {
-            $vid   = (int) $fila['variante_id'];
-            $hueco = max(array_keys($mapa[$vid] ?? [0 => 0]));
-            $mapa[$vid][$hueco] = ($mapa[$vid][$hueco] ?? 0) - (int) $fila['total'];
-        }
-
-        foreach ($mapa as $vid => $porHueco) {
-            $mapa[$vid] = array_filter($porHueco, static fn (int $n) => $n !== 0);
-            if ($mapa[$vid] === []) {
-                unset($mapa[$vid]);
-            }
+            $vid = (int) $fila['variante_id'];
+            $mapa[$vid] ??= ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
+            $mapa[$vid][$fila['caja'] ?? 'hueco'] = (int) $fila['total'];
+            $mapa[$vid]['total'] += (int) $fila['total'];
         }
 
         return $mapa;
@@ -119,18 +94,6 @@ class PiezaStockMovimientoModel extends Model
         return $mapa;
     }
 
-    /** @return array<int,int>  huecoId (0 = sin asignar) => stock */
-    public function stockPorHueco(int $varianteId): array
-    {
-        return $this->reparto([$varianteId])[$varianteId] ?? [];
-    }
-
-    /** @return array<int, array<int,int>>  varianteId => (huecoId (0 = sin asignar) => stock) */
-    public function stockPorVarianteYHueco(): array
-    {
-        return $this->reparto();
-    }
-
     /**
      * Reasigna todos los movimientos de un hueco a otro — para fusionar dos
      * huecos (mover y luego borrar el que queda vacío). No toca las
@@ -146,19 +109,13 @@ class PiezaStockMovimientoModel extends Model
         return $n;
     }
 
-    /**
-     * Pone todas las altas de una variante en un hueco (null = sin asignar).
-     * Las bajas no se tocan: no tienen ubicación, se restan del hueco de la
-     * pieza en reparto().
-     */
+    /** Lleva al hueco (null = sin hueco) todo lo de la variante que está fuera de las cajas, salvo las bajas sin hueco. */
     public function colocarVariante(int $varianteId, ?int $huecoId): int
     {
         $q = function () use ($varianteId, $huecoId) {
-            $this->where('variante_id', $varianteId)->where('caja', null)->where('delta >', 0);
-
-            return $huecoId === null
-                ? $this->where('ubicacion_id IS NOT NULL', null, false)
-                : $this->groupStart()->where('ubicacion_id', null)->orWhere('ubicacion_id !=', $huecoId)->groupEnd();
+            return $this->where('variante_id', $varianteId)->where('caja', null)
+                ->groupStart()->where('delta >', 0)->orWhere('ubicacion_id IS NOT NULL', null, false)->groupEnd()
+                ->where('NOT (ubicacion_id <=> ' . ($huecoId === null ? 'NULL' : (int) $huecoId) . ')', null, false);
         };
 
         $n = $q()->countAllResults();

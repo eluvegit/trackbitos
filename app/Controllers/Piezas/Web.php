@@ -2723,9 +2723,11 @@ class Web extends BaseController
             }
         }
 
+        $quitadas = $placa['inventario_sincronizado_en'] !== null ? (new PiezaInventario())->desvincularPlaca($id) : 0;
         $this->placaModel->delete($id);
 
-        return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.');
+        return redirect()->to(site_url('piezas/placas'))->with('success', 'Placa "' . $placa['nombre'] . '" borrada del histórico.'
+            . ($quitadas > 0 ? ' Sus piezas salen del inventario.' : ''));
     }
 
     /**
@@ -2808,6 +2810,14 @@ class Web extends BaseController
             return redirect()->back()->with('error', 'Elige al menos una pieza para repartir.');
         }
 
+        if ($placa['inventario_sincronizado_en'] !== null) {
+            $filasNuevas = array_column($this->placaVersionModel->where('placa_id', $nuevaId)->findAll(), 'id');
+            (new \App\Models\PiezaStockMovimientoModel())->whereIn('placa_version_id', $filasNuevas)->set('placa_id', $nuevaId)->update();
+            $inventario = new PiezaInventario();
+            $inventario->sincronizarPlaca($id);
+            $inventario->sincronizarPlaca((int) $nuevaId);
+        }
+
         $nueva = $this->placaModel->find($nuevaId);
 
         return redirect()->to(site_url('piezas/placas'))
@@ -2866,6 +2876,14 @@ class Web extends BaseController
         // Si de esta placa había salido a su vez otro reparto, ese trozo pasa
         // a colgar directamente de la origen en vez de quedarse huérfano.
         $this->placaModel->where('origen_placa_id', $id)->set(['origen_placa_id' => $origen['id']])->update();
+
+        $inventario = new PiezaInventario();
+        $antes      = array_merge($inventario->variantesDePlaca($id), $inventario->variantesDePlaca((int) $origen['id']));
+        (new \App\Models\PiezaStockMovimientoModel())->where('placa_id', $id)->set('placa_id', $origen['id'])->update();
+        if ($placa['inventario_sincronizado_en'] !== null && $origen['inventario_sincronizado_en'] === null) {
+            $this->placaModel->update((int) $origen['id'], ['inventario_sincronizado_en' => date('Y-m-d H:i:s')]);
+        }
+        $inventario->resincronizarSiDadaDeAlta((int) $origen['id'], array_values(array_unique($antes)));
 
         $this->placaModel->delete($id);
 
@@ -3554,6 +3572,7 @@ class Web extends BaseController
                 'notas'    => trim((string) ($notasPieza[$filaId] ?? '')) ?: null,
             ]);
         }
+        (new PiezaInventario())->resincronizarSiDadaDeAlta($id);
 
         // Se reescriben enteros, pero solo si la sección venía en el POST:
         // el modal no la manda, y sin este guardián un guardado desde ahí
@@ -3851,6 +3870,7 @@ class Web extends BaseController
                 'cantidad'   => $cantidad,
             ]);
         }
+        (new PiezaInventario())->resincronizarSiDadaDeAlta($id);
 
         return $this->response->setJSON(['ok' => true]);
     }
@@ -3883,7 +3903,10 @@ class Web extends BaseController
             $this->publicas->retirar($imagen['hash_imagen'] ?? null);
         }
 
+        $inventario = new PiezaInventario();
+        $antes      = $inventario->variantesDePlaca($id);
         $this->placaVersionModel->delete($filaId);
+        $inventario->resincronizarSiDadaDeAlta($id, $antes);
 
         return $this->response->setJSON(['ok' => true]);
     }
@@ -4246,8 +4269,10 @@ class Web extends BaseController
     {
         $inventario = new PiezaInventario();
         $id     = (int) $variante['id'];
-        $stock  = $inventario->stockDeVariante($id);
+        $d      = $inventario->desglose([$id])[$id] ?? ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
+        $stock  = $d['total'];
         $minimo = (int) ($variante['stock_minimo'] ?? 0);
+        $huecoId = $inventario->huecoDeVariante($id);
 
         $codigo = static function (?int $huecoId): ?array {
             $hueco = $huecoId ? (new PiezaHuecoModel())->find($huecoId) : null;
@@ -4263,8 +4288,11 @@ class Web extends BaseController
             'stock'    => $stock,
             'minimo'   => $minimo,
             'estado'   => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
-            'hueco'    => $codigo($inventario->huecoDeVariante($id)),
-            'sueltas'  => max(0, $inventario->stockPorHueco($id)[0] ?? 0),
+            'hueco'    => $codigo($huecoId),
+            'enHueco'  => $huecoId !== null ? $d['hueco'] : 0,
+            'sueltas'  => $huecoId === null ? $d['hueco'] : 0,
+            'impresas' => $d['impresas'],
+            'pedido'   => $d['pedido'],
         ];
     }
 

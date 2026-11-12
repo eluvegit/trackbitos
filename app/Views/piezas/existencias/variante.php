@@ -61,6 +61,7 @@
                 <div class="d-flex align-items-baseline gap-2">
                     <span class="display-5 fw-bold lh-1 <?= $claseTexto[$estado] ?>"><?= (int) $stock ?></span>
                     <span class="text-muted small">en stock</span>
+                    <?= view('piezas/_desglose_stock', ['d' => $desglose, 'conHueco' => (bool) $hueco]) ?>
                 </div>
                 <div class="d-flex align-items-center gap-2 mt-1">
                     <span class="badge rounded-pill <?= $claseBarra[$estado] ?>">&nbsp;</span>
@@ -138,7 +139,7 @@
             </a>
         <?php else: ?>
             <span class="badge rounded-pill text-bg-warning">
-                <i class="bi bi-exclamation-triangle"></i> Sin hueco<?= $stock > 0 ? ' · ' . (int) $stock . ' sin colocar' : '' ?>
+                <i class="bi bi-exclamation-triangle"></i> Sin hueco<?= $desglose['hueco'] > 0 ? ' · ' . (int) $desglose['hueco'] . ' sin colocar' : '' ?>
             </span>
         <?php endif; ?>
 

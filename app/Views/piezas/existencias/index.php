@@ -193,11 +193,8 @@
                             <div class="text-muted text-truncate mt-1" style="font-size: .68rem;" title="<?= esc(implode(', ', $ubicaciones[$idVar]), 'attr') ?>">
                                 <i class="bi bi-geo-alt"></i> <?= esc(implode(', ', $ubicaciones[$idVar])) ?>
                             </div>
-                        <?php elseif ($f['stock'] > 0): ?>
-                            <div class="text-muted mt-1" style="font-size: .68rem;">
-                                <i class="bi bi-geo-alt"></i> Sin ubicación
-                            </div>
                         <?php endif; ?>
+                        <div class="mt-1" style="font-size: .68rem;"><?= view('piezas/_desglose_stock', ['d' => $f['desglose'], 'conHueco' => !empty($ubicaciones[$idVar]), 'clase' => 'text-muted']) ?></div>
                     </div>
                 </a>
             </div>

@@ -404,7 +404,7 @@ $titulosCaja = [
 $gruposHuerfanas = [
     ['clave' => 'sin-hueco-con', 'titulo' => 'Sin ubicación · con unidades', 'icono' => 'text-warning',
         'piezas' => array_filter($huerfanas, static fn ($c) => $c['stock'] > 0)],
-    ['clave' => 'sin-hueco-cero', 'titulo' => 'Sin ubicación · sin unidades', 'icono' => 'text-secondary',
+    ['clave' => 'sin-hueco-cero', 'titulo' => 'Sin ubicación · sin unidades sueltas', 'icono' => 'text-secondary',
         'piezas' => array_filter($huerfanas, static fn ($c) => $c['stock'] <= 0)],
 ];
 ?>
@@ -445,6 +445,7 @@ $gruposHuerfanas = [
                                         <img src="<?= esc($c['img'], 'attr') ?>" alt="" class="miniatura" loading="lazy">
                                     <?php endif; ?>
                                     <span class="nombre"><?= esc($c['nombre']) ?></span>
+                                    <?= view('piezas/_desglose_stock', ['d' => $c['cajas']]) ?>
                                 </a>
                                 <span class="acciones-sin">
                                     <button type="button" class="btn btn-sm btn-outline-primary" title="Asignarle hueco"
