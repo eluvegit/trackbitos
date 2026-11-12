@@ -260,3 +260,11 @@
   .pp .stepper-btn { width: 34px; height: 36px; }
   .pp .stepper-valor { min-width: 2.4rem; }
 }
+
+/* Móvil: la fase va arriba del todo, sin título y en una sola franja baja. */
+@media (max-width: 760px) {
+  .pp-fase { padding: 6px 8px; gap: 0; }
+  .pp-fase .fv-ph { display: none; }
+  .pp-fase .pp-pasos li::after { top: 11px; }
+  .pp-fase .pp-pasos button { gap: 4px; padding: 6px 1px 4px; font-size: 10.5px; min-height: 40px; }
+}

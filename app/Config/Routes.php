@@ -1002,8 +1002,13 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('ubicaciones/huecos/(:num)/mover-pieza', 'UbicacionesController::moverPieza/$1');
     $routes->POST('ubicaciones/huecos/(:num)/traer-pieza', 'UbicacionesController::traerPieza/$1');
     $routes->POST('ubicaciones/huecos/(:num)/quitar-pieza', 'UbicacionesController::quitarPieza/$1');
+    // Datos del selector de huecos (todas las pantallas que eligen hueco).
+    $routes->GET('ubicaciones/huecos/mapa', 'UbicacionesController::mapaHuecos');
     $routes->GET('ubicaciones/huecos/(:num)/pieza-buscar', 'UbicacionesController::buscarPieza/$1');
     $routes->GET('ubicaciones/huecos/(:num)', 'UbicacionesController::verHueco/$1');
+    // Un solo estuche con todos sus huecos. Va después de los literales
+    // ('cajas', 'imprimir', 'huecos/...') aunque el patrón numérico no choca.
+    $routes->GET('ubicaciones/(:num)', 'UbicacionesController::verEstuche/$1');
 
     $routes->POST('carrito/agregar/(:num)', 'Web::carritoAgregar/$1');
     $routes->POST('carrito/quitar/(:num)', 'Web::carritoQuitar/$1');

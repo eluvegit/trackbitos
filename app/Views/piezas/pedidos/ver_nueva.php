@@ -74,7 +74,7 @@
 
     <div class="fv-grid pp-grid">
         <div class="fv-col">
-            <section class="fv-panel pp-piezas" data-m="2">
+            <section class="fv-panel pp-piezas" data-m="3">
                 <div class="fv-ph">
                     <h3>Piezas</h3>
                     <span class="cuenta" data-resumen-lineas><?= count($pedido['lineas']) ?></span>
@@ -154,7 +154,7 @@
         </div>
 
         <div class="fv-col">
-            <section class="fv-panel" data-m="1">
+            <section class="fv-panel" data-m="2">
                 <div class="fv-ph"><h3>Progreso</h3></div>
                 <div class="pp-grande"><span data-resumen-piezas>–</span><small>piezas hechas</small></div>
                 <div class="fv-nivel" aria-hidden="true"><i data-resumen-barra style="width: 0%"></i></div>
@@ -163,7 +163,7 @@
                 </dl>
             </section>
 
-            <section class="fv-panel" data-m="3">
+            <section class="fv-panel pp-fase" data-m="1">
                 <div class="fv-ph"><h3>Fase</h3></div>
                 <form method="post" action="<?= site_url('piezas/pedido/' . $pedido['id'] . '/estado') ?>">
                     <?= csrf_field() ?>

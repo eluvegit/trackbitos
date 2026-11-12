@@ -227,7 +227,8 @@ class Web extends BaseController
 
         // Existencias por variante (fase 60): el número de unidades físicas,
         // al lado del SKU en el listado. Una sola consulta para todas.
-        $stockPorVariante = (new PiezaInventario())->stockPorVariante();
+        $inventario = new PiezaInventario();
+        $stockPorVariante = $inventario->stockPorVariante();
         foreach ($familias as &$familia) {
             foreach ($familia['variantes'] as &$v) {
                 $v['unidades'] = $stockPorVariante[(int) $v['id']] ?? 0;
@@ -246,6 +247,8 @@ class Web extends BaseController
             'grupos'           => $this->agruparPorCategoria($familias),
             'familias'         => $familias,
             'carritoCount'     => count($this->carritoActual()),
+            // Todo lo que existe, también lo de la nevera (que este listado no pinta).
+            'stockTotal'       => $inventario->totalGlobal(),
             'papeleraCount'    => $this->familiaModel->where('borrado_en IS NOT NULL')->countAllResults()
                 + $this->varianteModel->where('borrado_en IS NOT NULL')->countAllResults(),
             'neveraCount'      => $this->varianteModel->where('congelado_en IS NOT NULL')->countAllResults(),
@@ -848,7 +851,8 @@ class Web extends BaseController
         return [
             'filas'    => array_slice($filas, 0, 20),
             'gastadas' => $totalGastadas,
-            'stock'    => array_sum(array_map(static fn($n) => max(0, $n), $stock)),
+            // Mismo total que el índice y Existencias: sin la papelera.
+            'stock'    => (new PiezaInventario())->totalGlobal(),
         ];
     }
 
@@ -3036,6 +3040,17 @@ class Web extends BaseController
         if ($placa['poner_en']) {
             $ponerEn = strtotime($placa['poner_en']);
             $minutos = $placa['acaba_en'] ? intdiv(strtotime($placa['acaba_en']) - $ponerEn, 60) : null;
+
+            // Guardada otro día y aún sin enviar: no se puede mandar al pasado,
+            // así que se trae a hoy (misma hora si aún no ha pasado; si no, al
+            // próximo cuarto de hora).
+            if (!$placa['enviada_en'] && date('Y-m-d', $ponerEn) < date('Y-m-d')) {
+                $ahora   = time();
+                $ponerEn = strtotime(date('Y-m-d') . ' ' . date('H:i', $ponerEn));
+                if ($ponerEn < $ahora) {
+                    $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
+                }
+            }
         } else {
             $ahora = time();
             $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
@@ -3150,6 +3165,9 @@ class Web extends BaseController
         }
         if ($impresora === null) {
             return redirect()->back()->withInput()->with('error', 'Elige la impresora: OLD o NEW.');
+        }
+        if (date('Y-m-d', $ponerEn) < date('Y-m-d')) {
+            return redirect()->back()->withInput()->with('error', 'La fecha de ponerla ya pasó: elige hoy o un día posterior.');
         }
 
         if (!$this->request->getPost('confirmado')) {
@@ -4289,6 +4307,7 @@ class Web extends BaseController
             'minimo'   => $minimo,
             'estado'   => $stock <= 0 ? 'cero' : ($minimo > 0 && $stock < $minimo ? 'bajo' : 'ok'),
             'hueco'    => $codigo($huecoId),
+            'desglose' => $d,
             'enHueco'  => $huecoId !== null ? $d['hueco'] : 0,
             'sueltas'  => $huecoId === null ? $d['hueco'] : 0,
             'impresas' => $d['impresas'],
@@ -6042,12 +6061,6 @@ class Web extends BaseController
         // Una sola lectura de los STL de la vigente: la usan la columna de
         // STL y la de medidas de placa.
         $stlsVigente   = $vigente ? $this->servicio->stlsDe((int) $vigente['id']) : [];
-        // Para la foto: la vigente puede ser una `descartada` que quedó sin
-        // promocionar nada encima, y enseñar su render sería mostrar la
-        // imagen de una versión que ya se sabe que no sirve. Misma cascada
-        // que usa galeria() (versionParaImprimir): la última que siga siendo
-        // válida, no la última a secas.
-        $paraFoto      = $this->versionParaImprimir((int) $variante['id']);
 
         return $variante + [
             'validada'      => $validada,
@@ -6086,10 +6099,14 @@ class Web extends BaseController
             'tiene_vigente'  => $vigente !== null,
             // La foto en el listado: en una lista de treinta nombres, «Cabeza
             // – calva» y «Cabeza – base» son la misma línea de texto, y hay
-            // que entrar en las dos para saber cuál es cuál. La última
-            // versión VÁLIDA (ver $paraFoto arriba), no la vigente: el STL de
-            // arriba sí sigue el rastro de una descartada, la foto no.
-            'miniatura' => $this->fotosDe($paraFoto, $variante)['miniatura'],
+            // que entrar en las dos para saber cuál es cuál. La de la versión
+            // VIGENTE, la misma de la que salen el .blend y el STL de la fila,
+            // también si es una descartada. Antes se saltaba las descartadas y
+            // caía a la anterior, y el listado enseñaba la foto de otra
+            // versión: si la vigente no tiene render, la fila se queda sin
+            // foto (y sale en "Sin imagen") para que se vea que falta ponerle
+            // uno o reutilizar el de otra versión.
+            'miniatura' => $this->fotosDe($vigente, $variante)['miniatura'],
         ];
     }
 

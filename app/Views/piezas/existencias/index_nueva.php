@@ -41,6 +41,16 @@
         'bajo-minimo' => ['Bajo mínimo', 'e-warn'],
         'sin-stock'   => ['Sin stock', 'e-bad'],
     ];
+    helper('piezas_stock');
+    // Alta / baja sin entrar en la pieza: abre el modal común.
+    $altaBaja = static function (int $idVar, array $f): string {
+        $conHueco = !empty($f['variante']['hueco_predeterminado_id']);
+
+        return '<span class="st-mov">'
+            . '<button type="button" class="fv-ibtn alta" title="Dar de alta"' . stock_mov_attrs($idVar, $f['nombre'], $f['desglose'], 'alta', null, $conHueco) . '><i class="bi bi-plus-lg"></i></button>'
+            . '<button type="button" class="fv-ibtn baja" title="Dar de baja"' . stock_mov_attrs($idVar, $f['nombre'], $f['desglose'], 'baja', null, $conHueco) . '><i class="bi bi-dash-lg"></i></button>'
+            . '</span>';
+    };
     $donde = static function (int $idVar, array $f) use ($ubicaciones): string {
         $d      = $f['desglose'];
         $partes = [];
@@ -76,7 +86,8 @@
         <h1>Existencias</h1>
         <div class="fv-trio ex-cifras">
             <a href="<?= $url(['filtro' => 'todas']) ?>" class="<?= $filtro === 'todas' ? 'on' : '' ?>" title="Ver todas las piezas">
-                <span class="k">Unidades</span><span class="v"><?= (int) $totales['unidades'] ?></span>
+                <span class="k">Unidades en total</span><span class="v"><?= (int) $totales['unidadesTotal'] ?></span>
+                <?php if ((int) $totales['unidades'] !== (int) $totales['unidadesTotal']): ?><span class="st-total" title="Las de la categoría y visibilidad elegidas"><?= (int) $totales['unidades'] ?> en este filtro</span><?php endif; ?>
             </a>
             <a href="<?= $url(['filtro' => 'existencias']) ?>" class="<?= $filtro === 'existencias' ? 'on' : '' ?>" title="Ver solo las piezas con existencias">
                 <span class="k">Con stock</span><span class="v e-ok"><?= (int) $totales['conStock'] ?></span>
@@ -170,10 +181,12 @@
                                 <span class="fv-estado <?= $tono[$f['estado']] ?>"><b><?= (int) $f['stock'] ?></b></span>
                                 <?php if ($f['minimo'] > 0): ?><span class="ex-min">mín <?= (int) $f['minimo'] ?></span><?php endif; ?>
                             </span>
+                            <?= stock_desglose($f['desglose'], null, 'en hueco', true) ?>
                             <?= $donde($idVar, $f) ?>
                         </span>
                     </a>
                     <?= $ojoSterclicks($f) ?>
+                    <?= $altaBaja($idVar, $f) ?>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -194,9 +207,11 @@
                         <span class="ex-stock d">
                             <span class="fv-estado <?= $tono[$f['estado']] ?>"><b><?= (int) $f['stock'] ?></b></span>
                             <?php if ($f['minimo'] > 0): ?><span class="ex-min">/ <?= (int) $f['minimo'] ?></span><?php endif; ?>
+                            <?= stock_desglose($f['desglose'], null, 'en hueco', true) ?>
                         </span>
                     </a>
                     <?= $ojoSterclicks($f) ?>
+                    <?= $altaBaja($idVar, $f) ?>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -204,6 +219,17 @@
 
     <p class="fv-vacio d-none" id="sinResultadosBuscador">Ninguna pieza coincide con la búsqueda.</p>
 </div>
+
+<style>
+    .ex-card .st-mov { position: absolute; top: 6px; left: 6px; background: rgb(0 0 0 / .45); border-radius: var(--fv-r-sm); opacity: 0; transition: opacity .12s; }
+    .ex-card:hover .st-mov, .ex-card:focus-within .st-mov { opacity: 1; }
+    .ex-card .st-des, .ex-fila .st-des { display: flex; }
+    .ex-fila .st-mov { position: absolute; right: 46px; top: 50%; transform: translateY(-50%); }
+    .ex-fila .ex-fila-a, .ex-cab { padding-right: 112px; }
+    .ex-fila .ex-stock { flex-wrap: wrap; justify-content: flex-end; }
+    @media (hover: none) { .ex-card .st-mov { opacity: 1; } }
+</style>
+<?= $this->include('piezas/_modal_mov_stock') ?>
 
 <script>
 (function () {

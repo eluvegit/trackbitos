@@ -121,19 +121,53 @@ class PiezaInventario
         return $res;
     }
 
-    /** @return array<string, array<int,int>>  caja => (varianteId => unidades) */
-    public function stockEnCajas(array $varianteIds = []): array
-    {
-        return $this->movimientos->stockEnCajas($varianteIds);
-    }
-
     /**
-     * @param list<int> $varianteIds
+     * El total de cada pieza y dónde está repartido: total = hueco (o sin
+     * ubicación) + caja de impresas + caja de pedido. Es lo que pintan todas
+     * las pantallas: el total en grande y su parte en pequeño.
+     *
+     * @param list<int> $varianteIds  las pedidas salen siempre, aunque estén a 0
      * @return array<int, array{total:int, hueco:int, impresas:int, pedido:int}>
      */
     public function desglose(array $varianteIds = []): array
     {
-        return $this->movimientos->desglose($varianteIds);
+        $mapa = $this->movimientos->desglose($varianteIds);
+        foreach ($varianteIds as $id) {
+            $mapa[(int) $id] ??= ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
+        }
+
+        return $mapa;
+    }
+
+    /** @return array{total:int, hueco:int, impresas:int, pedido:int} */
+    public function desgloseDe(int $varianteId): array
+    {
+        return $this->desglose([$varianteId])[$varianteId];
+    }
+
+    /**
+     * Unidades físicas que existen ahora mismo: la suma del stock de todas
+     * las piezas que no están en la papelera (la nevera sí cuenta). Una pieza
+     * en negativo cuenta como 0. Misma cifra en el índice, Existencias y
+     * Estadísticas.
+     */
+    public function totalGlobal(): int
+    {
+        $vivas = array_map('intval', array_column($this->variantes->select('id')->where('borrado_en', null)->findAll(), 'id'));
+        $stock = $this->stockPorVariante();
+
+        $suma = 0;
+        foreach ($vivas as $id) {
+            $suma += max(0, $stock[$id] ?? 0);
+        }
+
+        return $suma;
+    }
+
+    /** @return array<string, array<int,int>>  caja => (varianteId => unidades) */
+    public function stockEnCajas(array $varianteIds = []): array
+    {
+        return $this->movimientos->stockEnCajas($varianteIds);
     }
 
     /**
@@ -375,12 +409,17 @@ class PiezaInventario
         return $this->movimientos->colocarVariante($varianteId, $huecoId);
     }
 
-    /** Un alta/baja/ajuste a mano. $delta con signo. Devuelve el id insertado. */
-    public function movimientoManual(int $varianteId, int $delta, string $motivo, ?string $nota, ?int $huecoId = null): int
+    /**
+     * Un alta/baja/ajuste a mano. $delta con signo. Con $caja el movimiento
+     * va contra esa caja (una baja de lo que está en impresas o en pedido);
+     * sin ella, contra el hueco de la pieza. Devuelve el id insertado.
+     */
+    public function movimientoManual(int $varianteId, int $delta, string $motivo, ?string $nota, ?int $huecoId = null, ?string $caja = null): int
     {
         return (int) $this->movimientos->insert([
             'variante_id'  => $varianteId,
-            'ubicacion_id' => $huecoId,
+            'ubicacion_id' => $caja === null ? $huecoId : null,
+            'caja'         => $caja,
             'origen'       => 'manual',
             'delta'        => $delta,
             'motivo'       => $motivo,

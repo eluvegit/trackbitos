@@ -57,7 +57,11 @@ class InventarioCatalogo
         }
 
         $ids    = array_keys($variantes);
-        $stock  = (new PiezaInventario())->stockPorVariante($ids);
+        $inventario = new PiezaInventario();
+        $stock  = $inventario->stockPorVariante($ids);
+        // Lo que todavía no está en su hueco (cajas de impresas y de pedido):
+        // cuenta en el total, pero quien vaya al estuche no lo encuentra ahí.
+        $cajas  = $inventario->stockEnCajas($ids);
         $huecos = $this->codigosDeHueco();
         $fotos  = $this->fotos($ids);
 
@@ -71,6 +75,7 @@ class InventarioCatalogo
                 'sku'          => $v['sku'] ?? null,
                 'categoria_id' => $familia['categoria_id'] !== null ? (int) $familia['categoria_id'] : null,
                 'stock'        => max(0, $stock[$id] ?? 0),
+                'en_cajas'     => max(0, ($cajas['impresas'][$id] ?? 0) + ($cajas['pedido'][$id] ?? 0)),
                 'hueco_id'     => $huecoId,
                 'codigo'       => $huecos[$huecoId]['codigo'] ?? null,
                 'estuche_id'   => $huecos[$huecoId]['estuche_id'] ?? null,

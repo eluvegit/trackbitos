@@ -3,7 +3,11 @@
 <?= $this->include('piezas/_nav') ?>
 <?= $this->include('piezas/_fv_head') ?>
 <?php
-    $total = array_sum(array_column($filas, 'stock'));
+    helper('piezas_stock');
+    // $aqui: lo que hay físicamente en el hueco. $total: todo lo que existe
+    // de sus piezas, contando lo que aún está en las cajas.
+    $aqui  = array_sum(array_column($filas, 'stock'));
+    $total = array_sum(array_map(static fn (array $f) => $f['desglose']['total'], $filas));
     $opcionesDestino = static function () use ($destinosPorEstuche): string {
         ob_start();
         foreach ($destinosPorEstuche as $grupo): ?>
@@ -19,7 +23,7 @@
 
 <div class="fv pv hu">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Ubicaciones</a><i class="bi bi-chevron-right"></i><span><?= esc($codigo) ?></span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Ubicaciones</a><i class="bi bi-chevron-right"></i><?php if ($estuche): ?><a href="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id']) ?>">Estuche <?= esc($estuche['codigo']) ?></a><i class="bi bi-chevron-right"></i><?php endif; ?><span><?= esc($codigo) ?></span></nav>
         <div class="fv-acciones">
             <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/borrar') ?>"
                 onsubmit="return confirm('¿Borrar el hueco «<?= esc($codigo, 'js') ?>»? Lo que había aquí queda sin ubicación, no se pierde.');">
@@ -38,11 +42,12 @@
                 <span class="fv-estado e-neu">Vacío</span>
             <?php else: ?>
                 <span><b><?= count($filas) ?></b> pieza<?= count($filas) === 1 ? '' : 's' ?></span>
-                <span><b><?= (int) $total ?></b> ud.</span>
+                <span title="Todo lo que existe de las piezas de este hueco"><b><?= (int) $total ?></b> ud. en total</span>
+                <?php if ($aqui !== $total): ?><span class="t3"><?= (int) $aqui ?> aquí, el resto en las cajas</span><?php endif; ?>
             <?php endif; ?>
             <?php if ($estuche): ?>
                 <span class="fv-dot"></span>
-                <span><i class="bi bi-archive"></i> Estuche <?= esc($estuche['codigo']) ?></span>
+                <a href="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id']) ?>" title="Ver el estuche entero"><i class="bi bi-archive"></i> Estuche <?= esc($estuche['codigo']) ?></a>
                 <?php if ($estuche['zona']): ?><span><i class="bi bi-signpost"></i> <?= esc($estuche['zona']) ?></span><?php endif; ?>
             <?php endif; ?>
         </div>
@@ -73,11 +78,12 @@
                                 <span class="pv-ico g"><?php if ($f['img']): ?><img src="<?= esc($f['img'], 'attr') ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-box-seam"></i><?php endif; ?></span>
                                 <div class="pv-cuerpo">
                                     <a href="<?= site_url('piezas/existencias/' . $vid) ?>" class="pv-nom" title="<?= esc($f['nombre'], 'attr') ?>"><?= esc($f['nombre']) ?></a>
+                                    <div class="pv-sub"><?= stock_desglose($f['desglose'], 'hueco', 'aquí') ?></div>
                                     <?php if (!empty($destinos)): ?>
                                         <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/mover-pieza') ?>" class="hu-mover" id="mover-<?= $vid ?>" hidden>
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="variante_id" value="<?= $vid ?>">
-                                            <select name="destino_id" required class="fv-input">
+                                            <select name="destino_id" required class="fv-input" data-hueco data-hueco-enviar data-hueco-actual="<?= (int) $hueco['id'] ?>" data-hueco-para="<?= esc($f['nombre'], 'attr') ?>">
                                                 <option value="">Mover a…</option>
                                                 <?= $opcionesDestino() ?>
                                             </select>
@@ -85,8 +91,10 @@
                                         </form>
                                     <?php endif; ?>
                                 </div>
-                                <span class="pv-n"><?= (int) $f['stock'] ?><small>ud.</small></span>
+                                <span class="pv-n" title="Total de la pieza"><?= (int) $f['desglose']['total'] ?><small>ud.</small></span>
                                 <div class="pv-acc">
+                                    <button type="button" class="fv-ibtn" title="Dar de alta"<?= stock_mov_attrs($vid, $f['nombre'], $f['desglose'], 'alta') ?>><i class="bi bi-plus-lg"></i></button>
+                                    <button type="button" class="fv-ibtn" title="Dar de baja"<?= stock_mov_attrs($vid, $f['nombre'], $f['desglose'], 'baja') ?>><i class="bi bi-dash-lg"></i></button>
                                     <?php if (!empty($destinos)): ?>
                                         <button type="button" class="fv-ibtn" data-mover="mover-<?= $vid ?>" title="Mover a otro hueco"><i class="bi bi-arrow-right-circle"></i></button>
                                     <?php endif; ?>
@@ -125,7 +133,7 @@
                     <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/mover') ?>" class="fv-campo"
                         onsubmit="return confirm('¿Mover todo lo de <?= esc($codigo, 'js') ?> al hueco elegido?');">
                         <?= csrf_field() ?>
-                        <select name="destino_id" required class="fv-input">
+                        <select name="destino_id" required class="fv-input" data-hueco data-hueco-enviar data-hueco-actual="<?= (int) $hueco['id'] ?>" data-hueco-para="Todo lo de <?= esc($codigo, 'attr') ?>">
                             <option value="">Mover todo a…</option>
                             <?= $opcionesDestino() ?>
                         </select>
@@ -138,11 +146,16 @@
     </div>
 </div>
 
+<?= $this->include('piezas/_modal_mov_stock') ?>
+
 <script>
 (function () {
     document.querySelectorAll('[data-mover]').forEach(function (b) {
         b.addEventListener('click', function () {
             var f = document.getElementById(b.dataset.mover);
+            // Con el selector de huecos, el icono abre el panel directamente:
+            // elegir el hueco ya mueve la pieza.
+            if (window.PzHuecos) { window.PzHuecos.abrir(f.querySelector('select')); return; }
             f.hidden = !f.hidden;
             if (!f.hidden) f.querySelector('select').focus();
         });
@@ -175,7 +188,7 @@
                         b.type = 'button';
                         b.innerHTML = '<span></span><span></span>';
                         b.firstChild.textContent = p.nombre;
-                        b.lastChild.textContent = p.stock + ' ud.' + (p.hueco ? ' · en ' + p.hueco : '');
+                        b.lastChild.textContent = p.stock + ' ud. en total' + (p.hueco ? ' · en ' + p.hueco : '');
                         b.addEventListener('click', function () {
                             idInput.value = p.id;
                             caja.value = p.nombre;

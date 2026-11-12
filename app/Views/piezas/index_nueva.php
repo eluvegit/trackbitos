@@ -86,7 +86,7 @@ $listaCats = array_map(static fn($c) => ['id' => (int) $c['id'], 'n' => $c['nomb
     <div class="fv-meta">
         <span><b><?= $totalVars ?></b> variantes en <b><?= count($familias) ?></b> piezas</span>
         <span><b><?= count($categorias) ?></b> categorías</span>
-        <span><b><?= $totalUds ?></b> unidades en existencias</span>
+        <span title="Todas las unidades que existen, contando la nevera"><b><?= (int) ($stockTotal ?? $totalUds) ?></b> unidades en existencias<?php if (isset($stockTotal) && (int) $stockTotal !== (int) $totalUds): ?> <small class="t3">(<?= (int) $totalUds ?> en este listado)</small><?php endif; ?></span>
         <a href="<?= site_url('piezas/nevera') ?>">Nevera <b><?= (int) $neveraCount ?></b></a>
         <a href="<?= site_url('piezas/papelera') ?>">Papelera <b><?= (int) $papeleraCount ?></b></a>
     </div>

@@ -3,6 +3,7 @@
 <?= $this->include('piezas/_nav') ?>
 <?= $this->include('piezas/_fv_head') ?>
 <?php
+    helper('piezas_stock');
     $idVar  = (int) $variante['id'];
     $nombre = trim(($familia['nombre'] ?? '') . ' ' . $variante['nombre']);
     $etiquetaMotivo = [
@@ -68,20 +69,19 @@
                         <a href="<?= site_url('piezas/variante/' . $idVar) ?>" class="exv-img vacia" title="Sin render: súbelo desde la ficha de la variante"><i class="bi bi-image"></i></a>
                     <?php endif; ?>
                 <div class="fv-stock">
-                    <div class="grande" style="color: <?= $color[$estado] ?>"><?= (int) $stock ?><small>ud.</small></div>
+                    <div class="grande" style="color: <?= $color[$estado] ?>" title="Todas las unidades que existen de esta pieza"><?= (int) $stock ?><small>ud. en total</small></div>
                     <dl class="fv-kv">
+                        <div><dt><?= $hueco ? 'En su hueco <span class="fv-mono">' . esc($hueco['codigo']) . '</span>' : 'Sin ubicación' ?></dt><dd><?= (int) $desglose['hueco'] ?></dd></div>
+                        <div><dt>Caja de impresas</dt><dd><?= (int) $desglose['impresas'] ?></dd></div>
+                        <div><dt>Caja de pedido</dt><dd><?= (int) $desglose['pedido'] ?></dd></div>
                         <div><dt>Mínimo</dt><dd><?= $minimo > 0 ? (int) $minimo : '—' ?></dd></div>
-                        <div><dt>Hueco</dt><dd class="fv-mono"><?= $hueco ? esc($hueco['codigo']) : '—' ?></dd></div>
-                        <div><dt><?= $hueco ? 'En hueco' : 'Sin hueco' ?></dt><dd><?= (int) $desglose['hueco'] ?></dd></div>
-                        <div><dt>Caja impresas</dt><dd><?= (int) $desglose['impresas'] ?></dd></div>
-                        <div><dt>Caja pedido</dt><dd><?= (int) $desglose['pedido'] ?></dd></div>
                     </dl>
                     <div class="fv-nivel" title="<?= $minimo > 0 ? 'La marca es el mínimo' : '' ?>"><i style="width: <?= $llenado ?>%; background: <?= $color[$estado] ?>"></i><?php if ($marca !== null): ?><b style="left: <?= $marca ?>%"></b><?php endif; ?></div>
                 </div>
                 </div>
                 <div class="fv-duo">
-                    <button type="button" class="fv-btn" data-bs-toggle="modal" data-bs-target="#modalMovimiento" data-sentido="alta"><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta<small>Entran piezas</small></span></button>
-                    <button type="button" class="fv-btn" data-bs-toggle="modal" data-bs-target="#modalMovimiento" data-sentido="baja"><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja<small>Salen o se rompen</small></span></button>
+                    <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'alta', null, (bool) $hueco) ?>><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta<small>Entran piezas</small></span></button>
+                    <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'baja', null, (bool) $hueco) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja<small>Salen o se rompen</small></span></button>
                 </div>
             </section>
 
@@ -124,7 +124,7 @@
                             <input type="hidden" name="variante_id" value="<?= $idVar ?>">
                             <input type="hidden" name="volver" value="variante">
                         <?php endif; ?>
-                        <select name="<?= $hueco ? 'destino_id' : 'hueco_id' ?>" required class="fv-input">
+                        <select name="<?= $hueco ? 'destino_id' : 'hueco_id' ?>" required class="fv-input" data-hueco data-hueco-enviar data-hueco-para="<?= esc($nombre, 'attr') ?>"<?= $hueco ? ' data-hueco-actual="' . (int) $huecoActualId . '"' : '' ?>>
                             <option value=""><?= $hueco ? 'Mover a…' : 'Colocar en…' ?></option>
                             <?php $estucheActual = null; ?>
                             <?php foreach ($huecosDisponibles as $hd): ?>
@@ -188,69 +188,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalMovimiento" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <form method="post" action="<?= site_url('piezas/existencias/movimiento') ?>" class="modal-content">
-            <?= csrf_field() ?>
-            <input type="hidden" name="variante_id" value="<?= $idVar ?>">
-            <input type="hidden" name="sentido" value="alta" data-mov-sentido>
-            <div class="modal-header">
-                <h6 class="modal-title" data-mov-titulo>Dar de alta</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Cantidad</label>
-                    <input type="number" name="cantidad" min="1" step="1" value="1" required
-                        class="form-control" autocomplete="off">
-                </div>
-                <?php // El hueco solo tiene sentido al dar de alta (dónde se coloca lo
-                      // nuevo). Al dar de baja no se pregunta: se descuenta del total y
-                      // los huecos se quedan exactamente como estaban — no van de la
-                      // mano con las bajas. ?>
-                <div class="mb-3" data-mov-hueco-wrap>
-                    <label class="form-label">Hueco (opcional)</label>
-                    <?php if (empty($huecosDisponibles)): ?>
-                        <select name="ubicacion_id" class="form-select" disabled>
-                            <option value="">Sin huecos todavía</option>
-                        </select>
-                        <div class="form-text">
-                            Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a>.
-                        </div>
-                    <?php else: ?>
-                        <select name="ubicacion_id" class="form-select" data-mov-hueco-select>
-                            <option value="">Sin asignar</option>
-                            <?php $estucheActual = null; ?>
-                            <?php foreach ($huecosDisponibles as $hd): ?>
-                                <?php if ($estucheActual !== (int) $hd['estuche']['id']): ?>
-                                    <?php if ($estucheActual !== null): ?></optgroup><?php endif; ?>
-                                    <optgroup label="<?= esc($hd['estuche']['codigo']) ?><?= $hd['estuche']['zona'] ? ' — ' . esc($hd['estuche']['zona']) : '' ?>">
-                                    <?php $estucheActual = (int) $hd['estuche']['id']; ?>
-                                <?php endif; ?>
-                                <option value="<?= (int) $hd['hueco']['id'] ?>"><?= esc($hd['codigo']) ?><?= $hd['libre'] ? ' (libre)' : '' ?></option>
-                            <?php endforeach; ?>
-                            </optgroup>
-                        </select>
-                    <?php endif; ?>
-                </div>
-                <div class="mb-1">
-                    <label class="form-label">Motivo</label>
-                    <div class="d-flex flex-wrap gap-1 mb-2" data-mov-sugerencias>
-                        <?php foreach (['alta' => ['Recuento', 'De vuelta', 'Vuelve de pintura', 'Impresión sin placa', 'Reparada', 'Aparecida al ordenar'], 'baja' => ['Se lo llevó Esther', 'Recuento por descuadre', 'Rotura', 'Se lleva a pintura', 'Regalo', 'Prueba destructiva']] as $sentidoSug => $sugs): foreach ($sugs as $sug): ?>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-mov-sugerencia="<?= $sentidoSug ?>"><?= esc($sug) ?></button>
-                        <?php endforeach; endforeach; ?>
-                    </div>
-                    <textarea name="nota" rows="3" required class="form-control" data-mov-nota
-                        placeholder="Por qué se da de alta / baja (rotura, regalo, recuento, prueba destructiva…)"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-sm btn-primary" data-mov-enviar>Registrar</button>
-            </div>
-        </form>
-    </div>
-</div>
+<?= $this->include('piezas/_modal_mov_stock') ?>
 
 <script>
     (function () {
@@ -279,40 +217,6 @@
             });
             input.addEventListener('input', refrescar);
         }
-
-        var modal = document.getElementById('modalMovimiento');
-        if (!modal) return;
-
-        var huecoWrap   = modal.querySelector('[data-mov-hueco-wrap]');
-        var huecoSelect = modal.querySelector('[data-mov-hueco-select]');
-
-        modal.addEventListener('show.bs.modal', function (ev) {
-            var sentido = (ev.relatedTarget && ev.relatedTarget.dataset.sentido) || 'alta';
-            var esAlta = sentido === 'alta';
-            modal.querySelector('[data-mov-sentido]').value = sentido;
-            modal.querySelector('[data-mov-titulo]').textContent = esAlta ? 'Dar de alta' : 'Dar de baja';
-            var boton = modal.querySelector('[data-mov-enviar]');
-            boton.textContent = esAlta ? 'Dar de alta' : 'Dar de baja';
-            boton.classList.toggle('btn-success', esAlta);
-            boton.classList.toggle('btn-danger', !esAlta);
-            boton.classList.toggle('btn-primary', false);
-
-            // El hueco solo aplica al dar de alta (dónde se coloca lo
-            // nuevo). Al dar de baja se oculta y no se manda: se descuenta
-            // del total y los huecos existentes se quedan tal cual.
-            if (huecoWrap) huecoWrap.classList.toggle('d-none', !esAlta);
-            if (huecoSelect) huecoSelect.disabled = !esAlta;
-            modal.querySelectorAll('[data-mov-sugerencia]').forEach(function (b) { b.classList.toggle('d-none', b.dataset.movSugerencia !== sentido); });
-        });
-
-        var sugerencias = modal.querySelector('[data-mov-sugerencias]');
-        var nota = modal.querySelector('[data-mov-nota]');
-        modal.querySelectorAll('[data-mov-sugerencia]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                nota.value = btn.textContent.trim();
-                nota.focus();
-            });
-        });
     })();
 </script>
 
