@@ -344,7 +344,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
     </header>
 
     <section class="fv-hero">
-        <h1><?= esc($variante['nombre']) ?></h1>
+        <h1><?= esc($familia['nombre']) ?> <span class="fv-h1-var"><?= esc($variante['nombre']) ?></span></h1>
         <div class="fv-meta">
             <?php if ($validada): ?>
                 <span class="fv-estado e-ok"><?= $etiqueta($validada) ?> validada</span>

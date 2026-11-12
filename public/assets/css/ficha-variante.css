@@ -40,6 +40,7 @@
 
 .fv-hero { display: grid; gap: 12px; }
 .fv-hero h1 { font-size: clamp(32px, 5vw, 44px); font-weight: 600; letter-spacing: -.035em; line-height: 1; color: var(--fv-text); }
+.fv-hero h1 .fv-h1-var { font-size: .5em; font-weight: 500; letter-spacing: -.01em; color: var(--fv-text-3, #888); white-space: nowrap; }
 .fv-meta { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--fv-text-2); }
 .fv-meta a:hover, .fv-meta button:hover { color: var(--fv-text); }
 .fv-meta button { display: inline-flex; gap: 6px; align-items: center; color: var(--fv-text-2); }
