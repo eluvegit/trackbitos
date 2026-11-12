@@ -3022,6 +3022,17 @@ class Web extends BaseController
         if ($placa['poner_en']) {
             $ponerEn = strtotime($placa['poner_en']);
             $minutos = $placa['acaba_en'] ? intdiv(strtotime($placa['acaba_en']) - $ponerEn, 60) : null;
+
+            // Guardada otro día y aún sin enviar: no se puede mandar al pasado,
+            // así que se trae a hoy (misma hora si aún no ha pasado; si no, al
+            // próximo cuarto de hora).
+            if (!$placa['enviada_en'] && date('Y-m-d', $ponerEn) < date('Y-m-d')) {
+                $ahora   = time();
+                $ponerEn = strtotime(date('Y-m-d') . ' ' . date('H:i', $ponerEn));
+                if ($ponerEn < $ahora) {
+                    $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
+                }
+            }
         } else {
             $ahora = time();
             $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
@@ -3136,6 +3147,9 @@ class Web extends BaseController
         }
         if ($impresora === null) {
             return redirect()->back()->withInput()->with('error', 'Elige la impresora: OLD o NEW.');
+        }
+        if (date('Y-m-d', $ponerEn) < date('Y-m-d')) {
+            return redirect()->back()->withInput()->with('error', 'La fecha de ponerla ya pasó: elige hoy o un día posterior.');
         }
 
         if (!$this->request->getPost('confirmado')) {
