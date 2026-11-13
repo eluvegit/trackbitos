@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-placas.css') ?>?v=8">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-placas.css') ?>?v=9">
 <?php
     $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     $veredictos = \App\Models\PiezaPlacaModel::VEREDICTOS;
@@ -208,6 +208,19 @@
                     <button type="button" data-v="OLD">OLD <span class="n"><?= $nOld ?></span></button>
                     <button type="button" data-v="NEW">NEW <span class="n"><?= $nNew ?></span></button>
                 </div>
+                <?php $fepLimite = \App\Models\PiezaPlacaModel::FEP_LIMITE; ?>
+                <?php foreach ((new \App\Models\PiezaPlacaModel())->despeguesFep() as $imp => $f): ?>
+                    <?php $col = ['ok' => 'var(--fv-ok)', 'aviso' => 'var(--fv-warn)', 'peligro' => 'var(--fv-bad)', 'superado' => 'var(--fv-bad)'][$f['nivel']]; ?>
+                    <div class="pl-fep" title="Despegues del FEP de <?= $imp ?>: capas impresas. Se renueva a los <?= number_format($fepLimite, 0, ',', '.') ?>.">
+                        <div class="pl-fep-t"><span>FEP <?= $imp ?></span><span class="fv-mono" style="color: <?= $col ?>"><?= number_format($f['capas'], 0, ',', '.') ?> / <?= number_format($fepLimite / 1000) ?>k</span></div>
+                        <div class="pl-fep-b"><i style="width: <?= min(100, round($f['pct'] * 100)) ?>%; background: <?= $col ?>"></i></div>
+                        <?php if ($f['nivel'] === 'superado'): ?>
+                            <div class="pl-fep-av" style="color: <?= $col ?>"><i class="bi bi-exclamation-triangle-fill"></i> Superado: toca cambiar el FEP</div>
+                        <?php elseif ($f['nivel'] !== 'ok'): ?>
+                            <div class="pl-fep-av" style="color: <?= $col ?>"><i class="bi bi-exclamation-triangle"></i> Quedan <?= number_format($fepLimite - $f['capas'], 0, ',', '.') ?> despegues</div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
                 <div class="pl-lbl">Mes</div>
                 <div class="pl-fl" data-filtro="mes">
                     <button type="button" data-v="" class="on">Todos <span class="n"><?= count($impresas) ?></span></button>

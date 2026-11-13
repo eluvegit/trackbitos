@@ -62,6 +62,30 @@ class PiezaPlacaModel extends Model
 
     public const IMPRESORAS = ['OLD', 'NEW'];
 
+    public const FEP_LIMITE = 60000;
+
+    public function despeguesFep(): array
+    {
+        $filas = $this->select('impresora, COALESCE(SUM(numero_capas), 0) AS capas')
+            ->whereIn('impresora', self::IMPRESORAS)
+            ->where('COALESCE(impresa_en, poner_en, creado_en) <=', date('Y-m-d H:i:s'))
+            ->groupBy('impresora')->findAll();
+        $capas = array_column($filas, 'capas', 'impresora');
+
+        $out = [];
+        foreach (self::IMPRESORAS as $imp) {
+            $n   = (int) ($capas[$imp] ?? 0);
+            $pct = $n / self::FEP_LIMITE;
+            $out[$imp] = [
+                'capas' => $n,
+                'pct'   => $pct,
+                'nivel' => $pct >= 1 ? 'superado' : ($pct >= .95 ? 'peligro' : ($pct >= .8 ? 'aviso' : 'ok')),
+            ];
+        }
+
+        return $out;
+    }
+
     public const FUENTES_TIEMPO = [
         'minutos_estimados' => 'Programa',
         'minutos_previstos' => 'Máquina',
