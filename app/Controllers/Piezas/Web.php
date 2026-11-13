@@ -6249,7 +6249,15 @@ class Web extends BaseController
             return null;
         }
 
-        return $version + ['variante' => $this->varianteModel->find($version['variante_id'])];
+        $varianteOrigen = $this->varianteModel->find($version['variante_id']);
+        $actual = $this->versionModel->where('variante_id', $version['variante_id'])->where('estado', 'validada')->first()
+            ?? $this->versionModel->where('variante_id', $version['variante_id'])->whereNotIn('estado', ['superada', 'descartada'])->orderBy('numero', 'DESC')->first();
+
+        return $version + [
+            'actual'   => $actual && (int) $actual['id'] !== (int) $version['id'] ? $actual : null,
+            'variante' => $varianteOrigen,
+            'familia'  => $varianteOrigen ? $this->familiaModel->find($varianteOrigen['familia_id']) : null,
+        ];
     }
 
     private function sesionesDeRama(?array $rama): array

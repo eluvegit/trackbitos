@@ -33,7 +33,26 @@ class MenuController extends BaseController
                 ->orLike('v.sku', $p)
                 ->groupEnd();
         }
-        $filas = $qb->orderBy('f.nombre')->orderBy('v.nombre')->limit(8)->get()->getResultArray();
+        $plano = static fn (string $s): string => mb_strtolower(preg_replace('/\p{Mn}/u', '', \Normalizer::normalize($s, \Normalizer::FORM_D) ?: $s));
+        $frase = $plano(implode(' ', $palabras));
+        $puntuar = static function (array $f) use ($palabras, $plano, $frase): int {
+            $texto = $plano($f['familia'] . ' ' . $f['nombre'] . ' ' . ($f['sku'] ?? ''));
+            $n = str_contains($texto, $frase) ? 10 : 0;
+            foreach ($palabras as $p) {
+                $p = preg_quote($plano($p), '/');
+                $n += preg_match('/(?<![\p{L}\p{N}])' . $p . '(?![\p{L}\p{N}])/u', $texto) ? 4
+                    : (preg_match('/(?<![\p{L}\p{N}])' . $p . '/u', $texto) ? 2 : 1);
+            }
+
+            return $n;
+        };
+        $filas = $qb->get()->getResultArray();
+        foreach ($filas as &$f) {
+            $f['_puntos'] = $puntuar($f);
+        }
+        unset($f);
+        usort($filas, static fn ($a, $b) => $b['_puntos'] <=> $a['_puntos'] ?: strcmp($a['familia'] . $a['nombre'], $b['familia'] . $b['nombre']));
+        $filas = array_slice($filas, 0, 15);
 
         $imagenes = [];
         if ($filas !== []) {

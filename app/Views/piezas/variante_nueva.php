@@ -293,7 +293,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=18">
 
 <div class="fv" id="fv">
     <?php if (session('success')): ?>
@@ -341,15 +341,29 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             <?php if (!empty($variante['sku'])): ?>
                 <span class="fv-dot"></span><span class="fv-mono t3 user-select-all"><?= esc($variante['sku']) ?></span>
             <?php endif; ?>
-            <?php if ($origen): ?>
-                <span class="fv-dot"></span>
-                <a href="<?= site_url('piezas/variante/' . (int) $origen['variante_id']) ?>">Derivada de <span class="t1"><?= esc($origen['variante']['nombre'] ?? '?') ?> · <?= $etiqueta($origen) ?></span></a>
-            <?php endif; ?>
             <span class="fv-dot"></span>
             <button type="submit" form="fvVisibilidad" title="Pulsa para cambiarlo">
                 <i class="bi <?= $visible ? 'bi-eye' : 'bi-eye-slash' ?>"></i> <?= $visible ? 'Visible en sterclicks' : 'Oculta en sterclicks' ?>
             </button>
         </div>
+        <?php if ($origen): ?>
+            <?php $otraPieza = $origen['familia'] && (int) $origen['familia']['id'] !== (int) $familia['id']; ?>
+            <a class="fv-origen" href="<?= site_url('piezas/variante/' . (int) $origen['variante_id']) ?>">
+                <i class="bi bi-diagram-2"></i>
+                <span>Derivada de <?= $otraPieza ? 'otra pieza: ' : '' ?><b><?= esc(trim(($otraPieza ? $origen['familia']['nombre'] . ' ' : '') . ($origen['variante']['nombre'] ?? '?'))) ?></b>, desde su <b class="fv-mono"><?= $etiqueta($origen) ?></b></span>
+                <i class="bi bi-chevron-right"></i>
+            </a>
+            <?php if (in_array($origen['estado'], ['superada', 'descartada'], true)): ?>
+                <div class="fv-origen-aviso">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>
+                        Su <b class="fv-mono"><?= $etiqueta($origen) ?></b> ya está <b><?= $origen['estado'] === 'superada' ? 'superada' : 'descartada' ?></b><?php if ($origen['actual']): ?>:
+                        ahora la buena es la <b class="fv-mono"><?= $etiqueta($origen['actual']) ?></b> (<?= esc($origen['actual']['estado']) ?>)<?php endif; ?>.
+                        Revisa si esta pieza necesita el mismo arreglo.
+                    </span>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
     </section>
 
     <?php if ($congelado): ?>
@@ -385,28 +399,8 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                     </button>
                 <?php endif; ?>
                 <div class="fv-galeria">
-                    <div class="fv-ph">
-                        <div class="fv-subtabs" id="fvSubtabs">
-                            <button type="button" data-g="refs" aria-pressed="true">Referencias<span><?= count($referencias) ?></span></button>
-                            <button type="button" data-g="renders" aria-pressed="false">Renders<span><?= count($rendersTodos) ?></span></button>
-                            <button type="button" data-g="capturas" aria-pressed="false">Capturas<span><?= count($capturasDeLaPieza) ?></span></button>
-                        </div>
-                    </div>
-                    <div class="fv-thumbs" data-g="refs">
-                        <?php foreach ($referencias as $r): ?>
-                            <div class="fv-thumb">
-                                <a href="<?= imagen_pieza($r, 'referencia', 'v') ?>" target="_blank" data-foto-grande title="<?= esc($r['notas'] ?? '', 'attr') ?>">
-                                    <img src="<?= imagen_pieza($r, 'referencia') ?>" alt="Referencia" loading="lazy">
-                                </a>
-                                <form method="post" action="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/borrar') ?>" onsubmit="return confirm('¿Apartar esta referencia a la papelera?');">
-                                    <?= csrf_field() ?><input type="hidden" name="volver_a_variante" value="<?= $vid ?>">
-                                    <button class="fv-x" title="Borrar"><i class="bi bi-x"></i></button>
-                                </form>
-                            </div>
-                        <?php endforeach; ?>
-                        <button class="fv-thumb add" type="button" data-bs-toggle="modal" data-bs-target="#modalReferencia" aria-label="Añadir referencia"><i class="bi bi-plus-lg"></i></button>
-                    </div>
-                    <div class="fv-thumbs" data-g="renders" hidden>
+                    <h4 class="fv-gal-h">Renders<span><?= count($rendersTodos) ?></span></h4>
+                    <div class="fv-thumbs" data-g="renders">
                         <?php foreach ($rendersTodos as $r): ?>
                             <div class="fv-thumb">
                                 <a href="<?= imagen_pieza($r, 'render', 'v') ?>" target="_blank" data-foto-grande title="<?= esc($r['_de'] . ($r['notas'] ? ' · ' . $r['notas'] : ''), 'attr') ?>">
@@ -421,7 +415,23 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                         <?php endforeach; ?>
                         <button class="fv-thumb add" type="button" data-bs-toggle="modal" data-bs-target="#modalRenderSuelto" aria-label="Añadir imagen" title="Añadir imagen (a la última versión)"><i class="bi bi-plus-lg"></i></button>
                     </div>
-                    <div class="fv-thumbs" data-g="capturas" hidden>
+                    <h4 class="fv-gal-h">Referencias<span><?= count($referencias) ?></span></h4>
+                    <div class="fv-thumbs" data-g="refs">
+                        <?php foreach ($referencias as $r): ?>
+                            <div class="fv-thumb">
+                                <a href="<?= imagen_pieza($r, 'referencia', 'v') ?>" target="_blank" data-foto-grande title="<?= esc($r['notas'] ?? '', 'attr') ?>">
+                                    <img src="<?= imagen_pieza($r, 'referencia') ?>" alt="Referencia" loading="lazy">
+                                </a>
+                                <form method="post" action="<?= site_url('piezas/referencia/' . (int) $r['id'] . '/borrar') ?>" onsubmit="return confirm('¿Apartar esta referencia a la papelera?');">
+                                    <?= csrf_field() ?><input type="hidden" name="volver_a_variante" value="<?= $vid ?>">
+                                    <button class="fv-x" title="Borrar"><i class="bi bi-x"></i></button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                        <button class="fv-thumb add" type="button" data-bs-toggle="modal" data-bs-target="#modalReferencia" aria-label="Añadir referencia"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    <h4 class="fv-gal-h">Capturas<span><?= count($capturasDeLaPieza) ?></span></h4>
+                    <div class="fv-thumbs" data-g="capturas">
                         <?php foreach ($capturasDeLaPieza as $img): ?>
                             <div class="fv-thumb">
                                 <a href="<?= imagen_pieza($img, 'placa-version-imagen', 'v') ?>" target="_blank" data-foto-grande title="<?= esc($img['notas'] ?? '', 'attr') ?>">
