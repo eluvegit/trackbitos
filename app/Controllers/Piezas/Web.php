@@ -5331,7 +5331,10 @@ class Web extends BaseController
         if (!$render) {
             return redirect()->to(site_url('piezas'))->with('error', 'Ese render no existe.');
         }
-        $version = $this->versionModel->find($render['version_id']);
+        $varianteId = (int) ($render['variante_id'] ?? 0);
+        if ($varianteId === 0 && !empty($render['version_id'])) {
+            $varianteId = (int) ($this->versionModel->find((int) $render['version_id'])['variante_id'] ?? 0);
+        }
 
         $this->almacen->aPapelera($render['ruta_imagen']);
         // Las copias públicas se nombran por el hash del contenido: si otra
@@ -5346,7 +5349,7 @@ class Web extends BaseController
         }
         $this->renderModel->delete($id);
 
-        $destino = $version ? site_url('piezas/variante/' . $version['variante_id']) : site_url('piezas');
+        $destino = $varianteId > 0 ? site_url('piezas/variante/' . $varianteId) : site_url('piezas');
 
         return redirect()->to($destino)->with('success', 'Render apartado a la papelera.');
     }
@@ -6106,7 +6109,8 @@ class Web extends BaseController
             // versión: si la vigente no tiene render, la fila se queda sin
             // foto (y sale en "Sin imagen") para que se vea que falta ponerle
             // uno o reutilizar el de otra versión.
-            'miniatura' => $this->fotosDe($vigente, $variante)['miniatura'],
+            'miniatura' => $this->fotosDe($vigente, $variante)['miniatura']
+                ?? ($validada && (int) $validada['id'] !== (int) ($vigente['id'] ?? 0) ? $this->fotosDe($validada, $variante)['miniatura'] : null),
         ];
     }
 

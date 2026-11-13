@@ -230,30 +230,6 @@ $congelado = !empty($variante['congelado_en']);
 $verBuena  = $validada ?? ($versiones[0] ?? null);
 $vid       = (int) $variante['id'];
 
-$imgPrincipal = null;
-$imgTipo = 'render';
-$imgPie = '';
-if ($validada && !empty($validada['renders'])) {
-    $imgPrincipal = $validada['renders'][0];
-    $imgPie = $etiqueta($validada) . ' · render';
-} else {
-    foreach ($versiones as $vv) {
-        if (!empty($vv['renders'])) {
-            $imgPrincipal = $vv['renders'][0];
-            $imgPie = $etiqueta($vv) . ' · render';
-            break;
-        }
-    }
-    if (!$imgPrincipal && !empty($rendersSueltos)) {
-        $imgPrincipal = $rendersSueltos[0];
-        $imgPie = 'render suelto';
-    } elseif (!$imgPrincipal && !empty($referencias)) {
-        $imgPrincipal = $referencias[0];
-        $imgTipo = 'referencia';
-        $imgPie = 'referencia';
-    }
-}
-
 $rendersTodos = [];
 foreach ($versiones as $vv) {
     foreach ($vv['renders'] as $r) {
@@ -263,6 +239,17 @@ foreach ($versiones as $vv) {
 foreach ($rendersSueltos as $r) {
     $rendersTodos[] = $r + ['_de' => 'suelto'];
 }
+usort($rendersTodos, static fn ($a, $b) => strcmp((string) ($b['subida_en'] ?? ''), (string) ($a['subida_en'] ?? '')) ?: (int) $b['id'] <=> (int) $a['id']);
+
+$imgPrincipal = $rendersTodos[0] ?? null;
+$imgTipo = 'render';
+$imgPie = $imgPrincipal ? ($imgPrincipal['_de'] === 'suelto' ? 'render suelto' : $imgPrincipal['_de'] . ' · render') : '';
+if (!$imgPrincipal && !empty($referencias)) {
+    $imgPrincipal = $referencias[0];
+    $imgTipo = 'referencia';
+    $imgPie = 'referencia';
+}
+$ultimaVersion = $versiones[0] ?? null;
 $nFotos = count($referencias) + count($rendersTodos) + count($capturasDeLaPieza);
 
 $porServir = 0;
@@ -432,7 +419,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                                 </form>
                             </div>
                         <?php endforeach; ?>
-                        <button class="fv-thumb add" type="button" data-bs-toggle="modal" data-bs-target="#modalRenderSuelto" aria-label="Añadir render suelto"><i class="bi bi-plus-lg"></i></button>
+                        <button class="fv-thumb add" type="button" data-bs-toggle="modal" data-bs-target="#modalRenderSuelto" aria-label="Añadir imagen" title="Añadir imagen (a la última versión)"><i class="bi bi-plus-lg"></i></button>
                     </div>
                     <div class="fv-thumbs" data-g="capturas" hidden>
                         <?php foreach ($capturasDeLaPieza as $img): ?>
@@ -1722,10 +1709,17 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                     action="<?= site_url('piezas/variante/' . (int) $variante['id'] . '/render') ?>">
                     <?= csrf_field() ?>
                     <div class="modal-header">
-                        <h6 class="modal-title">Render suelto de <?= esc($variante['nombre']) ?></h6>
+                        <h6 class="modal-title">Imagen de <?= esc($variante['nombre']) ?></h6>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        <label class="form-label small">Para</label>
+                        <select name="version_id" class="form-select form-select-sm mb-2">
+                            <?php foreach ($versiones as $vv): ?>
+                                <option value="<?= (int) $vv['id'] ?>"<?= $vv === $ultimaVersion ? ' selected' : '' ?>><?= esc($etiqueta($vv)) ?><?= $vv === $ultimaVersion ? ' (última)' : '' ?><?= !empty($vv['renders']) ? ' · ya tiene ' . count($vv['renders']) : '' ?></option>
+                            <?php endforeach; ?>
+                            <option value="0"<?= $ultimaVersion ? '' : ' selected' ?>>Suelto (sin versión)</option>
+                        </select>
                         <label class="form-label small">Imagen</label>
                         <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mb-2" required>
                         <label class="form-label small">Notas</label>
