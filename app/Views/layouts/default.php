@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-base="<?= base_url() ?>">
 
 <head>
     <meta charset="UTF-8">
@@ -26,7 +26,18 @@
         $cssVer  = is_file($cssRuta) ? filemtime($cssRuta) : null;
     ?>
     <link href="<?= base_url('assets/css/style.css') . ($cssVer ? '?v=' . $cssVer : '') ?>" rel="stylesheet">
+    <?php
+        $tbModo = logged_in() && in_groups('admin') ? \App\Libraries\MenuPrincipal::modo() : 'clasica';
+        $tbVer  = @filemtime(FCPATH . 'assets/css/tb-menu.css');
+    ?>
+    <?php if ($tbModo !== 'clasica' || uri_string() === 'dashboard'): ?>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+        <link href="<?= base_url('assets/css/tb-menu.css') . ($tbVer ? '?v=' . $tbVer : '') ?>" rel="stylesheet">
+    <?php endif; ?>
     <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
+    <link rel="manifest" href="<?= base_url('manifest.webmanifest') ?>">
+    <meta name="theme-color" content="#1a1d21">
+    <link rel="apple-touch-icon" href="<?= base_url('assets/images/app/apple-touch-icon.png') ?>">
     <?php // Embebido y no en style.css a propósito, mismo motivo que el resto
           // de ajustes puntuales del proyecto: esta hoja se sirve con una
           // semana de caché. El gris que trae Bootstrap por defecto para los
@@ -40,7 +51,10 @@
     </style>
 </head>
 
-<body data-bs-theme="dark">
+<body data-bs-theme="dark" class="tb-modo-<?= $tbModo ?><?= $tbModo === 'c' && ($_COOKIE['tb_riel'] ?? '') === '1' ? ' tb-plegado' : '' ?>">
+    <?php if ($tbModo !== 'clasica'): ?>
+        <?= view('layouts/_tb_menu', ['modo' => $tbModo]) ?>
+    <?php else: ?>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
         <a class="navbar-brand d-flex align-items-center gap-1" href="<?= site_url('dashboard') ?>">
@@ -59,6 +73,14 @@
             <ul class="navbar-nav ms-auto">
                 <?php if (logged_in()): ?>
                     <?php if (in_groups('admin')): ?>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">Estilo</a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <?php foreach (\App\Libraries\MenuPrincipal::MODOS as $k => $n): ?>
+                                    <li><button type="button" class="dropdown-item" data-tb-menu="<?= $k ?>"><i class="bi <?= $k === 'clasica' ? 'bi-check2' : 'bi-dot' ?>"></i> <?= esc($n) ?></button></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" href="<?= site_url('cuenta/usuarios') ?>">Usuarios</a>
                         </li>
@@ -77,6 +99,15 @@
             </ul>
         </div>
     </nav>
+    <script>
+    document.addEventListener('click', function (e) {
+        var m = e.target.closest('[data-tb-menu]');
+        if (!m) return;
+        document.cookie = 'tb_menu=' + m.getAttribute('data-tb-menu') + '; path=/; max-age=31536000; samesite=lax';
+        location.reload();
+    });
+    </script>
+    <?php endif; ?>
 
     <!-- Contenido principal -->
     <div class="container">
@@ -92,6 +123,7 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= base_url('assets/js/app-pwa.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/app-pwa.js') ?>"></script>
 </body>
 
 </html>

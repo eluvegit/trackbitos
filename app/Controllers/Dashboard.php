@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Libraries\MenuPrincipal;
 use App\Models\BookModel;
 use App\Models\DashboardTareaFijadaModel;
 use App\Models\LentillasSustitucionesModel;
@@ -44,7 +45,11 @@ class Dashboard extends BaseController
         }
         usort($recordatoriosUrgentes, fn($a, $b) => $a['dias'] <=> $b['dias']);
 
-        return view('dashboard/index', [
+        $modo = MenuPrincipal::modo();
+
+        return view($modo === 'clasica' ? 'dashboard/index' : 'dashboard/index_' . $modo, [
+            'modo' => $modo,
+            'vivos' => $modo === 'clasica' ? [] : $this->datosVivos($dias, $recordatoriosUrgentes),
             'dias' => $dias,
             'mostrarAlerta' => $mostrarAlerta,
             'recordatoriosUrgentes' => $recordatoriosUrgentes,
@@ -151,24 +156,85 @@ class Dashboard extends BaseController
 
     private function secciones(): array
     {
-        return [
-            ['ruta' => 'comidas/diario/hoy', 'icono' => '🍽️', 'titulo' => 'Comida', 'texto' => 'Planifica tus menús, dieta y seguimiento alimenticio.'],
-            ['ruta' => 'gimnasio', 'icono' => '🏋️', 'titulo' => 'Gimnasio', 'texto' => 'Registra tus entrenamientos, progresos y objetivos físicos.'],
-            ['ruta' => 'compras', 'icono' => '🛒', 'titulo' => 'Compras', 'texto' => 'Lleva control de tus compras, listas y gastos.'],
-            ['ruta' => 'lentillas', 'icono' => '👁️', 'titulo' => 'Lentillas', 'texto' => 'Lleva un registro de cambios, limpieza y reemplazos.'],
-            ['ruta' => 'coche', 'icono' => '🚗', 'titulo' => 'Coche', 'texto' => 'Controla cambios de aceite, revisiones, neumáticos y más.'],
-            ['ruta' => 'youtube', 'icono' => '▶️', 'titulo' => 'YouTube', 'texto' => 'Permite revisar los vídeos guardados como interesantes.'],
-            ['ruta' => 'enlaces', 'icono' => '📒', 'titulo' => 'Enlaces', 'texto' => 'Permite revisar los enlaces registrados interesantes.'],
-            ['ruta' => 'journal', 'icono' => '📨', 'titulo' => 'Journal', 'texto' => 'Permite hacer y seguir tareas y bullet journal.'],
-            ['ruta' => 'reading', 'icono' => '📖', 'titulo' => 'Lectura', 'texto' => 'Sigue tus libros a tu ritmo, sin presión ni rachas.'],
-            ['ruta' => 'hogar', 'icono' => '🏠', 'titulo' => 'Hogar', 'texto' => 'Checklist rutinario de limpieza y tareas del hogar por habitación.'],
-            ['ruta' => 'recordatorios', 'icono' => '📅', 'titulo' => 'Recordatorios', 'texto' => 'ITV, revisiones médicas, vacunas, DNI, carnet... y cuándo tocan.'],
-            ['ruta' => 'braintogram', 'icono' => '🧠', 'titulo' => 'Braintogram', 'texto' => 'Log de ingesta del bot de Telegram: segundo cerebro en construcción.'],
-            ['ruta' => 'buscapp', 'icono' => '📟', 'titulo' => 'Buscapp', 'texto' => 'Avisos de llamada estilo busca/telegrama: usuarios y envíos de la app.'],
-            ['ruta' => 'rodajes', 'icono' => '🎬', 'titulo' => 'Rodajes', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
-            ['ruta' => 'sesiones', 'icono' => '📸', 'titulo' => 'Sesiones', 'texto' => 'Kanban de sesiones de foto/vídeo: moodboard, equipo y model releases.'],
-            ['ruta' => 'piezas', 'icono' => '🧱', 'titulo' => 'Piezas', 'texto' => 'Versionado de modelos 3D en Blender: qué versión es la buena y dónde está.'],
-            ['ruta' => 'silo', 'icono' => '🗄️', 'titulo' => 'Silo', 'texto' => 'Archivo de material resultante: fotos y vídeos editados, clasificados y ubicados.'],
-        ];
+        return array_map(static fn (array $m) => ['ruta' => $m['ruta'], 'icono' => $m['emoji'], 'titulo' => $m['titulo'], 'texto' => $m['texto']], MenuPrincipal::modulos());
+    }
+
+    private function datosVivos(int $dias, array $urgentes): array
+    {
+        $db = db_connect();
+        $v = [];
+        $uno = static function (callable $fn) {
+            try {
+                return $fn();
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+        $plural = static fn (int $n, string $s, string $p) => $n . ' ' . ($n === 1 ? $s : $p);
+
+        $v['lentillas'] = ['t' => $plural($dias, 'día', 'días'), 'e' => $dias >= 45 ? 'warn' : null, 'n' => $dias];
+
+        $cad = count(array_filter($urgentes, fn ($r) => $r['nivel'] === 'caducado'));
+        $urg = count($urgentes) - $cad;
+        $v['recordatorios'] = $cad
+            ? ['t' => $plural($cad, 'caducado', 'caducados'), 'e' => 'bad', 'n' => count($urgentes)]
+            : ($urg ? ['t' => $urg . ' por vencer', 'e' => 'warn', 'n' => $urg] : ['t' => 'Nada cerca', 'e' => null, 'n' => 0]);
+
+        $n = $uno(fn () => (int) $db->table('tasks')->where('en_foco', 1)->where('completed', 0)->countAllResults());
+        if ($n !== null) {
+            $v['journal'] = ['t' => $n ? $plural($n, 'en foco', 'en foco') : 'Nada en foco', 'e' => null, 'n' => $n];
+        }
+
+        $f = $uno(fn () => $db->table('gimnasio_entrenamientos')->selectMax('fecha')->get()->getRow('fecha'));
+        if ($f) {
+            $d = (new \DateTime($f))->diff(new \DateTime('today'))->days;
+            $v['gimnasio'] = ['t' => $d === 0 ? 'Hoy' : 'Hace ' . $plural($d, 'día', 'días'), 'e' => $d >= 7 ? 'warn' : null, 'n' => $d];
+        }
+
+        $n = $uno(fn () => (int) $db->table('compra_faltantes')->countAllResults());
+        if ($n !== null) {
+            $v['compras'] = ['t' => $n ? $plural($n, 'en la lista', 'en la lista') : 'Lista vacía', 'e' => null, 'n' => $n];
+        }
+
+        $n = $uno(fn () => (int) $db->table('youtube_videos')->where('visto', 0)->countAllResults());
+        if ($n !== null) {
+            $v['youtube'] = ['t' => $n . ' sin ver', 'e' => null, 'n' => $n];
+        }
+
+        $n = $uno(function () {
+            helper('hogar');
+            $t = (new \App\Models\HogarTareaModel())->where('estado', 0)->findAll();
+            return count(array_filter($t, fn ($x) => hogar_esta_atrasada($x['frecuencia_dias'] ? (int) $x['frecuencia_dias'] : null, $x['ultima_vez'])));
+        });
+        if ($n !== null) {
+            $v['hogar'] = $n ? ['t' => $plural($n, 'atrasada', 'atrasadas'), 'e' => 'warn', 'n' => $n] : ['t' => 'Al día', 'e' => 'ok', 'n' => 0];
+        }
+
+        $n = $uno(fn () => count((new BookModel())->getByStatus('leyendo')));
+        if ($n !== null) {
+            $v['reading'] = ['t' => $n ? $plural($n, 'en curso', 'en curso') : 'Ninguno en curso', 'e' => null, 'n' => $n];
+        }
+
+        $n = $uno(fn () => (int) $db->table('braintogram_mensajes')->where('created_at >=', date('Y-m-d 00:00:00'))->countAllResults());
+        if ($n !== null) {
+            $v['braintogram'] = ['t' => $n ? $plural($n, 'entrada hoy', 'entradas hoy') : 'Nada hoy', 'e' => null, 'n' => $n];
+        }
+
+        $n = $uno(fn () => (int) $db->table('sesiones')->where('fecha_sesion >=', date('Y-m-d'))->countAllResults());
+        if ($n !== null) {
+            $v['sesiones'] = ['t' => $n ? $plural($n, 'próxima', 'próximas') : 'Ninguna próxima', 'e' => $n ? 'info' : null, 'n' => $n];
+        }
+
+        $n = $uno(fn () => (int) $db->table('rodajes_proyectos')->where('deleted_at', null)->countAllResults());
+        if ($n !== null) {
+            $v['rodajes'] = ['t' => $plural($n, 'proyecto', 'proyectos'), 'e' => null, 'n' => $n];
+        }
+
+        $n = $uno(fn () => (int) $db->table('silo_piezas')->countAllResults());
+        if ($n !== null) {
+            $v['silo'] = ['t' => $plural($n, 'pieza', 'piezas'), 'e' => null, 'n' => $n];
+        }
+
+        return array_filter($v);
     }
 }
