@@ -61,7 +61,11 @@ ULTIMO_DIRECTORIO_PATH = CONFIG_DIR / "ultimo_directorio"
 # allí era mayor, y eso se retiró: las dos máquinas se ponen al día con git,
 # así que el script se actualiza como cualquier otro fichero del repo. Súbela
 # cuando el cambio merezca distinguirse.
-VERSION = "1.14.0"
+VERSION = "1.14.1"
+
+
+def _mb(n: int) -> str:
+    return f"{n / (1024 * 1024):.1f} MB"
 
 # Espejo de PiezaService::VARIANTE_BASE en el servidor: el nombre que se le
 # pone sola a la primera variante de cada pieza. Se usa solo para no
@@ -1172,7 +1176,7 @@ def cmd_subir(args) -> int:
     # una "y" explícita, Enter a secas no sube.
     tamano = blend.stat().st_size
     if tamano > UMBRAL_AVISO_SUBIDA:
-        print(f"\n  ⚠ OJO: {blend.name} pesa {tamano / (1024 * 1024):.1f} MB (más de {UMBRAL_AVISO_SUBIDA // (1024 * 1024)} MB).")
+        print(f"\n  ⚠ OJO: {blend.name} pesa {_mb(tamano)} (más de {UMBRAL_AVISO_SUBIDA // (1024 * 1024)} MB).")
         print("    ¿Hay algún STL sin decimate dentro?")
         try:
             respuesta_y = input("  ¿Subirlo igualmente? [y/N] ").strip().lower()
@@ -1208,7 +1212,7 @@ def cmd_subir(args) -> int:
     })
 
     print(f"\n{sentinel.get('variante', '?')} · rama {sentinel.get('rama', '?')} · sesión {subida['numero']} subida\n")
-    print(f"  ✓ {blend.name} — {subida['tamano_bytes']} bytes")
+    print(f"  ✓ {blend.name} — {_mb(int(subida['tamano_bytes']))}")
 
     _verificar_subida(config, directorio, blend, sentinel, subida)
 
@@ -1404,8 +1408,7 @@ def cmd_papelera(args) -> int:
         total += f.stat().st_size
         print(f"  {f.name}  ·  hace {dias} día(s)  ·  caduca en {max(0, DIAS_PAPELERA - dias)}")
 
-    tamano = f"{total / 1024:.0f} KB" if total >= 1024 else f"{total} bytes"
-    print(f"\n  {len(ficheros)} fichero(s), {tamano}. Se borran solos a los {DIAS_PAPELERA} días.\n")
+    print(f"\n  {len(ficheros)} fichero(s), {_mb(total)}. Se borran solos a los {DIAS_PAPELERA} días.\n")
     return 0
 
 
