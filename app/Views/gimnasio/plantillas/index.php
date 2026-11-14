@@ -35,10 +35,10 @@
                     <a href="<?= site_url('gimnasio/plantillas/editar/' . $p['id']) ?>" class="pl-icon-btn" title="Editar">
                         <i class="bi bi-pencil"></i>
                     </a>
-                    <a href="<?= site_url('gimnasio/plantillas/eliminar/' . $p['id']) ?>" class="pl-icon-btn pl-icon-btn-danger"
-                       onclick="return confirm('¿Eliminar la plantilla \'<?= esc($p['nombre'], 'js') ?>\'?')" title="Eliminar">
-                        <i class="bi bi-trash"></i>
-                    </a>
+                    <form method="post" action="<?= site_url('gimnasio/plantillas/eliminar/' . $p['id']) ?>" class="m-0"
+                          onsubmit="return confirm('¿Eliminar la plantilla \'<?= esc($p['nombre'], 'js') ?>\'?')">
+                        <button class="pl-icon-btn pl-icon-btn-danger border-0" title="Eliminar"><i class="bi bi-trash"></i></button>
+                    </form>
                 </div>
             </div>
         <?php endforeach; ?>

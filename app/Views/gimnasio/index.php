@@ -6,6 +6,7 @@
     <a href="<?= site_url('dashboard') ?>" class="text-decoration-none text-muted fw-normal">Dashboard</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Gimnasio</strong>
+    <a href="<?= site_url('gimnasio?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 
 <?php

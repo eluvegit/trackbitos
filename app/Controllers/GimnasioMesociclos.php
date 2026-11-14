@@ -18,7 +18,7 @@ class GimnasioMesociclos extends BaseController
         $this->planes = new GimnasioPlanesModel();
         $this->bloques = new GimnasioPlanBloquesModel();
         $this->asign = new GimnasioPlanAsignacionesModel();
-        helper(['form', 'url']);
+        helper(['form', 'url', 'gimnasio']);
     }
 
     /** Helpers de cálculo **/
@@ -77,7 +77,7 @@ class GimnasioMesociclos extends BaseController
         }
         unset($p);
 
-        return view('gimnasio/mesociclos/index', ['planes' => $planes]);
+        return view(gim_vista('gimnasio/mesociclos/index'), ['planes' => $planes]);
     }
 
 
@@ -94,7 +94,7 @@ class GimnasioMesociclos extends BaseController
             $id = $this->planes->insert($data);
             return redirect()->to(site_url("gimnasio/mesociclos/{$id}"));
         }
-        return view('gimnasio/mesociclos/nuevo');
+        return view(gim_vista('gimnasio/mesociclos/nuevo'));
     }
 
     /** Ver plan */
@@ -133,7 +133,7 @@ class GimnasioMesociclos extends BaseController
         $bloquesPendientes = count($pendientes);
         $siguienteOrden = $bloquesPendientes ? $pendientes[0]['orden'] : null;
 
-        return view('gimnasio/mesociclos/ver', [
+        return view(gim_vista('gimnasio/mesociclos/ver'), [
             'plan' => $plan,
             'pendientes' => $pendientes,
             'hechos' => $hechos,
@@ -168,7 +168,7 @@ class GimnasioMesociclos extends BaseController
             return redirect()->to(site_url("gimnasio/mesociclos/{$planId}"));
         }
 
-        return view('gimnasio/mesociclos/bloque_nuevo', compact('plan'));
+        return view(gim_vista('gimnasio/mesociclos/bloque_nuevo'), compact('plan'));
     }
 
     /** Vista simplificada “lo que toca” */
@@ -197,7 +197,7 @@ class GimnasioMesociclos extends BaseController
             ];
         }
 
-        return view('gimnasio/mesociclos/simplificado', compact('plan', 'rows'));
+        return view(gim_vista('gimnasio/mesociclos/simplificado'), compact('plan', 'rows'));
     }
 
     /** Asignar bloque a entrenamiento (stub simple) */
@@ -217,7 +217,7 @@ class GimnasioMesociclos extends BaseController
             return redirect()->to(site_url("gimnasio/mesociclos/{$planId}/simplificado"));
         }
 
-        return view('gimnasio/mesociclos/asignar', compact('planId', 'bloqueId'));
+        return view(gim_vista('gimnasio/mesociclos/asignar'), compact('planId', 'bloqueId'));
     }
 
     public function marcarHecho(int $bloqueId)
@@ -276,6 +276,11 @@ class GimnasioMesociclos extends BaseController
     {
         $plan = $this->planes->find($planId);
         if (!$plan) return redirect()->to(site_url('gimnasio/mesociclos'))->with('error', 'Plan no encontrado.');
+
+        // Solo por POST: con un GET (enlace abierto, precarga del navegador…) se generaban bloques sin querer
+        if ($this->request->getMethod() !== 'POST') {
+            return redirect()->to(site_url("gimnasio/mesociclos/{$planId}"));
+        }
 
         $pendientes = $this->bloques
             ->where('plan_id', $planId)
@@ -387,7 +392,7 @@ class GimnasioMesociclos extends BaseController
         $sugJusto    = $e1rmActual;               // igual
         $sugSobrado  = $e1rmActual + 5;         // o +3%
 
-        return view('gimnasio/mesociclos/ajustar', [
+        return view(gim_vista('gimnasio/mesociclos/ajustar'), [
             'plan'        => $plan,
             'sugFatigado' => $sugFatigado,
             'sugJusto'    => $sugJusto,
@@ -454,19 +459,11 @@ class GimnasioMesociclos extends BaseController
             ->where('estado !=', 'hecho')
             ->countAllResults();
 
-        if ($this->request->getMethod() === 'get') {
-            // Vista simple con botón “Generar” y knobs opcionales
-            return view('gimnasio/mesociclos/generar_bilbo', [
-                'plan' => $plan,
-                'bloquesPendientes' => $pendientes,
-                'defaults' => [
-                    'bo_sets' => 3,
-                    'bo_reps' => 8,
-                    'pico_min' => 0.93,
-                    'pico_max' => 0.95,
-                    'pico_bo_rel' => -0.50,
-                ]
-            ]);
+        // Solo por POST. Antes se comparaba con 'get' en minúsculas (CI 4.7 da
+        // 'GET'), así que un simple enlace generaba el lote; y la vista
+        // generar_bilbo a la que apuntaba nunca existió.
+        if ($this->request->getMethod() !== 'POST') {
+            return redirect()->to(site_url("gimnasio/mesociclos/{$planId}"));
         }
 
         // POST: generar

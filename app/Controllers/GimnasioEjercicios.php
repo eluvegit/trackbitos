@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Models\GimnasioEjerciciosModel;
+use App\Services\GimnasioStats;
 
 class GimnasioEjercicios extends BaseController
 {
@@ -15,71 +16,31 @@ class GimnasioEjercicios extends BaseController
         $this->model = new GimnasioEjerciciosModel();
     }
 
-    /**
-     * Progresión de un ejercicio: la mejor serie (por 1RM estimado, Epley) de
-     * cada fecha, más su PR y su última sesión. Se usa tanto en el resumen de
-     * los 3 básicos como en el historial completo de un ejercicio cualquiera.
-     */
-    private function calcularProgresion(int $ejercicioId): array
+    public function index()
     {
         $db = \Config\Database::connect();
 
-        $series = $db->table('gimnasio_series s')
-            ->select('en.fecha AS fecha, s.repeticiones, s.peso')
-            ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.id = s.entrenamiento_ejercicio_id')
-            ->join('gimnasio_entrenamientos en', 'en.id = ee.entrenamiento_id')
-            ->where('ee.ejercicio_id', $ejercicioId)
-            ->where('s.peso >', 0)
-            ->where('s.repeticiones >', 0)
-            ->orderBy('en.fecha', 'ASC')
-            ->get()->getResultArray();
-
-        $porFecha = [];
-        foreach ($series as $s) {
-            $peso = (float) $s['peso'];
-            $reps = (int) $s['repeticiones'];
-            $e1rm = $peso * (1 + $reps / 30);
-
-            $fecha = $s['fecha'];
-            if (!isset($porFecha[$fecha]) || $e1rm > $porFecha[$fecha]['e1rm']) {
-                $porFecha[$fecha] = [
-                    'fecha' => $fecha,
-                    'peso'  => $peso,
-                    'reps'  => $reps,
-                    'e1rm'  => round($e1rm, 1),
-                ];
-            }
-        }
-        $progresion = array_values($porFecha);
-
-        $pr = null;
-        foreach ($progresion as $p) {
-            if (!$pr || $p['e1rm'] > $pr['e1rm']) {
-                $pr = $p;
-            }
-        }
-
-        return [
-            'progresion' => $progresion,
-            'pr'         => $pr,
-            'ultimo'     => $progresion ? end($progresion) : null,
-        ];
-    }
-
-    public function index()
-    {
         $data['ejercicios'] = $this->model
-            ->select('gimnasio_ejercicios.*, gc.nombre AS catalogo_nombre')
+            ->select('gimnasio_ejercicios.*, gc.nombre AS catalogo_nombre, gc.imagen AS catalogo_imagen')
             ->join('gimnasio_catalogo gc', 'gc.id = gimnasio_ejercicios.catalogo_id', 'left')
             ->orderBy('grupo_muscular')->orderBy('gimnasio_ejercicios.nombre')
             ->findAll();
         $data['grupoNombres'] = gim_grupos();
-        return view('gimnasio/ejercicios/index', $data);
+
+        // Uso de cada ejercicio (veces entrenado y última fecha), para la vista nueva
+        $uso = $db->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ee.ejercicio_id, COUNT(*) AS veces, MAX(en.fecha) AS ultima')
+            ->join('gimnasio_entrenamientos en', 'en.id = ee.entrenamiento_id')
+            ->groupBy('ee.ejercicio_id')
+            ->get()->getResultArray();
+        $data['uso'] = array_column($uso, null, 'ejercicio_id');
+
+        return view(gim_vista('gimnasio/ejercicios/index'), $data);
     }
 
     public function create()
     {
-        return view('gimnasio/ejercicios/create');
+        return view(gim_vista('gimnasio/ejercicios/create'), ['grupo' => (string) $this->request->getGet('grupo')]);
     }
 
     /**
@@ -103,7 +64,6 @@ class GimnasioEjercicios extends BaseController
         return $this->response->setJSON($ejercicios);
     }
 
-
     public function store()
     {
         $this->model->save([
@@ -116,8 +76,11 @@ class GimnasioEjercicios extends BaseController
 
     public function edit($id)
     {
-        $data['ejercicio'] = $this->model->find($id);
-        return view('gimnasio/ejercicios/edit', $data);
+        $ejercicio = $this->model->find($id);
+        if (!$ejercicio) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+        return view(gim_vista('gimnasio/ejercicios/edit'), ['ejercicio' => $ejercicio]);
     }
 
     public function update($id)
@@ -136,6 +99,22 @@ class GimnasioEjercicios extends BaseController
         return redirect()->to(site_url('gimnasio/ejercicios'))->with('success', 'Ejercicio eliminado.');
     }
 
+    /** Marca/desmarca un ejercicio como principal (estrella). AJAX o formulario. */
+    public function principal($id)
+    {
+        $ej = $this->model->find($id);
+        if (!$ej) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        $nuevo = empty($ej['principal']) ? 1 : 0;
+        $this->model->update($id, ['principal' => $nuevo]);
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'principal' => $nuevo]);
+        }
+        return redirect()->back();
+    }
+
     public function estadisticas($id)
     {
         $db = \Config\Database::connect();
@@ -145,29 +124,34 @@ class GimnasioEjercicios extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Ejercicio no encontrado');
         }
 
-        $prog = $this->calcularProgresion((int) $id);
+        $prog = (new GimnasioStats())->progresion((int) $id);
 
         // Detalle de todas las series individuales (alimenta el buscador por peso)
         $seriesDetalle = $db->table('gimnasio_series s')
-            ->select('en.fecha AS fecha, s.series, s.repeticiones, s.peso, s.rpe, s.nota')
+            ->select('en.id AS entrenamiento_id, en.fecha AS fecha, s.series, s.repeticiones, s.peso, s.rpe, s.nota')
             ->join('gimnasio_entrenamiento_ejercicios ee', 'ee.id = s.entrenamiento_ejercicio_id', 'inner')
             ->join('gimnasio_entrenamientos en', 'en.id = ee.entrenamiento_id', 'inner')
             ->where('ee.ejercicio_id', $id)
             ->orderBy('en.fecha', 'DESC')
+            ->orderBy('s.orden', 'ASC')
             ->orderBy('s.id', 'ASC')
             ->get()->getResultArray();
 
-        return view('gimnasio/ejercicios/estadisticas', [
-            'ejercicio'      => $ejercicio,
-            'progresion'     => $prog['progresion'],
-            'pr'             => $prog['pr'],
-            'ultimo'         => $prog['ultimo'],
-            'seriesDetalle'  => $seriesDetalle,
-            'catalogo'       => !empty($ejercicio['catalogo_id'])
+        $hayCatalogo = $db->tableExists('gimnasio_catalogo');
+
+        return view(gim_vista('gimnasio/ejercicios/estadisticas'), [
+            'ejercicio'          => $ejercicio,
+            'progresion'         => $prog['progresion'],
+            'pr'                 => $prog['pr'],
+            'ultimo'             => $prog['ultimo'],
+            'volumen'            => $prog['volumen'],
+            'sesiones'           => $prog['sesiones'],
+            'seriesDetalle'      => $seriesDetalle,
+            'catalogo'           => !empty($ejercicio['catalogo_id'])
                 ? $db->table('gimnasio_catalogo')->where('id', $ejercicio['catalogo_id'])->get()->getRowArray()
                 : null,
             // Sugerencias para vincular o cambiar el vínculo (vacío si no hay catálogo importado)
-            'hayCatalogo'        => $hayCatalogo = $db->tableExists('gimnasio_catalogo'),
+            'hayCatalogo'        => $hayCatalogo,
             'candidatosCatalogo' => $hayCatalogo
                 ? (new \App\Services\GimnasioCatalogoService())->candidatosPara($ejercicio)
                 : [],
@@ -176,16 +160,25 @@ class GimnasioEjercicios extends BaseController
 
     public function principales()
     {
-        $db = \Config\Database::connect();
+        $stats = new GimnasioStats();
 
-        // 1) Localizar IDs de los 3 ejercicios (tolerante con nombres comunes)
+        if (gim_vista('x') === 'x_nueva') {
+            return view('gimnasio/ejercicios/estadisticas_principales_nueva', [
+                'principales' => $stats->principales(),
+                'semana'      => $stats->semanaPorGrupo(),
+                'constancia'  => $stats->constancia(),
+                'dias'        => $stats->dias(date('Y-m-d', strtotime('-26 weeks'))),
+            ]);
+        }
+
+        // Vista clásica: los 3 básicos buscados por nombre, como siempre
+        $db = \Config\Database::connect();
         $nombresBuscados = [
             'press banca'    => ['press banca', 'press de banca'],
             'peso muerto'    => ['peso muerto', 'deadlift'],
             'sentadillas'    => ['sentadilla', 'sentadillas', 'back squat', 'squat'],
         ];
 
-        // Buscar por LIKE (case-insensitive)
         $ejercicios = [];
         foreach ($nombresBuscados as $clave => $patrones) {
             $builder = $db->table('gimnasio_ejercicios');
@@ -198,20 +191,13 @@ class GimnasioEjercicios extends BaseController
             $ejercicios[$clave] = $row ?: null;
         }
 
-        // 2) Para cada ejercicio: progresión (mejor 1RM estimado por sesión), PR y últimas sesiones
-        $data = [
-            'ejercicios' => $ejercicios,
-            'bloques'    => [],
-        ];
-
+        $data = ['ejercicios' => $ejercicios, 'bloques' => []];
         foreach ($ejercicios as $clave => $ej) {
             if (!$ej) {
                 $data['bloques'][$clave] = null;
                 continue;
             }
-
-            $prog = $this->calcularProgresion((int) $ej['id']);
-
+            $prog = $stats->progresion((int) $ej['id']);
             $data['bloques'][$clave] = [
                 'progresion' => $prog['progresion'],
                 'pr'         => $prog['pr'],
@@ -222,6 +208,4 @@ class GimnasioEjercicios extends BaseController
 
         return view('gimnasio/ejercicios/estadisticas_principales', $data);
     }
-
-
 }

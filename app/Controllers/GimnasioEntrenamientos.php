@@ -34,8 +34,35 @@ class GimnasioEntrenamientos extends BaseController
         $model = new GimnasioEntrenamientosModel();
         $entrenamientos = $model->orderBy('fecha', 'DESC')->findAll();
 
-        return view('gimnasio/entrenamientos/index', [
-            'entrenamientos' => $entrenamientos
+        $vista = gim_vista('gimnasio/entrenamientos/index');
+        if ($vista === 'gimnasio/entrenamientos/index') {
+            return view($vista, ['entrenamientos' => $entrenamientos]);
+        }
+
+        $stats = new \App\Services\GimnasioStats();
+        $dias  = $stats->dias('1970-01-01');
+
+        // Nombres de los ejercicios de cada sesión (buscador y línea de resumen)
+        $nombres = \Config\Database::connect()->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ee.entrenamiento_id, GROUP_CONCAT(ge.nombre ORDER BY ee.orden SEPARATOR "|") AS nombres', false)
+            ->join('gimnasio_ejercicios ge', 'ge.id = ee.ejercicio_id')
+            ->groupBy('ee.entrenamiento_id')
+            ->get()->getResultArray();
+        $nombres = array_column($nombres, 'nombres', 'entrenamiento_id');
+
+        foreach ($entrenamientos as &$e) {
+            $d = $dias[$e['fecha']] ?? null;
+            $e['_ejercicios'] = $d['ejercicios'] ?? 0;
+            $e['_series']     = $d['series'] ?? 0;
+            $e['_volumen']    = $d['volumen'] ?? 0;
+            $e['_nombres']    = isset($nombres[$e['id']]) ? explode('|', $nombres[$e['id']]) : [];
+        }
+        unset($e);
+
+        return view($vista, [
+            'entrenamientos' => $entrenamientos,
+            'dias'           => $dias,
+            'constancia'     => $stats->constancia(),
         ]);
     }
 
@@ -114,7 +141,11 @@ class GimnasioEntrenamientos extends BaseController
             }
             $otro = $this->entrenamientosModel->where('fecha', $fecha)->where('id !=', $id)->first();
             if ($otro) {
-                return redirect()->back()->with('error', "Ya existe otro entrenamiento el " . date('d/m/Y', strtotime($fecha)) . '. No se ha cambiado la fecha.');
+                $msg = "Ya existe otro entrenamiento el " . date('d/m/Y', strtotime($fecha)) . '. No se ha cambiado la fecha.';
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON(['ok' => false, 'error' => $msg]);
+                }
+                return redirect()->back()->with('error', $msg);
             }
             $data['fecha'] = $fecha;
         }
@@ -127,6 +158,9 @@ class GimnasioEntrenamientos extends BaseController
         ];
 
         $this->entrenamientosModel->update($id, $data);
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON(['ok' => true, 'fecha' => $data['fecha'] ?? $ent['fecha']]);
+        }
         return redirect()->back()->with('mensaje', 'Datos del entrenamiento actualizados');
     }
 
@@ -240,7 +274,32 @@ class GimnasioEntrenamientos extends BaseController
             ->orderBy('p.nombre', 'ASC')
             ->get()->getResultArray();
 
-        return view('gimnasio/entrenamientos/registro', [
+        $vista = gim_vista('gimnasio/entrenamientos/registro');
+        $extra = [];
+        if ($vista !== 'gimnasio/entrenamientos/registro') {
+            // Récords: una serie es PR si su 1RM estimado supera lo mejor de
+            // las sesiones anteriores (y había algo con qué comparar).
+            $stats = new \App\Services\GimnasioStats();
+            foreach ($ejerciciosAgrupados as &$g) {
+                $mejorPrevio = $stats->mejorAntes($g['ejercicio_id'], $entrenamiento['fecha']);
+                $g['mejor_previo'] = $mejorPrevio;
+                foreach ($g['series'] as &$s) {
+                    $e = \App\Services\GimnasioStats::e1rm((float) $s['peso'], (int) $s['repeticiones']);
+                    $s['pr'] = $mejorPrevio > 0 && $e > $mejorPrevio;
+                }
+                unset($s);
+            }
+            unset($g);
+
+            $extra = [
+                'constancia' => $stats->constancia(),
+                'esHoy'      => $entrenamiento['fecha'] === date('Y-m-d'),
+                'todos'      => $db->table('gimnasio_ejercicios')->select('id, nombre, grupo_muscular')
+                    ->orderBy('nombre')->get()->getResultArray(),
+            ];
+        }
+
+        return view($vista, $extra + [
             'entrenamiento'       => $entrenamiento,
             'fecha'               => $entrenamiento['fecha'],
             'entrenamiento_id'    => $id,
@@ -306,8 +365,19 @@ class GimnasioEntrenamientos extends BaseController
 
         $ejercicioInfo = $this->ejerciciosModel->find($ejercicioId);
 
+        // ¿Récord? Se compara con todo lo anterior (incluidas las series de
+        // hoy), así el aviso salta justo en la serie que lo bate.
+        $peso = (float) $req->getPost('peso');
+        $reps = (int) $req->getPost('repeticiones');
+        $e1rm = \App\Services\GimnasioStats::e1rm($peso, $reps);
+        $mejorPrevio = (new \App\Services\GimnasioStats())->mejorAntes($ejercicioId, null, (int) $serieId);
+        $pr = $e1rm > 0 && $mejorPrevio > 0 && $e1rm > $mejorPrevio
+            ? ['e1rm' => $e1rm, 'anterior' => $mejorPrevio]
+            : null;
+
         return $this->response->setJSON([
             'ok'    => true,
+            'pr'    => $pr,
             'serie' => [
                 'id'           => $serieId,
                 'series'       => (int) $req->getPost('series'),
@@ -343,6 +413,53 @@ class GimnasioEntrenamientos extends BaseController
             ->get()->getRowArray();
 
         return $this->response->setJSON($row ?: new \stdClass());
+    }
+
+    /**
+     * "La última vez": todas las series del ejercicio en la sesión más
+     * reciente en la que se hizo (sin contar la actual, ?excluir=id), más su
+     * récord, para enseñarlo al elegir el ejercicio y precargar valores.
+     */
+    public function ultimaSesion($ejercicioId)
+    {
+        $db = \Config\Database::connect();
+        $excluir = (int) $this->request->getGet('excluir');
+
+        $b = $db->table('gimnasio_entrenamiento_ejercicios ee')
+            ->select('ee.id AS ee_id, en.id AS entrenamiento_id, en.fecha')
+            ->join('gimnasio_entrenamientos en', 'en.id = ee.entrenamiento_id')
+            ->join('gimnasio_series s', 's.entrenamiento_ejercicio_id = ee.id')
+            ->where('ee.ejercicio_id', (int) $ejercicioId);
+        if ($excluir) {
+            $b->where('en.id !=', $excluir);
+        }
+        $ultima = $b->orderBy('en.fecha', 'DESC')->limit(1)->get()->getRowArray();
+
+        if (!$ultima) {
+            return $this->response->setJSON(['ok' => true, 'sesion' => null]);
+        }
+
+        $series = $db->table('gimnasio_series')
+            ->select('series, repeticiones, peso, rpe, nota')
+            ->where('entrenamiento_ejercicio_id', $ultima['ee_id'])
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')
+            ->get()->getResultArray();
+
+        return $this->response->setJSON([
+            'ok'     => true,
+            'sesion' => [
+                'fecha'  => $ultima['fecha'],
+                'cuando' => gim_hace($ultima['fecha']) . ' · ' . gim_fecha_corta($ultima['fecha']),
+                'series' => array_map(fn ($s) => [
+                    'series'       => (int) $s['series'],
+                    'repeticiones' => (int) $s['repeticiones'],
+                    'peso'         => (float) $s['peso'],
+                    'rpe'          => $s['rpe'] !== null ? (int) $s['rpe'] : null,
+                    'nota'         => $s['nota'],
+                ], $series),
+            ],
+            'record' => (new \App\Services\GimnasioStats())->mejorAntes((int) $ejercicioId),
+        ]);
     }
 
     /**
@@ -620,6 +737,28 @@ class GimnasioEntrenamientos extends BaseController
         $detallePorEj = [];
         foreach ($series as $row) {
             $detallePorEj[$row['ejercicio_id']][] = $row;
+        }
+
+        // Vista nueva: los principales son los ejercicios con estrella
+        if ($this->request->getGet('v') === 'nueva') {
+            $principales = [];
+            foreach ((new \App\Services\GimnasioStats())->principales() as $p) {
+                $mejor = null;
+                foreach ($detallePorEj[$p['id']] ?? [] as $d) {
+                    $e1 = \App\Services\GimnasioStats::e1rm((float) $d['peso'], (int) $d['repeticiones']);
+                    if ($e1 > 0 && (!$mejor || $e1 > $mejor['e1rm'])) {
+                        $mejor = ['peso' => (float) $d['peso'], 'reps' => (int) $d['repeticiones'], 'e1rm' => $e1];
+                    }
+                }
+                $principales[] = ['nombre' => $p['nombre'], 'mejor' => $mejor];
+            }
+            return view('gimnasio/entrenamientos/_resumen_nueva', [
+                'ent'          => $ent,
+                'global'       => $global,
+                'porEjercicio' => $porEjercicio,
+                'detallePorEj' => $detallePorEj,
+                'principales'  => $principales,
+            ]);
         }
 
         // Los 3 básicos hechos (o no) en esta sesión, para destacarlos arriba del todo

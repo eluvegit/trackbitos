@@ -36,7 +36,7 @@ class GimnasioCatalogo extends BaseController
             $vinculos[$e['catalogo_id']][] = $e['nombre'];
         }
 
-        return view('gimnasio/catalogo/index', [
+        return view(gim_vista('gimnasio/catalogo/index'), [
             'filas'    => $filas,
             'vinculos' => $vinculos,
         ]);
@@ -49,7 +49,7 @@ class GimnasioCatalogo extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Ejercicio de catálogo no encontrado');
         }
 
-        return view('gimnasio/catalogo/ver', [
+        return view(gim_vista('gimnasio/catalogo/ver'), [
             'c'           => $c,
             'pasos'       => json_decode($c['pasos_es'] ?? '[]', true) ?: [],
             'vinculados'  => $this->ejercicios->where('catalogo_id', $id)->orderBy('nombre')->findAll(),
@@ -124,7 +124,7 @@ class GimnasioCatalogo extends BaseController
     /** Revisión en lote: sugerencias del catálogo para mis ejercicios sin vincular. */
     public function vincularLote()
     {
-        return view('gimnasio/catalogo/vincular_lote', [
+        return view(gim_vista('gimnasio/catalogo/vincular_lote'), [
             'sugerencias' => (new GimnasioCatalogoService())->sugerencias(),
             'grupos'      => gim_grupos(),
         ]);

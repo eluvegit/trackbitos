@@ -641,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!confirm('¿Eliminar esta serie?')) return;
             const li = delBtn.closest('li');
             const bloque = delBtn.closest('.ej-block');
-            fetch(urlEliminarSerie + delBtn.dataset.id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            fetch(urlEliminarSerie + delBtn.dataset.id, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                 .then(r => r.json())
                 .then(data => {
                     if (!data.ok) return;

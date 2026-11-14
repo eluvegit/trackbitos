@@ -193,7 +193,7 @@ $routes->group('gimnasio', ['filter' => 'admin'], function ($routes) {
     $routes->GET('ejercicios/por-grupo/(:segment)', 'GimnasioEjercicios::porGrupo/$1');
 
     $routes->GET('ejercicios/estadisticas/(:num)', 'GimnasioEjercicios::estadisticas/$1');
-    $routes->GET('ejercicios/estadisticas/(:num)', 'GimnasioEjercicios::estadisticas/$1');
+    $routes->POST('ejercicios/principal/(:num)', 'GimnasioEjercicios::principal/$1');
     $routes->GET('ejercicios/principales', 'GimnasioEjercicios::principales');
 
     // Catálogo externo (exercises-dataset): biblioteca aparte de mis ejercicios
@@ -209,13 +209,14 @@ $routes->group('gimnasio', ['filter' => 'admin'], function ($routes) {
 
     $routes->GET('entrenamientos', 'GimnasioEntrenamientos::index');
     $routes->POST('entrenamientos/crear', 'GimnasioEntrenamientos::crear');
-    $routes->GET('entrenamientos/eliminar/(:num)', 'GimnasioEntrenamientos::eliminar/$1');
+    $routes->POST('entrenamientos/eliminar/(:num)', 'GimnasioEntrenamientos::eliminar/$1');
     $routes->POST('entrenamientos/actualizar-datos/(:num)', 'GimnasioEntrenamientos::actualizarDatos/$1');
     $routes->GET('entrenamientos/registro/(:segment)', 'GimnasioEntrenamientos::registro/$1');
     $routes->POST('entrenamientos/guardar-serie', 'GimnasioEntrenamientos::guardarSerie');
-    $routes->GET('entrenamientos/eliminar-serie/(:num)', 'GimnasioEntrenamientos::eliminarSerie/$1');
+    $routes->POST('entrenamientos/eliminar-serie/(:num)', 'GimnasioEntrenamientos::eliminarSerie/$1');
     $routes->POST('entrenamientos/actualizar-serie/(:num)', 'GimnasioEntrenamientos::actualizarSerie/$1');
     $routes->GET('entrenamientos/ultimo-valor/(:num)', 'GimnasioEntrenamientos::ultimoValor/$1');
+    $routes->GET('entrenamientos/ultima-sesion/(:num)', 'GimnasioEntrenamientos::ultimaSesion/$1');
     $routes->POST('entrenamientos/reordenar-ejercicio', 'GimnasioEntrenamientos::reordenarEjercicio');
     $routes->POST('entrenamientos/reutilizar/(:num)', 'GimnasioEntrenamientos::reutilizar/$1');
 
@@ -226,11 +227,11 @@ $routes->group('gimnasio', ['filter' => 'admin'], function ($routes) {
     // PLANTILLAS
     $routes->GET('plantillas', 'GimnasioPlantillas::index');
     $routes->POST('plantillas/crear', 'GimnasioPlantillas::crear');
-    $routes->GET('plantillas/eliminar/(:num)', 'GimnasioPlantillas::eliminar/$1');
+    $routes->POST('plantillas/eliminar/(:num)', 'GimnasioPlantillas::eliminar/$1');
     $routes->POST('plantillas/renombrar/(:num)', 'GimnasioPlantillas::renombrar/$1');
     $routes->GET('plantillas/editar/(:num)', 'GimnasioPlantillas::editar/$1');
     $routes->POST('plantillas/guardar-serie', 'GimnasioPlantillas::guardarSerie');
-    $routes->GET('plantillas/eliminar-serie/(:num)', 'GimnasioPlantillas::eliminarSerie/$1');
+    $routes->POST('plantillas/eliminar-serie/(:num)', 'GimnasioPlantillas::eliminarSerie/$1');
     $routes->POST('plantillas/actualizar-serie/(:num)', 'GimnasioPlantillas::actualizarSerie/$1');
     $routes->POST('plantillas/reordenar-ejercicio', 'GimnasioPlantillas::reordenarEjercicio');
     $routes->POST('plantillas/aplicar/(:num)', 'GimnasioPlantillas::aplicar/$1');

@@ -212,9 +212,9 @@
                 <input type="hidden" name="plantilla" value="estandar">
                 <button class="meso-pill meso-pill-accent"><i class="bi bi-arrow-repeat"></i> Generar lote</button>
             </form>
-            <a href="<?= site_url('gimnasio/mesociclos/' . $plan['id'] . '/generar/bilbo') ?>" class="meso-pill meso-pill-accent">
-                <i class="bi bi-arrow-repeat"></i> Generar BILBO
-            </a>
+            <form method="post" action="<?= site_url('gimnasio/mesociclos/' . $plan['id'] . '/generar/bilbo') ?>" class="d-inline">
+                <button class="meso-pill meso-pill-accent"><i class="bi bi-arrow-repeat"></i> Generar BILBO</button>
+            </form>
         <?php else: ?>
             <span class="meso-pill meso-pill-disabled">Generar (bloques pendientes)</span>
         <?php endif; ?>

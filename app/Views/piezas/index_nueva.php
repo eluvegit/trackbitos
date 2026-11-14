@@ -579,7 +579,10 @@ $listaCats = array_map(static fn($c) => ['id' => (int) $c['id'], 'n' => $c['nomb
 
     pintarChips();
     pintar();
-    if (!location.hash) document.getElementById('piBuscar').focus({ preventScroll: true });
+    // Solo con ratón: en móvil/táctil el foco saca el teclado nada más entrar.
+    if (!location.hash && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        document.getElementById('piBuscar').focus({ preventScroll: true });
+    }
 })();
 </script>
 

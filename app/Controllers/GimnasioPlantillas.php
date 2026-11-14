@@ -36,10 +36,15 @@ class GimnasioPlantillas extends BaseController
         foreach ($plantillas as &$p) {
             $p['num_ejercicios'] = $this->plantillaEjerciciosModel
                 ->where('plantilla_id', $p['id'])->countAllResults();
+            $p['_nombres'] = array_column($db->table('gimnasio_plantilla_ejercicios pe')
+                ->select('ge.nombre')
+                ->join('gimnasio_ejercicios ge', 'ge.id = pe.ejercicio_id')
+                ->where('pe.plantilla_id', $p['id'])
+                ->orderBy('pe.orden')->get()->getResultArray(), 'nombre');
         }
         unset($p);
 
-        return view('gimnasio/plantillas/index', ['plantillas' => $plantillas]);
+        return view(gim_vista('gimnasio/plantillas/index'), ['plantillas' => $plantillas]);
     }
 
     public function crear()
@@ -146,12 +151,14 @@ class GimnasioPlantillas extends BaseController
             ->limit(20)
             ->get()->getResultArray();
 
-        return view('gimnasio/plantillas/editar', [
+        return view(gim_vista('gimnasio/plantillas/editar'), [
             'plantilla'           => $plantilla,
             'plantilla_id'        => $id,
             'ejerciciosAgrupados' => $ejerciciosAgrupados,
             'recientes'           => $recientes,
             'grupos'              => gim_grupos(),
+            'todos'               => $db->table('gimnasio_ejercicios')->select('id, nombre, grupo_muscular')
+                ->orderBy('nombre')->get()->getResultArray(),
         ]);
     }
 

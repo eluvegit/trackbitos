@@ -311,10 +311,10 @@ foreach ($entrenamientos as $e) {
                                         <button type="button" class="ent-icon-btn btn-preview-entrenamiento" data-id="<?= (int) $e['id'] ?>" title="Ver resumen">
                                             <i class="bi bi-eye"></i>
                                         </button>
-                                        <a href="<?= site_url('gimnasio/entrenamientos/eliminar/' . $e['id']) ?>" class="ent-icon-btn ent-icon-btn-danger"
-                                           onclick="return confirm('¿Seguro que deseas eliminar este entrenamiento?')" title="Eliminar">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
+                                        <form method="post" action="<?= site_url('gimnasio/entrenamientos/eliminar/' . $e['id']) ?>" class="m-0 d-inline"
+                                              onsubmit="return confirm('¿Seguro que deseas eliminar este entrenamiento?')">
+                                            <button class="ent-icon-btn ent-icon-btn-danger" title="Eliminar"><i class="bi bi-trash"></i></button>
+                                        </form>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
