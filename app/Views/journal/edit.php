@@ -15,6 +15,7 @@ $subtaskTitleById = array_column($subtasks, 'title', 'id');
 
 <div class="jt-header mb-2">
     <a href="<?= site_url('journal') ?>" class="jt-back"><i class="bi bi-chevron-left"></i> Journal</a>
+    <a href="<?= site_url('journal/edit/' . $task['id']) ?>?nueva=1" class="jt-back ms-3"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </div>
 
 <?php if (session('success')): ?>

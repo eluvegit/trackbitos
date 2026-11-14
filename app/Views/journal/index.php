@@ -63,6 +63,9 @@
         <a href="<?= site_url('journal/focalizar') ?>" class="btn btn-outline-primary" title="Focalizar">
             <i class="bi bi-bullseye"></i>
         </a>
+        <a href="<?= site_url('journal') ?>?nueva=1" class="btn btn-outline-secondary" title="Vista nueva">
+            <i class="bi bi-arrow-left-right"></i>
+        </a>
         <button id="toggleAllBtn" class="btn btn-outline-secondary" type="button" title="Mostrar todo">
             <i class="bi bi-arrows-expand"></i>
         </button>

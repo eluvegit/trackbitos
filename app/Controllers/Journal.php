@@ -38,6 +38,14 @@ class Journal extends BaseController
      */
     public function index()
     {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('journal_nueva', $nueva === '1');
+        }
+        if (session('journal_nueva') !== false) {
+            return view('journal/index_nueva', $this->buildGridData('listado', 'todas', '1', 'mostrar'));
+        }
+
         // Leer parámetros de la URL; si no vienen (recarga o entrada directa),
         // se recuperan de la cookie del último filtro elegido.
         $viewMode = $this->stickyFilter('view', 'listado');
@@ -291,7 +299,12 @@ class Journal extends BaseController
             $horasPorCategoria[$catName] = round(array_sum(array_column($tareas, 'time_spent')) / 60, 1);
         }
 
-        return view('journal/que_hacer', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('journal_qh_nueva', $nueva === '1');
+        }
+
+        return view(session('journal_qh_nueva') !== false ? 'journal/que_hacer_nueva' : 'journal/que_hacer', [
             'sugeridos'         => $sugeridos,
             'categorias'        => $categories,
             'horasPorCategoria' => $horasPorCategoria,
@@ -361,9 +374,17 @@ class Journal extends BaseController
             return $ordenA <=> $ordenB;
         });
 
-        return view('journal/focalizar', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('journal_foco_nueva', $nueva === '1');
+        }
+        $esNueva = session('journal_foco_nueva') !== false;
+
+        return view($esNueva ? 'journal/focalizar_nueva' : 'journal/focalizar', [
             'starredByCategory' => $starredByCategory,
             'enFocoOrdered'     => $enFocoOrdered,
+            'lastTaskActivity'  => $esNueva ? $this->taskLogModel->getLastActivityPerTask() : [],
+            'colores'           => array_column($categories, 'color', 'name'),
         ]);
     }
 
@@ -544,13 +565,22 @@ class Journal extends BaseController
             $this->taskModel->update($taskId, $data);
             $this->readingSync->pushTaskToBook($taskId, true);
 
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON(['success' => true]);
+            }
+
             return redirect()->to('/journal/edit/' . $taskId)->with('success', 'Registro actualizado correctamente.');
         }
 
         // Obtener logs para calendario
         $logs = $this->taskLogModel->where('task_id', $taskId)->orderBy('log_date', 'DESC')->findAll();
 
-        return view('journal/edit', [
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('journal_ficha_nueva', $nueva === '1');
+        }
+
+        return view(session('journal_ficha_nueva') !== false ? 'journal/edit_nueva' : 'journal/edit', [
             'task'      => $task,
             'logs'      => $logs,
             'subtasks'  => $this->subtaskModel->getForTask($taskId),

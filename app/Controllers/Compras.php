@@ -282,8 +282,9 @@ class Compras extends BaseController
         $siguienteOrden = (int) ($superModel->selectMax('orden')->first()['orden'] ?? 0) + 1;
 
         $superModel->insert([
-            'nombre' => $this->request->getPost('nombre'),
-            'orden'  => $siguienteOrden,
+            'nombre'      => $this->request->getPost('nombre'),
+            'descripcion' => $this->request->getPost('descripcion'),
+            'orden'       => $siguienteOrden,
         ]);
         return redirect()->to(site_url('compras/supermercados'));
     }
@@ -297,7 +298,7 @@ class Compras extends BaseController
             return redirect()->to(site_url('compras/supermercados'))->with('error', 'Supermercado no encontrado.');
         }
 
-        return view('compras/supermercados/form', ['supermercado' => $supermercado]);
+        return view('compras/supermercados/form', ['supermercado' => $supermercado, 'volver' => $this->urlSuper($id)]);
     }
 
     public function guardarSupermercado($id)
@@ -479,7 +480,8 @@ class Compras extends BaseController
         return view('compras/productos/form', [
             'producto' => $producto,
             'supermercado' => $supermercado,
-            'zonas' => $zonas
+            'zonas' => $zonas,
+            'volver' => $this->urlSuper($producto['supermercado_id'], '#catalogo'),
         ]);
     }
 
@@ -767,7 +769,8 @@ class Compras extends BaseController
             'zonas' => $zonas,
             'sugerencias' => $sugerencias,
             'supermercado_id' => $supermercadoId,
-            'supermercado_nombre' => $supermercado['nombre']
+            'supermercado_nombre' => $supermercado['nombre'],
+            'volver' => $this->urlSuper($supermercadoId),
         ]);
     }
 

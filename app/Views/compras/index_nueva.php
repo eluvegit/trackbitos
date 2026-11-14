@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/compras.css') ?>?v=3">
+<link rel="stylesheet" href="<?= base_url('assets/css/compras.css') ?>?v=4">
 <?php $pendientes = count(array_filter($supermercados, fn ($s) => $s['faltan'] > 0)); ?>
 <div class="fv cp">
     <div class="fv-top">
