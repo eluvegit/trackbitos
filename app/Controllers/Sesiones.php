@@ -68,6 +68,14 @@ class Sesiones extends BaseController
             return redirect()->to(site_url('sesiones'))->with('error', 'Sesión no encontrada.');
         }
 
+        // Rodajes vinculados (módulo Rodajes, independiente): con su progreso de plató.
+        $detalle['rodajes'] = (new \App\Models\RodajesProyectoModel())
+            ->select("rodajes_proyectos.id, rodajes_proyectos.titulo, COUNT(e.id) AS total, SUM(e.toma_estado = 'hecha') AS hechas", false)
+            ->join('rodajes_escenas e', 'e.proyecto_id = rodajes_proyectos.id AND e.deleted_at IS NULL', 'left')
+            ->where('rodajes_proyectos.sesion_id', $id)
+            ->groupBy('rodajes_proyectos.id, rodajes_proyectos.titulo')
+            ->findAll();
+
         return view('sesiones/show', $detalle);
     }
 

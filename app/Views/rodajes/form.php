@@ -21,6 +21,19 @@
             <label class="form-label">Descripción</label>
             <textarea name="descripcion" class="form-control" rows="3"><?= old('descripcion', $proyecto['descripcion'] ?? '') ?></textarea>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Sesión de stock vinculada <span class="text-muted small">(opcional)</span></label>
+            <?php $sesSel = (int) old('sesion_id', $proyecto['sesion_id'] ?? 0); ?>
+            <select name="sesion_id" class="form-select">
+                <option value="">— Ninguna —</option>
+                <?php foreach ($sesiones ?? [] as $sid => $s): ?>
+                    <option value="<?= $sid ?>" <?= $sesSel === $sid ? 'selected' : '' ?>>
+                        <?= esc($s['titulo']) ?><?= $s['fecha_sesion'] ? ' · ' . esc($s['fecha_sesion']) : '' ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <div class="form-text">Permite traer las situaciones de la sesión como escenas, enviar los bloques del rodaje como situaciones y ver su moodboard en el modo plató.</div>
+        </div>
         <div class="d-flex gap-2">
             <button class="btn btn-primary" type="submit">Guardar</button>
             <a class="btn btn-secondary" href="<?= site_url('rodajes') ?>">Volver</a>

@@ -37,6 +37,22 @@ class BookModel extends Model
             ->findAll();
     }
 
+    /** [status => nº de libros] para las pestañas de la biblioteca. */
+    public function conteosPorEstado(): array
+    {
+        $filas = $this->builder()->select('status, COUNT(*) AS n')->groupBy('status')->get()->getResultArray();
+
+        return array_map('intval', array_column($filas, 'n', 'status'));
+    }
+
+    public function terminadosEnAnio(int $anio): int
+    {
+        return $this->where('status', 'terminado')
+            ->where('finished_at >=', $anio . '-01-01')
+            ->where('finished_at <=', $anio . '-12-31')
+            ->countAllResults();
+    }
+
     /**
      * Porcentaje de progreso (0-100) si el libro tiene total_pages definido.
      */

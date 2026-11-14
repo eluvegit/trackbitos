@@ -30,11 +30,28 @@
                             </div>
 
                             <h5 class="card-title fw-bold mb-2"><?= esc($titulo) ?></h5>
-                            <p class="card-text text-muted small mb-4 text-truncate-2">
+                            <?php $sesV = !empty($p['sesion_id']) ? ($sesiones[(int) $p['sesion_id']] ?? null) : null; ?>
+                            <?php if ($sesV): ?>
+                                <a class="badge text-bg-secondary text-decoration-none mb-2" href="<?= site_url('sesiones/' . $sesV['id']) ?>">
+                                    <i class="bi bi-camera me-1"></i><?= esc($sesV['titulo']) ?>
+                                </a>
+                            <?php endif; ?>
+                            <p class="card-text text-muted small mb-3 text-truncate-2">
                                 <?= esc($desc) ?>
                             </p>
 
+                            <?php $pr = $progreso[$id] ?? null; ?>
+                            <?php if ($pr && $pr['total']): ?>
+                                <div class="d-flex align-items-center gap-2 small text-muted mb-3">
+                                    <div class="progress flex-grow-1" style="height:6px"><div class="progress-bar bg-success" style="width:<?= round($pr['hechas'] / $pr['total'] * 100) ?>%"></div></div>
+                                    <span><?= $pr['hechas'] ?>/<?= $pr['total'] ?> tomas</span>
+                                </div>
+                            <?php endif; ?>
+
                             <div class="d-grid gap-2">
+                                <a class="btn btn-success btn-sm d-flex align-items-center justify-content-center" href="<?= site_url('rodajes/' . $id . '/plato') ?>">
+                                    <i class="bi bi-phone me-2"></i> Modo plató
+                                </a>
                                 <a class="btn btn-outline-light btn-sm d-flex align-items-center justify-content-center" href="<?= site_url('rodajes/' . $id . '/escenas') ?>">
                                     <i class="bi bi-film me-2"></i> Ver Escenas
                                 </a>

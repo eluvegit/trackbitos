@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\BookModel;
+use App\Models\ReadingGoalModel;
 use App\Models\ReadingSessionModel;
 use App\Services\BookLookupService;
 use App\Services\ReadingJournalSyncService;
@@ -27,6 +28,7 @@ class Reading extends BaseController
         $this->bookModel = new BookModel();
         $this->sessionModel = new ReadingSessionModel();
         $this->syncService = new ReadingJournalSyncService();
+        helper('lectura');
     }
 
     /**
@@ -46,16 +48,51 @@ class Reading extends BaseController
         }
         unset($libro);
 
-        return view('reading/library', [
+        $vista = lec_vista('reading/library');
+        $data = [
             'estados'    => self::ESTADOS,
             'tabActual'  => $tab,
             'libros'     => $libros,
-        ]);
+        ];
+
+        if ($vista === 'reading/library_nueva') {
+            $anio = (int) date('Y');
+            $meta = (new ReadingGoalModel())->forYear($anio);
+
+            $ultimas = $this->sessionModel->ultimaPorLibro(array_map('intval', array_column($libros, 'id')));
+            foreach ($libros as &$libro) {
+                $libro['ultima'] = $ultimas[$libro['id']] ?? null;
+            }
+            unset($libro);
+            $data['libros'] = $libros;
+
+            // En "Leyendo", cada tarjeta lleva su check del día y sus puntos.
+            if ($tab === 'leyendo') {
+                $hoy = $this->sessionModel->hoyPorLibro(array_map('intval', array_column($libros, 'id')));
+                foreach ($libros as &$libro) {
+                    $libro['hoy'] = $hoy[$libro['id']] ?? null;
+                    $libro['constancia'] = $this->sessionModel->constanciaVentana((int) $libro['id'], 14);
+                }
+                unset($libro);
+                $data['libros'] = $libros;
+            }
+
+            $data += [
+                'conteos'    => $this->bookModel->conteosPorEstado(),
+                'anio'       => $anio,
+                'terminados' => $this->bookModel->terminadosEnAnio($anio),
+                'meta'       => $meta ? (int) $meta['target_books'] : null,
+                'global'     => $this->sessionModel->constanciaGlobal(30),
+                'ultimaVez'  => $this->sessionModel->ultimaGlobal(),
+            ];
+        }
+
+        return view($vista, $data);
     }
 
     public function nuevoLibro()
     {
-        return view('reading/form', ['libro' => null]);
+        return view(lec_vista('reading/form'), ['libro' => null]);
     }
 
     /**
@@ -112,12 +149,24 @@ class Reading extends BaseController
 
         $libro['progreso'] = $this->bookModel->progreso($libro);
 
-        return view('reading/book_detail', [
+        $vista = lec_vista('reading/book_detail');
+        $sesiones = $this->sessionModel->getForBook($id);
+        $data = [
             'libro'      => $libro,
             'hoy'        => $this->sessionModel->getForToday($id),
             'constancia' => $this->sessionModel->constanciaVentana($id),
-            'historial'  => array_slice($this->sessionModel->getForBook($id), 0, 10),
-        ]);
+            'historial'  => array_slice($sesiones, 0, 10),
+        ];
+
+        if ($vista === 'reading/book_detail_nueva') {
+            $data['historial']    = array_slice($sesiones, 0, 30);
+            $data['hayMas']       = count($sesiones) > 30;
+            $data['resumen']      = $this->sessionModel->resumenLibro($id);
+            // Todos los pensamientos aparcados, juntos: para releerlos al acabar.
+            $data['pensamientos'] = array_values(array_filter($sesiones, fn ($s) => !empty($s['parked_thought'])));
+        }
+
+        return view($vista, $data);
     }
 
     public function actualizarLibro(int $id)
@@ -239,6 +288,30 @@ class Reading extends BaseController
 
         $libroActualizado = $this->bookModel->find($bookId);
         $this->syncService->pushBookSettingsToTask((int) $libroAntes['task_id'], $libroActualizado);
+    }
+
+    /**
+     * Meta de libros del año (opcional): vacío o 0 la quita. Solo informa,
+     * nunca se usa para avisar de "vas por detrás".
+     */
+    public function guardarMeta()
+    {
+        $anio   = (int) date('Y');
+        $valor  = (int) $this->request->getPost('target_books');
+        $goals  = new ReadingGoalModel();
+        $actual = $goals->forYear($anio);
+
+        if ($valor <= 0) {
+            if ($actual) {
+                $goals->delete($actual['id']);
+            }
+        } elseif ($actual) {
+            $goals->update($actual['id'], ['target_books' => min($valor, 999)]);
+        } else {
+            $goals->insert(['year' => $anio, 'target_books' => min($valor, 999)]);
+        }
+
+        return redirect()->to(site_url('reading') . '?' . http_build_query(['tab' => $this->request->getPost('tab') ?: 'leyendo']));
     }
 
     public function borrarLibro(int $id)

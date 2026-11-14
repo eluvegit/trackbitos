@@ -1,0 +1,186 @@
+<?= $this->extend('layouts/default') ?>
+<?= $this->section('content') ?>
+<?php
+/**
+ * @var array      $proyecto
+ * @var array|null $sesion
+ * @var array      $escenas
+ * @var array      $multimedia [escena_id => ['ruta','es_video','ext']]
+ * @var array      $numMedia   [escena_id => n]
+ */
+$pid = (int) $proyecto['id'];
+$estadosUi = rod_toma_estados();
+
+// Grupos por bloque, en el orden en que aparece cada bloque por primera vez.
+$grupos = [];
+$cuenta = array_fill_keys(array_keys($estadosUi), 0);
+foreach ($escenas as $e) {
+    $nombre = trim((string) $e['escena_bloque']);
+    $clave  = mb_strtolower($nombre);
+    $grupos[$clave] ??= ['nombre' => $nombre !== '' ? $nombre : 'Sin bloque', 'escenas' => []];
+    $grupos[$clave]['escenas'][] = $e;
+    $cuenta[$e['toma_estado'] ?: 'pendiente']++;
+}
+$total = count($escenas);
+
+$sub = ['<span>' . $total . ' ' . ($total === 1 ? 'escena' : 'escenas') . '</span>'];
+if ($total) $sub[] = '<span>' . $cuenta['hecha'] . ' hechas</span>';
+if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesion['id']) . '"><i class="bi bi-camera"></i>' . esc($sesion['titulo']) . '</a>';
+
+ob_start(); ?>
+<a class="fv-btn fv-btn-pri" href="<?= site_url("rodajes/$pid/plato") ?>"><i class="bi bi-phone"></i>Plató</a>
+<a class="fv-btn" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Escena</a>
+<details class="rd-menu">
+    <summary class="fv-btn" title="Más"><i class="bi bi-three-dots"></i></summary>
+    <div class="rd-menu-pop">
+        <a href="<?= site_url("rodajes/$pid/escenas/storyboard") ?>"><i class="bi bi-layout-text-window-reverse"></i>Storyboard</a>
+        <a href="<?= site_url("rodajes/$pid/escenas/ordenrodaje") ?>"><i class="bi bi-sort-down"></i>Plan por clasificación</a>
+        <a href="<?= site_url("rodajes/$pid/dialogos") ?>"><i class="bi bi-chat-quote"></i>Diálogos</a>
+        <a href="<?= site_url("rodajes/edit/$pid") ?>"><i class="bi bi-pencil"></i>Editar proyecto</a>
+        <?php if ($sesion): ?>
+            <hr>
+            <small>Sesión «<?= esc($sesion['titulo']) ?>» — solo añade lo que falta</small>
+            <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
+                <?= csrf_field() ?><input type="hidden" name="direccion" value="traer">
+                <button type="submit"><i class="bi bi-box-arrow-in-down"></i>Traer situaciones como escenas</button>
+            </form>
+            <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
+                <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar">
+                <button type="submit"><i class="bi bi-box-arrow-up"></i>Enviar bloques como situaciones</button>
+            </form>
+        <?php endif; ?>
+    </div>
+</details>
+<?php $acciones = ob_get_clean(); ?>
+
+<div class="fv rd">
+    <?= view('rodajes/_cabecera', [
+        'migas'    => [$proyecto['titulo'] => null],
+        'titulo'   => esc($proyecto['titulo']),
+        'sub'      => implode('<span class="fv-dot"></span>', $sub),
+        'acciones' => $acciones,
+    ]) ?>
+
+    <?php if (!$escenas): ?>
+        <div class="fv-panel rd-vacio">
+            <i class="bi bi-film"></i>
+            <div>Este rodaje no tiene escenas todavía.</div>
+            <div class="rd-herr" style="justify-content:center">
+                <a class="fv-btn fv-btn-pri" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Crear la primera</a>
+                <?php if ($sesion): ?>
+                    <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
+                        <?= csrf_field() ?><input type="hidden" name="direccion" value="traer">
+                        <button type="submit" class="fv-btn"><i class="bi bi-box-arrow-in-down"></i>Traer situaciones de la sesión</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="rd-herr">
+            <input type="search" class="fv-input" id="rdBuscar" placeholder="Buscar en las escenas…" autocomplete="off">
+        </div>
+        <nav class="rd-nav" id="rdEstados">
+            <button type="button" class="on" data-estado="">Todas <small><?= $total ?></small></button>
+            <?php foreach ($estadosUi as $k => [$txt]): ?>
+                <?php if (!$cuenta[$k]) continue; ?>
+                <button type="button" data-estado="<?= $k ?>"><?= $txt === 'Hecha' ? 'Hechas' : ($txt === 'Pendiente' ? 'Pendientes' : ($txt === 'Descartada' ? 'Descartadas' : $txt)) ?> <small><?= $cuenta[$k] ?></small></button>
+            <?php endforeach; ?>
+        </nav>
+
+        <div class="rd-escenas">
+            <?php foreach ($grupos as $g): ?>
+                <section class="rd-grupo">
+                    <?php if (count($grupos) > 1 || $g['nombre'] !== 'Sin bloque'): ?>
+                        <div class="rd-bloque"><?= esc($g['nombre']) ?> <small><?= count($g['escenas']) ?></small></div>
+                    <?php endif; ?>
+                    <div class="rd-filas">
+                        <?php foreach ($g['escenas'] as $e): ?>
+                            <?php
+                            $eid    = (int) $e['id'];
+                            $estado = $e['toma_estado'] ?: 'pendiente';
+                            $m      = $multimedia[$eid] ?? null;
+                            $buscar = mb_strtolower(implode(' ', [
+                                $e['escena_bloque'], $e['escena_descripcion'], $e['escena_accion'], $e['escena_ubicacion'],
+                                $e['plano_hora_dia'], $e['plano_objetos'], $e['plano_notas'], $e['escena_tomas'], $e['toma_nota'],
+                            ]));
+                            ?>
+                            <div class="rd-fila <?= $estado ?>" data-estado="<?= $estado ?>" data-buscar="<?= esc($buscar, 'attr') ?>">
+                                <span class="rd-num"><?= (int) $e['orden'] ?></span>
+                                <div class="rd-mini">
+                                    <?php if ($m && $m['es_video']): ?>
+                                        <video src="<?= base_url($m['ruta']) ?>#t=0.1" muted playsinline preload="metadata"></video><i class="bi bi-play-fill"></i>
+                                    <?php elseif ($m): ?>
+                                        <img src="<?= base_url($m['ruta']) ?>" alt="" loading="lazy">
+                                    <?php else: ?>
+                                        <i class="bi bi-image"></i>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="rd-fila-txt">
+                                    <a class="t" href="<?= site_url("rodajes/$pid/escenas/show/$eid") ?>"><?= esc(rod_titulo_escena($e)) ?></a>
+                                    <?php if ($plano = rod_resumen_plano($e)): ?><div class="rd-plano"><?= $plano ?></div><?php endif; ?>
+                                    <div class="m">
+                                        <?php if ($estado !== 'pendiente'): ?>
+                                            <span class="fv-estado <?= $estadosUi[$estado][2] ?>"><?= $estadosUi[$estado][0] ?></span>
+                                        <?php endif; ?>
+                                        <?php if (trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
+                                        <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
+                                        <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>
+                                        <?php if (trim((string) $e['escena_efecto_especial']) !== ''): ?><span class="e-bad"><i class="bi bi-stars"></i>FX</span><?php endif; ?>
+                                        <?php if (!empty($numMedia[$eid])): ?><span><i class="bi bi-images"></i><?= $numMedia[$eid] ?></span><?php endif; ?>
+                                        <?php if (trim((string) $e['toma_nota']) !== ''): ?><span class="e-warn"><i class="bi bi-pencil"></i><?= esc($e['toma_nota']) ?></span><?php endif; ?>
+                                    </div>
+                                    <?php if (trim((string) $e['sonido_dialogo_escrito']) !== ''): ?>
+                                        <div class="dlg"><?= esc(preg_replace('/\s+/', ' ', $e['sonido_dialogo_escrito'])) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="rd-fila-lado">
+                                    <a class="fv-ibtn" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>" title="Editar"><i class="bi bi-pencil"></i></a>
+                                    <a class="fv-ibtn opc" href="<?= site_url("rodajes/$pid/escenas/delete/$eid") ?>" title="Borrar" onclick="return confirm('¿Borrar esta escena?')"><i class="bi bi-trash"></i></a>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endforeach; ?>
+            <div class="fv-vacio rd-vacio" id="rdNada" hidden>Ninguna escena coincide.</div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+(() => {
+    const buscar = document.getElementById('rdBuscar');
+    if (!buscar) return;
+    const nav = document.getElementById('rdEstados');
+    let estado = '';
+    const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    function filtrar() {
+        const q = norm(buscar.value.trim());
+        let alguna = false;
+        document.querySelectorAll('.rd-grupo').forEach(g => {
+            let vis = 0;
+            g.querySelectorAll('.rd-fila').forEach(f => {
+                const ok = (!estado || f.dataset.estado === estado) && (!q || norm(f.dataset.buscar).includes(q));
+                f.hidden = !ok;
+                if (ok) vis++;
+            });
+            g.hidden = !vis;
+            if (vis) alguna = true;
+        });
+        document.getElementById('rdNada').hidden = alguna;
+    }
+    buscar.addEventListener('input', filtrar);
+    nav.addEventListener('click', ev => {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        nav.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+        estado = b.dataset.estado;
+        filtrar();
+    });
+    // Cerrar el menú "más" al pulsar fuera.
+    document.addEventListener('click', ev => {
+        document.querySelectorAll('.rd-menu[open]').forEach(d => { if (!d.contains(ev.target)) d.open = false; });
+    });
+})();
+</script>
+<?= $this->endSection() ?>

@@ -28,8 +28,13 @@ class RodajesEscenaModel extends Model
         // SONIDO
         'sonido_ambiente','sonido_antiviento','sonido_dialogo_escrito',
         // ORDEN
-        'orden'
+        'orden',
+        // VÍNCULO CON SESIONES + PLATÓ
+        'situacion_id', 'toma_estado', 'toma_estado_at', 'toma_nota',
     ];
+
+    /** Estados de toma en el plató. NULL en BD = pendiente. */
+    public const TOMA_ESTADOS = ['hecha', 'repetir', 'descartada'];
 
     protected $validationRules = [
         'proyecto_id' => 'required|is_natural_no_zero'

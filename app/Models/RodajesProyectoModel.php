@@ -14,7 +14,8 @@ class RodajesProyectoModel extends Model
     protected $allowedFields    = [
         'titulo',
         'codigo',
-        'descripcion'
+        'descripcion',
+        'sesion_id', // vínculo opcional con el módulo Sesiones
     ];
 
     protected $validationRules  = [

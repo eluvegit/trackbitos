@@ -6,6 +6,8 @@ use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenMod
 
 class RodajesEscenas extends BaseController
 {
+    protected $helpers = ['rodajes'];
+
     // Carpeta pública donde se guardarán las imágenes
     protected $publicDir = 'images/rodajes'; // dentro de /public
 
@@ -32,6 +34,7 @@ class RodajesEscenas extends BaseController
             foreach ($files as $f) {
                 $eid = $f['escena_id'];
                 $ruta = $f['ruta'];
+                $numMedia[$eid] = ($numMedia[$eid] ?? 0) + 1;
 
                 // Extraer extensión de forma segura
                 $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
@@ -54,10 +57,16 @@ class RodajesEscenas extends BaseController
             }
         }
 
-        return view('rodajes/escenas/index', [
+        $sesion = !empty($proyecto['sesion_id'])
+            ? (new \App\Models\SesionModel())->find((int) $proyecto['sesion_id'])
+            : null;
+
+        return view(rod_vista('rodajes/escenas/index'), [
             'proyecto'   => $proyecto,
+            'sesion'     => $sesion,
             'escenas'    => $escenas,
-            'multimedia' => $multimedia // Ahora sí viaja con la info de extensión
+            'multimedia' => $multimedia, // Ahora sí viaja con la info de extensión
+            'numMedia'   => $numMedia ?? [],
         ]);
     }
 
@@ -93,7 +102,19 @@ class RodajesEscenas extends BaseController
             return redirect()->to(site_url('rodajes'));
         }
         $data['escena'] = null;
-        return view('rodajes/escenas/form', $data);
+        $data['bloques'] = $this->bloquesDelProyecto((int) $proyectoId);
+        $ultima = (new RodajesEscenaModel())->select('orden')->where('proyecto_id', $proyectoId)->orderBy('orden', 'DESC')->first();
+        $data['ordenSiguiente'] = (int) ($ultima['orden'] ?? 0) + 1;
+        return view(rod_vista('rodajes/escenas/form'), $data);
+    }
+
+    /** Nombres de bloque ya usados en el proyecto (para sugerirlos en el formulario). */
+    private function bloquesDelProyecto(int $proyectoId): array
+    {
+        $filas = (new RodajesEscenaModel())->select('escena_bloque')
+            ->where('proyecto_id', $proyectoId)->where('escena_bloque !=', '')->where('escena_bloque IS NOT NULL')
+            ->groupBy('escena_bloque')->findAll();
+        return array_column($filas, 'escena_bloque');
     }
 
     public function store($proyectoId)
@@ -119,6 +140,12 @@ class RodajesEscenas extends BaseController
         // Subidas múltiples por categoría -> a /public/images/rodajes/{escenaId}/
         $this->handleUploads($proyectoId, $escenaId, 'lugar_objetos');
         $this->handleUploads($proyectoId, $escenaId, 'inspiracion');
+
+        // "Guardar y otra": encadenar escenas rápido (la lista de tomas se escribe de corrido).
+        if ($this->request->getPost('otra')) {
+            return redirect()->to(site_url("rodajes/$proyectoId/escenas/create?bloque=" . rawurlencode((string) $this->request->getPost('escena_bloque'))))
+                ->with('success', 'Escena #' . (int) $this->request->getPost('orden') . ' guardada.');
+        }
 
         return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
     }
@@ -173,8 +200,9 @@ class RodajesEscenas extends BaseController
 
         $data['imagenes_lugar'] = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
         $data['imagenes_insp']  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
+        $data['bloques']        = $this->bloquesDelProyecto((int) $proyectoId);
 
-        return view('rodajes/escenas/form', $data);
+        return view(rod_vista('rodajes/escenas/form'), $data);
     }
 
     public function update($proyectoId, $id)
@@ -319,7 +347,7 @@ class RodajesEscenas extends BaseController
         $imagenes_insp  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
 
         // 4. Pasar todo a la vista
-        return view('rodajes/escenas/show', [
+        return view(rod_vista('rodajes/escenas/show'), [
             'proyecto'        => $proyecto,
             'escena'          => $escena,
             'nextId'          => $next['id'] ?? null,

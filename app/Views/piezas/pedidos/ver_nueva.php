@@ -79,6 +79,10 @@
                     <h3>Piezas</h3>
                     <span class="cuenta" data-resumen-lineas><?= count($pedido['lineas']) ?></span>
                     <div class="der d-flex gap-1">
+                        <?php if (array_filter(array_column($pedido['lineas'], 'versionBlendId'))): ?>
+                            <a href="<?= site_url('piezas/pedido/' . $pedido['id'] . '/blends') ?>" class="fv-gbtn"
+                                title="Los .blend de todas las piezas definidas del pedido en un zip (solo lectura), p. ej. para montar un diorama"><i class="bi bi-file-zip"></i> <span class="lbl-m">.blend</span></a>
+                        <?php endif; ?>
                         <button type="button" class="fv-gbtn" data-modo="ordenar"><i class="bi bi-arrow-down-up"></i> Ordenar</button>
                         <button type="button" class="fv-gbtn" data-modo="seleccion"><i class="bi bi-check2-square"></i> Seleccionar</button>
                     </div>
@@ -252,10 +256,11 @@
             <label class="form-label small text-body-secondary mb-1">Notas</label>
             <textarea name="notas" class="form-control" rows="2" maxlength="150" data-panel-notas placeholder="p. ej. reforzar el cuello"></textarea>
 
-            <div class="d-flex align-items-center gap-2 mt-4">
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
                 <button type="submit" class="btn btn-primary rounded-pill px-4">Guardar</button>
-                <a href="#" class="btn btn-outline-secondary rounded-pill" data-panel-ver target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver pieza</a>
-                <button type="button" class="btn btn-link text-danger ms-auto" data-panel-borrar><i class="bi bi-trash"></i> Borrar</button>
+                <a href="#" class="btn btn-outline-secondary rounded-pill text-nowrap" data-panel-ver target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver pieza</a>
+                <a href="#" class="btn btn-outline-secondary rounded-pill text-nowrap" data-panel-blend title="El .blend de la versión vigente, solo lectura"><i class="bi bi-download"></i> .blend</a>
+                <button type="button" class="btn btn-link text-danger ms-auto text-nowrap" data-panel-borrar><i class="bi bi-trash"></i> Borrar</button>
             </div>
         </form>
 
@@ -623,6 +628,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var cantidadPanel = formPanel.querySelector('[data-panel-cantidad-input]');
     var notasPanel = formPanel.querySelector('[data-panel-notas]');
     var verPanel = formPanel.querySelector('[data-panel-ver]');
+    var blendPanel = formPanel.querySelector('[data-panel-blend]');
     var lineaEnPanel = null;
 
     // La descripción libre solo pinta algo sin pieza del catálogo elegida.
@@ -719,6 +725,8 @@ document.addEventListener('DOMContentLoaded', function () {
         notasPanel.value = d.notas;
         verPanel.classList.toggle('d-none', !d.urlVariante);
         verPanel.href = d.urlVariante || '#';
+        blendPanel.classList.toggle('d-none', !d.urlBlend);
+        blendPanel.href = d.urlBlend || '#';
         ajustarDescripcion();
 
         // Hoja desde abajo en móvil, panel a la derecha en pantallas anchas.

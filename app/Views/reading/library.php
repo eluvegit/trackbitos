@@ -10,6 +10,7 @@
     <a href="<?= site_url('reading/nuevo') ?>" class="text-decoration-none ms-1 text-success" title="Añadir libro">
         <i class="bi bi-plus-circle fs-5"></i>
     </a>
+    <a href="?nueva=1" class="text-decoration-none text-muted ms-auto" title="Vista nueva"><i class="bi bi-arrow-left-right"></i></a>
 </h5>
 
 <?php if (session('success')): ?>

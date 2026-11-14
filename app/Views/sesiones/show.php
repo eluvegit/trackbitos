@@ -40,6 +40,7 @@ $secInfo = [
     'briefing'    => ['color' => 'info',      'icono' => 'bi-file-text',         'titulo' => 'Briefing'],
     'moodboard'   => ['color' => 'warning',   'icono' => 'bi-images',            'titulo' => 'Moodboard'],
     'situaciones' => ['color' => 'danger',    'icono' => 'bi-collection',        'titulo' => 'Situaciones'],
+    'rodaje'      => ['color' => 'dark',      'icono' => 'bi-film',              'titulo' => 'Rodaje (guion técnico y plató)'],
     'equipo'      => ['color' => 'secondary', 'icono' => 'bi-bag-check',         'titulo' => 'Equipo'],
     'releases'    => ['color' => 'success',   'icono' => 'bi-file-earmark-text', 'titulo' => 'Model releases'],
 ];
@@ -238,6 +239,36 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
                         <input type="text" name="nombre" class="form-control form-control-sm" placeholder="Nueva situación..." required>
                         <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i></button>
                     </form>
+
+                <?php elseif ($clave === 'rodaje'): ?>
+                    <?php if (empty($rodajes)): ?>
+                        <p class="text-muted small mb-2">Ningún rodaje vinculado. Crea uno con una escena por cada situación y úsalo en el móvil como lista de tomas (modo plató).</p>
+                        <form method="post" action="<?= site_url('rodajes/desde-sesion/' . $sesionId) ?>" class="d-inline">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm btn-primary rounded-pill"><i class="bi bi-film"></i> Crear rodaje desde esta sesión</button>
+                        </form>
+                        <a href="<?= site_url('rodajes') ?>" class="btn btn-sm btn-link">o vincular uno existente desde Rodajes</a>
+                    <?php else: ?>
+                        <?php foreach ($rodajes as $r): ?>
+                            <?php $rid = (int) $r['id']; $tot = (int) $r['total']; $hec = (int) $r['hechas']; ?>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                <a href="<?= site_url('rodajes/' . $rid . '/escenas') ?>" class="fw-semibold me-auto"><?= esc($r['titulo']) ?></a>
+                                <span class="small text-muted"><?= $hec ?>/<?= $tot ?> tomas hechas</span>
+                                <a href="<?= site_url('rodajes/' . $rid . '/plato') ?>" class="btn btn-sm btn-success rounded-pill"><i class="bi bi-phone"></i> Plató</a>
+                                <form method="post" action="<?= site_url('rodajes/' . $rid . '/sincronizar') ?>" class="d-inline">
+                                    <?= csrf_field() ?><input type="hidden" name="direccion" value="traer"><input type="hidden" name="volver" value="sesion">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill" title="Crea una escena por cada situación que aún no tenga"><i class="bi bi-box-arrow-right"></i> Situaciones → escenas</button>
+                                </form>
+                                <form method="post" action="<?= site_url('rodajes/' . $rid . '/sincronizar') ?>" class="d-inline">
+                                    <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar"><input type="hidden" name="volver" value="sesion">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill" title="Crea situaciones con los bloques de escenas que aún no tengan situación"><i class="bi bi-box-arrow-in-left"></i> Bloques → situaciones</button>
+                                </form>
+                            </div>
+                            <?php if ($tot): ?>
+                                <div class="progress mb-3" style="height:6px"><div class="progress-bar bg-success" style="width:<?= round($hec / $tot * 100) ?>%"></div></div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
 
                 <?php elseif ($clave === 'equipo'): ?>
                     <ul class="list-unstyled equipo-list" id="equipoList">

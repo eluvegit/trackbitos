@@ -191,7 +191,70 @@ class PedidosController extends BaseController
         $linea['nombreVariante'] = $variante['nombre'] ?? null;
         $linea['foto']           = $variante ? $this->miniaturaDeVariante($variante) : null;
 
+        // Para "Descargar .blend" del panel: la versión vigente (misma regla
+        // que el resto del módulo: la validada, o si no la más reciente).
+        $version = $variante ? $this->versionVigente((int) $variante['id']) : null;
+        $linea['versionBlendId'] = $version ? (int) $version['id'] : null;
+
         return $linea;
+    }
+
+    /** La validada de la variante o, si no hay, la de número más alto. */
+    private function versionVigente(int $varianteId): ?array
+    {
+        return (new PiezaVersionModel())->where('variante_id', $varianteId)->where('estado', 'validada')->first()
+            ?? (new PiezaVersionModel())->where('variante_id', $varianteId)->orderBy('numero', 'DESC')->first();
+    }
+
+    /**
+     * Los .blend vigentes de todas las piezas definidas del pedido, en un
+     * zip (sin comprimir: los .blend ya pesan y comprimir solo tarda), para
+     * montar un diorama haciendo Append desde cada uno. Solo lectura, como
+     * Web::descargarBlend: no abre asiento ni toca la sincronización.
+     */
+    public function descargarBlends(int $id)
+    {
+        $pedido = (new PiezaPedidoModel())->conLineas($id);
+        if (!$pedido) {
+            return redirect()->to('/piezas/pedidos')->with('error', 'Pedido no encontrado.');
+        }
+
+        $almacen  = new PiezaAlmacen();
+        $ficheros = [];
+        foreach (array_unique(array_filter(array_map('intval', array_column($pedido['lineas'], 'variante_id')))) as $varianteId) {
+            $version  = $this->versionVigente($varianteId);
+            $variante = (new PiezaVarianteModel())->find($varianteId);
+            if (!$version || !$variante || !$almacen->existe($version['ruta_blend'] ?? null)) {
+                continue;
+            }
+            $familia = (new PiezaFamiliaModel())->find($variante['familia_id']);
+            $nombre  = implode('-', array_filter(array_map(
+                fn($t) => trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $t), '-'),
+                [$variante['sku'] ?? null, $familia['nombre'] ?? null, $variante['nombre'] ?? null]
+            ))) ?: 'variante-' . $varianteId;
+            $ficheros[sprintf('%s-v%03d.blend', $nombre, (int) $version['numero'])] = $almacen->absoluta($version['ruta_blend']);
+        }
+
+        if (!$ficheros) {
+            return redirect()->to('/piezas/pedido/' . $id)->with('error', 'Ninguna pieza del pedido tiene aún un .blend.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'blends');
+        $zip = new \ZipArchive();
+        if ($zip->open($tmp, \ZipArchive::OVERWRITE) !== true) {
+            return redirect()->to('/piezas/pedido/' . $id)->with('error', 'No se pudo preparar el zip.');
+        }
+        foreach ($ficheros as $nombre => $ruta) {
+            $zip->addFile($ruta, $nombre);
+            $zip->setCompressionName($nombre, \ZipArchive::CM_STORE);
+        }
+        $zip->close();
+        register_shutdown_function(static fn() => @unlink($tmp));
+
+        $ref = trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($pedido['referencia_externa'] ?? '')), '-');
+
+        return $this->response->download($tmp, null, true)
+            ->setFileName('pedido-' . $id . ($ref !== '' ? '-' . $ref : '') . '-blends-solo-lectura.zip');
     }
 
     /**

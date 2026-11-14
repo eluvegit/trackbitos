@@ -31,6 +31,7 @@ $nombre = $textoCatalogo ?: ($linea['descripcion_libre'] ?: 'Pieza borrada');
     data-url-borrar="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/borrar') ?>"
     data-url-hecha="<?= site_url('piezas/pedido-linea/' . $linea['id'] . '/hecha') ?>"
     data-url-crear="<?= $linea['variante_id'] ? '' : site_url('piezas/pedido-linea/' . $linea['id'] . '/crear-pieza') ?>"
+    data-url-blend="<?= !empty($linea['versionBlendId']) ? site_url('piezas/version/' . (int) $linea['versionBlendId'] . '/blend/descargar') : '' ?>"
     data-url-variante="<?= $linea['variante_id'] ? site_url('piezas/variante/' . $linea['variante_id']) : '' ?>">
 
     <?php // Solo en modo "Ordenar" / "Seleccionar" (clases en #lista-lineas). ?>

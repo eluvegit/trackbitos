@@ -95,13 +95,37 @@
     <div class="row align-items-center mb-4 g-3">
         <div class="col-md-6">
             <h1 class="h3 mb-0 fw-bold"><?= esc($proyecto['titulo']) ?></h1>
-            <p class="text-muted mb-0">Listado de Escenas</p>
+            <p class="text-muted mb-0">
+                Listado de Escenas
+                <?php if (!empty($sesion)): ?>
+                    · <a href="<?= site_url('sesiones/' . $sesion['id']) ?>" class="text-decoration-none"><i class="bi bi-camera"></i> <?= esc($sesion['titulo']) ?></a>
+                <?php endif; ?>
+            </p>
         </div>
         <div class="col-md-6 text-md-end">
             <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                <a class="btn btn-success" href="<?= site_url('rodajes/' . $proyecto['id'] . '/plato') ?>">
+                    <i class="bi bi-phone"></i> Plató
+                </a>
                 <a class="btn btn-primary" href="<?= site_url('rodajes/' . $proyecto['id'] . '/escenas/create') ?>">
                     <i class="bi bi-plus-lg"></i> Nueva escena
                 </a>
+                <?php if (!empty($sesion)): ?>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-arrow-left-right"></i> Sesión</button>
+                        <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:270px">
+                            <form method="post" action="<?= site_url('rodajes/' . $proyecto['id'] . '/sincronizar') ?>" class="mb-1">
+                                <?= csrf_field() ?><input type="hidden" name="direccion" value="traer">
+                                <button class="dropdown-item rounded" type="submit"><i class="bi bi-box-arrow-in-down me-1"></i> Traer situaciones como escenas</button>
+                            </form>
+                            <form method="post" action="<?= site_url('rodajes/' . $proyecto['id'] . '/sincronizar') ?>">
+                                <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar">
+                                <button class="dropdown-item rounded" type="submit"><i class="bi bi-box-arrow-up me-1"></i> Enviar bloques como situaciones</button>
+                            </form>
+                            <div class="small text-muted px-2 pt-1">Solo añade lo que falta; no borra ni duplica.</div>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <a class="btn btn-secondary shadow-sm" href="<?= site_url('rodajes/' . $proyecto['id'] . '/dialogos') ?>">
                     <i class="bi bi-chat-left-quote me-1"></i> Diálogos
                 </a>
@@ -116,6 +140,13 @@
             </div>
         </div>
     </div>
+
+    <?php if (session('success')): ?>
+        <div class="alert alert-success py-2"><?= esc(session('success')) ?></div>
+    <?php endif; ?>
+    <?php if (session('error')): ?>
+        <div class="alert alert-danger py-2"><?= esc(session('error')) ?></div>
+    <?php endif; ?>
 
     <?php if (empty($escenas)): ?>
         <div class="alert alert-info border-0 shadow-sm">No hay escenas registradas en este proyecto todavía.</div>
@@ -133,6 +164,10 @@
                             <div class="d-flex justify-content-between mb-3">
                                 <div class="order-badge">#<?= (int)$e['orden'] ?></div>
                                 <div class="d-flex gap-1">
+                                    <?php $te = $e['toma_estado'] ?? null; ?>
+                                    <?php if ($te): ?>
+                                        <span class="badge <?= ['hecha' => 'text-bg-success', 'repetir' => 'text-bg-warning', 'descartada' => 'text-bg-secondary'][$te] ?? 'text-bg-light' ?>"><?= esc(ucfirst($te)) ?></span>
+                                    <?php endif; ?>
                                     <?php if (!empty($e['escena_efecto_especial'])): ?>
                                         <span class="badge bg-danger-subtle text-danger border border-danger-subtle">FX</span>
                                     <?php endif; ?>

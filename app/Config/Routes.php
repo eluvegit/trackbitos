@@ -79,6 +79,7 @@ $routes->group('reading', ['filter' => 'admin'], function ($routes) {
     $routes->GET('/', 'Reading::library');
     $routes->GET('nuevo', 'Reading::nuevoLibro');
     $routes->GET('buscar', 'Reading::buscarLibro');
+    $routes->POST('meta', 'Reading::guardarMeta');
     $routes->POST('crear', 'Reading::crearLibro');
     $routes->GET('libro/(:num)', 'Reading::libro/$1');
     $routes->POST('libro/(:num)/actualizar', 'Reading::actualizarLibro/$1');
@@ -409,6 +410,15 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('edit/(:num)',       'Rodajes::edit/$1');
     $routes->POST('update/(:num)',    'Rodajes::update/$1');
     $routes->GET('delete/(:num)',     'Rodajes::delete/$1');
+
+    // ---- Vínculo con Sesiones (módulos independientes, se pasan datos) ----
+    $routes->POST('desde-sesion/(:num)',  'Rodajes::desdeSesion/$1');
+    $routes->POST('(:num)/sincronizar',   'Rodajes::sincronizar/$1');
+
+    // ---- Modo plató (móvil): marcar tomas hechas/repetir/descartadas ----
+    $routes->GET('(:num)/plato',                     'Rodajes::plato/$1');
+    $routes->POST('(:num)/plato/reiniciar',          'Rodajes::reiniciarPlato/$1');
+    $routes->POST('(:num)/escenas/(:num)/toma',      'Rodajes::toma/$1/$2');
     
 
     // ---- Escenas (anidadas bajo proyecto) ----
@@ -874,6 +884,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('pedido/(:num)/datos', 'PedidosController::editarDatos/$1');
     $routes->POST('pedido/(:num)/estado', 'PedidosController::cambiarEstado/$1');
     $routes->POST('pedido/(:num)/cargar-placa', 'Web::pedidoCargarACarrito/$1');
+    // Los .blend vigentes de sus piezas en un zip (p. ej. para un diorama).
+    $routes->GET('pedido/(:num)/blends', 'PedidosController::descargarBlends/$1');
     $routes->POST('pedido/(:num)/borrar', 'PedidosController::borrar/$1');
     $routes->POST('pedido/(:num)/linea', 'PedidosController::agregarLinea/$1');
     $routes->POST('pedido/(:num)/copiar-lineas', 'PedidosController::copiarLineas/$1');

@@ -7,6 +7,7 @@
     </a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold">Añadir libro</strong>
+    <a href="?nueva=1" class="text-decoration-none text-muted ms-auto" title="Vista nueva"><i class="bi bi-arrow-left-right"></i></a>
 </h5>
 
 <?php if (session('error')): ?>
