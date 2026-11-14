@@ -596,6 +596,7 @@ $routes->group('sesiones', ['filter' => 'admin'], static function ($routes) {
     $routes->GET('(:num)/situaciones/(:num)/exportar', 'Sesiones::exportarSituacion/$1/$2');
 
     $routes->POST('(:num)/equipo/agregar', 'Sesiones::equipoAgregar/$1');
+    $routes->POST('(:num)/equipo/copiar', 'Sesiones::equipoCopiar/$1');
     $routes->POST('(:num)/equipo/(:num)/toggle', 'Sesiones::equipoToggle/$1/$2');
     $routes->POST('(:num)/equipo/(:num)/borrar', 'Sesiones::equipoBorrar/$1/$2');
 

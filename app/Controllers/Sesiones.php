@@ -14,6 +14,8 @@ class Sesiones extends BaseController
     // Carpeta pública donde se guardan moodboard y model releases (dentro de /public)
     protected string $publicDir = 'uploads/sesiones';
 
+    protected $helpers = ['sesiones'];
+
     // ========== SESIONES ==========
 
     public function index()
@@ -25,12 +27,57 @@ class Sesiones extends BaseController
         // el filtro "Ideas" las muestra.
         $sesiones = (new SesionModel())->orderBy('actualizada_at', 'DESC')->findAll();
 
-        return view('sesiones/index', ['sesiones' => $sesiones]);
+        $vista = ses_vista('sesiones/index');
+        $datos = ['sesiones' => $sesiones];
+        if ($vista === 'sesiones/index_nueva') {
+            $datos['resumen'] = $this->resumenTablero(array_column($sesiones, 'id'));
+        }
+
+        return view($vista, $datos);
+    }
+
+    /**
+     * Contadores por sesión para el tablero (una consulta agrupada por tabla):
+     * [sesion_id => situaciones, moodboard, portada, equipo, equipo_ok,
+     *               releases, rodaje_total, rodaje_hechas].
+     */
+    private function resumenTablero(array $ids): array
+    {
+        $out = [];
+        if (!$ids) return $out;
+        $db  = db_connect();
+        $set = static function (array $filas, array $campos) use (&$out) {
+            foreach ($filas as $f) {
+                foreach ($campos as $c) $out[(int) $f['sesion_id']][$c] = $f[$c];
+            }
+        };
+
+        $set($db->table('situaciones')->select('sesion_id, COUNT(*) AS situaciones')->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['situaciones']);
+        $set($db->table('moodboard_items')->select('sesion_id, COUNT(*) AS moodboard')->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['moodboard']);
+        $set($db->table('sesion_equipo')->select('sesion_id, COUNT(*) AS equipo, SUM(marcado) AS equipo_ok', false)->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['equipo', 'equipo_ok']);
+        $set($db->table('model_releases')->select('sesion_id, COUNT(*) AS releases')->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['releases']);
+
+        // Portada: la primera imagen subida al moodboard.
+        $primeras = $db->table('moodboard_items')->select('MIN(id) AS id', false)
+            ->whereIn('sesion_id', $ids)->where('origen', 'archivo')->groupBy('sesion_id')->get()->getResultArray();
+        if ($primeras) {
+            $set($db->table('moodboard_items')->select('sesion_id, ruta_archivo AS portada')
+                ->whereIn('id', array_column($primeras, 'id'))->get()->getResultArray(), ['portada']);
+        }
+
+        // Progreso de los rodajes vinculados (módulo Rodajes).
+        $set($db->table('rodajes_proyectos p')
+            ->select("p.sesion_id, COUNT(e.id) AS rodaje_total, SUM(e.toma_estado = 'hecha') AS rodaje_hechas", false)
+            ->join('rodajes_escenas e', 'e.proyecto_id = p.id AND e.deleted_at IS NULL', 'left')
+            ->whereIn('p.sesion_id', $ids)->where('p.deleted_at', null)
+            ->groupBy('p.sesion_id')->get()->getResultArray(), ['rodaje_total', 'rodaje_hechas']);
+
+        return $out;
     }
 
     public function create()
     {
-        return view('sesiones/form', ['sesion' => null, 'defaultIdea' => (bool) $this->request->getGet('idea')]);
+        return view(ses_vista('sesiones/form'), ['sesion' => null, 'defaultIdea' => (bool) $this->request->getGet('idea')]);
     }
 
     public function store()
@@ -76,7 +123,16 @@ class Sesiones extends BaseController
             ->groupBy('rodajes_proyectos.id, rodajes_proyectos.titulo')
             ->findAll();
 
-        return view('sesiones/show', $detalle);
+        $vista = ses_vista('sesiones/show');
+        if ($vista === 'sesiones/show_nueva') {
+            // Otras sesiones con equipo, para poder copiar su lista.
+            $detalle['equipo_de_otras'] = db_connect()->table('sesion_equipo q')
+                ->select('s.id, s.titulo, COUNT(*) AS n')->join('sesiones s', 's.id = q.sesion_id')
+                ->where('q.sesion_id !=', $id)->groupBy('s.id, s.titulo')->orderBy('MAX(s.actualizada_at)', 'DESC', false)
+                ->get()->getResultArray();
+        }
+
+        return view($vista, $detalle);
     }
 
     public function edit(int $id)
@@ -86,7 +142,7 @@ class Sesiones extends BaseController
             return redirect()->to(site_url('sesiones'))->with('error', 'Sesión no encontrada.');
         }
 
-        return view('sesiones/form', ['sesion' => $sesion]);
+        return view(ses_vista('sesiones/form'), ['sesion' => $sesion]);
     }
 
     public function update(int $id)
@@ -250,6 +306,35 @@ class Sesiones extends BaseController
         (new SesionEquipoModel())->where('sesion_id', $sesionId)->delete($itemId);
 
         return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * Copia la lista de equipo de otra sesión (sin marcar). Los ítems que ya
+     * están en esta sesión (mismo texto, sin distinguir mayúsculas) no se
+     * duplican. Devuelve los ítems añadidos.
+     */
+    public function equipoCopiar(int $sesionId)
+    {
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $desde = (int) ($input['desde'] ?? 0);
+        $model = new SesionEquipoModel();
+
+        if ($desde === $sesionId || !(new SesionModel())->find($desde) || !(new SesionModel())->find($sesionId)) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        }
+
+        $ya = array_map(static fn ($i) => mb_strtolower(trim($i['item'])), $model->where('sesion_id', $sesionId)->findAll());
+        $orden = count($ya);
+        $nuevos = [];
+        foreach ($model->where('sesion_id', $desde)->orderBy('orden', 'ASC')->findAll() as $i) {
+            $clave = mb_strtolower(trim($i['item']));
+            if (in_array($clave, $ya, true)) continue;
+            $ya[] = $clave;
+            $model->insert(['sesion_id' => $sesionId, 'item' => $i['item'], 'marcado' => 0, 'orden' => $orden++]);
+            $nuevos[] = ['id' => $model->getInsertID(), 'item' => $i['item'], 'marcado' => 0];
+        }
+
+        return $this->response->setJSON(['ok' => true, 'items' => $nuevos]);
     }
 
     // ========== MOODBOARD ==========
