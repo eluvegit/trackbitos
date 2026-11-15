@@ -9,6 +9,7 @@
  * @var array  $groups     [clave => ['_title', '_first', 'transicion', 'items' => [['escena', 'cover_lugar', 'cover_insp'], ...]]]
  * @var string $agrupar    bloque | clasificacion
  * @var bool   $hayFormato
+ * @var array  $colores    [valor normalizado => color] del campo por el que se agrupa
  */
 $pid      = (int) $proyecto['id'];
 $estados  = rod_toma_estados();
@@ -60,15 +61,15 @@ ob_start(); ?>
         <?php if (count($groups) > 1): ?>
             <nav class="sb-chips sb-herr" id="sbGrupos" title="Pulsa para ocultar o mostrar un grupo (lo oculto no se imprime)">
                 <?php $i = 0; foreach ($groups as $g): if ($g['transicion']) continue; ?>
-                    <button type="button" class="on" data-g="<?= $i ?>"><?= esc($g['_title']) ?> <small><?= count($g['items']) ?></small></button>
+                    <button type="button" class="on" data-g="<?= $i ?>" style="--c:<?= rod_color($colores, $g['_title']) ?>"><i class="pl-punto"></i><?= esc($g['_title']) ?> <small><?= count($g['items']) ?></small></button>
                 <?php $i++; endforeach; ?>
             </nav>
         <?php endif; ?>
 
         <div class="sb-grupos">
             <?php $i = 0; foreach ($groups as $g): ?>
-                <section class="sb-grupo<?= $g['transicion'] ? ' trans' : '' ?>" style="--n:<?= count($g['items']) ?>"<?= $g['transicion'] ? '' : ' data-g="' . $i++ . '"' ?>>
-                    <h2><?= esc($g['_title']) ?><?php if (!$g['transicion']): ?> <small><?= count($g['items']) ?></small><?php endif; ?></h2>
+                <section class="sb-grupo<?= $g['transicion'] ? ' trans' : '' ?>" style="--n:<?= count($g['items']) ?>;--c:<?= rod_color($colores, $g['_title']) ?>"<?= $g['transicion'] ? '' : ' data-g="' . $i++ . '"' ?>>
+                    <h2><i class="pl-punto"></i><?= esc($g['_title']) ?><?php if (!$g['transicion']): ?> <small><?= count($g['items']) ?></small><?php endif; ?></h2>
                     <div class="sb-rejilla">
                         <?php foreach ($g['items'] as $it): ?>
                             <?php

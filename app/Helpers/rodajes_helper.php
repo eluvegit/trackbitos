@@ -144,6 +144,35 @@ if (!function_exists('rod_normalizar')) {
     }
 }
 
+if (!function_exists('rod_colores')) {
+    /**
+     * Color de cada valor de un campo (bloque, ubicación, soporte…) dentro de
+     * un proyecto: [valor normalizado => color]. Se reparten por orden de
+     * primera aparición en la historia, así que los grupos cercanos no repiten
+     * color y cada uno conserva el suyo en pizarra, storyboard y plató.
+     *
+     * @param array $escenas en orden narrativo (rodajes_escenas.orden)
+     */
+    function rod_colores(array $escenas, string $campo): array
+    {
+        $paleta = ['#f97316', '#38bdf8', '#a3e635', '#f472b6', '#facc15', '#a78bfa', '#2dd4bf', '#fb7185', '#60a5fa', '#4ade80', '#e879f9', '#fdba74'];
+        $mapa = [];
+        foreach ($escenas as $e) {
+            $n = rod_normalizar((string) ($e[$campo] ?? ''));
+            if ($n !== '' && !isset($mapa[$n])) $mapa[$n] = $paleta[count($mapa) % count($paleta)];
+        }
+        return $mapa;
+    }
+}
+
+if (!function_exists('rod_color')) {
+    /** Color de un valor según rod_colores(); gris neutro si no tiene (vacío, «Sin …»). */
+    function rod_color(array $mapa, ?string $valor): string
+    {
+        return $mapa[rod_normalizar((string) $valor)] ?? '#71717a';
+    }
+}
+
 if (!function_exists('rod_titulo_escena')) {
     /** Texto principal de una escena: descripción, si no bloque, si no «Escena #n». */
     function rod_titulo_escena(array $e): string

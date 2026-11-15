@@ -10,6 +10,9 @@
  *
  * @var array      $proyecto
  * @var array      $escenas
+ * @var array      $grupos     [['nombre', 'escenas'], ...] según $orden (RodajesPizarra::grupos)
+ * @var string     $orden      narrativa | ubicacion | montaje
+ * @var array      $colores    [valor normalizado => color] del campo por el que se agrupa
  * @var array      $media      [escena_id => [['src','video'], ...]]
  * @var array|null $sesion     sesión vinculada (módulo Sesiones)
  * @var array      $moodboard  [situacion_id|'general' => items]
@@ -52,6 +55,22 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
             <div class="rd-barra" aria-hidden="true">
                 <i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i>
             </div>
+            <div class="fv-seg pl-orden" title="El orden y los grupos son los de la pizarra">
+                <?php foreach (['narrativa' => ['Historia', 'bi-book'], 'ubicacion' => ['Ubicación', 'bi-geo-alt'], 'montaje' => ['Montaje', 'bi-camera-reels']] as $k => [$txt, $ico]): ?>
+                    <a href="<?= site_url("rodajes/$pid/plato?orden=$k") ?>" aria-pressed="<?= $orden === $k ? 'true' : 'false' ?>"><i class="bi <?= $ico ?>"></i><?= $txt ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php $conIndice = count($grupos) > 1; ?>
+            <?php if ($conIndice): ?>
+                <button type="button" class="pl-indice-btn" id="plIndiceBtn" aria-expanded="false"><i class="bi bi-list-nested"></i>Índice <small><?= count($grupos) ?></small><i class="bi bi-chevron-down"></i></button>
+                <nav class="pl-indice" id="plIndice" hidden>
+                    <?php foreach ($grupos as $gi => $g): ?>
+                        <a href="#pl-g<?= $gi ?>" data-ir="<?= $gi ?>" style="--c:<?= rod_color($colores, $g['nombre']) ?>">
+                            <i class="pl-punto"></i><span class="n"><?= esc($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque') ?></span><small data-pend="<?= $gi ?>"></small>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
             <div class="pl-filtros">
                 <button type="button" class="on" data-filtro="pendientes">Por hacer<span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
                 <button type="button" data-filtro="repetir">Repetir<span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
@@ -68,13 +87,18 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         </div>
 
         <div class="pl-lista">
-            <?php $bloqueAnt = null; ?>
-            <?php foreach ($escenas as $e): ?>
+            <?php foreach ($grupos as $gi => $g): ?>
+                <?php $color = rod_color($colores, $g['nombre']); ?>
+                <?php if ($g['nombre'] !== '' || $conIndice): ?>
+                    <div class="rd-bloque pl-grupo" id="pl-g<?= $gi ?>" data-bloque style="--c:<?= $color ?>"><i class="pl-punto"></i><?= esc($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque') ?> <small><?= count($g['escenas']) ?></small></div>
+                <?php endif; ?>
+            <?php foreach ($g['escenas'] as $e): ?>
                 <?php
                 $eid    = (int) $e['id'];
                 $estado = rod_estado_escena($e);
                 $partes = rod_estados_partes($e);
                 $bloque = trim((string) $e['escena_bloque']);
+                $soporte = trim((string) $e['camara_soporte']);
                 $detalle = array_filter([
                     'Acción'              => $e['escena_accion'],
                     'Toma/s'              => $e['escena_tomas'],
@@ -90,12 +114,8 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 $refs = $media[$eid] ?? [];
                 $mood = $e['situacion_id'] ? ($moodboard[$e['situacion_id']] ?? []) : [];
                 ?>
-                <?php if ($bloque !== '' && $bloque !== $bloqueAnt): ?>
-                    <div class="rd-bloque" data-bloque><?= esc($bloque) ?></div>
-                <?php endif; ?>
-                <?php $bloqueAnt = $bloque !== '' ? $bloque : $bloqueAnt; ?>
 
-                <article class="pl-toma" data-id="<?= $eid ?>" data-estado="<?= $estado ?>">
+                <article class="pl-toma" data-id="<?= $eid ?>" data-estado="<?= $estado ?>" data-g="<?= $gi ?>" style="--c:<?= $color ?>">
                     <div class="pl-toma-cab" data-abrir>
                         <div class="pl-fila1">
                             <span class="rd-num"><?= (int) $e['orden'] ?></span>
@@ -105,7 +125,9 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                         <?= rod_ficha_tecnica($e) ?>
                         <div class="pl-meta">
                             <?= rod_formato_chip($e) ?>
-                            <?php if (trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
+                            <?php if ($orden !== 'narrativa' && $bloque !== ''): ?><span><i class="bi bi-collection"></i><?= esc($bloque) ?></span><?php endif; ?>
+                            <?php if ($orden === 'ubicacion' && $soporte !== ''): ?><span><i class="bi bi-camera-reels"></i><?= esc($soporte) ?></span><?php endif; ?>
+                            <?php if ($orden !== 'ubicacion' && trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
                             <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
                             <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>
                             <?php if (trim((string) $e['escena_efecto_especial']) !== ''): ?><span class="e-bad"><i class="bi bi-stars"></i>FX</span><?php endif; ?>
@@ -150,6 +172,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                         </div>
                     <?php endforeach; ?>
                 </article>
+            <?php endforeach; ?>
             <?php endforeach; ?>
 
             <div class="pl-fin" hidden>
@@ -216,6 +239,22 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         ['hecha', 'repetir', 'descartada'].forEach(k => {
             raiz.querySelector('.rd-barra .' + k).style.width = (total ? n[k] / total * 100 : 0) + '%';
         });
+        // Índice: lo que queda por hacer en cada grupo (con el filtro de foto/vídeo aplicado).
+        const pend = {};
+        tomas.forEach(t => {
+            const g = t.dataset.g;
+            pend[g] ??= [0, 0];
+            const ests = [...t.querySelectorAll('.pl-botones')].filter(casa).map(x => x.dataset.actual);
+            if (!ests.length) return;
+            pend[g][1]++;
+            if (ests.some(e => e === 'pendiente' || e === 'repetir')) pend[g][0]++;
+        });
+        raiz.querySelectorAll('[data-pend]').forEach(s => {
+            const [p, t] = pend[s.dataset.pend] || [0, 0];
+            s.textContent = !t ? '—' : (p ? p + ' por hacer' : '✓');
+            s.closest('a').classList.toggle('hecho', t > 0 && !p);
+        });
+
         const fin = raiz.querySelector('.pl-fin');
         fin.hidden = tomas.some(t => !t.hidden);
         fin.querySelector('[data-fin-txt]').textContent = filtro === 'pendientes' ? '¡Todas las tomas están hechas!' : '';
@@ -234,6 +273,26 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         filtro = b.dataset.filtro;
         pintar();
     }));
+    // Índice: oculto por defecto; al elegir un grupo se va a su cabecera (por debajo de la barra fija).
+    const indiceBtn = document.getElementById('plIndiceBtn');
+    const indice = document.getElementById('plIndice');
+    indiceBtn?.addEventListener('click', () => {
+        indice.hidden = !indice.hidden;
+        indiceBtn.setAttribute('aria-expanded', !indice.hidden);
+    });
+    indice?.addEventListener('click', ev => {
+        const a = ev.target.closest('a[data-ir]');
+        if (!a) return;
+        ev.preventDefault();
+        indice.hidden = true;
+        indiceBtn.setAttribute('aria-expanded', 'false');
+        const cab = document.getElementById('pl-g' + a.dataset.ir);
+        // Si el filtro la tiene oculta, se pasa a «Todas» para poder verla.
+        if (cab.hidden) raiz.querySelector('.pl-filtros [data-filtro="todas"]').click();
+        const fija = raiz.querySelector('.pl-fija');
+        window.scrollTo({ top: cab.getBoundingClientRect().top + window.scrollY - fija.offsetHeight - 8, behavior: 'smooth' });
+    });
+
     raiz.querySelectorAll('.pl-medio button').forEach(b => b.addEventListener('click', () => {
         raiz.querySelectorAll('.pl-medio button').forEach(x => x.setAttribute('aria-pressed', x === b));
         medio = b.dataset.medio;

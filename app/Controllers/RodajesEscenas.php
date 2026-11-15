@@ -431,6 +431,7 @@ class RodajesEscenas extends BaseController
             'groups'     => $grupos,
             'agrupar'    => $agrupar,
             'hayFormato' => (bool) array_filter($escenas, static fn ($e) => !empty($e['formato'])),
+            'colores'    => rod_colores($escenas, $agrupar === 'clasificacion' ? 'plano_hora_dia' : 'escena_bloque'),
         ]);
     }
 

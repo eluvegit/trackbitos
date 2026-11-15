@@ -9,6 +9,7 @@
  * @var array  $miniaturas [escena_id => ['ruta', 'video']]
  * @var int    $total
  * @var bool   $hayFormato alguna escena tiene formato (foto/vídeo/ambas)
+ * @var array  $colores    [valor normalizado => color] (vacío en Producción)
  */
 $pid       = (int) $proyecto['id'];
 $editables = $vista !== 'produccion';   // columnas que se pueden renombrar, mover y crear
@@ -53,7 +54,7 @@ ob_start(); ?>
 
     <div class="rp-tablero" id="rpTablero">
         <?php foreach ($columnas as $c): ?>
-            <section class="rp-col<?= $c['fija'] ? ' fija' : ' movible' ?><?= $c['valor'] === '' && $editables ? ' bandeja' : '' ?>" data-valor="<?= esc($c['valor'], 'attr') ?>">
+            <section class="rp-col<?= $c['fija'] ? ' fija' : ' movible' ?><?= $c['valor'] === '' && $editables ? ' bandeja' : '' ?>" data-valor="<?= esc($c['valor'], 'attr') ?>"<?= $colores && $c['valor'] !== '' ? ' style="--c:' . rod_color($colores, $c['valor']) . '"' : '' ?>>
                 <header class="rp-cab">
                     <?php if (!$c['fija'] && $editables): ?><i class="bi bi-grip-vertical rp-grip" title="Arrastra para mover la columna"></i><?php endif; ?>
                     <?php if (!$c['fija'] && $editables): ?>

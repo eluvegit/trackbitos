@@ -267,9 +267,19 @@ class Rodajes extends BaseController
             }
         }
 
+        // Orden del plató: el de la historia o el de la pizarra por ubicación / montaje (se recuerda).
+        $orden = $this->request->getGet('orden');
+        if (in_array($orden, ['narrativa', 'ubicacion', 'montaje'], true)) {
+            session()->set('rodajes_plato_orden', $orden);
+        }
+        $orden = session('rodajes_plato_orden') ?? 'narrativa';
+
         return view('rodajes/plato', [
             'proyecto'  => $proyecto,
             'escenas'   => $escenas,
+            'grupos'    => RodajesPizarra::grupos($escenas, $orden),
+            'colores'   => rod_colores($escenas, RodajesPizarra::VISTAS[$orden][2]),
+            'orden'     => $orden,
             'media'     => $media,
             'sesion'    => $sesion,
             'moodboard' => $moodboard,

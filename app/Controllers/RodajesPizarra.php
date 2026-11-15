@@ -56,16 +56,7 @@ class RodajesPizarra extends BaseController
             }
         }
 
-        // Orden propio de la vista (lo que no tiene posición va detrás, en orden narrativo).
-        if ($vista !== 'narrativa' && $tarjetas) {
-            $pos = [];
-            $filas = (new RodajesPizarraOrdenModel())
-                ->whereIn('vista', $vista === 'produccion' ? ['produccion', 'produccion_f'] : [$vista])
-                ->whereIn('escena_id', array_column($escenas, 'id'))->findAll();
-            foreach ($filas as $f) $pos[$f['vista'] . ':' . $f['escena_id']] = (int) $f['posicion'];
-            $clave = static fn ($t) => $pos[$t['clave'] . ':' . $t['e']['id']] ?? 1_000_000 + (int) $t['e']['orden'] * 2 + ($t['parte'] === 'video' ? 1 : 0);
-            usort($tarjetas, static fn ($a, $b) => ($clave($a) <=> $clave($b)) ?: ($a['e']['id'] <=> $b['e']['id']));
-        }
+        $tarjetas = self::ordenar($vista, $tarjetas);
 
         $hayFormato = (bool) array_filter($escenas, static fn ($e) => !empty($e['formato']));
 
@@ -73,10 +64,11 @@ class RodajesPizarra extends BaseController
             'proyecto'   => $proyecto,
             'vista'      => $vista,
             'vistas'     => self::VISTAS,
-            'columnas'   => $this->columnas($vista, $tarjetas),
+            'columnas'   => self::columnas($vista, $tarjetas),
             'miniaturas' => $this->miniaturas(array_column($escenas, 'id')),
             'total'      => count($escenas),
             'hayFormato' => $hayFormato,
+            'colores'    => $vista === 'produccion' ? [] : rod_colores($escenas, self::VISTAS[$vista][2]),
         ]);
     }
 
@@ -195,8 +187,59 @@ class RodajesPizarra extends BaseController
         ]);
     }
 
+    /**
+     * Orden propio de la vista (lo que no tiene posición va detrás, en orden
+     * narrativo). La narrativa ya viene ordenada por rodajes_escenas.orden.
+     */
+    private static function ordenar(string $vista, array $tarjetas): array
+    {
+        if ($vista === 'narrativa' || !$tarjetas) return $tarjetas;
+        $pos   = [];
+        $filas = (new RodajesPizarraOrdenModel())
+            ->whereIn('vista', $vista === 'produccion' ? ['produccion', 'produccion_f'] : [$vista])
+            ->whereIn('escena_id', array_unique(array_map(static fn ($t) => $t['e']['id'], $tarjetas)))->findAll();
+        foreach ($filas as $f) $pos[$f['vista'] . ':' . $f['escena_id']] = (int) $f['posicion'];
+        $clave = static fn ($t) => $pos[$t['clave'] . ':' . $t['e']['id']] ?? 1_000_000 + (int) $t['e']['orden'] * 2 + ($t['parte'] === 'video' ? 1 : 0);
+        usort($tarjetas, static fn ($a, $b) => ($clave($a) <=> $clave($b)) ?: ($a['e']['id'] <=> $b['e']['id']));
+        return $tarjetas;
+    }
+
+    /**
+     * Escenas agrupadas como en la pizarra, para el plató: [['nombre', 'escenas'], ...].
+     * Narrativa = tramos seguidos del mismo bloque en el orden de la historia;
+     * ubicación / montaje = columnas de la pizarra en su orden, con la
+     * bandeja («Sin ubicación», «Sin soporte») al final.
+     *
+     * @param array $escenas ya ordenadas por rodajes_escenas.orden
+     */
+    public static function grupos(array $escenas, string $vista): array
+    {
+        if ($vista === 'ubicacion' || $vista === 'montaje') {
+            $tarjetas = array_map(static fn ($e) => ['e' => $e, 'parte' => null, 'clave' => $vista], $escenas);
+            $cols = self::columnas($vista, self::ordenar($vista, $tarjetas));
+            $cols[] = array_shift($cols);   // la bandeja, al final
+            $grupos = [];
+            foreach ($cols as $c) {
+                if ($c['tarjetas']) $grupos[] = ['nombre' => $c['nombre'], 'escenas' => array_column($c['tarjetas'], 'e')];
+            }
+            return $grupos;
+        }
+
+        $grupos = [];
+        foreach ($escenas as $e) {
+            $bloque = trim((string) $e['escena_bloque']);
+            $ultimo = array_key_last($grupos);
+            if ($ultimo === null || mb_strtolower($grupos[$ultimo]['nombre']) !== mb_strtolower($bloque)) {
+                $grupos[] = ['nombre' => $bloque, 'escenas' => []];
+                $ultimo = array_key_last($grupos);
+            }
+            $grupos[$ultimo]['escenas'][] = $e;
+        }
+        return $grupos;
+    }
+
     /** Columnas de la vista en orden: [['valor', 'nombre', 'tarjetas', 'fija'], ...]. */
-    private function columnas(string $vista, array $tarjetas): array
+    private static function columnas(string $vista, array $tarjetas): array
     {
         [, , $campo, $bandeja, $fijas] = self::VISTAS[$vista];
 
