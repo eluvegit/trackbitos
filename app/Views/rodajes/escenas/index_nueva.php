@@ -35,7 +35,7 @@ ob_start(); ?>
     <summary class="fv-btn" title="Más"><i class="bi bi-three-dots"></i></summary>
     <div class="rd-menu-pop">
         <a href="<?= site_url("rodajes/$pid/escenas/storyboard") ?>"><i class="bi bi-layout-text-window-reverse"></i>Storyboard</a>
-        <a href="<?= site_url("rodajes/$pid/escenas/ordenrodaje") ?>"><i class="bi bi-sort-down"></i>Plan por clasificación</a>
+        <a href="<?= site_url("rodajes/$pid/escenas/storyboard?agrupar=clasificacion") ?>"><i class="bi bi-sort-down"></i>Storyboard por clasificación</a>
         <a href="<?= site_url("rodajes/$pid/dialogos") ?>"><i class="bi bi-chat-quote"></i>Diálogos</a>
         <a href="<?= site_url("rodajes/edit/$pid") ?>"><i class="bi bi-pencil"></i>Editar proyecto</a>
         <?php if ($sesion): ?>

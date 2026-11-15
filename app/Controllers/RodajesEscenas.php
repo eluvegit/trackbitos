@@ -88,7 +88,7 @@ class RodajesEscenas extends BaseController
             ->orderBy('id', 'ASC')
             ->findAll();
 
-        return view('rodajes/dialogos', [
+        return view(rod_vista('rodajes/dialogos'), [
             'proyecto' => $proyecto,
             'escenas'  => $escenas
         ]);
@@ -373,341 +373,70 @@ class RodajesEscenas extends BaseController
         ]);
     }
 
+    /**
+     * Storyboard: tarjetas con la primera imagen de lugar y de inspiración de
+     * cada escena, agrupadas por bloque (cada transición, aparte) o por
+     * clasificación (?agrupar=clasificacion). También sirve para imprimir.
+     * Sustituye al antiguo «plan por clasificación» (ruta ordenrodaje).
+     */
     public function storyboard($proyectoId)
     {
-        $proyectos = new \App\Models\RodajesProyectoModel();
-        $escenasM  = new \App\Models\RodajesEscenaModel();
-        $imgsM     = new \App\Models\RodajesEscenaImagenModel();
+        $pid      = (int) $proyectoId;
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
 
-        // Proyecto
-        $proyecto = $proyectos->find($proyectoId);
-        if (!$proyecto) {
-            return redirect()->to(site_url('rodajes'));
-        }
+        $agrupar = $this->request->getGet('agrupar') === 'clasificacion' ? 'clasificacion' : 'bloque';
+        $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
 
-        // 1) Escenas ordenadas
-        $escenas = $escenasM->where('proyecto_id', $proyectoId)
-            ->orderBy('orden', 'ASC')
-            ->orderBy('id', 'ASC')
-            ->findAll();
-
-        // Si no hay escenas, renderiza vacío
-        if (!$escenas) {
-            return view('rodajes/escenas/storyboard', [
-                'proyecto' => $proyecto,
-                'groups'   => [],
-            ]);
-        }
-
-        // 2) Portadas por escena: primera imagen por categoría
-        $ids = array_column($escenas, 'id');
-        $coversLugar = [];
-        $coversInsp  = [];
-
-        // Helper que obtiene primera imagen por categoría para todas las escenas
-        $fetchFirstByCat = function (string $categoria) use ($imgsM, $ids) {
-            if (empty($ids)) return [];
-            // Subquery: MIN(id) por escena/categoría
-            $rows = $imgsM->select('escena_id, MIN(id) AS mid')
-                ->whereIn('escena_id', $ids)
-                ->where('categoria', $categoria)
-                ->groupBy('escena_id')
-                ->findAll();
-
-            if (!$rows) return [];
-            $minIds = array_column($rows, 'mid');
-            if (!$minIds) return [];
-
-            // Traer los registros finales
-            $files = $imgsM->whereIn('id', $minIds)->findAll();
-            $map = [];
+        // Portadas: primera imagen de cada categoría (un vídeo solo si no hay imagen).
+        $portadas = [];
+        if ($escenas) {
+            $files = (new RodajesEscenaImagenModel())->whereIn('escena_id', array_column($escenas, 'id'))
+                ->orderBy('id', 'ASC')->findAll();
             foreach ($files as $f) {
-                // Guardamos la ruta pública tal cual está en DB (p.ej. images/rodajes/{escenaId}/file.jpg)
-                $map[$f['escena_id']] = $f['ruta'];
+                $cat    = $f['categoria'] === 'inspiracion' ? 'insp' : 'lugar';
+                $actual = $portadas[$f['escena_id']][$cat] ?? null;
+                if ($actual === null || (rod_es_video($actual) && !rod_es_video($f['ruta']))) {
+                    $portadas[$f['escena_id']][$cat] = $f['ruta'];
+                }
             }
-            return $map;
-        };
+        }
 
-        $coversLugar = $fetchFirstByCat('lugar_objetos');
-        $coversInsp  = $fetchFirstByCat('inspiracion');
-
-        // 3) Helpers de normalizado y detección de transición
-        $unaccent = function (string $s): string {
-            $s = trim($s);
-            $s = strtr($s, [
-                'Á' => 'A',
-                'À' => 'A',
-                'Â' => 'A',
-                'Ä' => 'A',
-                'Ã' => 'A',
-                'Å' => 'A',
-                'É' => 'E',
-                'È' => 'E',
-                'Ê' => 'E',
-                'Ë' => 'E',
-                'Í' => 'I',
-                'Ì' => 'I',
-                'Î' => 'I',
-                'Ï' => 'I',
-                'Ó' => 'O',
-                'Ò' => 'O',
-                'Ô' => 'O',
-                'Ö' => 'O',
-                'Õ' => 'O',
-                'Ú' => 'U',
-                'Ù' => 'U',
-                'Û' => 'U',
-                'Ü' => 'U',
-                'á' => 'a',
-                'à' => 'a',
-                'â' => 'a',
-                'ä' => 'a',
-                'ã' => 'a',
-                'å' => 'a',
-                'é' => 'e',
-                'è' => 'e',
-                'ê' => 'e',
-                'ë' => 'e',
-                'í' => 'i',
-                'ì' => 'i',
-                'î' => 'i',
-                'ï' => 'i',
-                'ó' => 'o',
-                'ò' => 'o',
-                'ô' => 'o',
-                'ö' => 'o',
-                'õ' => 'o',
-                'ú' => 'u',
-                'ù' => 'u',
-                'û' => 'u',
-                'ü' => 'u',
-                'ñ' => 'n',
-                'Ñ' => 'N'
-            ]);
-            return $s;
-        };
-        $isTransition = function (string $raw) use ($unaccent): bool {
-            $n = strtoupper($unaccent($raw));
-            return $n !== '' && (strpos($n, 'TRANS') === 0 || strpos($n, 'TRANSICION') !== false);
-        };
-
-        // 4) Agrupar: bloques normales por nombre; transiciones como bloque independiente por escena
-        $groups = [];
-        $blockFirstOrder = []; // guardamos el primer orden donde aparece cada bloque
-
+        // Grupos en el orden en que aparece su primera escena (las escenas ya vienen en orden narrativo).
+        $grupos = [];
         foreach ($escenas as $e) {
-            $raw = (string)($e['escena_bloque'] ?? '');
-            $ord = (int)($e['orden'] ?? 0);
-
-            // Datos de imágenes por escena
-            $item = [
-                'escena'       => $e,
-                'cover_lugar'  => $coversLugar[$e['id']] ?? null,
-                'cover_insp'   => $coversInsp[$e['id']] ?? null,
+            $transicion = false;
+            if ($agrupar === 'clasificacion') {
+                $raw    = trim((string) $e['plano_hora_dia']);
+                $clave  = $raw === '' ? '~' : 'C:' . rod_normalizar($raw);
+                $titulo = $raw !== '' ? $raw : 'Sin clasificación';
+            } else {
+                $raw = trim((string) $e['escena_bloque']);
+                $n   = rod_normalizar($raw);
+                $transicion = $n !== '' && (str_starts_with($n, 'TRANS') || str_contains($n, 'TRANSICION'));
+                $clave  = $transicion ? 'T:' . $e['id'] : ($n === '' ? '~' : 'B:' . $n);
+                $titulo = $raw !== '' ? $raw : 'Sin bloque';
+            }
+            $grupos[$clave] ??= ['_title' => $titulo, '_first' => (int) $e['orden'], 'transicion' => $transicion, 'items' => []];
+            $grupos[$clave]['items'][] = [
+                'escena'      => $e,
+                'cover_lugar' => $portadas[$e['id']]['lugar'] ?? null,
+                'cover_insp'  => $portadas[$e['id']]['insp'] ?? null,
             ];
-
-            if ($isTransition($raw)) {
-                // Transición: su propio bloque
-                $key = 'TRANS#' . $e['id'];
-                $groups[$key] = [
-                    '_title' => ($raw !== '' ? $raw : 'Transición'),
-                    '_first' => $ord,
-                    'items'  => [$item],
-                ];
-                continue;
-            }
-
-            // Bloques normales
-            $norm = strtoupper($unaccent($raw));
-            if ($norm === '') $norm = 'OTROS';
-            $key = 'BLOCK:' . $norm;
-
-            if (!isset($groups[$key])) {
-                $groups[$key] = [
-                    '_title' => ($raw !== '' ? $raw : 'Otros'),
-                    '_first' => $ord,
-                    'items'  => [],
-                ];
-                // registramos primer orden
-                $blockFirstOrder[$key] = $ord;
-            }
-
-            $groups[$key]['items'][] = $item;
-
-            // actualizamos el menor orden si aparece antes
-            if ($ord < $groups[$key]['_first']) {
-                $groups[$key]['_first'] = $ord;
-            }
         }
 
-        // 5) Ordenar los grupos por el orden de aparición de su primera escena
-        uasort($groups, function ($a, $b) {
-            return ($a['_first'] <=> $b['_first']);
-        });
-
-        // 6) Dentro de cada grupo, mantener orden de escena
-        foreach ($groups as &$g) {
-            usort($g['items'], function ($a, $b) {
-                return ($a['escena']['orden'] <=> $b['escena']['orden'])
-                    ?: ($a['escena']['id'] <=> $b['escena']['id']);
-            });
-        }
-        unset($g);
-
-        return view('rodajes/escenas/storyboard', [
-            'proyecto' => $proyecto,
-            'groups'   => $groups,
+        return view(rod_vista('rodajes/escenas/storyboard'), [
+            'proyecto'   => $proyecto,
+            'groups'     => $grupos,
+            'agrupar'    => $agrupar,
+            'hayFormato' => (bool) array_filter($escenas, static fn ($e) => !empty($e['formato'])),
         ]);
     }
 
+    /** Antiguo «plan por clasificación»: ahora es el storyboard agrupado por clasificación. */
     public function storyboardPorClasificacion($proyectoId)
     {
-        $proyectos = new \App\Models\RodajesProyectoModel();
-        $escenasM  = new \App\Models\RodajesEscenaModel();
-        $imgsM     = new \App\Models\RodajesEscenaImagenModel();
-
-        $proyecto = $proyectos->find($proyectoId);
-        if (!$proyecto) return redirect()->to(site_url('rodajes'));
-
-        $escenas = $escenasM->where('proyecto_id', $proyectoId)
-            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
-
-        if (!$escenas) {
-            return view('rodajes/escenas/storyboard_por_clasificacion', [
-                'proyecto' => $proyecto,
-                'groups' => [],
-                'clasificaciones' => [],
-                'q' => []
-            ]);
-        }
-
-        // Portadas (igual que ya tenías)
-        $ids = array_column($escenas, 'id');
-        $fetchFirstByCat = function (string $categoria) use ($imgsM, $ids) {
-            if (empty($ids)) return [];
-            $rows = $imgsM->select('escena_id, MIN(id) AS mid')
-                ->whereIn('escena_id', $ids)->where('categoria', $categoria)
-                ->groupBy('escena_id')->findAll();
-            if (!$rows) return [];
-            $minIds = array_column($rows, 'mid');
-            $files = $imgsM->whereIn('id', $minIds)->findAll();
-            $map = [];
-            foreach ($files as $f) $map[$f['escena_id']] = $f['ruta'];
-            return $map;
-        };
-        $coversLugar = $fetchFirstByCat('lugar_objetos');
-        $coversInsp  = $fetchFirstByCat('inspiracion');
-
-        // Normalizador
-        $unaccent = function (string $s): string {
-            $s = trim($s);
-            $s = strtr($s, [
-                'Á' => 'A',
-                'À' => 'A',
-                'Â' => 'A',
-                'Ä' => 'A',
-                'Ã' => 'A',
-                'Å' => 'A',
-                'É' => 'E',
-                'È' => 'E',
-                'Ê' => 'E',
-                'Ë' => 'E',
-                'Í' => 'I',
-                'Ì' => 'I',
-                'Î' => 'I',
-                'Ï' => 'I',
-                'Ó' => 'O',
-                'Ò' => 'O',
-                'Ô' => 'O',
-                'Ö' => 'O',
-                'Õ' => 'O',
-                'Ú' => 'U',
-                'Ù' => 'U',
-                'Û' => 'U',
-                'Ü' => 'U',
-                'á' => 'a',
-                'à' => 'a',
-                'â' => 'a',
-                'ä' => 'a',
-                'ã' => 'a',
-                'å' => 'a',
-                'é' => 'e',
-                'è' => 'e',
-                'ê' => 'e',
-                'ë' => 'e',
-                'í' => 'i',
-                'ì' => 'i',
-                'î' => 'i',
-                'ï' => 'i',
-                'ó' => 'o',
-                'ò' => 'o',
-                'ô' => 'o',
-                'ö' => 'o',
-                'õ' => 'o',
-                'ú' => 'u',
-                'ù' => 'u',
-                'û' => 'u',
-                'ü' => 'u',
-                'ñ' => 'n',
-                'Ñ' => 'N'
-            ]);
-            return $s;
-        };
-
-        // --- Filtro GET ---
-        $q = $this->request->getGet('q');
-        // adm: ?q=valor o ?q[]=v1&q[]=v2
-        $q = is_array($q) ? array_filter($q, fn($v) => trim((string)$v) !== '') : (trim((string)$q) !== '' ? [$q] : []);
-        // normaliza claves del filtro
-        $qNorm = array_map(function ($v) use ($unaccent) {
-            return mb_strtoupper($unaccent((string)$v));
-        }, $q);
-        $qNorm = array_values(array_unique($qNorm)); // sin duplicados
-
-        // Construir grupos y listado de clasificaciones únicas
-        $groups = [];
-        $clasificaciones = []; // para el <select>
-        foreach ($escenas as $e) {
-            $raw = trim((string)($e['plano_hora_dia'] ?? ''));
-            $title = ($raw !== '') ? $raw : '(Sin clasificación)';
-            $norm  = ($raw !== '') ? mb_strtoupper($unaccent($raw)) : '__SIN__';
-
-            // contar para el selector
-            if (!isset($clasificaciones[$norm])) {
-                $clasificaciones[$norm] = ['norm' => $norm, 'title' => $title, 'count' => 0];
-            }
-            $clasificaciones[$norm]['count']++;
-
-            // Si hay filtro, y esta clasificación NO está incluida, salta
-            if (!empty($qNorm) && !in_array($norm, $qNorm, true)) continue;
-
-            $ord = (int)($e['orden'] ?? 0);
-            $item = [
-                'escena'      => $e,
-                'cover_lugar' => $coversLugar[$e['id']] ?? null,
-                'cover_insp'  => $coversInsp[$e['id']] ?? null,
-            ];
-
-            $key = 'CLF:' . $norm;
-            if (!isset($groups[$key])) {
-                $groups[$key] = ['_title' => $title, '_first' => $ord, 'items' => []];
-            } else {
-                if ($ord < $groups[$key]['_first']) $groups[$key]['_first'] = $ord;
-            }
-            $groups[$key]['items'][] = $item;
-        }
-
-        // Ordenar selector y grupos
-        uasort($clasificaciones, fn($a, $b) => strnatcasecmp($a['title'], $b['title']));
-        uasort($groups, function ($a, $b) {
-            return ($a['_first'] <=> $b['_first']) ?: strnatcasecmp($a['_title'], $b['_title']);
-        });
-
-        return view('rodajes/escenas/storyboard_por_clasificacion', [
-            'proyecto'        => $proyecto,
-            'groups'          => $groups,
-            'clasificaciones' => $clasificaciones,
-            'q'               => $q, // títulos originales tal cual vinieron en GET
-        ]);
+        return redirect()->to(site_url('rodajes/' . (int) $proyectoId . '/escenas/storyboard?agrupar=clasificacion'));
     }
 }

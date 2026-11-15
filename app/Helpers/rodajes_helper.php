@@ -131,6 +131,19 @@ if (!function_exists('rod_sql_hechas')) {
     }
 }
 
+if (!function_exists('rod_normalizar')) {
+    /** Mayúsculas y sin tildes, para agrupar «Cocina», «cocina » y «COCINA» juntos. */
+    function rod_normalizar(string $s): string
+    {
+        static $mapa = null;
+        $mapa ??= array_combine(
+            mb_str_split('ÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑáàâäãåéèêëíìîïóòôöõúùûüñ'),
+            str_split('AAAAAAEEEEIIIIOOOOOUUUUNaaaaaaeeeeiiiiooooouuuun')
+        );
+        return mb_strtoupper(strtr(trim($s), $mapa));
+    }
+}
+
 if (!function_exists('rod_titulo_escena')) {
     /** Texto principal de una escena: descripción, si no bloque, si no «Escena #n». */
     function rod_titulo_escena(array $e): string
