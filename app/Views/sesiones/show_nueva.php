@@ -21,6 +21,13 @@ $js  = base_url('assets/js/sesiones.js') . '?v=' . (@filemtime(FCPATH . 'assets/
 $nMood   = array_sum(array_map('count', $moodboard_por_situacion));
 $nEquipo = count($equipo);
 $nEqOk   = count(array_filter($equipo, static fn ($i) => (int) $i['marcado'] === 1));
+// "Qué llevar" en dos listas.
+$listas = [
+    'equipo' => ['Equipo', 'bi-camera', 'Cámara, ópticas, luces, trípode…'],
+    'props'  => ['Props', 'bi-box2-heart', 'Atrezzo, vestuario, objetos…'],
+];
+$porTipo = array_fill_keys(array_keys($listas), []);
+foreach ($equipo as $it) $porTipo[($it['tipo'] ?? 'equipo') === 'props' ? 'props' : 'equipo'][] = $it;
 $nModelos = count($model_releases) + count($mensajes_modelo);
 
 // Briefing: HTML de Quill; si es texto plano antiguo, se envuelve en <p> por línea.
@@ -70,9 +77,9 @@ ob_start(); ?>
 
     <!-- Etapas -->
     <section class="fv-panel ss-etapas<?= $pausada ? ' pausada' : '' ?>">
-        <?php foreach ($partesUi as $parte => [$nombre, $ico]): ?>
+        <?php foreach ($partesUi as $parte => [$nombre, $ico, $colorP]): ?>
             <?php $est = $s['estado_' . $parte]; if ($est === null) continue; $idx = array_search($est, $orden, true); ?>
-            <div class="ss-etapa" data-parte="<?= $parte ?>" style="--c: <?= $estadosUi[$est][2] ?>">
+            <div class="ss-etapa" data-parte="<?= $parte ?>" style="--c: <?= $estadosUi[$est][2] ?>; --p: <?= $colorP ?>">
                 <div class="ss-etapa-nom"><i class="bi <?= $ico ?>"></i><?= $nombre ?></div>
                 <div class="ss-stepper">
                     <?php foreach ($orden as $i => $e): ?>
@@ -89,7 +96,7 @@ ob_start(); ?>
     <div class="fv-secs ss-secs" id="ssSecs">
         <button type="button" data-tab="plan" aria-pressed="true"><i class="bi bi-journal-text"></i>Plan</button>
         <button type="button" data-tab="moodboard" aria-pressed="false"><i class="bi bi-images"></i>Moodboard <span data-cuenta="moodboard"><?= $nMood ?></span></button>
-        <button type="button" data-tab="equipo" aria-pressed="false"><i class="bi bi-bag-check"></i>Equipo <span data-cuenta="equipo"><?= $nEqOk ?>/<?= $nEquipo ?></span></button>
+        <button type="button" data-tab="equipo" aria-pressed="false"><i class="bi bi-bag-check"></i>Qué llevar <span data-cuenta="equipo"><?= $nEqOk ?>/<?= $nEquipo ?></span></button>
         <button type="button" data-tab="modelos" aria-pressed="false"><i class="bi bi-person-badge"></i>Modelos <span data-cuenta="modelos"><?= $nModelos ?></span></button>
         <button type="button" data-tab="rodaje" aria-pressed="false"><i class="bi bi-film"></i>Rodaje <?php if ($rodajes): ?><span><?= count($rodajes) ?></span><?php endif; ?></button>
     </div>
@@ -139,27 +146,38 @@ ob_start(); ?>
 
     <!-- EQUIPO -->
     <div class="ss-tab" data-panel="equipo" hidden>
-        <section class="fv-panel ss-equipo">
-            <div class="fv-ph">
-                <h3>Equipo a llevar</h3>
-                <span class="cuenta" id="ssEqCuenta"><?= $nEqOk ?>/<?= $nEquipo ?></span>
-            </div>
-            <div class="ss-barra"><i id="ssEqBarra" style="width:<?= $nEquipo ? round($nEqOk / $nEquipo * 100) : 0 ?>%"></i></div>
-            <div id="ssEquipo">
-                <?php foreach ($equipo as $it): ?>
-                    <label class="fv-check<?= (int) $it['marcado'] === 1 ? ' hecha' : '' ?>" data-id="<?= (int) $it['id'] ?>">
-                        <input type="checkbox" <?= (int) $it['marcado'] === 1 ? 'checked' : '' ?>>
-                        <span><?= esc($it['item']) ?></span>
-                        <button type="button" class="deshacer ss-eq-borrar" title="Quitar"><i class="bi bi-x-lg"></i></button>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-            <form class="fv-nueva" id="ssEqNuevo">
-                <i class="bi bi-plus-lg"></i><input type="text" name="item" maxlength="150" placeholder="Añadir… (puedes pegar varias líneas)" required>
-            </form>
+        <div class="ss-dos" id="ssEquipo">
+            <?php foreach ($listas as $tipo => [$nomLista, $icoLista, $phLista]): ?>
+                <?php $its = $porTipo[$tipo]; $ok = count(array_filter($its, static fn ($i) => (int) $i['marcado'] === 1)); ?>
+                <section class="fv-panel ss-equipo" data-tipo="<?= $tipo ?>">
+                    <div class="fv-ph">
+                        <i class="bi <?= $icoLista ?> t3"></i>
+                        <h3 class="t1"><?= $nomLista ?></h3>
+                        <span class="cuenta der" data-eq-cuenta><?= $ok ?>/<?= count($its) ?></span>
+                    </div>
+                    <div class="ss-barra<?= $its && $ok === count($its) ? ' ok' : '' ?>"><i data-eq-barra style="width:<?= $its ? round($ok / count($its) * 100) : 0 ?>%"></i></div>
+                    <div class="ss-eq-lista">
+                        <?php foreach ($its as $it): ?>
+                            <label class="fv-check<?= (int) $it['marcado'] === 1 ? ' hecha' : '' ?>" data-id="<?= (int) $it['id'] ?>">
+                                <input type="checkbox" <?= (int) $it['marcado'] === 1 ? 'checked' : '' ?>>
+                                <span><?= esc($it['item']) ?></span>
+                                <button type="button" class="deshacer ss-eq-editar" title="Editar"><i class="bi bi-pencil"></i></button>
+                                <button type="button" class="deshacer ss-eq-mover" title="Pasar a <?= $tipo === 'props' ? 'Equipo' : 'Props' ?>"><i class="bi bi-arrow-left-right"></i></button>
+                                <button type="button" class="deshacer ss-eq-borrar" title="Quitar"><i class="bi bi-x-lg"></i></button>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <form class="fv-nueva ss-eq-nuevo">
+                        <i class="bi bi-plus-lg"></i><input type="text" name="item" maxlength="150" placeholder="<?= $phLista ?>" required>
+                    </form>
+                </section>
+            <?php endforeach; ?>
+        </div>
+        <section class="fv-panel">
+            <p class="ss-ayuda"><i class="bi bi-lightbulb"></i> Puedes pegar una lista de varias líneas de golpe: se crea un ítem por línea. Con <i class="bi bi-arrow-left-right" style="color:inherit"></i> pasas un ítem a la otra lista.</p>
             <?php if (!empty($equipo_de_otras)): ?>
                 <div class="ss-copiar">
-                    <span class="ss-ayuda">Cargar la lista de otra sesión:</span>
+                    <span class="ss-ayuda">Cargar las listas de otra sesión:</span>
                     <select class="form-select ss-sel" id="ssEqDesde">
                         <?php foreach ($equipo_de_otras as $o): ?>
                             <option value="<?= (int) $o['id'] ?>"><?= esc($o['titulo']) ?> (<?= (int) $o['n'] ?>)</option>

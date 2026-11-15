@@ -14,6 +14,7 @@ class SesionEquipoModel extends Model
     protected $allowedFields = [
         'sesion_id',
         'item',
+        'tipo',
         'marcado',
         'orden',
     ];
@@ -21,5 +22,9 @@ class SesionEquipoModel extends Model
     protected $validationRules = [
         'sesion_id' => 'required|is_natural_no_zero',
         'item'      => 'required|max_length[150]',
+        'tipo'      => 'permit_empty|in_list[equipo,props]',
     ];
+
+    /** Las dos listas de "Qué llevar". */
+    public const TIPOS = ['equipo', 'props'];
 }

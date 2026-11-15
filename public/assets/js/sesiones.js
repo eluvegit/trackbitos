@@ -47,7 +47,7 @@
     // ---------- etapas ----------
     $$('.ss-etapa', raiz).forEach(et => et.addEventListener('click', async e => {
         const b = e.target.closest('.ss-stepper button');
-        if (!b) return;
+        if (!b || b.classList.contains('actual')) return; // misma etapa: no es un cambio
         const estado = b.dataset.estado;
         try { await post('/estado', { parte: et.dataset.parte, estado }); } catch (err) { return fallo('No se ha podido cambiar la etapa.'); }
         const idx = ORDEN.indexOf(estado);
@@ -293,17 +293,26 @@
         }
     }
 
-    // ---------- equipo ----------
+    // ---------- qué llevar: dos listas (equipo / props) ----------
     const equipo = $('#ssEquipo');
+    const lista = tipo => $(`.ss-equipo[data-tipo="${tipo === 'props' ? 'props' : 'equipo'}"]`, equipo);
     function pintarEquipo() {
-        const items = $$('.fv-check', equipo);
-        const ok = items.filter(i => $('input', i).checked).length;
-        $('#ssEqCuenta').textContent = `${ok}/${items.length}`;
-        $('#ssEqBarra').style.width = (items.length ? ok / items.length * 100 : 0) + '%';
-        $('#ssEqBarra').parentElement.classList.toggle('ok', items.length > 0 && ok === items.length);
-        cuenta('equipo', `${ok}/${items.length}`);
+        let okT = 0, nT = 0;
+        $$('.ss-equipo', equipo).forEach(sec => {
+            const items = $$('.fv-check', sec);
+            const ok = items.filter(i => $('input', i).checked).length;
+            okT += ok; nT += items.length;
+            $('[data-eq-cuenta]', sec).textContent = `${ok}/${items.length}`;
+            const barra = $('[data-eq-barra]', sec);
+            barra.style.width = (items.length ? ok / items.length * 100 : 0) + '%';
+            barra.parentElement.classList.toggle('ok', items.length > 0 && ok === items.length);
+            // El botón de mover dice siempre a qué lista va.
+            $$('.ss-eq-mover', sec).forEach(b => { b.title = 'Pasar a ' + (sec.dataset.tipo === 'props' ? 'Equipo' : 'Props'); });
+        });
+        cuenta('equipo', `${okT}/${nT}`);
     }
-    const htmlEq = it => `<label class="fv-check${+it.marcado ? ' hecha' : ''}" data-id="${it.id}"><input type="checkbox"${+it.marcado ? ' checked' : ''}><span>${esc(it.item)}</span><button type="button" class="deshacer ss-eq-borrar" title="Quitar"><i class="bi bi-x-lg"></i></button></label>`;
+    const htmlEq = it => `<label class="fv-check${+it.marcado ? ' hecha' : ''}" data-id="${it.id}"><input type="checkbox"${+it.marcado ? ' checked' : ''}><span>${esc(it.item)}</span><button type="button" class="deshacer ss-eq-editar" title="Editar"><i class="bi bi-pencil"></i></button><button type="button" class="deshacer ss-eq-mover" title=""><i class="bi bi-arrow-left-right"></i></button><button type="button" class="deshacer ss-eq-borrar" title="Quitar"><i class="bi bi-x-lg"></i></button></label>`;
+    const meter = it => $('.ss-eq-lista', lista(it.tipo)).insertAdjacentHTML('beforeend', htmlEq(it));
     if (equipo) {
         equipo.addEventListener('change', async e => {
             const lab = e.target.closest('.fv-check');
@@ -313,43 +322,83 @@
             lab.classList.toggle('hecha', e.target.checked);
             pintarEquipo();
         });
+        // Editar el texto de un ítem en el sitio. El <label> envuelve el
+        // checkbox, así que mientras se edita hay que evitar que un clic marque.
+        function editarEq(lab) {
+            if (lab.classList.contains('editando')) return;
+            const span = $('span', lab);
+            const original = span.textContent;
+            const inp = document.createElement('input');
+            inp.className = 'fv-input ss-eq-input';
+            inp.maxLength = 150;
+            inp.value = original;
+            lab.classList.add('editando');
+            span.replaceWith(inp);
+            inp.focus();
+            inp.select();
+            let hecho = false;
+            const cerrar = texto => { span.textContent = texto; inp.replaceWith(span); lab.classList.remove('editando'); };
+            const guardar = async () => {
+                if (hecho) return;
+                hecho = true;
+                const texto = inp.value.trim();
+                if (!texto || texto === original) return cerrar(original);
+                try { const r = await post(`/equipo/${lab.dataset.id}/editar`, { item: texto }); cerrar(r.item); }
+                catch (err) { cerrar(original); fallo(); }
+            };
+            inp.addEventListener('keydown', ev => {
+                if (ev.key === 'Enter') { ev.preventDefault(); guardar(); }
+                if (ev.key === 'Escape') { ev.preventDefault(); hecho = true; cerrar(original); }
+            });
+            inp.addEventListener('blur', guardar);
+            inp.addEventListener('click', ev => ev.preventDefault());
+        }
         equipo.addEventListener('click', async e => {
-            const b = e.target.closest('.ss-eq-borrar');
-            if (!b) return;
+            if (e.target.closest('.ss-eq-editar')) { e.preventDefault(); editarEq(e.target.closest('.fv-check')); return; }
+            const borrar = e.target.closest('.ss-eq-borrar');
+            const mover = e.target.closest('.ss-eq-mover');
+            if (!borrar && !mover) return;
             e.preventDefault();
-            const lab = b.closest('.fv-check');
-            try { await post(`/equipo/${lab.dataset.id}/borrar`); lab.remove(); pintarEquipo(); } catch (err) { fallo(); }
+            const lab = e.target.closest('.fv-check');
+            try {
+                if (borrar) { await post(`/equipo/${lab.dataset.id}/borrar`); lab.remove(); }
+                else { const r = await post(`/equipo/${lab.dataset.id}/tipo`); $('.ss-eq-lista', lista(r.tipo)).appendChild(lab); }
+                pintarEquipo();
+            } catch (err) { fallo(); }
         });
         // Varios ítems de golpe: separados por salto de línea o «;».
-        async function agregarEquipo(texto) {
+        async function agregarEquipo(texto, tipo) {
             const lineas = texto.split(/\r?\n|;/).map(s => s.replace(/^[-*•\s]+/, '').trim()).filter(Boolean);
             for (const item of lineas) {
-                try { const r = await post('/equipo/agregar', { item }); equipo.insertAdjacentHTML('beforeend', htmlEq(r.item)); }
+                try { const r = await post('/equipo/agregar', { item, tipo }); meter(r.item); }
                 catch (err) { fallo(); break; }
             }
             pintarEquipo();
         }
-        $('#ssEqNuevo').addEventListener('submit', e => {
-            e.preventDefault();
-            const inp = e.target.item;
-            const t = inp.value;
-            inp.value = '';
-            agregarEquipo(t);
-        });
-        // Pegar una lista de varias líneas: un <input> aplanaría los saltos, así que se intercepta.
-        $('#ssEqNuevo input').addEventListener('paste', e => {
-            const t = e.clipboardData.getData('text');
-            if (!/\n/.test(t.trim())) return;
-            e.preventDefault();
-            agregarEquipo(t);
+        $$('.ss-eq-nuevo', equipo).forEach(f => {
+            const tipo = f.closest('.ss-equipo').dataset.tipo;
+            f.addEventListener('submit', e => {
+                e.preventDefault();
+                const t = f.item.value;
+                f.item.value = '';
+                agregarEquipo(t, tipo);
+            });
+            // Pegar una lista de varias líneas: un <input> aplanaría los saltos, así que se intercepta.
+            f.item.addEventListener('paste', e => {
+                const t = e.clipboardData.getData('text');
+                if (!/\n/.test(t.trim())) return;
+                e.preventDefault();
+                agregarEquipo(t, tipo);
+            });
         });
         $('#ssEqCopiar')?.addEventListener('click', async () => {
             let r;
             try { r = await post('/equipo/copiar', { desde: $('#ssEqDesde').value }); } catch (err) { return fallo(); }
-            r.items.forEach(it => equipo.insertAdjacentHTML('beforeend', htmlEq(it)));
+            r.items.forEach(meter);
             pintarEquipo();
             if (!r.items.length) alert('Ya tenías todos esos ítems.');
         });
+        pintarEquipo();
     }
 
     // ---------- model releases ----------

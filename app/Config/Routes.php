@@ -433,9 +433,12 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     // Imágenes de referencia (borrado)
     $routes->GET('(:num)/escenas/(:num)/imagen/delete/(:num)', 'RodajesEscenas::deleteImage/$1/$2/$3');
 
-    // (Opcional) Reordenar escenas por AJAX (enviar JSON: [{id, orden}, ...])
-    // Implementa RodajesEscenas::reordenar($proyectoId) si lo quieres usar.
-    $routes->POST('(:num)/escenas/reordenar',             'RodajesEscenas::reordenar/$1');
+    // ---- Pizarra: columnas por bloque/ubicación/soporte/estado, tarjetas arrastrables ----
+    // (sustituye a la antigua ruta escenas/reordenar, que no tenía método)
+    $routes->POST('(:num)/pizarra/guardar',               'RodajesPizarra::guardar/$1');
+    $routes->POST('(:num)/pizarra/escena',                'RodajesPizarra::escena/$1');
+    $routes->GET('(:num)/pizarra',                        'RodajesPizarra::index/$1');
+    $routes->GET('(:num)/pizarra/(:segment)',             'RodajesPizarra::index/$1/$2');
 
     // Ver escena (detalle)
     $routes->GET('(:num)/escenas/show/(:num)', 'RodajesEscenas::show/$1/$2');
@@ -597,6 +600,8 @@ $routes->group('sesiones', ['filter' => 'admin'], static function ($routes) {
 
     $routes->POST('(:num)/equipo/agregar', 'Sesiones::equipoAgregar/$1');
     $routes->POST('(:num)/equipo/copiar', 'Sesiones::equipoCopiar/$1');
+    $routes->POST('(:num)/equipo/(:num)/tipo', 'Sesiones::equipoTipo/$1/$2');
+    $routes->POST('(:num)/equipo/(:num)/editar', 'Sesiones::equipoEditar/$1/$2');
     $routes->POST('(:num)/equipo/(:num)/toggle', 'Sesiones::equipoToggle/$1/$2');
     $routes->POST('(:num)/equipo/(:num)/borrar', 'Sesiones::equipoBorrar/$1/$2');
 

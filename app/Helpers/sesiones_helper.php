@@ -32,9 +32,17 @@ if (!function_exists('ses_estados')) {
 }
 
 if (!function_exists('ses_partes')) {
+    /**
+     * Partes de una sesión: [nombre, icono, color]. El color identifica la
+     * parte en todo el módulo (tarjetas de "Por trabajo", tablero, ficha) y
+     * está elegido para no confundirse con los colores de las etapas.
+     */
     function ses_partes(): array
     {
-        return ['foto' => ['Fotografía', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-video']];
+        return [
+            'foto'  => ['Fotografía', 'bi-camera-fill', '#f472b6'],
+            'video' => ['Vídeo', 'bi-camera-video-fill', '#a78bfa'],
+        ];
     }
 }
 

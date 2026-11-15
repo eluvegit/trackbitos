@@ -57,6 +57,13 @@ class Sesiones extends BaseController
         $set($db->table('sesion_equipo')->select('sesion_id, COUNT(*) AS equipo, SUM(marcado) AS equipo_ok', false)->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['equipo', 'equipo_ok']);
         $set($db->table('model_releases')->select('sesion_id, COUNT(*) AS releases')->whereIn('sesion_id', $ids)->groupBy('sesion_id')->get()->getResultArray(), ['releases']);
 
+        // Desde cuándo está cada parte en su etapa actual: último cambio
+        // registrado en el historial (desde_foto / desde_video).
+        foreach ($db->table('sesion_historial_estados')->select('sesion_id, parte, MAX(cambiado_at) AS desde', false)
+            ->whereIn('sesion_id', $ids)->groupBy('sesion_id, parte')->get()->getResultArray() as $f) {
+            $out[(int) $f['sesion_id']]['desde_' . $f['parte']] = $f['desde'];
+        }
+
         // Portada: la primera imagen subida al moodboard.
         $primeras = $db->table('moodboard_items')->select('MIN(id) AS id', false)
             ->whereIn('sesion_id', $ids)->where('origen', 'archivo')->groupBy('sesion_id')->get()->getResultArray();
@@ -271,6 +278,7 @@ class Sesiones extends BaseController
         $input = $this->request->getJSON(true) ?: $this->request->getPost();
         $model = new SesionEquipoModel();
         $item  = trim((string) ($input['item'] ?? ''));
+        $tipo  = in_array($input['tipo'] ?? '', SesionEquipoModel::TIPOS, true) ? $input['tipo'] : 'equipo';
 
         if ($item === '') {
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
@@ -278,12 +286,43 @@ class Sesiones extends BaseController
 
         $orden = (int) ($model->where('sesion_id', $sesionId)->countAllResults() ?: 0);
 
-        $model->insert(['sesion_id' => $sesionId, 'item' => $item, 'marcado' => 0, 'orden' => $orden]);
+        $model->insert(['sesion_id' => $sesionId, 'item' => $item, 'tipo' => $tipo, 'marcado' => 0, 'orden' => $orden]);
 
         return $this->response->setJSON([
             'ok'    => true,
-            'item'  => ['id' => $model->getInsertID(), 'item' => $item, 'marcado' => 0, 'orden' => $orden],
+            'item'  => ['id' => $model->getInsertID(), 'item' => $item, 'tipo' => $tipo, 'marcado' => 0, 'orden' => $orden],
         ]);
+    }
+
+    /** Cambia el texto de un ítem de "Qué llevar". */
+    public function equipoEditar(int $sesionId, int $itemId)
+    {
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $texto = trim((string) ($input['item'] ?? ''));
+        $model = new SesionEquipoModel();
+
+        if ($texto === '' || mb_strlen($texto) > 150 || !$model->where('sesion_id', $sesionId)->find($itemId)) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        }
+
+        $model->update($itemId, ['item' => $texto]);
+
+        return $this->response->setJSON(['ok' => true, 'item' => $texto]);
+    }
+
+    /** Pasa un ítem de una lista a la otra (equipo ↔ props). */
+    public function equipoTipo(int $sesionId, int $itemId)
+    {
+        $model = new SesionEquipoModel();
+        $item  = $model->where('sesion_id', $sesionId)->find($itemId);
+        if (!$item) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        $nuevo = ($item['tipo'] ?? 'equipo') === 'props' ? 'equipo' : 'props';
+        $model->update($itemId, ['tipo' => $nuevo]);
+
+        return $this->response->setJSON(['ok' => true, 'tipo' => $nuevo]);
     }
 
     public function equipoToggle(int $sesionId, int $itemId)
@@ -323,15 +362,17 @@ class Sesiones extends BaseController
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         }
 
-        $ya = array_map(static fn ($i) => mb_strtolower(trim($i['item'])), $model->where('sesion_id', $sesionId)->findAll());
+        // Clave = lista + texto: el mismo nombre en equipo y en props no choca.
+        $clave = static fn ($i) => ($i['tipo'] ?? 'equipo') . '|' . mb_strtolower(trim($i['item']));
+        $ya = array_map($clave, $model->where('sesion_id', $sesionId)->findAll());
         $orden = count($ya);
         $nuevos = [];
         foreach ($model->where('sesion_id', $desde)->orderBy('orden', 'ASC')->findAll() as $i) {
-            $clave = mb_strtolower(trim($i['item']));
-            if (in_array($clave, $ya, true)) continue;
-            $ya[] = $clave;
-            $model->insert(['sesion_id' => $sesionId, 'item' => $i['item'], 'marcado' => 0, 'orden' => $orden++]);
-            $nuevos[] = ['id' => $model->getInsertID(), 'item' => $i['item'], 'marcado' => 0];
+            if (in_array($clave($i), $ya, true)) continue;
+            $ya[] = $clave($i);
+            $tipo = $i['tipo'] ?? 'equipo';
+            $model->insert(['sesion_id' => $sesionId, 'item' => $i['item'], 'tipo' => $tipo, 'marcado' => 0, 'orden' => $orden++]);
+            $nuevos[] = ['id' => $model->getInsertID(), 'item' => $i['item'], 'tipo' => $tipo, 'marcado' => 0];
         }
 
         return $this->response->setJSON(['ok' => true, 'items' => $nuevos]);
