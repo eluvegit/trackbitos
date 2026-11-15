@@ -20,7 +20,7 @@ class Porciones extends BaseController
         $rows = $porcionesM->where('alimento_id', $alimentoId)
             ->orderBy('id', 'ASC')->findAll();
 
-        return view('comidas/porciones/index', [
+        return view(comidas_vista('comidas/porciones/index'), [
             'title'    => 'Porciones habituales · ' . $alimento['nombre'],
             'alimento' => $alimento,
             'rows'     => $rows,
@@ -37,7 +37,7 @@ class Porciones extends BaseController
         }
 
 
-        return view('comidas/porciones/form', [
+        return view(comidas_vista('comidas/porciones/form'), [
             'title'    => 'Nueva porción · ' . $alimento['nombre'],
             'alimento' => $alimento,
             'row'      => null,
@@ -97,7 +97,7 @@ class Porciones extends BaseController
 
         $alimento = (new ComidasAlimentosModel())->find($row['alimento_id']);
 
-        return view('comidas/porciones/form', [
+        return view(comidas_vista('comidas/porciones/form'), [
             'title'    => 'Editar porción · '.($alimento['nombre'] ?? ('#'.$row['alimento_id'])),
             'alimento' => $alimento,
             'row'      => $row,

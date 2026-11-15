@@ -214,7 +214,7 @@ foreach ($controlados as $c) {
         usort($ingredientes_no_controlados, fn($a, $b) => strcmp($a['nombre'], $b['nombre']));
 
 
-        return view('comidas/alimentos_control/index', [
+        return view(comidas_vista('comidas/alimentos_control/index'), [
             'alimentos_todos' => $alimentos_todos,
             'alimentos_controlados' => $alimentos_controlados,
             'ingredientes_no_controlados' => $ingredientes_no_controlados,
@@ -274,7 +274,7 @@ foreach ($controlados as $c) {
         $control = $this->controlModel->find($id);
         if (!$control) return redirect()->to(site_url('comidas/alimentos-control'));
 
-        if ($this->request->getMethod() === 'post') {
+        if (strtolower($this->request->getMethod()) === 'post') {
             $post = $this->request->getPost();
             $this->controlModel->update($id, [
                 'periodo_dias' => $post['periodo_dias'],
@@ -286,7 +286,7 @@ foreach ($controlados as $c) {
         }
 
         $alimento = $this->alimentosModel->find($control['alimento_id']);
-        return view('comidas/alimentos_control/edit', [
+        return view(comidas_vista('comidas/alimentos_control/edit'), [
             'control'  => $control,
             'alimento' => $alimento
         ]);

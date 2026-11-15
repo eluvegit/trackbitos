@@ -22,7 +22,7 @@ class Objetivos extends BaseController
             ->orderBy('n.nombre', 'ASC')
             ->get()->getResultArray();
 
-        return view('comidas/objetivos/index', [
+        return view(comidas_vista('comidas/objetivos/index'), [
             'rows'  => $rows,
             'title' => 'Límites diarios por nutriente',
         ]);
@@ -37,7 +37,7 @@ class Objetivos extends BaseController
                            ->orderBy('nombre', 'ASC')
                            ->findAll();
 
-        return view('comidas/objetivos/form', [
+        return view(comidas_vista('comidas/objetivos/form'), [
             'title'      => 'Nuevo límite',
             'nutrientes' => $nutrientes,
             'row'        => null,
@@ -92,7 +92,7 @@ class Objetivos extends BaseController
                            ->orderBy('nombre', 'ASC')
                            ->findAll();
 
-        return view('comidas/objetivos/form', [
+        return view(comidas_vista('comidas/objetivos/form'), [
             'title'      => 'Editar límite',
             'nutrientes' => $nutrientes,
             'row'        => $row,

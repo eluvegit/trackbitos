@@ -133,10 +133,10 @@ class Alimentos extends BaseController
 
         // ⇨ Si es petición parcial (AJAX o ?partial=1), devolvemos solo las filas
         if ($this->request->isAJAX() || $this->request->getGet('partial') === '1') {
-            return view('comidas/alimentos/_rows', ['rows' => $rows]);
+            return view(comidas_vista('comidas/alimentos/_rows'), ['rows' => $rows]);
         }
 
-        return view('comidas/alimentos/index', [
+        return view(comidas_vista('comidas/alimentos/index'), [
             'rows'  => $rows,
             'q'     => $q,
             'title' => 'Alimentos',
@@ -168,7 +168,7 @@ class Alimentos extends BaseController
                 ->orderBy($cfg['campo'], $cfg['orden'])
                 ->findAll($cfg['limite']);
 
-            return view('comidas/alimentos/ranking', [
+            return view(comidas_vista('comidas/alimentos/ranking'), [
                 'title'  => $cfg['titulo'],
                 'rows'   => $rows,
                 'campo'  => $cfg['campo'],
@@ -211,7 +211,7 @@ class Alimentos extends BaseController
 
             $rows = $builder->get()->getResultArray();
 
-            return view('comidas/alimentos/ranking', [
+            return view(comidas_vista('comidas/alimentos/ranking'), [
                 'title'  => $masConsumidos ? 'Top 100 · Más consumidos' : 'Top 100 · Menos consumidos',
                 'rows'   => $rows,
                 'campo'  => 'veces',
@@ -228,7 +228,7 @@ class Alimentos extends BaseController
     {
         helper('form'); // para form_open()
 
-        return view('comidas/alimentos/form', [
+        return view(comidas_vista('comidas/alimentos/form'), [
             'title'  => 'Nuevo alimento',
             'row'    => $this->defaults(),
             'action' => site_url('comidas/alimentos/store'),
@@ -276,7 +276,7 @@ class Alimentos extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Alimento no encontrado');
         }
 
-        return view('comidas/alimentos/form', [
+        return view(comidas_vista('comidas/alimentos/form'), [
             'title'  => 'Editar alimento',
             'row'    => $row,
             'action' => site_url('comidas/alimentos/update/' . $id),

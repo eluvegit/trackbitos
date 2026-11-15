@@ -288,7 +288,7 @@ class Diario extends BaseController
         // Se agrupan de 7 en 7 para sugerir un mes de 4 semanas a replicar
         $semanas = array_chunk($top, 7);
 
-        return view('comidas/diario/top_dias', [
+        return view(comidas_vista('comidas/diario/top_dias'), [
             'title'   => 'Top 28 · Mejores días',
             'semanas' => $semanas,
         ]);
@@ -401,14 +401,14 @@ class Diario extends BaseController
         // (Opcional) si tu vista usa $fechaSel como DateTime, pásalo también:
         $data['fechaSel'] = $fechaSel;
 
-        return view('comidas/diario/resumen', $data);
+        return view(comidas_vista('comidas/diario/resumen'), $data);
     }
 
 
     public function verTipo($fecha, $tipo)
     {
         $data = $this->buildDia($fecha, $this->normalizeTipo($tipo));
-        return view('comidas/diario/entrada', $data);
+        return view(comidas_vista('comidas/diario/entrada'), $data);
     }
 
     public function seleccionarTipo($fecha)
@@ -419,7 +419,7 @@ class Diario extends BaseController
         $data['tipos'] = ['almuerzo', 'cena', 'nocturna', 'desayuno', 'merienda'];
 
         // vista con tarjetas de selección
-        return view('comidas/diario/seleccionar_tipo', $data);
+        return view(comidas_vista('comidas/diario/seleccionar_tipo'), $data);
     }
 
     // Vista completa de nutrientes del día
@@ -485,7 +485,7 @@ class Diario extends BaseController
             ];
         }
 
-        return view('comidas/diario/nutrientes', [
+        return view(comidas_vista('comidas/diario/nutrientes'), [
             'title'    => 'Nutrientes · ' . $fecha,
             'fechaSel' => new \DateTime($fecha),
             'items'    => $items,

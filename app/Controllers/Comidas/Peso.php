@@ -24,7 +24,7 @@ class Peso extends BaseController
 
         // Rango del último mes para el gráfico
         $hoy     = Time::now('Europe/Madrid')->toDateString(); // YYYY-MM-DD
-        $desdeTs = strtotime('-{$this->diasRango} days', strtotime($hoy));
+        $desdeTs = strtotime("-{$this->diasRango} days", strtotime($ultimos[0]["fecha"] ?? $hoy));
         $desde   = date('Y-m-d', $desdeTs);
 
         $ultimoMes = $model->where('fecha >=', $desde)
@@ -129,7 +129,7 @@ class Peso extends BaseController
         }
 
 
-        return view('comidas/peso/index', [
+        return view(comidas_vista('comidas/peso/index'), [
             'hoy'           => $hoy,
             'desde'         => $desde,
             'ultimos'       => $ultimos,
@@ -255,7 +255,7 @@ class Peso extends BaseController
 
     public function importarForm()
     {
-        return view('comidas/peso/importar', [
+        return view(comidas_vista('comidas/peso/importar'), [
             'title' => 'Importar CSV de báscula',
         ]);
     }
@@ -293,7 +293,7 @@ class Peso extends BaseController
         $model = new ComidasPesoModel();
 
         $hoy     = Time::now('Europe/Madrid')->toDateString();
-        $desdeTs = strtotime('-{$this->diasRango} days', strtotime($hoy));
+        $desdeTs = strtotime("-{$this->diasRango} days", strtotime($hoy));
         $desde   = date('Y-m-d', $desdeTs);
 
         $rows = $model->where('fecha >=', $desde)

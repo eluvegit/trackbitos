@@ -180,3 +180,14 @@ function comidas_alertas_eval_7d($arg1, ?array $arg2 = null): array
     $limits = comidas_limites(); // global
     return comidas_eval_limits($limits, $totales7d, 7);
 }
+
+if (!function_exists('comidas_vista')) {
+    function comidas_vista(string $vista): string
+    {
+        $nueva = service('request')->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('comidas_nueva', $nueva === '1');
+        }
+        return session('comidas_nueva') !== false ? $vista . '_nueva' : $vista;
+    }
+}

@@ -25,10 +25,10 @@ class Recetas extends BaseController
 
         // Petición parcial (AJAX o ?partial=1): solo las filas, para el buscador.
         if ($this->request->isAJAX() || $this->request->getGet('partial') === '1') {
-            return view('comidas/recetas/_rows', ['rows' => $rows]);
+            return view(comidas_vista('comidas/recetas/_rows'), ['rows' => $rows]);
         }
 
-        return view('comidas/recetas/index', [
+        return view(comidas_vista('comidas/recetas/index'), [
             'rows'  => $rows,
             'q'     => $q,
             'title' => 'Recetas',
@@ -37,7 +37,7 @@ class Recetas extends BaseController
 
     public function create()
     {
-        return view('comidas/recetas/form', [
+        return view(comidas_vista('comidas/recetas/form'), [
             'title' => 'Nueva receta'
         ]);
     }
@@ -82,7 +82,7 @@ class Recetas extends BaseController
         $aliVirt   = $aliM->where('es_receta', 1)->where('receta_id', $id)->first();
         $aliVirtId = $aliVirt['id'] ?? null;
 
-        return view('comidas/recetas/form', [
+        return view(comidas_vista('comidas/recetas/form'), [
             'row'       => $row,
             'aliVirtId' => $aliVirtId,
             'title'     => 'Editar receta'
