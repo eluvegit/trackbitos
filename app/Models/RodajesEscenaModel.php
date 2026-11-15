@@ -14,7 +14,7 @@ class RodajesEscenaModel extends Model
     protected $allowedFields    = [
         'proyecto_id',
         // ESCENA
-        'escena_bloque','escena_tomas','escena_ubicacion','escena_descripcion',
+        'escena_bloque','formato','escena_tomas','escena_ubicacion','escena_descripcion',
         'escena_objetivo','escena_accion','escena_efecto_especial',
         'escena_cont_previa','escena_cont_posterior',
         // CÁMARA
@@ -31,7 +31,11 @@ class RodajesEscenaModel extends Model
         'orden',
         // VÍNCULO CON SESIONES + PLATÓ
         'situacion_id', 'toma_estado', 'toma_estado_at', 'toma_nota',
+        'toma_estado_foto', 'toma_estado_foto_at',
     ];
+
+    /** Formato de la escena. NULL en BD = sin definir. */
+    public const FORMATOS = ['foto', 'video', 'ambas'];
 
     /** Estados de toma en el plató. NULL en BD = pendiente. */
     public const TOMA_ESTADOS = ['hecha', 'repetir', 'descartada'];

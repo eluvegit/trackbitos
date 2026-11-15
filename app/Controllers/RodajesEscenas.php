@@ -108,6 +108,13 @@ class RodajesEscenas extends BaseController
         return view(rod_vista('rodajes/escenas/form'), $data);
     }
 
+    /** Formato enviado por el formulario, normalizado (NULL = sin definir). */
+    private function formatoPost(): ?string
+    {
+        $f = (string) $this->request->getPost('formato');
+        return in_array($f, RodajesEscenaModel::FORMATOS, true) ? $f : null;
+    }
+
     /** Nombres de bloque ya usados en el proyecto (para sugerirlos en el formulario). */
     private function bloquesDelProyecto(int $proyectoId): array
     {
@@ -131,6 +138,7 @@ class RodajesEscenas extends BaseController
         ));
 
         $post = $this->request->getPost();
+        if (array_key_exists('formato', $post)) $post['formato'] = $this->formatoPost();
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
@@ -143,7 +151,8 @@ class RodajesEscenas extends BaseController
 
         // "Guardar y otra": encadenar escenas rápido (la lista de tomas se escribe de corrido).
         if ($this->request->getPost('otra')) {
-            return redirect()->to(site_url("rodajes/$proyectoId/escenas/create?bloque=" . rawurlencode((string) $this->request->getPost('escena_bloque'))))
+            return redirect()->to(site_url("rodajes/$proyectoId/escenas/create?bloque=" . rawurlencode((string) $this->request->getPost('escena_bloque'))
+                . '&formato=' . rawurlencode((string) $this->formatoPost())))
                 ->with('success', 'Escena #' . (int) $this->request->getPost('orden') . ' guardada.');
         }
 
@@ -215,6 +224,13 @@ class RodajesEscenas extends BaseController
         $post['plano_actores']    = $this->request->getPost('plano_actores') ? 'S' : 'N';
         $post['sonido_ambiente']  = $this->request->getPost('sonido_ambiente') ? 'S' : 'N';
         $post['sonido_antiviento'] = $this->request->getPost('sonido_antiviento') ? 'S' : 'N';
+
+        // Formato: solo lo trae el formulario nuevo; al cambiarlo, el estado de toma se mueve de parte.
+        if (array_key_exists('formato', $post)) {
+            $post['formato'] = $this->formatoPost();
+            $previa = $escenas->where('proyecto_id', (int) $proyectoId)->find((int) $id);
+            if ($previa) $post = rod_cambio_formato($previa, $post['formato']) + $post;
+        }
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());

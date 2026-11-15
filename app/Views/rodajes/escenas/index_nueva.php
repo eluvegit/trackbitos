@@ -19,7 +19,7 @@ foreach ($escenas as $e) {
     $clave  = mb_strtolower($nombre);
     $grupos[$clave] ??= ['nombre' => $nombre !== '' ? $nombre : 'Sin bloque', 'escenas' => []];
     $grupos[$clave]['escenas'][] = $e;
-    $cuenta[$e['toma_estado'] ?: 'pendiente']++;
+    $cuenta[rod_estado_escena($e)]++;
 }
 $total = count($escenas);
 
@@ -98,7 +98,8 @@ ob_start(); ?>
                         <?php foreach ($g['escenas'] as $e): ?>
                             <?php
                             $eid    = (int) $e['id'];
-                            $estado = $e['toma_estado'] ?: 'pendiente';
+                            $estado = rod_estado_escena($e);
+                            $partes = rod_estados_partes($e);
                             $m      = $multimedia[$eid] ?? null;
                             $buscar = mb_strtolower(implode(' ', [
                                 $e['escena_bloque'], $e['escena_descripcion'], $e['escena_accion'], $e['escena_ubicacion'],
@@ -120,9 +121,11 @@ ob_start(); ?>
                                     <a class="t" href="<?= site_url("rodajes/$pid/escenas/show/$eid") ?>"><?= esc(rod_titulo_escena($e)) ?></a>
                                     <?php if ($plano = rod_resumen_plano($e)): ?><div class="rd-plano"><?= $plano ?></div><?php endif; ?>
                                     <div class="m">
-                                        <?php if ($estado !== 'pendiente'): ?>
-                                            <span class="fv-estado <?= $estadosUi[$estado][2] ?>"><?= $estadosUi[$estado][0] ?></span>
-                                        <?php endif; ?>
+                                        <?= rod_formato_chip($e) ?>
+                                        <?php foreach ($partes as $parte => $est): ?>
+                                            <?php if ($est === 'pendiente') continue; ?>
+                                            <span class="fv-estado <?= $estadosUi[$est][2] ?>"><?= count($partes) > 1 ? rod_formatos()[$parte][0] . ': ' : '' ?><?= $estadosUi[$est][0] ?></span>
+                                        <?php endforeach; ?>
                                         <?php if (trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
                                         <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
                                         <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>

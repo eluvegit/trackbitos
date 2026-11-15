@@ -94,6 +94,25 @@ ob_start(); ?>
                 <input class="fv-input rd-grande" id="f_escena_descripcion" name="escena_descripcion" value="<?= $attr('escena_descripcion') ?>"
                        placeholder="Qué se ve: «Manos sirviendo café, plano cenital»" <?= $editar ? '' : 'autofocus' ?>>
             </div>
+            <?php $formato = (string) old('formato', $e['formato'] ?? (service('request')->getGet('formato') ?? '')); ?>
+            <div class="rd-campo">
+                <span class="rd-lbl">Formato <small>(opcional; tócalo otra vez para quitarlo)</small></span>
+                <div class="rd-formatos" id="rdFormatos">
+                    <input type="hidden" name="formato" value="">
+                    <?php foreach (rod_formatos() as $k => [$txt, $ico]): ?>
+                        <label><input type="radio" name="formato" value="<?= $k ?>" <?= $formato === $k ? 'checked' : '' ?>><span><i class="bi <?= $ico ?>"></i><?= $txt ?></span></label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <script>
+            (() => {
+                // Radios que se pueden desmarcar: pulsar el marcado lo deja sin formato.
+                document.querySelectorAll('#rdFormatos input[type=radio]').forEach(r => {
+                    r.closest('label').addEventListener('pointerdown', () => { r.dataset.estaba = r.checked ? '1' : ''; });
+                    r.addEventListener('click', () => { if (r.dataset.estaba) { r.checked = false; r.dataset.estaba = ''; } });
+                });
+            })();
+            </script>
             <div class="rd-filas-f" style="grid-template-columns: minmax(0, 1fr) 90px">
                 <div class="rd-campo">
                     <label for="f_escena_bloque">Bloque</label>

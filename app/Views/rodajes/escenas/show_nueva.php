@@ -14,11 +14,12 @@ $e   = $escena;
 $pid = (int) $proyecto['id'];
 $eid = (int) $e['id'];
 $val = static fn (string $k): string => trim((string) ($e[$k] ?? ''));
-$estado = $e['toma_estado'] ?: 'pendiente';
+$partes = rod_estados_partes($e);
 $estadosUi = rod_toma_estados();
 
 $titulo = $val('escena_bloque') ?: 'Escena #' . (int) $e['orden'];
 $sub = ['<span class="fv-mono">#' . (int) $e['orden'] . '</span>'];
+if ($f = rod_formato_chip($e)) $sub[] = $f;
 if ($val('escena_ubicacion') !== '') $sub[] = '<span><i class="bi bi-geo-alt"></i> ' . esc($val('escena_ubicacion')) . '</span>';
 if ($val('plano_hora_dia') !== '')   $sub[] = '<span><i class="bi bi-tag"></i> ' . esc($val('plano_hora_dia')) . '</span>';
 if ($val('escena_tomas') !== '')     $sub[] = '<span><i class="bi bi-camera-reels"></i> ' . esc($val('escena_tomas')) . '</span>';
@@ -114,11 +115,16 @@ ob_start(); ?>
         <aside class="rd-col">
             <section class="fv-panel" id="rdToma" data-url="<?= site_url("rodajes/$pid/escenas/$eid/toma") ?>">
                 <div class="fv-ph"><h3>En el plató</h3><a class="fv-link der" href="<?= site_url("rodajes/$pid/plato") ?>">Abrir plató <i class="bi bi-arrow-right"></i></a></div>
-                <div class="rd-estado-toma">
-                    <?php foreach ($estadosUi as $k => [$txt, $ico, $cls]): ?>
-                        <button type="button" class="<?= $cls ?><?= $estado === $k ? ' on' : '' ?>" data-estado="<?= $k ?>"><i class="bi <?= $ico ?>"></i><?= $txt ?></button>
-                    <?php endforeach; ?>
-                </div>
+                <?php foreach ($partes as $parte => $estado): ?>
+                    <div class="rd-estado-parte">
+                        <?php if (count($partes) > 1): ?><div class="t"><i class="bi <?= rod_formatos()[$parte][1] ?>"></i><?= rod_formatos()[$parte][0] ?></div><?php endif; ?>
+                        <div class="rd-estado-toma" data-parte="<?= $parte ?>">
+                            <?php foreach ($estadosUi as $k => [$txt, $ico, $cls]): ?>
+                                <button type="button" class="<?= $cls ?><?= $estado === $k ? ' on' : '' ?>" data-estado="<?= $k ?>"><i class="bi <?= $ico ?>"></i><?= $txt ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
                 <input type="text" class="fv-input" id="rdNota" maxlength="255" placeholder="Nota rápida de la toma…" value="<?= esc($e['toma_nota'] ?? '', 'attr') ?>">
             </section>
 
@@ -140,9 +146,10 @@ ob_start(); ?>
     }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
 
     panel.querySelectorAll('.rd-estado-toma button').forEach(b => b.addEventListener('click', () => {
-        const prev = panel.querySelector('.rd-estado-toma .on');
-        panel.querySelectorAll('.rd-estado-toma button').forEach(x => x.classList.toggle('on', x === b));
-        enviar({ estado: b.dataset.estado === 'pendiente' ? '' : b.dataset.estado })
+        const grupo = b.closest('.rd-estado-toma');
+        const prev = grupo.querySelector('.on');
+        grupo.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+        enviar({ estado: b.dataset.estado === 'pendiente' ? '' : b.dataset.estado, parte: grupo.dataset.parte })
             .catch(() => { b.classList.remove('on'); prev && prev.classList.add('on'); });
     }));
 

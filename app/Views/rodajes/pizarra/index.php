@@ -5,9 +5,10 @@
  * @var array  $proyecto
  * @var string $vista
  * @var array  $vistas     [clave => [título, icono, campo, bandeja, fijas]]
- * @var array  $columnas   [['valor', 'nombre', 'escenas', 'fija'], ...]
+ * @var array  $columnas   [['valor', 'nombre', 'tarjetas' => [['e', 'parte'], ...], 'fija'], ...]
  * @var array  $miniaturas [escena_id => ['ruta', 'video']]
  * @var int    $total
+ * @var bool   $hayFormato alguna escena tiene formato (foto/vídeo/ambas)
  */
 $pid       = (int) $proyecto['id'];
 $editables = $vista !== 'produccion';   // columnas que se pueden renombrar, mover y crear
@@ -15,7 +16,7 @@ $ayuda     = [
     'narrativa'  => 'El orden de la historia: es el que usan la lista, el storyboard y el plató.',
     'ubicacion'  => 'Agrupa por sitio para rodar todo lo de un lugar seguido. Su orden no toca la narrativa.',
     'montaje'    => 'Agrupa por soporte para no montar y desmontar el equipo. Su orden no toca la narrativa.',
-    'produccion' => 'Estado de cada toma (el mismo que marcas en el plató).',
+    'produccion' => 'Estado de cada toma (el mismo que marcas en el plató). Las escenas de foto y vídeo salen dos veces, una por parte.',
 ][$vista];
 
 ob_start(); ?>
@@ -40,6 +41,13 @@ ob_start(); ?>
 
     <div class="rd-herr">
         <input type="search" class="fv-input" id="rpBuscar" placeholder="Buscar tarjetas…" autocomplete="off">
+        <?php if ($hayFormato): ?>
+            <div class="fv-seg rp-filtro-medio" id="rpMedio">
+                <button type="button" data-medio="" aria-pressed="true">Todo</button>
+                <button type="button" data-medio="foto" aria-pressed="false"><i class="bi bi-camera"></i>Foto</button>
+                <button type="button" data-medio="video" aria-pressed="false"><i class="bi bi-camera-video"></i>Vídeo</button>
+            </div>
+        <?php endif; ?>
         <span class="rp-estado" id="rpEstado"></span>
     </div>
 
@@ -53,15 +61,15 @@ ob_start(); ?>
                     <?php else: ?>
                         <span class="rp-nombre"><?= esc($c['nombre']) ?></span>
                     <?php endif; ?>
-                    <small class="rp-cuenta"><?= count($c['escenas']) ?></small>
+                    <small class="rp-cuenta"><?= count($c['tarjetas']) ?></small>
                     <button type="button" class="fv-ibtn rp-mas" title="Escena rápida en esta columna"><i class="bi bi-plus-lg"></i></button>
                 </header>
                 <form class="rp-nueva" hidden>
                     <input type="text" class="fv-input" placeholder="Descripción y Enter…" maxlength="500">
                 </form>
                 <div class="rp-lista">
-                    <?php foreach ($c['escenas'] as $e): ?>
-                        <?= view('rodajes/pizarra/_tarjeta', ['e' => $e, 'pid' => $pid, 'vista' => $vista, 'mini' => $miniaturas[(int) $e['id']] ?? null]) ?>
+                    <?php foreach ($c['tarjetas'] as $t): ?>
+                        <?= view('rodajes/pizarra/_tarjeta', ['e' => $t['e'], 'pid' => $pid, 'vista' => $vista, 'parte' => $t['parte'], 'mini' => $miniaturas[(int) $t['e']['id']] ?? null]) ?>
                     <?php endforeach; ?>
                 </div>
             </section>
@@ -113,7 +121,7 @@ ob_start(); ?>
         clearTimeout(temporizador);
         aviso('Guardando…');
         temporizador = setTimeout(async () => {
-            const columnas = cols().map(c => ({ valor: c.dataset.valor, ids: [...c.querySelectorAll('.rp-tarjeta')].map(t => +t.dataset.id) }));
+            const columnas = cols().map(c => ({ valor: c.dataset.valor, ids: [...c.querySelectorAll('.rp-tarjeta')].map(t => t.dataset.id) }));
             try {
                 const r = await fetch(URL_GUARDAR, { method: 'POST', headers: HEADERS, body: JSON.stringify({ vista: VISTA, columnas }) });
                 const j = await r.json();
@@ -262,10 +270,23 @@ ob_start(); ?>
     tablero.addEventListener('scroll', () => { pop.hidden = true; }, { passive: true });
 
     // ---------- buscar ----------
-    document.getElementById('rpBuscar').addEventListener('input', ev => {
-        const q = norm(ev.target.value);
-        tablero.querySelectorAll('.rp-tarjeta').forEach(t => t.hidden = q !== '' && !norm(t.dataset.buscar).includes(q));
-    });
+    // ---------- buscar + filtro foto/vídeo ----------
+    // «Foto y vídeo» casa con los dos filtros, salvo en Producción, donde cada parte es su propia tarjeta.
+    const buscar = document.getElementById('rpBuscar');
+    let medio = '';
+    function filtrar() {
+        const q = norm(buscar.value);
+        tablero.querySelectorAll('.rp-tarjeta').forEach(t => {
+            const m = t.dataset.medio;
+            t.hidden = (q !== '' && !norm(t.dataset.buscar).includes(q)) || (medio !== '' && m !== medio && m !== 'ambas');
+        });
+    }
+    buscar.addEventListener('input', filtrar);
+    document.querySelectorAll('#rpMedio button').forEach(b => b.addEventListener('click', () => {
+        document.querySelectorAll('#rpMedio button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        medio = b.dataset.medio;
+        filtrar();
+    }));
 })();
 </script>
 <?= $this->endSection() ?>

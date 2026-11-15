@@ -26,7 +26,7 @@ class Rodajes extends BaseController
         $ids = array_column($data['proyectos'], 'id');
         if ($ids) {
             $filas = (new RodajesEscenaModel())
-                ->select("proyecto_id, COUNT(*) AS total, SUM(toma_estado = 'hecha') AS hechas", false)
+                ->select('proyecto_id, COUNT(*) AS total, ' . rod_sql_hechas() . ' AS hechas', false)
                 ->whereIn('proyecto_id', $ids)
                 ->groupBy('proyecto_id')
                 ->findAll();
@@ -293,8 +293,11 @@ class Rodajes extends BaseController
             if ($estado !== '' && !in_array($estado, RodajesEscenaModel::TOMA_ESTADOS, true)) {
                 return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
             }
-            $datos['toma_estado']    = $estado === '' ? null : $estado;
-            $datos['toma_estado_at'] = $estado === '' ? null : date('Y-m-d H:i:s');
+            // Parte (foto/vídeo) en las escenas «ambas»; si no se indica o no existe, la principal.
+            $partes = rod_partes($escena);
+            $col    = $partes[(string) ($input['parte'] ?? '')] ?? 'toma_estado';
+            $datos[$col]         = $estado === '' ? null : $estado;
+            $datos[$col . '_at'] = $estado === '' ? null : date('Y-m-d H:i:s');
         }
         if (array_key_exists('nota', $input)) {
             $nota = trim((string) $input['nota']);
@@ -313,7 +316,7 @@ class Rodajes extends BaseController
     {
         (new RodajesEscenaModel())->skipValidation(true)
             ->where('proyecto_id', (int) $id)
-            ->set(['toma_estado' => null, 'toma_estado_at' => null])
+            ->set(['toma_estado' => null, 'toma_estado_at' => null, 'toma_estado_foto' => null, 'toma_estado_foto_at' => null])
             ->update();
 
         return redirect()->to(site_url("rodajes/$id/plato"))->with('success', 'Todas las tomas vuelven a estar pendientes.');

@@ -10,6 +10,11 @@ use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenMod
  * tarjetas es propio de cada vista (la narrativa usa rodajes_escenas.orden,
  * el resto rodajes_pizarra_orden) para que reorganizar por ubicación no
  * descoloque la historia.
+ *
+ * En Producción cada tarjeta es una parte con estado propio: las escenas
+ * «foto y vídeo» salen dos veces (una por parte). Su orden se guarda con la
+ * clave de vista 'produccion' (columna toma_estado) o 'produccion_f'
+ * (columna toma_estado_foto).
  */
 class RodajesPizarra extends BaseController
 {
@@ -23,6 +28,12 @@ class RodajesPizarra extends BaseController
         'produccion' => ['Producción', 'bi-clipboard-check', 'toma_estado', null, []],
     ];
 
+    /** Clave de orden en Producción según la columna de estado de la parte. */
+    private static function claveProduccion(string $columna): string
+    {
+        return $columna === 'toma_estado_foto' ? 'produccion_f' : 'produccion';
+    }
+
     public function index($proyectoId, $vista = 'narrativa')
     {
         $pid      = (int) $proyectoId;
@@ -33,29 +44,46 @@ class RodajesPizarra extends BaseController
         $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)
             ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
 
-        // Orden propio de la vista (las escenas sin posición van detrás, en orden narrativo).
-        if ($vista !== 'narrativa' && $escenas) {
-            $pos = array_column(
-                (new RodajesPizarraOrdenModel())->where('vista', $vista)->whereIn('escena_id', array_column($escenas, 'id'))->findAll(),
-                'posicion', 'escena_id'
-            );
-            $clave = static fn ($e) => isset($pos[$e['id']]) ? (int) $pos[$e['id']] : 1_000_000 + (int) $e['orden'];
-            usort($escenas, static fn ($a, $b) => ($clave($a) <=> $clave($b)) ?: ($a['id'] <=> $b['id']));
+        // Tarjetas: una por escena, o una por parte en Producción.
+        $tarjetas = [];
+        foreach ($escenas as $e) {
+            if ($vista === 'produccion') {
+                foreach (rod_partes($e) as $parte => $col) {
+                    $tarjetas[] = ['e' => $e, 'parte' => (string) $parte, 'clave' => self::claveProduccion($col), 'estado' => ($e[$col] ?? null) ?: 'pendiente'];
+                }
+            } else {
+                $tarjetas[] = ['e' => $e, 'parte' => null, 'clave' => $vista];
+            }
         }
 
+        // Orden propio de la vista (lo que no tiene posición va detrás, en orden narrativo).
+        if ($vista !== 'narrativa' && $tarjetas) {
+            $pos = [];
+            $filas = (new RodajesPizarraOrdenModel())
+                ->whereIn('vista', $vista === 'produccion' ? ['produccion', 'produccion_f'] : [$vista])
+                ->whereIn('escena_id', array_column($escenas, 'id'))->findAll();
+            foreach ($filas as $f) $pos[$f['vista'] . ':' . $f['escena_id']] = (int) $f['posicion'];
+            $clave = static fn ($t) => $pos[$t['clave'] . ':' . $t['e']['id']] ?? 1_000_000 + (int) $t['e']['orden'] * 2 + ($t['parte'] === 'video' ? 1 : 0);
+            usort($tarjetas, static fn ($a, $b) => ($clave($a) <=> $clave($b)) ?: ($a['e']['id'] <=> $b['e']['id']));
+        }
+
+        $hayFormato = (bool) array_filter($escenas, static fn ($e) => !empty($e['formato']));
+
         return view('rodajes/pizarra/index', [
-            'proyecto'  => $proyecto,
-            'vista'     => $vista,
-            'vistas'    => self::VISTAS,
-            'columnas'  => $this->columnas($vista, $escenas),
+            'proyecto'   => $proyecto,
+            'vista'      => $vista,
+            'vistas'     => self::VISTAS,
+            'columnas'   => $this->columnas($vista, $tarjetas),
             'miniaturas' => $this->miniaturas(array_column($escenas, 'id')),
-            'total'     => count($escenas),
+            'total'      => count($escenas),
+            'hayFormato' => $hayFormato,
         ]);
     }
 
     /**
-     * Guarda el tablero entero: {vista, columnas: [{valor, ids: [...]}, ...]}.
-     * Asigna el campo de la vista a cada escena y renumera las posiciones.
+     * Guarda el tablero entero: {vista, columnas: [{valor, ids: ["12", "13:foto", ...]}, ...]}.
+     * Asigna el campo de la vista a cada escena (o el estado a cada parte en
+     * Producción) y renumera las posiciones.
      */
     public function guardar($proyectoId)
     {
@@ -67,13 +95,13 @@ class RodajesPizarra extends BaseController
         }
         $campo = self::VISTAS[$vista][2];
 
-        $model   = new RodajesEscenaModel();
-        $actual  = [];
-        foreach ($model->select("id, orden, $campo")->where('proyecto_id', $pid)->findAll() as $e) {
+        $model  = new RodajesEscenaModel();
+        $actual = [];
+        foreach ($model->where('proyecto_id', $pid)->findAll() as $e) {
             $actual[(int) $e['id']] = $e;
         }
 
-        // Columnas normalizadas; la bandeja (valor vacío) va al final de la secuencia narrativa.
+        // Columnas normalizadas: cada tarjeta = [id, columna donde va su valor].
         $columnas = [];
         $vistos   = [];
         foreach ($in['columnas'] as $c) {
@@ -81,13 +109,19 @@ class RodajesPizarra extends BaseController
             if ($vista === 'produccion' && $valor !== '' && !in_array($valor, RodajesEscenaModel::TOMA_ESTADOS, true)) {
                 return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
             }
-            $ids = [];
-            foreach ((array) ($c['ids'] ?? []) as $id) {
+            $tarjetas = [];
+            foreach ((array) ($c['ids'] ?? []) as $ref) {
+                [$id, $parte] = array_pad(explode(':', (string) $ref, 2), 2, '');
                 $id = (int) $id;
-                if (isset($actual[$id]) && !isset($vistos[$id])) { $ids[] = $id; $vistos[$id] = true; }
+                if (!isset($actual[$id])) continue;
+                $col = $vista === 'produccion' ? (rod_partes($actual[$id])[$parte] ?? 'toma_estado') : $campo;
+                if (isset($vistos["$id:$col"])) continue;
+                $vistos["$id:$col"] = true;
+                $tarjetas[] = [$id, $col];
             }
-            $columnas[] = ['valor' => mb_substr($valor, 0, 255), 'ids' => $ids];
+            $columnas[] = ['valor' => mb_substr($valor, 0, 255), 'tarjetas' => $tarjetas];
         }
+        // En la narrativa, la bandeja (sin bloque) va al final del orden de la historia.
         if ($vista === 'narrativa') {
             usort($columnas, static fn ($a, $b) => ($a['valor'] === '') <=> ($b['valor'] === ''));
         }
@@ -95,29 +129,30 @@ class RodajesPizarra extends BaseController
         $db = db_connect();
         $db->transStart();
         $model->skipValidation(true);
+        $cambios    = [];
         $posiciones = [];
         $n = 0;
         foreach ($columnas as $c) {
-            foreach ($c['ids'] as $id) {
+            foreach ($c['tarjetas'] as [$id, $col]) {
                 $n++;
-                $datos = [];
-                $previo = trim((string) ($actual[$id][$campo] ?? ''));
+                $previo = trim((string) ($actual[$id][$col] ?? ''));
                 if ($previo !== $c['valor']) {
-                    $datos[$campo] = $c['valor'] === '' ? ($vista === 'produccion' ? null : '') : $c['valor'];
-                    if ($vista === 'produccion') $datos['toma_estado_at'] = $c['valor'] === '' ? null : date('Y-m-d H:i:s');
+                    $cambios[$id][$col] = $c['valor'] === '' ? ($vista === 'produccion' ? null : '') : $c['valor'];
+                    if ($vista === 'produccion') $cambios[$id][$col . '_at'] = $c['valor'] === '' ? null : date('Y-m-d H:i:s');
                 }
                 if ($vista === 'narrativa') {
-                    if ((int) $actual[$id]['orden'] !== $n) $datos['orden'] = $n;
+                    if ((int) $actual[$id]['orden'] !== $n) $cambios[$id]['orden'] = $n;
                 } else {
-                    $posiciones[] = ['escena_id' => $id, 'vista' => $vista, 'posicion' => $n];
+                    $clave = $vista === 'produccion' ? self::claveProduccion($col) : $vista;
+                    $posiciones[$clave][] = ['escena_id' => $id, 'vista' => $clave, 'posicion' => $n];
                 }
-                if ($datos) $model->update($id, $datos);
             }
         }
-        if ($posiciones) {
-            $orden = new RodajesPizarraOrdenModel();
-            $orden->where('vista', $vista)->whereIn('escena_id', array_column($posiciones, 'escena_id'))->delete();
-            $orden->insertBatch($posiciones);
+        foreach ($cambios as $id => $datos) $model->update($id, $datos);
+        $orden = new RodajesPizarraOrdenModel();
+        foreach ($posiciones as $clave => $filas) {
+            $orden->where('vista', $clave)->whereIn('escena_id', array_column($filas, 'escena_id'))->delete();
+            $orden->insertBatch($filas);
         }
         $db->transComplete();
 
@@ -152,40 +187,40 @@ class RodajesPizarra extends BaseController
             if ($vista === 'produccion') $datos['toma_estado_at'] = date('Y-m-d H:i:s');
         }
         $id = (int) $model->insert($datos);
+        $e  = $model->find($id);
 
         return $this->response->setJSON([
             'ok'   => true,
-            'html' => view('rodajes/pizarra/_tarjeta', ['e' => $model->find($id), 'pid' => $pid, 'vista' => $vista, 'mini' => null]),
+            'html' => view('rodajes/pizarra/_tarjeta', ['e' => $e, 'pid' => $pid, 'vista' => $vista, 'parte' => $vista === 'produccion' ? '' : null, 'mini' => null]),
         ]);
     }
 
-    /** Columnas de la vista en orden: [['valor', 'nombre', 'escenas', 'fija'], ...]. */
-    private function columnas(string $vista, array $escenas): array
+    /** Columnas de la vista en orden: [['valor', 'nombre', 'tarjetas', 'fija'], ...]. */
+    private function columnas(string $vista, array $tarjetas): array
     {
         [, , $campo, $bandeja, $fijas] = self::VISTAS[$vista];
 
         if ($vista === 'produccion') {
             $cols = [];
             foreach (rod_toma_estados() as $k => [$txt]) {
-                $cols[$k] = ['valor' => $k === 'pendiente' ? '' : $k, 'nombre' => $txt, 'escenas' => [], 'fija' => true];
+                $cols[$k] = ['valor' => $k === 'pendiente' ? '' : $k, 'nombre' => $txt, 'tarjetas' => [], 'fija' => true];
             }
-            foreach ($escenas as $e) {
-                $k = in_array($e['toma_estado'], RodajesEscenaModel::TOMA_ESTADOS, true) ? $e['toma_estado'] : 'pendiente';
-                $cols[$k]['escenas'][] = $e;
+            foreach ($tarjetas as $t) {
+                $cols[isset($cols[$t['estado']]) ? $t['estado'] : 'pendiente']['tarjetas'][] = $t;
             }
             return array_values($cols);
         }
 
         // La bandeja siempre primero; el resto, en el orden en que aparece su primera tarjeta.
-        $cols = ['' => ['valor' => '', 'nombre' => $bandeja, 'escenas' => [], 'fija' => true]];
-        foreach ($escenas as $e) {
-            $valor = trim((string) $e[$campo]);
+        $cols = ['' => ['valor' => '', 'nombre' => $bandeja, 'tarjetas' => [], 'fija' => true]];
+        foreach ($tarjetas as $t) {
+            $valor = trim((string) $t['e'][$campo]);
             $clave = mb_strtolower($valor);
-            $cols[$clave] ??= ['valor' => $valor, 'nombre' => $valor, 'escenas' => [], 'fija' => false];
-            $cols[$clave]['escenas'][] = $e;
+            $cols[$clave] ??= ['valor' => $valor, 'nombre' => $valor, 'tarjetas' => [], 'fija' => false];
+            $cols[$clave]['tarjetas'][] = $t;
         }
         foreach ($fijas as $f) {
-            $cols[mb_strtolower($f)] ??= ['valor' => $f, 'nombre' => $f, 'escenas' => [], 'fija' => false];
+            $cols[mb_strtolower($f)] ??= ['valor' => $f, 'nombre' => $f, 'tarjetas' => [], 'fija' => false];
         }
         return array_values($cols);
     }

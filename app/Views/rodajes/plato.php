@@ -5,6 +5,8 @@
  * Modo plató (estilo fv): lista de tomas para usar en el móvil durante la
  * sesión. Cada escena se marca como hecha / repetir / descartada (tocar el
  * estado activo otra vez la devuelve a pendiente) y admite una nota rápida.
+ * Las escenas «foto y vídeo» tienen dos filas de botones, una por parte, y
+ * los contadores cuentan partes (tomas), no escenas.
  *
  * @var array      $proyecto
  * @var array      $escenas
@@ -15,10 +17,13 @@
 $pid = (int) $proyecto['id'];
 
 $cuenta = ['pendiente' => 0, 'hecha' => 0, 'repetir' => 0, 'descartada' => 0];
+$hayFormato = false;
 foreach ($escenas as $e) {
-    $cuenta[$e['toma_estado'] ?: 'pendiente']++;
+    foreach (rod_estados_partes($e) as $est) $cuenta[$est]++;
+    if (!empty($e['formato'])) $hayFormato = true;
 }
-$total  = count($escenas);
+$total  = array_sum($cuenta);
+$formatos = rod_formatos();
 $pct    = static fn (int $n) => $total ? round($n / $total * 100, 2) : 0;
 
 $sub = [];
@@ -51,8 +56,15 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 <button type="button" class="on" data-filtro="pendientes">Por hacer<span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
                 <button type="button" data-filtro="repetir">Repetir<span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
                 <button type="button" data-filtro="hecha">Hechas<span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
-                <button type="button" data-filtro="todas">Todas<span><?= $total ?></span></button>
+                <button type="button" data-filtro="todas">Todas<span data-n="todas"><?= $total ?></span></button>
             </div>
+            <?php if ($hayFormato): ?>
+                <div class="fv-seg pl-medio">
+                    <button type="button" data-medio="" aria-pressed="true">Todo</button>
+                    <button type="button" data-medio="foto" aria-pressed="false"><i class="bi bi-camera"></i> Foto</button>
+                    <button type="button" data-medio="video" aria-pressed="false"><i class="bi bi-camera-video"></i> Vídeo</button>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="pl-lista">
@@ -60,7 +72,8 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
             <?php foreach ($escenas as $e): ?>
                 <?php
                 $eid    = (int) $e['id'];
-                $estado = $e['toma_estado'] ?: 'pendiente';
+                $estado = rod_estado_escena($e);
+                $partes = rod_estados_partes($e);
                 $bloque = trim((string) $e['escena_bloque']);
                 $detalle = array_filter([
                     'Acción'              => $e['escena_accion'],
@@ -91,6 +104,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                         </div>
                         <?= rod_ficha_tecnica($e) ?>
                         <div class="pl-meta">
+                            <?= rod_formato_chip($e) ?>
                             <?php if (trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
                             <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
                             <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>
@@ -125,11 +139,16 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                         <a class="fv-link" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>"><i class="bi bi-pencil-square"></i>Editar escena completa</a>
                     </div>
 
-                    <div class="pl-botones">
-                        <button type="button" data-estado="hecha"><i class="bi bi-check-lg"></i>Hecha</button>
-                        <button type="button" data-estado="repetir"><i class="bi bi-arrow-repeat"></i>Repetir</button>
-                        <button type="button" data-estado="descartada"><i class="bi bi-x-lg"></i>Descartar</button>
-                    </div>
+                    <?php foreach ($partes as $parte => $est): ?>
+                        <div class="pl-botones" data-parte="<?= $parte ?>" data-medio="<?= $parte ?>" data-actual="<?= $est ?>">
+                            <?php if (count($partes) > 1): ?>
+                                <div class="pl-parte"><i class="bi <?= $formatos[$parte][1] ?>"></i><?= $formatos[$parte][0] ?></div>
+                            <?php endif; ?>
+                            <button type="button" data-estado="hecha"><i class="bi bi-check-lg"></i>Hecha</button>
+                            <button type="button" data-estado="repetir"><i class="bi bi-arrow-repeat"></i>Repetir</button>
+                            <button type="button" data-estado="descartada"><i class="bi bi-x-lg"></i>Descartar</button>
+                        </div>
+                    <?php endforeach; ?>
                 </article>
             <?php endforeach; ?>
 
@@ -154,11 +173,20 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
     const base = raiz.dataset.base;
     const csrf = '<?= csrf_hash() ?>';
     let filtro = 'pendientes';
+    let medio = '';   // '' | foto | video
 
-    const visible = (estado) => ({
-        pendientes: estado === 'pendiente' || estado === 'repetir',
-        repetir: estado === 'repetir',
-        hecha: estado === 'hecha',
+    // Mismo criterio que rod_estado_escena() en PHP.
+    const combinar = ests => {
+        if (new Set(ests).size === 1) return ests[0];
+        if (ests.includes('repetir')) return 'repetir';
+        if (ests.every(e => e === 'hecha' || e === 'descartada')) return 'hecha';
+        return 'pendiente';
+    };
+    const casa = g => !medio || g.dataset.medio === medio;
+    const visible = (ests) => ests.length > 0 && ({
+        pendientes: ests.some(e => e === 'pendiente' || e === 'repetir'),
+        repetir: ests.includes('repetir'),
+        hecha: ests.every(e => e === 'hecha'),
         todas: true,
     })[filtro];
 
@@ -166,8 +194,11 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         const tomas = [...raiz.querySelectorAll('.pl-toma')];
         const n = { pendiente: 0, hecha: 0, repetir: 0, descartada: 0 };
         tomas.forEach(t => {
-            n[t.dataset.estado]++;
-            t.hidden = !visible(t.dataset.estado);
+            const grupos = [...t.querySelectorAll('.pl-botones')];
+            grupos.forEach(g => g.hidden = !casa(g));
+            const ests = grupos.filter(casa).map(g => g.dataset.actual);
+            ests.forEach(e => n[e]++);
+            t.hidden = !visible(ests);
         });
         // Cabeceras de bloque: solo si queda alguna toma visible bajo ellas.
         raiz.querySelectorAll('[data-bloque]').forEach(b => {
@@ -175,7 +206,8 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
             while (sig && sig.classList.contains('pl-toma')) { if (!sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
             b.hidden = !alguna;
         });
-        const total = tomas.length;
+        const total = n.pendiente + n.hecha + n.repetir + n.descartada;
+        raiz.querySelector('[data-n="todas"]').textContent = total;
         document.getElementById('plHechas').textContent = n.hecha;
         document.getElementById('plUtiles').textContent = total - n.descartada;
         raiz.querySelector('[data-n="pendientes"]').textContent = n.pendiente + n.repetir;
@@ -202,6 +234,11 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         filtro = b.dataset.filtro;
         pintar();
     }));
+    raiz.querySelectorAll('.pl-medio button').forEach(b => b.addEventListener('click', () => {
+        raiz.querySelectorAll('.pl-medio button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        medio = b.dataset.medio;
+        pintar();
+    }));
 
     raiz.addEventListener('click', (ev) => {
         const cab = ev.target.closest('[data-abrir]');
@@ -215,17 +252,20 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         const btn = ev.target.closest('.pl-botones button');
         if (!btn) return;
         const toma = btn.closest('.pl-toma');
-        const anterior = toma.dataset.estado;
+        const grupo = btn.closest('.pl-botones');
+        const anterior = grupo.dataset.actual;
         const nuevo = anterior === btn.dataset.estado ? 'pendiente' : btn.dataset.estado;
+        const recalcular = () => { toma.dataset.estado = combinar([...toma.querySelectorAll('.pl-botones')].map(g => g.dataset.actual)); };
 
         // Optimista: se pinta ya; la toma se queda visible un instante para
         // que se vea el cambio antes de desaparecer del filtro.
-        toma.dataset.estado = nuevo;
+        grupo.dataset.actual = nuevo;
+        recalcular();
         toma.classList.add('guardando');
         if (navigator.vibrate) navigator.vibrate(15);
-        enviar(toma, { estado: nuevo === 'pendiente' ? '' : nuevo })
+        enviar(toma, { estado: nuevo === 'pendiente' ? '' : nuevo, parte: grupo.dataset.parte })
             .then(() => setTimeout(pintar, 450))
-            .catch(() => { toma.dataset.estado = anterior; alert('No se ha podido guardar. ¿Hay conexión?'); pintar(); })
+            .catch(() => { grupo.dataset.actual = anterior; recalcular(); alert('No se ha podido guardar. ¿Hay conexión?'); pintar(); })
             .finally(() => toma.classList.remove('guardando'));
     });
 

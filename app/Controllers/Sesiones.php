@@ -74,7 +74,7 @@ class Sesiones extends BaseController
 
         // Progreso de los rodajes vinculados (módulo Rodajes).
         $set($db->table('rodajes_proyectos p')
-            ->select("p.sesion_id, COUNT(e.id) AS rodaje_total, SUM(e.toma_estado = 'hecha') AS rodaje_hechas", false)
+            ->select("p.sesion_id, COUNT(e.id) AS rodaje_total, SUM(e.toma_estado = 'hecha' AND (e.formato IS NULL OR e.formato <> 'ambas' OR e.toma_estado_foto = 'hecha')) AS rodaje_hechas", false)
             ->join('rodajes_escenas e', 'e.proyecto_id = p.id AND e.deleted_at IS NULL', 'left')
             ->whereIn('p.sesion_id', $ids)->where('p.deleted_at', null)
             ->groupBy('p.sesion_id')->get()->getResultArray(), ['rodaje_total', 'rodaje_hechas']);
@@ -124,7 +124,7 @@ class Sesiones extends BaseController
 
         // Rodajes vinculados (módulo Rodajes, independiente): con su progreso de plató.
         $detalle['rodajes'] = (new \App\Models\RodajesProyectoModel())
-            ->select("rodajes_proyectos.id, rodajes_proyectos.titulo, COUNT(e.id) AS total, SUM(e.toma_estado = 'hecha') AS hechas", false)
+            ->select("rodajes_proyectos.id, rodajes_proyectos.titulo, COUNT(e.id) AS total, SUM(e.toma_estado = 'hecha' AND (e.formato IS NULL OR e.formato <> 'ambas' OR e.toma_estado_foto = 'hecha')) AS hechas", false)
             ->join('rodajes_escenas e', 'e.proyecto_id = rodajes_proyectos.id AND e.deleted_at IS NULL', 'left')
             ->where('rodajes_proyectos.sesion_id', $id)
             ->groupBy('rodajes_proyectos.id, rodajes_proyectos.titulo')

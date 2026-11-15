@@ -37,6 +37,100 @@ if (!function_exists('rod_toma_estados')) {
     }
 }
 
+if (!function_exists('rod_formatos')) {
+    /** Formatos de escena: [clave => [texto, icono]]. NULL en BD = sin definir. */
+    function rod_formatos(): array
+    {
+        return [
+            'foto'  => ['Foto', 'bi-camera'],
+            'video' => ['Vídeo', 'bi-camera-video'],
+            'ambas' => ['Foto y vídeo', 'bi-collection-play'],
+        ];
+    }
+}
+
+if (!function_exists('rod_formato_chip')) {
+    /** Icono + texto del formato para listados ('' si no tiene). */
+    function rod_formato_chip(array $e, bool $conTexto = true): string
+    {
+        $f = rod_formatos()[$e['formato'] ?? ''] ?? null;
+        if (!$f) return '';
+        return '<span class="rd-formato ' . esc($e['formato'], 'attr') . '" title="' . $f[0] . '"><i class="bi ' . $f[1] . '"></i>' . ($conTexto ? $f[0] : '') . '</span>';
+    }
+}
+
+if (!function_exists('rod_partes')) {
+    /**
+     * Partes con estado de toma propio: [parte => columna del estado].
+     * Una escena «ambas» tiene dos (foto en toma_estado_foto, vídeo en
+     * toma_estado); el resto, una sola en toma_estado. Parte '' = sin formato.
+     */
+    function rod_partes(array $e): array
+    {
+        return match ($e['formato'] ?? null) {
+            'ambas' => ['foto' => 'toma_estado_foto', 'video' => 'toma_estado'],
+            'foto'  => ['foto' => 'toma_estado'],
+            'video' => ['video' => 'toma_estado'],
+            default => ['' => 'toma_estado'],
+        };
+    }
+}
+
+if (!function_exists('rod_estados_partes')) {
+    /** [parte => estado] ('pendiente' cuando la columna es NULL). */
+    function rod_estados_partes(array $e): array
+    {
+        return array_map(static fn ($col) => ($e[$col] ?? null) ?: 'pendiente', rod_partes($e));
+    }
+}
+
+if (!function_exists('rod_estado_escena')) {
+    /**
+     * Estado de la escena entera a partir de sus partes: si coinciden, ese;
+     * si alguna es «repetir», repetir; si todas están cerradas (hecha o
+     * descartada), hecha; si no, pendiente.
+     */
+    function rod_estado_escena(array $e): string
+    {
+        $estados = array_values(rod_estados_partes($e));
+        if (count(array_unique($estados)) === 1) return $estados[0];
+        if (in_array('repetir', $estados, true)) return 'repetir';
+        if (!array_diff($estados, ['hecha', 'descartada'])) return 'hecha';
+        return 'pendiente';
+    }
+}
+
+if (!function_exists('rod_cambio_formato')) {
+    /**
+     * Al cambiar el formato de una escena, mueve el estado de toma para que
+     * no se pierda: foto → ambas lleva el estado a la parte foto; ambas → foto
+     * lo trae de vuelta; dejar de ser «ambas» por otro lado limpia la foto.
+     */
+    function rod_cambio_formato(array $e, ?string $nuevo): array
+    {
+        $viejo = ($e['formato'] ?? null) ?: null;
+        if ($viejo === $nuevo) return [];
+        if ($viejo === 'foto' && $nuevo === 'ambas') {
+            return ['toma_estado_foto' => $e['toma_estado'], 'toma_estado_foto_at' => $e['toma_estado_at'], 'toma_estado' => null, 'toma_estado_at' => null];
+        }
+        if ($viejo === 'ambas' && $nuevo === 'foto') {
+            return ['toma_estado' => $e['toma_estado_foto'], 'toma_estado_at' => $e['toma_estado_foto_at'], 'toma_estado_foto' => null, 'toma_estado_foto_at' => null];
+        }
+        if ($viejo === 'ambas') {
+            return ['toma_estado_foto' => null, 'toma_estado_foto_at' => null];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('rod_sql_hechas')) {
+    /** Expresión SQL «escena hecha» (en las «ambas», foto y vídeo hechos). $a = alias con punto. */
+    function rod_sql_hechas(string $a = ''): string
+    {
+        return "SUM({$a}toma_estado = 'hecha' AND ({$a}formato IS NULL OR {$a}formato <> 'ambas' OR {$a}toma_estado_foto = 'hecha'))";
+    }
+}
+
 if (!function_exists('rod_titulo_escena')) {
     /** Texto principal de una escena: descripción, si no bloque, si no «Escena #n». */
     function rod_titulo_escena(array $e): string
