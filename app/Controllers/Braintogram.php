@@ -558,7 +558,7 @@ class Braintogram extends BaseController
     {
         $mensajes = $this->model->orderBy('id', 'DESC')->paginate(30);
 
-        return view('braintogram/index', [
+        return view($this->vista('braintogram/index'), [
             'mensajes'    => $mensajes,
             'pager'       => $this->model->pager,
             'webhookUrl'  => site_url('braintogram/webhook'),
@@ -572,6 +572,15 @@ class Braintogram extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Mensaje no encontrado');
         }
 
-        return view('braintogram/ver', ['mensaje' => $mensaje]);
+        return view($this->vista('braintogram/ver'), ['mensaje' => $mensaje]);
+    }
+
+    private function vista(string $vista): string
+    {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('braintogram_nueva', $nueva === '1');
+        }
+        return session('braintogram_nueva') !== false ? $vista . '_nueva' : $vista;
     }
 }

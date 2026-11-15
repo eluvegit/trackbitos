@@ -19,7 +19,7 @@ class Admin extends BaseController
         $usuarios   = new BuscappUsuarioModel();
         $telegramas = new BuscappTelegramaModel();
 
-        return view('buscapp/index', [
+        return view($this->vista('buscapp/index'), [
             'usuarios'   => $usuarios->orderBy('creado_en', 'DESC')->findAll(),
             'telegramas' => $telegramas->orderBy('enviado_en', 'DESC')->paginate(30),
             'pager'      => $telegramas->pager,
@@ -41,11 +41,20 @@ class Admin extends BaseController
             $usuariosPorId[$d['receptor_id']] = (new BuscappUsuarioModel())->find($d['receptor_id']);
         }
 
-        return view('buscapp/ver', [
+        return view($this->vista('buscapp/ver'), [
             'telegrama'      => $telegrama,
             'emisor'         => $emisor,
             'destinos'       => $destinos,
             'usuariosPorId'  => $usuariosPorId,
         ]);
+    }
+
+    private function vista(string $vista): string
+    {
+        $nueva = $this->request->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('buscapp_nueva', $nueva === '1');
+        }
+        return session('buscapp_nueva') !== false ? $vista . '_nueva' : $vista;
     }
 }
