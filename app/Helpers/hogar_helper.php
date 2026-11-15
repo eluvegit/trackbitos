@@ -77,3 +77,30 @@ if (!function_exists('hogar_esta_atrasada')) {
         return hogar_dias_desde($ultimaVez) >= $frecuenciaDias;
     }
 }
+
+if (!function_exists('hogar_vista')) {
+    /**
+     * Vista nueva (estilo fv) o clásica, como en el resto de módulos:
+     * ?nueva=0 / ?nueva=1 la fija en la sesión; por defecto, la nueva.
+     */
+    function hogar_vista(string $vista): string
+    {
+        $nueva = service('request')->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set('hogar_nueva', $nueva === '1');
+        }
+        return session('hogar_nueva') !== false ? $vista . '_nueva' : $vista;
+    }
+}
+
+if (!function_exists('hogar_iconos')) {
+    /** Iconos de habitación: [slug de Bootstrap Icons => etiqueta]. */
+    function hogar_iconos(): array
+    {
+        return [
+            'house' => 'Genérico', 'cup-hot' => 'Cocina', 'droplet-half' => 'Baño', 'tv' => 'Salón',
+            'moon-stars' => 'Dormitorio', 'door-open' => 'Entrada / Pasillo', 'tree' => 'Jardín / Terraza',
+            'car-front' => 'Garaje', 'briefcase' => 'Estudio / Oficina', 'building' => 'Otro',
+        ];
+    }
+}

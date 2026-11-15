@@ -48,7 +48,7 @@ class Hogar extends BaseController
         }
         unset($hab);
 
-        return view('hogar/index', [
+        return view(hogar_vista('hogar/index'), [
             'habitaciones'     => $habitaciones,
             'totalPendientes'  => $totalPendientes,
         ]);
@@ -94,7 +94,7 @@ class Hogar extends BaseController
 
         usort($tareas, fn($a, $b) => $b['prioridad'] <=> $a['prioridad']);
 
-        return view('hogar/pendientes', ['tareas' => $tareas]);
+        return view(hogar_vista('hogar/pendientes'), ['tareas' => $tareas]);
     }
 
     /**
@@ -116,7 +116,7 @@ class Hogar extends BaseController
         }
         unset($t);
 
-        return view('hogar/habitacion', [
+        return view(hogar_vista('hogar/habitacion'), [
             'habitacion' => $habitacion,
             'tareas'     => $tareas,
         ]);
@@ -127,12 +127,12 @@ class Hogar extends BaseController
     public function gestionar()
     {
         $habitaciones = $this->habitacionModel->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
-        return view('hogar/gestionar', ['habitaciones' => $habitaciones]);
+        return view(hogar_vista('hogar/gestionar'), ['habitaciones' => $habitaciones]);
     }
 
     public function nuevaHabitacion()
     {
-        return view('hogar/habitacion_form');
+        return view(hogar_vista('hogar/habitacion_form'));
     }
 
     public function crearHabitacion()
@@ -153,7 +153,7 @@ class Hogar extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Habitación no encontrada');
         }
 
-        return view('hogar/habitacion_form', ['habitacion' => $habitacion]);
+        return view(hogar_vista('hogar/habitacion_form'), ['habitacion' => $habitacion]);
     }
 
     public function actualizarHabitacion(int $id)
@@ -220,7 +220,7 @@ class Hogar extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Tarea no encontrada');
         }
 
-        return view('hogar/tarea_form', ['tarea' => $tarea]);
+        return view(hogar_vista('hogar/tarea_form'), ['tarea' => $tarea]);
     }
 
     /**
@@ -276,7 +276,7 @@ class Hogar extends BaseController
             $this->construirMesCalendario((int) $hoy->format('Y'), (int) $hoy->format('n'), $logDates),
         ];
 
-        return view('hogar/tarea_historial', [
+        return view(hogar_vista('hogar/tarea_historial'), [
             'tarea'        => $tarea,
             'habitacion'   => $habitacion,
             'timeline'     => $timeline,

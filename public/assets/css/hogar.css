@@ -1,0 +1,44 @@
+/* Hogar — vistas nuevas en estilo fv. Usa también recordatorios.css (rc-) para cabecera, listas y formularios. */
+
+/* ---------- habitaciones (inicio) ---------- */
+.hg-habs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.hg-hab { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); background: var(--fv-panel); text-decoration: none; color: inherit; transition: border-color .12s; }
+.hg-hab:hover { border-color: var(--fv-border-2); }
+.hg-hab-cab { display: flex; align-items: center; gap: 10px; }
+.hg-hab-cab .rc-ico { flex: none; }
+.hg-hab-cab .n { font-weight: 600; font-size: 15px; color: var(--fv-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hg-hab .s { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--fv-text-3); }
+.hg-hab .rc-barra { margin-top: 0; }
+.hg-hab.completa .rc-ico { color: var(--fv-ok); }
+.hg-hab-nueva { place-items: center; align-content: center; min-height: 110px; border-style: dashed; color: var(--fv-text-3); font-size: 13px; }
+.hg-hab-nueva .bi { font-size: 20px; }
+
+/* ---------- checklist ---------- */
+.hg-tareas { display: grid; border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); background: var(--fv-panel); overflow: hidden; }
+.hg-t { display: grid; grid-template-columns: auto 40px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 12px 8px 6px; border-top: 1px solid var(--fv-border); border-left: 3px solid transparent; }
+.hg-t:first-child { border-top: 0; }
+.hg-t[hidden] { display: none; }
+.hg-t.atrasada { border-left-color: var(--fv-warn); }
+.hg-asa { color: var(--fv-text-3); cursor: grab; padding: 6px 2px; touch-action: none; }
+.hg-check { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; font-size: 24px; color: var(--fv-text-3); transition: color .12s, transform .12s; }
+.hg-check:hover:not(:disabled) { color: var(--fv-ok); }
+.hg-check:active:not(:disabled) { transform: scale(.9); }
+.hg-t.hecha .hg-check { color: var(--fv-ok); cursor: default; }
+.hg-t .rc-txt .t { font-weight: 500; font-size: 14px; color: var(--fv-text); }
+.hg-t.hecha .rc-txt .t { color: var(--fv-text-3); text-decoration: line-through; text-decoration-color: var(--fv-text-3); }
+.hg-t .rc-btns .fv-ibtn { width: 30px; height: 30px; }
+.hg-fantasma { opacity: .35; }
+.hg-nueva { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; gap: 8px; }
+@media (max-width: 560px) { .hg-nueva { grid-template-columns: minmax(0, 1fr) 100px; } .hg-nueva .fv-btn { grid-column: 1 / -1; justify-content: center; } }
+.hg-nueva .fv-input { width: 100%; height: 40px; font-size: 16px; }
+@media (min-width: 720px) { .hg-nueva .fv-input { height: 36px; font-size: 13px; } }
+
+/* ---------- historial: calendario ---------- */
+.hg-meses { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.hg-mes h4 { font-size: 13px; font-weight: 500; color: var(--fv-text-2); margin: 0 0 8px; }
+.hg-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.hg-cal span { aspect-ratio: 1; display: grid; place-items: center; border-radius: 6px; font-size: 11px; font-family: var(--fv-mono); color: var(--fv-text-3); background: var(--fv-inset); }
+.hg-cal span.dow { background: none; font-family: inherit; aspect-ratio: auto; padding-bottom: 2px; }
+.hg-cal span.vacio { background: none; }
+.hg-cal span.si { background: var(--fv-ok); color: #09090b; font-weight: 600; }
+.hg-cal span.hoy { box-shadow: inset 0 0 0 1.5px var(--fv-accent); }
