@@ -4,7 +4,7 @@
 helper('gimnasio');
 $js = base_url('assets/js/gimnasio.js') . '?v=' . (@filemtime(FCPATH . 'assets/js/gimnasio.js') ?: 1);
 ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'plantillas', 'titulo' => 'Plantillas',
         'sub' => '<span>Rutinas que repites: se aplican a una sesión con «Reutilizar»</span>']) ?>
 

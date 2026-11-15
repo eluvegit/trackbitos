@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 <?php helper('gimnasio'); $url = site_url('gimnasio/mesociclos/' . $plan['id'] . '/ajustar'); ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'mesociclos',
         'migas' => ['Mesociclos' => site_url('gimnasio/mesociclos'), $plan['nombre'] => site_url('gimnasio/mesociclos/' . $plan['id']), 'Ajustar' => null],
         'titulo' => 'Ajustar e1RM', 'sub' => '<span>Ahora: <b class="t1">' . gim_kg($plan['e1rm_base']) . ' kg</b></span><span class="fv-dot"></span><span>antes de generar el siguiente lote</span>']) ?>

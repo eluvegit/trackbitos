@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 <?php helper('gimnasio'); ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'mesociclos',
         'migas' => ['Mesociclos' => site_url('gimnasio/mesociclos'), $plan['nombre'] => site_url('gimnasio/mesociclos/' . $plan['id']), 'Simplificado' => null],
         'titulo' => 'Lo que toca', 'sub' => '<span>Todos los bloques con el e1RM actual (' . gim_kg($plan['e1rm_base']) . ' kg), tope alto de cada rango</span>']) ?>

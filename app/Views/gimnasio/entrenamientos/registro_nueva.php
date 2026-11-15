@@ -20,7 +20,7 @@ $acciones .= '<div class="dropdown"><button type="button" class="fv-ibtn" data-b
     . '<li><form method="post" action="' . site_url('gimnasio/entrenamientos/eliminar/' . $entrenamiento_id) . '" data-confirm="¿Eliminar este entrenamiento con todas sus series?" class="m-0"><button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Eliminar entrenamiento</button></form></li>'
     . '</ul></div>';
 ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', [
         'activa' => 'entrenos', 'sinNav' => true,
         'migas' => ['Entrenos' => site_url('gimnasio/entrenamientos'), gim_fecha_corta($fecha, false) => null],

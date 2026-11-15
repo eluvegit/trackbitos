@@ -1,6 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'mesociclos',
         'migas' => ['Mesociclos' => site_url('gimnasio/mesociclos'), 'Plan' => site_url('gimnasio/mesociclos/' . $planId), 'Asignar' => null],
         'titulo' => 'Asignar bloque']) ?>

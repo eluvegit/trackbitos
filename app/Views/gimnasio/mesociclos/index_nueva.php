@@ -4,7 +4,7 @@
 helper('gimnasio');
 $acciones = '<a class="fv-btn fv-btn-pri" href="' . site_url('gimnasio/mesociclos/nuevo') . '"><i class="bi bi-plus-lg"></i> Nuevo plan</a>';
 ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'mesociclos', 'titulo' => 'Mesociclos', 'acciones' => $acciones,
         'sub' => '<span>Progresión por bloques: top set + back-off a partir de tu 1RM estimado</span>']) ?>
 

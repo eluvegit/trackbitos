@@ -8,7 +8,7 @@ helper('gimnasio');
 $editar = !empty($ejercicio);
 $grupoSel = $editar ? $ejercicio['grupo_muscular'] : ($grupo ?? '');
 ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'ejercicios',
         'migas' => ['Ejercicios' => site_url('gimnasio/ejercicios'), ($editar ? 'Editar' : 'Nuevo') => null],
         'titulo' => $editar ? esc($ejercicio['nombre']) : 'Nuevo ejercicio']) ?>

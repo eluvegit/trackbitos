@@ -5,7 +5,7 @@ helper('gimnasio');
 $acciones = '<button type="button" class="fv-gbtn" data-bs-toggle="modal" data-bs-target="#gmRenombrar"><i class="bi bi-pencil"></i> Renombrar</button>'
     . '<form method="post" action="' . site_url('gimnasio/plantillas/eliminar/' . $plantilla_id) . '" data-confirm="¿Eliminar esta plantilla?" class="m-0"><button class="fv-ibtn" title="Eliminar plantilla"><i class="bi bi-trash"></i></button></form>';
 ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'plantillas',
         'migas' => ['Plantillas' => site_url('gimnasio/plantillas'), $plantilla['nombre'] => null],
         'titulo' => esc($plantilla['nombre']), 'acciones' => $acciones,

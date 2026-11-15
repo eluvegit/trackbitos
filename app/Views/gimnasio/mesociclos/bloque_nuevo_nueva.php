@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
 <?php $campo = fn ($id, $lbl, $attrs) => '<div class="gm-campo"><label for="' . $id . '">' . $lbl . '</label><input id="' . $id . '" class="fv-input" ' . $attrs . '></div>'; ?>
-<div class="fv gm estrecho">
+<div class="fv gm">
     <?= view('gimnasio/_cabecera', ['activa' => 'mesociclos',
         'migas' => ['Mesociclos' => site_url('gimnasio/mesociclos'), $plan['nombre'] => site_url('gimnasio/mesociclos/' . $plan['id']), 'Nuevo bloque' => null],
         'titulo' => 'Nuevo bloque']) ?>

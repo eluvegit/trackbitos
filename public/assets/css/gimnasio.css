@@ -1,7 +1,6 @@
 /* Gimnasio — vistas nuevas en estilo fv (se apoya en ficha-variante.css) */
 
 .fv.gm { gap: 22px; grid-template-columns: minmax(0, 1fr); max-width: 1080px; width: 100%; margin-inline: auto; }
-.fv.gm.estrecho { max-width: 720px; }
 .fv.gm .fv-panel { padding: 18px; gap: 14px; }
 
 /* ---------- cabecera ---------- */
