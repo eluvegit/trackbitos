@@ -8,12 +8,16 @@ class RecordatorioModel extends Model
 {
     protected $table         = 'recordatorios';
     protected $primaryKey    = 'id';
-    protected $allowedFields = ['titulo', 'categoria', 'icono', 'fecha_evento', 'periodo_meses', 'periodo_dias', 'notas'];
+    protected $allowedFields = [
+        'titulo', 'categoria', 'icono', 'fecha_evento', 'periodo_meses', 'periodo_dias', 'notas',
+        // Lista común con Coche y Lentillas (ver App\Libraries\RecordatorioServicio)
+        'persistente', 'avisar', 'intervalo_km', 'ultima_vez', 'elemento',
+    ];
     protected $useTimestamps = true;
 
     protected $validationRules = [
         'titulo'       => 'required|min_length[2]|max_length[150]',
-        'fecha_evento' => 'required|valid_date',
+        'fecha_evento' => 'permit_empty|valid_date',   // NULL = sin plazo en días o aún sin hacer
     ];
 
     protected $validationMessages = [
@@ -23,7 +27,6 @@ class RecordatorioModel extends Model
             'max_length' => 'No puede superar los 150 caracteres.',
         ],
         'fecha_evento' => [
-            'required'   => 'La fecha es obligatoria.',
             'valid_date' => 'Introduce una fecha válida.',
         ],
     ];

@@ -68,11 +68,11 @@ $routes->POST('lentillas/sustituciones/eliminar/(:num)', 'Lentillas::eliminarSus
 
 
 // Avisos
-$routes->match(['GET', 'POST'], 'lentillas/avisos', 'Lentillas::avisos', ['filter' => 'admin']);
-$routes->match(['GET', 'POST'], 'lentillas/avisos/crear', 'Lentillas::crearAviso', ['filter' => 'admin']);
+// Los avisos son recordatorios de categoría «lentillas»: el alta, la edición,
+// el borrado y el «hecho» van por las rutas de `recordatorios` (con ?volver=lentillas).
+$routes->GET('lentillas/avisos', 'Lentillas::avisos', ['filter' => 'admin']);
+$routes->GET('lentillas/avisos/crear', 'Lentillas::crearAviso', ['filter' => 'admin']);
 $routes->GET('lentillas/avisos/editar/(:num)', 'Lentillas::editarAviso/$1', ['filter' => 'admin']);
-$routes->POST('lentillas/avisos/actualizar/(:num)', 'Lentillas::actualizarAviso/$1', ['filter' => 'admin']);
-$routes->match(['GET', 'POST'], 'lentillas/avisos/eliminar/(:num)', 'Lentillas::eliminarAviso/$1', ['filter' => 'admin']);
 
 // LECTURA
 $routes->group('reading', ['filter' => 'admin'], function ($routes) {
@@ -113,12 +113,11 @@ $routes->group('coche', ['filter' => 'admin'], function ($routes) {
     $routes->POST('averias/borrar/(:num)', 'Coche::borrarAveria/$1');
 
     // Recordatorios
+    // Son recordatorios de categoría «vehiculo»: el alta, la edición, el borrado
+    // y el «hecho» van por las rutas de `recordatorios` (con ?volver=coche).
     $routes->GET('recordatorios', 'Coche::recordatorios');
     $routes->GET('recordatorios/nuevo', 'Coche::nuevoRecordatorio');
-    $routes->POST('recordatorios/guardar', 'Coche::guardarRecordatorio');
     $routes->GET('recordatorios/editar/(:num)', 'Coche::editarRecordatorio/$1');
-    $routes->POST('recordatorios/borrar/(:num)', 'Coche::borrarRecordatorio/$1');
-    $routes->POST('recordatorios/(:num)/renovar', 'Coche::renovarRecordatorio/$1');
 });
 
 // Compras

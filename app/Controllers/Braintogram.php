@@ -304,7 +304,8 @@ class Braintogram extends BaseController
     {
         helper('recordatorio');
 
-        $recordatorios = (new RecordatorioModel())->findAll();
+        // Lista común con su estado ya calculado (incluye Coche y Lentillas).
+        $recordatorios = (new \App\Libraries\RecordatorioServicio())->lista();
 
         $filtro = trim((string) ($params['filtro'] ?? ''));
         if ($filtro !== '') {
@@ -322,17 +323,6 @@ class Braintogram extends BaseController
                 : '📋 No tienes recordatorios guardados.';
         }
 
-        foreach ($recordatorios as &$r) {
-            $periodo            = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
-            $fechaEfectiva       = recordatorio_fecha_efectiva($r['fecha_evento'], $periodo);
-            $estado              = recordatorio_estado($fechaEfectiva);
-            $r['dias']           = $estado['dias'];
-            $r['texto']          = $estado['texto'];
-            $r['categoria_label'] = Recordatorios::CATEGORIAS[$r['categoria']][0] ?? 'Otro';
-        }
-        unset($r);
-
-        usort($recordatorios, static fn (array $a, array $b) => $a['dias'] <=> $b['dias']);
 
         $lineas = array_map(
             static fn (array $r) => "- {$r['titulo']} ({$r['categoria_label']}) — {$r['texto']}",

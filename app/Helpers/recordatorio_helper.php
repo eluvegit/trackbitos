@@ -125,3 +125,53 @@ if (!function_exists('recordatorio_es_icono_bootstrap')) {
         return (bool) preg_match('/^[a-z0-9-]+$/', $icono);
     }
 }
+
+if (!function_exists('rec_vista')) {
+    /**
+     * Vista nueva (estilo fv) o clásica de un módulo (coche, lentillas),
+     * igual que en Rodajes/Lectura/Gimnasio: ?nueva=0 / ?nueva=1 la fija en la
+     * sesión y por defecto se ve la nueva. Las pantallas de recordatorios
+     * (lista común) solo existen en la nueva.
+     */
+    function rec_vista(string $modulo, string $vista): string
+    {
+        $nueva = service('request')->getGet('nueva');
+        if ($nueva !== null) {
+            session()->set($modulo . '_nueva', $nueva === '1');
+        }
+        return session($modulo . '_nueva') !== false ? $vista . '_nueva' : $vista;
+    }
+}
+
+if (!function_exists('rec_icono')) {
+    /** HTML del icono de un recordatorio: Bootstrap Icons o emoji. */
+    function rec_icono(string $icono): string
+    {
+        return recordatorio_es_icono_bootstrap($icono) ? '<i class="bi bi-' . $icono . '"></i>' : esc($icono);
+    }
+}
+
+if (!function_exists('rec_hace')) {
+    /** «hoy», «ayer», «hace 12 días», «hace 3 meses», «hace 2 años» para una fecha pasada. */
+    function rec_hace(?string $fecha): string
+    {
+        if (!$fecha) return '';
+        $d = (int) (new DateTime(substr($fecha, 0, 10)))->diff(new DateTime('today'))->format('%r%a');
+        if ($d <= 0) return $d === 0 ? 'hoy' : 'en ' . abs($d) . ' días';
+        if ($d === 1) return 'ayer';
+        if ($d < 60) return 'hace ' . $d . ' días';
+        if ($d < 730) return 'hace ' . round($d / 30.4) . ' meses';
+        return 'hace ' . round($d / 365) . ' años';
+    }
+}
+
+if (!function_exists('rec_fecha')) {
+    /** 18 sep 2026 */
+    function rec_fecha(?string $fecha): string
+    {
+        if (!$fecha) return '';
+        $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        $t = strtotime(substr($fecha, 0, 10));
+        return (int) date('j', $t) . ' ' . $meses[(int) date('n', $t) - 1] . ' ' . date('Y', $t);
+    }
+}

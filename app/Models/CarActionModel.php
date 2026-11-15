@@ -10,7 +10,8 @@ class CarActionModel extends Model
     protected $primaryKey = 'id';
 
     protected $allowedFields = [
-        'reminder_id',
+        'reminder_id',       // antiguo enlace con car_reminders (ya no se usa)
+        'recordatorio_id',   // recordatorio (tabla común) que renueva esta acción
         'title',
         'date',
         'kilometers',

@@ -8,7 +8,7 @@ class LentillasSustitucionesModel extends Model
 {
     protected $table         = 'lentillas_sustituciones';
     protected $primaryKey    = 'id';
-    protected $allowedFields = ['elemento', 'fecha', 'notas', 'created_at'];
+    protected $allowedFields = ['elemento', 'fecha', 'notas', 'created_at', 'recordatorio_id'];
     protected $useTimestamps = false;
     protected $createdField     = 'created_at';
     protected $updatedField     = 'updated_at';

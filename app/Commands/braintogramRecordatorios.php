@@ -24,19 +24,17 @@ class BraintogramRecordatorios extends BaseCommand
     {
         helper('recordatorio');
 
-        $model         = new RecordatorioModel();
-        $recordatorios = $model->findAll();
+        // Lista común (incluye Coche y Lentillas), solo los que tienen «avisar» activado.
+        $recordatorios = (new \App\Libraries\RecordatorioServicio())->lista(null, true);
 
         $hoy    = [];
         $semana = [];
 
         foreach ($recordatorios as $r) {
-            $periodo       = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
-            $fechaEfectiva = recordatorio_fecha_efectiva($r['fecha_evento'], $periodo);
-            $estado        = recordatorio_estado($fechaEfectiva);
-
-            $r['dias']  = $estado['dias'];
-            $r['texto'] = $estado['texto'];
+            if ($r['nivel'] === 'sinfecha') {
+                continue;
+            }
+            $estado = $r;
 
             if ($estado['dias'] <= 0) {
                 $hoy[] = $r;

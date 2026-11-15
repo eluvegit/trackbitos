@@ -5,154 +5,76 @@ namespace App\Controllers;
 use App\Models\LentillasComprasModel;
 use App\Models\LentillasSustitucionesModel;
 use App\Models\LentillasStockModel;
-use App\Models\LentillasAvisosModel;
+use App\Libraries\RecordatorioServicio;
 
 use DateTime;
 
+/**
+ * Lentillas: cambios (sustituciones), stock, compras y avisos.
+ *
+ * Los avisos ya no viven en `lentillas_avisos`: son los recordatorios de
+ * categoría «lentillas» de la lista común (ver RecordatorioServicio), ligados
+ * a un elemento («lentillas», «presión»…). Registrar una sustitución renueva
+ * el aviso de ese elemento, y marcar el aviso como hecho desde Recordatorios
+ * apunta la sustitución y descuenta el stock.
+ */
 class Lentillas extends BaseController
 {
+    protected RecordatorioServicio $servicio;
+
+    public function __construct()
+    {
+        helper('recordatorio');
+        $this->servicio = new RecordatorioServicio();
+    }
+
     public function index()
     {
-        $avisoModel = new \App\Models\LentillasAvisosModel();
-        $sustModel = new \App\Models\LentillasSustitucionesModel();
-        $stockModel = new LentillasStockModel();
+        $sustModel = new LentillasSustitucionesModel();
 
-        // Buscar el aviso configurado para "lentillas"
-        $aviso = $avisoModel->where('item', 'lentillas')->first();
+        // Aviso de cambio de lentillas (su plazo marca cuándo toca).
+        $aviso = $this->servicio->deElemento('lentillas');
 
-        $stockItems = $stockModel->findAll();
+        $ultima = $sustModel
+            ->whereIn('elemento', ['lentillas', 'lentilla izquierda', 'lentilla derecha'])
+            ->orderBy('fecha', 'DESC')
+            ->first();
 
         $dias = null;
         $mostrarAlerta = false;
         $ultimoCambio = null;
-
-        if ($aviso) {
-            // Buscar la última sustitución relacionada con lentillas
-            $ultima = $sustModel
-                ->whereIn('elemento', ['lentillas', 'lentilla izquierda', 'lentilla derecha'])
-                ->orderBy('fecha', 'DESC')
-                ->first();
-
-            if ($ultima) {
-                $fechaUltima = new \DateTime($ultima['fecha']);
-                $hoy = new \DateTime();
-                $dias = $fechaUltima->diff($hoy)->days;
-
-                $mostrarAlerta = $dias > $aviso['periodo_dias'];
-
-                $ultimoCambio = [
-                    'fecha' => $ultima['fecha'],
-                    'dias' => $dias,
-                ];
-            }
+        if ($ultima) {
+            $dias = (new \DateTime($ultima['fecha']))->diff(new \DateTime('today'))->days;
+            $mostrarAlerta = $aviso && !empty($aviso['periodo_dias']) && $dias > (int) $aviso['periodo_dias'];
+            $ultimoCambio = ['fecha' => $ultima['fecha'], 'dias' => $dias];
         }
 
-        return view('lentillas/index', [
-            'dias' => $dias,
+        return view(rec_vista('lentillas', 'lentillas/index'), [
+            'dias'          => $dias,
             'mostrarAlerta' => $mostrarAlerta,
-            'ultimoCambio' => $ultimoCambio,
-            'stockItems' => $stockItems,
+            'ultimoCambio'  => $ultimoCambio,
+            'stockItems'    => (new LentillasStockModel())->findAll(),
+            'periodo'       => $aviso && !empty($aviso['periodo_dias']) ? (int) $aviso['periodo_dias'] : null,
+            'avisos'        => $this->servicio->lista('lentillas'),
+            'ultimos'       => $sustModel->orderBy('fecha', 'DESC')->orderBy('id', 'DESC')->findAll(4),
         ]);
     }
 
-
-
+    // ---- Avisos: recordatorios de categoría «lentillas» (alta y edición en el formulario común) ----
     public function avisos()
     {
-        $avisoModel = new \App\Models\LentillasAvisosModel();
-        $sustModel  = new \App\Models\LentillasSustitucionesModel();
-
-        $avisos = $avisoModel->findAll();
-        $avisosProcesados = [];
-
-        foreach ($avisos as $aviso) {
-            $ultimoCambio = $sustModel
-                ->where('elemento', $aviso['item'])
-                ->orderBy('fecha', 'DESC')
-                ->first();
-
-            $fechaUltima = $ultimoCambio['fecha'] ?? null;
-            $diasPasados = null;
-
-            if ($fechaUltima) {
-                try {
-                    $diasPasados = (new \DateTime())->diff(new \DateTime($fechaUltima))->days;
-                } catch (\Exception $e) {
-                    log_message('error', "Error al calcular días de diferencia para {$aviso['item']}: " . $e->getMessage());
-                }
-            }
-
-            $avisosProcesados[] = [
-                'id'           => $aviso['id'],
-                'item'         => $aviso['item'],
-                'dias_maximos' => $aviso['periodo_dias'],
-                'fecha'        => $fechaUltima,
-                'dias_pasados' => $diasPasados,
-            ];
-        }
-
-        return view('lentillas/avisos', ['avisos' => $avisosProcesados]);
-    }
-
-
-    public function editarAviso($id)
-    {
-        $model = new LentillasAvisosModel();
-        $aviso = $model->find($id);
-
-        if (!$aviso) {
-            return redirect()->to(site_url('lentillas/avisos'))->with('error', 'Aviso no encontrado');
-        }
-
-        return view('lentillas/editar_aviso', ['aviso' => $aviso]);
-    }
-
-    public function actualizarAviso($id)
-    {
-        $model = new LentillasAvisosModel();
-
-        $data = [
-            'item'           => $this->request->getPost('item'),
-            'periodo_dias'   => (int) $this->request->getPost('periodo_dias'),
-        ];
-
-        $model->update($id, $data);
-
-        return redirect()->to(site_url('lentillas/avisos'))->with('message', 'Aviso actualizado correctamente');
+        return view('lentillas/avisos_nueva', ['avisos' => $this->servicio->lista('lentillas')]);
     }
 
     public function crearAviso()
     {
-        $model = new LentillasAvisosModel();
-
-        if ($this->request->getMethod(true) === 'POST') {
-            $item          = $this->request->getPost('item');
-            $diasMaximos   = (int) $this->request->getPost('dias_maximos');
-            $fechaCambio   = date('Y-m-d'); // O permitir input de fecha si quieres
-
-            // Insertar usando nombres válidos
-            $model->insert([
-                'item'           => $item,
-                'periodo_dias'   => $diasMaximos,
-            ]);
-
-            return redirect()->to(site_url('lentillas/avisos'))->with('message', 'Aviso creado correctamente');
-        }
-
-        return view('lentillas/crear_aviso');
+        return redirect()->to(site_url('recordatorios/nuevo?categoria=lentillas&volver=lentillas'));
     }
 
-
-
-    public function eliminarAviso($id)
+    public function editarAviso($id)
     {
-        $model = new LentillasAvisosModel();
-        $model->delete($id);
-        return redirect()->to(site_url('lentillas/avisos'))->with('message', 'Aviso eliminado');
+        return redirect()->to(site_url('recordatorios/editar/' . (int) $id . '?volver=lentillas'));
     }
-
-
-
 
     public function compras()
     {
@@ -178,7 +100,7 @@ class Lentillas extends BaseController
             'compras' => $model->orderBy('fecha', 'DESC')->findAll(),
         ];
 
-        return view('lentillas/compras', $data);
+        return view(rec_vista('lentillas', 'lentillas/compras'), $data);
     }
 
     public function editarCompra($id)
@@ -190,7 +112,7 @@ class Lentillas extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Compra no encontrada');
         }
 
-        return view('lentillas/editar_compra', ['compra' => $compra]);
+        return view(rec_vista('lentillas', 'lentillas/editar_compra'), ['compra' => $compra]);
     }
 
     public function eliminarCompra($id)
@@ -221,7 +143,7 @@ class Lentillas extends BaseController
         $model = new LentillasStockModel();
         $items = $model->findAll();
 
-        return view('lentillas/stock', ['items' => $items]);
+        return view(rec_vista('lentillas', 'lentillas/stock'), ['items' => $items]);
     }
 
     public function actualizarStock()
@@ -259,43 +181,8 @@ class Lentillas extends BaseController
                 return redirect()->back()->with('error', 'Debes indicar qué elemento fue sustituido.');
             }
 
-            // Guardar
-            if (! $model->save([
-                'elemento' => $elemento,
-                'fecha'    => $fecha,
-                'notas'    => $notas,
-            ])) {
-                log_message('error', 'Error al guardar sustitución: ' . json_encode($model->errors()));
-                return redirect()->back()->with('error', 'No se pudo registrar la sustitución.');
-            }
-
-            // Actualizar stock
-            $itemsASustituir = $elemento === 'lentillas'
-                ? ['lentilla izquierda', 'lentilla derecha']
-                : [$elemento];
-
-            $cambiosStock = [];
-
-            foreach ($itemsASustituir as $item) {
-                $registro = $stockModel->where('item', $item)->first();
-                if ($registro) {
-                    $cantidadAntes = (int) $registro['cantidad'];
-                    $nuevaCantidad = max(0, $cantidadAntes - 1);
-                    $stockModel->update($registro['id'], [
-                        'cantidad' => $nuevaCantidad,
-                        'updated_at' => date('Y-m-d H:i:s'),
-                    ]);
-                    log_message('info', "Stock actualizado: $item -> $nuevaCantidad");
-
-                    $cambiosStock[] = [
-                        'item'    => $item,
-                        'antes'   => $cantidadAntes,
-                        'despues' => $nuevaCantidad,
-                    ];
-                } else {
-                    log_message('error', "Elemento de stock no encontrado: $item");
-                }
-            }
+            // Guarda, descuenta stock y renueva el aviso de ese elemento (si lo hay).
+            $cambiosStock = $this->servicio->registrarSustitucion($elemento, $fecha, $notas);
 
             return redirect()->to(site_url('lentillas/sustituciones'))
                 ->with('message', 'Sustitución registrada correctamente.')
@@ -303,7 +190,7 @@ class Lentillas extends BaseController
         }
 
         // Mostrar vista
-        return view('lentillas/sustituciones', [
+        return view(rec_vista('lentillas', 'lentillas/sustituciones'), [
             'sustituciones' => $sustituciones,
         ]);
     }
@@ -317,7 +204,7 @@ class Lentillas extends BaseController
             return redirect()->to(site_url('lentillas/sustituciones'))->with('error', 'Sustitución no encontrada.');
         }
 
-        return view('lentillas/editar_sustitucion', ['sustitucion' => $sustitucion]);
+        return view(rec_vista('lentillas', 'lentillas/editar_sustitucion'), ['sustitucion' => $sustitucion]);
     }
 
     public function actualizarSustitucion($id)
@@ -330,9 +217,12 @@ class Lentillas extends BaseController
             'notas'    => $this->request->getPost('notas'),
         ];
 
-        if (!$model->update($id, $data)) {
+        $antes = $model->find($id);
+        $data['elemento'] = mb_strtolower(trim((string) $data['elemento']));
+        if (!$antes || !$model->update($id, $data)) {
             return redirect()->back()->with('error', 'Error al actualizar sustitución.');
         }
+        $this->servicio->reenlazarSustitucion($antes, $model->find($id));
 
         return redirect()->to(site_url('lentillas/sustituciones'))->with('message', 'Sustitución actualizada correctamente.');
     }
@@ -341,11 +231,13 @@ class Lentillas extends BaseController
     {
         $model = new \App\Models\LentillasSustitucionesModel();
 
-        if (! $model->find($id)) {
+        $antes = $model->find($id);
+        if (! $antes) {
             return redirect()->to(site_url('lentillas/sustituciones'))->with('error', 'Sustitución no encontrada.');
         }
 
         $model->delete($id);
+        $this->servicio->reenlazarSustitucion($antes, null);
         return redirect()->to(site_url('lentillas/sustituciones'))->with('message', 'Sustitución eliminada correctamente.');
     }
 }

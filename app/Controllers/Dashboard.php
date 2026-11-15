@@ -26,30 +26,20 @@ class Dashboard extends BaseController
             $dias = (new \DateTime($ultima['fecha']))->diff(new \DateTime())->days;
         }
 
-        $mostrarAlerta = $dias >= 45;
+        // El plazo de las lentillas es el de su aviso (lista común de recordatorios); 45 días si no hay.
+        $servicio = new \App\Libraries\RecordatorioServicio();
+        $plazoLentillas = (int) ($servicio->deElemento('lentillas')['periodo_dias'] ?? 0) ?: 45;
+        $mostrarAlerta = $dias >= $plazoLentillas;
 
-        // Recordatorios que vencen dentro de 1 mes (o ya caducados)
-        $recordatorioModel = new RecordatorioModel();
-        $recordatoriosUrgentes = [];
-        foreach ($recordatorioModel->findAll() as $r) {
-            $periodo = $r['periodo_meses'] ? (int) $r['periodo_meses'] : null;
-            $fechaEfectiva = recordatorio_fecha_efectiva($r['fecha_evento'], $periodo);
-            $estado = recordatorio_estado($fechaEfectiva);
-
-            if (in_array($estado['nivel'], ['caducado', 'urgente'], true)) {
-                $r['dias']  = $estado['dias'];
-                $r['texto'] = $estado['texto'];
-                $r['nivel'] = $estado['nivel'];
-                $recordatoriosUrgentes[] = $r;
-            }
-        }
-        usort($recordatoriosUrgentes, fn($a, $b) => $a['dias'] <=> $b['dias']);
+        // Recordatorios que vencen dentro de 1 mes (o ya caducados) y que tienen «avisar» activado.
+        // Incluye los de Coche y Lentillas: es la misma lista.
+        $recordatoriosUrgentes = $servicio->urgentes();
 
         $modo = MenuPrincipal::modo();
 
         return view($modo === 'clasica' ? 'dashboard/index' : 'dashboard/index_' . $modo, [
             'modo' => $modo,
-            'vivos' => $modo === 'clasica' ? [] : $this->datosVivos($dias, $recordatoriosUrgentes),
+            'vivos' => $modo === 'clasica' ? [] : $this->datosVivos($dias, $recordatoriosUrgentes, $plazoLentillas),
             'dias' => $dias,
             'mostrarAlerta' => $mostrarAlerta,
             'recordatoriosUrgentes' => $recordatoriosUrgentes,
@@ -159,7 +149,7 @@ class Dashboard extends BaseController
         return array_map(static fn (array $m) => ['ruta' => $m['ruta'], 'icono' => $m['emoji'], 'titulo' => $m['titulo'], 'texto' => $m['texto']], MenuPrincipal::modulos());
     }
 
-    private function datosVivos(int $dias, array $urgentes): array
+    private function datosVivos(int $dias, array $urgentes, int $plazoLentillas = 45): array
     {
         $db = db_connect();
         $v = [];
@@ -172,7 +162,7 @@ class Dashboard extends BaseController
         };
         $plural = static fn (int $n, string $s, string $p) => $n . ' ' . ($n === 1 ? $s : $p);
 
-        $v['lentillas'] = ['t' => $plural($dias, 'día', 'días'), 'e' => $dias >= 45 ? 'warn' : null, 'n' => $dias];
+        $v['lentillas'] = ['t' => $plural($dias, 'día', 'días'), 'e' => $dias >= $plazoLentillas ? 'warn' : null, 'n' => $dias];
 
         $cad = count(array_filter($urgentes, fn ($r) => $r['nivel'] === 'caducado'));
         $urg = count($urgentes) - $cad;
