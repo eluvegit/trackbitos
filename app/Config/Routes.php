@@ -475,6 +475,7 @@ $routes->group('enlaces', ['filter' => 'admin'], static function ($routes) {
 
     // ajax
     $routes->POST('toggle-visto/(:num)', 'Enlaces::toggleVisto/$1');
+    $routes->POST('sugerir-etiquetas', 'Enlaces::sugerirEtiquetas');        // AJAX: etiquetas propuestas por IA (revisión «sin título»)
 
 
     // Página tipo Notion:

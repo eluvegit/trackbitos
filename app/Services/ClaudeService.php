@@ -15,6 +15,7 @@ class ClaudeService
 {
     private const API_URL = 'https://api.anthropic.com/v1/messages';
     private const MODEL   = 'claude-haiku-4-5-20251001';
+    private const MODEL_ETIQUETAS = 'claude-opus-5-5';
 
     /**
      * Interpreta el mensaje contra todas las herramientas disponibles. Si
@@ -168,6 +169,131 @@ class ClaudeService
 
                 return array_values(array_filter(array_map('trim', $subtareas), fn($s) => $s !== ''));
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Sugiere etiquetas para un enlace guardado a partir de su título, URL,
+     * categorías y notas. Prioriza reutilizar etiquetas que ya existen para
+     * no seguir multiplicándolas. Usa salida JSON estructurada
+     * (output_config.format), así que no hay que parsear texto libre.
+     *
+     * @param list<string> $categorias  Nombres de las categorías marcadas
+     * @param list<string> $existentes  Etiquetas que ya existen (las más usadas primero)
+     * @return list<string>|null null si falla la llamada o el modelo la rechaza
+     */
+    public function sugerirEtiquetasEnlace(string $titulo, string $url, array $categorias = [], ?string $notas = null, array $existentes = []): ?array
+    {
+        $apiKey = env('braintogram.anthropicApiKey');
+        if (!$apiKey) {
+            log_message('error', 'ClaudeService: braintogram.anthropicApiKey no configurado.');
+
+            return null;
+        }
+
+        $contexto = 'Título: ' . $titulo . "\nURL: " . $url;
+        if ($categorias) {
+            $contexto .= "\nCategorías: " . implode(', ', $categorias);
+        }
+        if ($notas !== null && trim($notas) !== '') {
+            $contexto .= "\nNotas: " . mb_substr(trim(strip_tags($notas)), 0, 2000);
+        }
+        if ($existentes) {
+            $contexto .= "\n\nEtiquetas que ya existen (reutilízalas tal cual si encajan):\n" . implode(', ', $existentes);
+        }
+
+        $payload = [
+            'model'         => self::MODEL_ETIQUETAS,
+            'max_tokens'    => 4096,
+            'output_config' => [
+                // Tarea corta y sencilla: poco razonamiento basta.
+                'effort' => 'low',
+                'format' => [
+                    'type'   => 'json_schema',
+                    'schema' => [
+                        'type'                 => 'object',
+                        'properties'           => [
+                            'etiquetas' => [
+                                'type'        => 'array',
+                                'items'       => ['type' => 'string'],
+                                'description' => 'Entre 2 y 6 etiquetas',
+                            ],
+                        ],
+                        'required'             => ['etiquetas'],
+                        'additionalProperties' => false,
+                    ],
+                ],
+            ],
+            // Si el modelo rechaza la petición, la API la reintenta sola en el
+            // modelo de respaldo que Anthropic recomiende.
+            'fallbacks' => 'default',
+            'system'    => 'Pones etiquetas a enlaces guardados en una colección personal en español. '
+                . 'Devuelve entre 2 y 6 etiquetas cortas (1-2 palabras), en minúscula salvo nombres propios '
+                . '(Blender, Photoshop, YouTube…), que ayuden a encontrar el enlace después: tema, herramienta, '
+                . 'tipo de contenido. Si una etiqueta de la lista de existentes significa lo mismo, usa esa '
+                . 'escrita exactamente igual en vez de inventar una variante. No repitas el nombre de las '
+                . 'categorías marcadas ni pongas etiquetas genéricas como «enlace», «web» o «vídeo» salvo que '
+                . 'aporten. Si la información es muy escasa, da solo las que estén claras.',
+            'messages'  => [
+                ['role' => 'user', 'content' => $contexto],
+            ],
+        ];
+
+        try {
+            $client   = \Config\Services::curlrequest();
+            $response = $client->post(self::API_URL, [
+                'headers' => [
+                    'x-api-key'         => $apiKey,
+                    'anthropic-version' => '2026-10-21',
+                    'anthropic-beta'    => 'server-side-fallback-2026-07-01',
+                    'content-type'      => 'application/json',
+                ],
+                'json'        => $payload,
+                'timeout'     => 45,
+                'http_errors' => false,
+            ]);
+
+            $data = json_decode($response->getBody(), true);
+        } catch (\Throwable $e) {
+            log_message('error', 'ClaudeService: fallo al llamar a la API: {msg}', ['msg' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if ($response->getStatusCode() >= 400) {
+            log_message('error', 'ClaudeService: etiquetas, HTTP {code}: {body}', [
+                'code' => $response->getStatusCode(),
+                'body' => mb_substr((string) $response->getBody(), 0, 500),
+            ]);
+
+            return null;
+        }
+
+        if (($data['stop_reason'] ?? null) === 'refusal') {
+            log_message('warning', 'ClaudeService: sugerencia de etiquetas rechazada ({cat}).', ['cat' => $data['stop_details']['category'] ?? '-']);
+
+            return null;
+        }
+
+        foreach ($data['content'] ?? [] as $bloque) {
+            if (($bloque['type'] ?? null) !== 'text') {
+                continue;
+            }
+            $json = json_decode($bloque['text'], true);
+            if (!is_array($json['etiquetas'] ?? null)) {
+                continue;
+            }
+            $vistas = [];
+            foreach ($json['etiquetas'] as $t) {
+                $t = trim(str_replace(',', ' ', (string) $t));
+                if ($t !== '' && !isset($vistas[mb_strtolower($t)])) {
+                    $vistas[mb_strtolower($t)] = $t;
+                }
+            }
+
+            return array_slice(array_values($vistas), 0, 6);
         }
 
         return null;

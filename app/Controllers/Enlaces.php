@@ -28,6 +28,7 @@ class Enlaces extends BaseController
         $this->etiquetas        = new EnlacesEtiquetasModel();
         $this->enlaceCategorias = new EnlaceCategoriasModel();
         $this->enlaceEtiquetas  = new EnlaceEtiquetasModel();
+        helper('enlaces');
     }
 
     /** Cuántos enlaces se listan sin buscar ni filtrar: los más recientes, para no dejar la pantalla en blanco. */
@@ -41,7 +42,7 @@ class Enlaces extends BaseController
 
     public function index()
     {
-        return view('enlaces/index', $this->resolverBusqueda());
+        return view(enl_vista('enlaces/index'), $this->resolverBusqueda());
     }
 
     /**
@@ -55,8 +56,8 @@ class Enlaces extends BaseController
         $data = $this->resolverBusqueda();
 
         return $this->response->setJSON([
-            'resultados'       => view('enlaces/_resultados', $data),
-            'chips'            => view('enlaces/_chips', $data),
+            'resultados'       => view(enl_vista('enlaces/_resultados'), $data),
+            'chips'            => view(enl_vista('enlaces/_chips'), $data),
             'total'            => count($data['enlaces']),
             'hayMas'           => $data['hayMas'],
             'modoReciente'     => $data['modoReciente'],
@@ -303,7 +304,7 @@ class Enlaces extends BaseController
             if (!isset($catById[$cid])) continue;
             $chipsActivos[] = [
                 'texto' => $catById[$cid],
-                'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                'url'   => $this->urlBusqueda($baseParams + [
                     'cats'     => array_values(array_diff($cats, [$cid])),
                     'tag_ids'  => $tagIdsSel,
                 ]),
@@ -313,7 +314,7 @@ class Enlaces extends BaseController
             if (!isset($tagById[$tid])) continue;
             $chipsActivos[] = [
                 'texto' => $tagById[$tid],
-                'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                'url'   => $this->urlBusqueda($baseParams + [
                     'cats'     => $cats,
                     'tag_ids'  => array_values(array_diff($tagIdsSel, [$tid])),
                 ]),
@@ -322,7 +323,7 @@ class Enlaces extends BaseController
         if (in_array($visto, ['0', '1', 'arch'], true)) {
             $chipsActivos[] = [
                 'texto' => ['0' => 'No vistos', '1' => 'Vistos', 'arch' => 'Archivados'][$visto],
-                'url'   => site_url('enlaces') . '?' . http_build_query(array_filter([
+                'url'   => $this->urlBusqueda(array_filter([
                     'q' => $q, 'match' => $match,
                 ], fn($v) => $v !== '' && $v !== null) + ['cats' => $cats, 'tag_ids' => $tagIdsSel]),
             ];
@@ -330,7 +331,7 @@ class Enlaces extends BaseController
         if ($q !== '') {
             $chipsActivos[] = [
                 'texto' => '"' . $q . '"',
-                'url'   => site_url('enlaces') . '?' . http_build_query(array_filter([
+                'url'   => $this->urlBusqueda(array_filter([
                     'visto' => $visto, 'match' => $match,
                 ], fn($v) => $v !== '' && $v !== null) + ['cats' => $cats, 'tag_ids' => $tagIdsSel]),
             ];
@@ -386,7 +387,9 @@ class Enlaces extends BaseController
                 $sugerenciasRefinar[] = [
                     'texto' => $td['nombre'],
                     'total' => (int) $td['total'],
-                    'url'   => site_url('enlaces') . '?' . http_build_query($baseParams + [
+                    // Acotar = sumar la etiqueta con «Todas» (AND): con «Cualquiera»
+                    // cada etiqueta añadida ampliaría los resultados en vez de reducirlos.
+                    'url'   => $this->urlBusqueda(['match' => 'all'] + $baseParams + [
                         'cats'    => $cats,
                         'tag_ids' => array_values(array_merge($tagIdsSel, [$tid])),
                     ]),
@@ -423,6 +426,18 @@ class Enlaces extends BaseController
             'sugerenciasRefinar' => $sugerenciasRefinar,
             'topeResultados'    => self::TOPE_RESULTADOS,
         ];
+    }
+
+    /**
+     * URL del buscador con estos parámetros. Las listas van como `cats[]=1`
+     * (sin índice): `http_build_query` las escribe `cats[0]=1`, que PHP entiende
+     * pero el JS de la búsqueda en vivo no (perdía el filtro al pinchar).
+     */
+    private function urlBusqueda(array $params): string
+    {
+        $qs = preg_replace('/%5B\d+%5D=/', '%5B%5D=', http_build_query($params));
+
+        return site_url('enlaces') . ($qs !== '' ? '?' . $qs : '');
     }
 
     /**
@@ -557,7 +572,7 @@ class Enlaces extends BaseController
     {
         $categorias = $this->categorias->orderBy('nombre', 'ASC')->findAll();
         $etiquetas  = $this->etiquetas->orderBy('nombre', 'ASC')->findAll();
-        return view('enlaces/crear', compact('categorias', 'etiquetas'));
+        return view(enl_vista('enlaces/crear'), compact('categorias', 'etiquetas'));
     }
 
 
@@ -579,7 +594,7 @@ class Enlaces extends BaseController
             foreach ($rows as $t) $selTagNames[] = $t['nombre'];
         }
 
-        return view('enlaces/editar', compact('enlace', 'categorias', 'etiquetas', 'selCats', 'selTagNames'));
+        return view(enl_vista('enlaces/editar'), compact('enlace', 'categorias', 'etiquetas', 'selCats', 'selTagNames'));
     }
 
     public function guardar()
@@ -733,7 +748,7 @@ class Enlaces extends BaseController
             $conteoPorCategoria[$c['categoria_id']] = (int)$c['total'];
         }
 
-        return view('enlaces/categorias', [
+        return view(enl_vista('enlaces/categorias'), [
             'categorias' => $categorias,
             'conteoPorCategoria' => $conteoPorCategoria,
         ]);
@@ -779,7 +794,7 @@ class Enlaces extends BaseController
         // Las de menos uso primero: son las que hay que fusionar o quitar.
         usort($etiquetas, static fn($a, $b) => [$a['uso'], mb_strtolower($a['nombre'])] <=> [$b['uso'], mb_strtolower($b['nombre'])]);
 
-        return view('enlaces/etiquetas', [
+        return view(enl_vista('enlaces/etiquetas'), [
             'etiquetas' => $etiquetas,
             'sinUso'    => count(array_filter($etiquetas, static fn($t) => $t['uso'] === 0)),
             'unaVez'    => count(array_filter($etiquetas, static fn($t) => $t['uso'] === 1)),
@@ -949,7 +964,7 @@ class Enlaces extends BaseController
             ->join('enlaces_etiquetas t', 't.id=eie.etiqueta_id')
             ->where('eie.item_id', $itemId)->get()->getResultArray();
 
-        return view('enlaces/pagina', compact('item', 'bloques', 'cats', 'tags'));
+        return view(enl_vista('enlaces/pagina'), compact('item', 'bloques', 'cats', 'tags'));
     }
 
     public function guardarDoc($itemId)
@@ -1016,7 +1031,7 @@ class Enlaces extends BaseController
 
     public function importarForm()
     {
-        return view('enlaces/importar');
+        return view(enl_vista('enlaces/importar'));
     }
 
     public function importarUpload()
@@ -1241,10 +1256,10 @@ class Enlaces extends BaseController
         $cat = (int) $this->request->getGet('cat');
 
         if (!$db->tableExists('enlaces_repasos') || !$this->archivadoDisponible($db)) {
-            return view('enlaces/repaso', ['sinMigrar' => true]);
+            return view(enl_vista('enlaces/repaso'), ['sinMigrar' => true]);
         }
 
-        return view('enlaces/repaso', [
+        return view(enl_vista('enlaces/repaso'), [
             'sinMigrar'  => false,
             'cat'        => $cat,
             'categorias' => $this->repasoCategorias($db, $cat),
@@ -1351,8 +1366,8 @@ class Enlaces extends BaseController
         $stats = $this->repasoStats($db);
 
         return $this->response->setJSON([
-            'tarjeta'  => view('enlaces/_repaso_tarjeta', ['tarjeta' => $this->repasoTarjeta($db, $this->repasoCola($db, $cat), $cat)]),
-            'stats'    => view('enlaces/_repaso_stats', ['stats' => $stats]),
+            'tarjeta'  => view(enl_vista('enlaces/_repaso_tarjeta'), ['tarjeta' => $this->repasoTarjeta($db, $this->repasoCola($db, $cat), $cat)]),
+            'stats'    => view(enl_vista('enlaces/_repaso_stats'), ['stats' => $stats]),
             'deshacer' => $repasoId,
             'accion'   => $accion,
             'hoy'      => $stats['hoy'],
@@ -1547,7 +1562,7 @@ class Enlaces extends BaseController
             ->selectCount('id', 'c')->where('(titulo IS NULL OR titulo = "")', null, false)
             ->get()->getRow('c');
 
-        return view('enlaces/revision', [
+        return view(enl_vista('enlaces/revision'), [
             'pendientes' => (int)$pendientes,
         ]);
     }
@@ -1584,7 +1599,45 @@ class Enlaces extends BaseController
         $categorias = $this->categorias->orderBy('nombre', 'ASC')->findAll();
         $etiquetas  = $this->etiquetas->orderBy('nombre', 'ASC')->findAll();
 
-        return view('enlaces/revision_item', compact('item', 'nextId', 'categorias', 'etiquetas'));
+        return view(enl_vista('enlaces/revision_item'), compact('item', 'nextId', 'categorias', 'etiquetas'));
+    }
+
+    /**
+     * AJAX: propone etiquetas con IA para un enlace a partir de lo que hay
+     * escrito en el formulario (título, URL, categorías marcadas y notas).
+     * Pasa también las etiquetas más usadas para que reutilice las que ya
+     * existen en vez de crear variantes. No guarda nada.
+     */
+    public function sugerirEtiquetas()
+    {
+        $titulo = trim((string) $this->request->getPost('titulo'));
+        $url    = trim((string) $this->request->getPost('url'));
+        $notas  = trim((string) $this->request->getPost('notas'));
+        if ($titulo === '' && $notas === '') {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Escribe antes un título o una nota.']);
+        }
+
+        $catIds = array_filter(array_map('intval', (array) $this->request->getPost('categorias')));
+        $cats   = $catIds ? array_column($this->categorias->whereIn('id', $catIds)->findAll(), 'nombre') : [];
+
+        $existentes = array_column(
+            \Config\Database::connect()->table('enlaces_item_etiquetas eie')
+                ->select('t.nombre, COUNT(*) AS uso')
+                ->join('enlaces_etiquetas t', 't.id = eie.etiqueta_id')
+                ->groupBy('t.id, t.nombre')
+                ->having('uso >', 1)
+                ->orderBy('uso', 'DESC')
+                ->limit(300)
+                ->get()->getResultArray(),
+            'nombre'
+        );
+
+        $etiquetas = (new \App\Services\ClaudeService())->sugerirEtiquetasEnlace($titulo, $url, $cats, $notas, $existentes);
+        if ($etiquetas === null) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudieron sugerir etiquetas ahora.']);
+        }
+
+        return $this->response->setJSON(['etiquetas' => $etiquetas]);
     }
 
     /**

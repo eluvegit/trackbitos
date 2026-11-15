@@ -5,7 +5,10 @@
 
     <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
         <h5 class="mb-0">Repaso de enlaces</h5>
-        <a href="<?= site_url('enlaces') ?>" class="btn btn-sm btn-outline-secondary">Volver</a>
+        <div class="d-flex gap-2">
+            <a href="<?= site_url('enlaces/repaso?nueva=1') ?>" class="btn btn-sm btn-outline-secondary" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
+            <a href="<?= site_url('enlaces') ?>" class="btn btn-sm btn-outline-secondary">Volver</a>
+        </div>
     </div>
 
     <?php if (!empty($sinMigrar)): ?>

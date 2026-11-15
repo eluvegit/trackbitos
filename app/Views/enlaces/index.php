@@ -19,6 +19,7 @@
             </span>
         </h5>
         <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary" href="<?= site_url('enlaces?nueva=1') ?>" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
             <a class="btn btn-sm btn-outline-warning" href="<?= site_url('enlaces/repaso') ?>"
                title="Repaso diario: un enlace al azar cada vez">
                 🔥 Repaso
@@ -827,8 +828,9 @@
         btnLimpiarTexto.classList.toggle('d-none', inputQ.value === '');
         inputVisto.value = ['0', '1', 'arch'].includes(p.get('visto')) ? p.get('visto') : '';
         inputMatch.value = p.get('match') === 'all' ? 'all' : 'any';
-        const cats = p.getAll('cats[]').concat(p.getAll('cats'));
-        const tags = p.getAll('tag_ids[]').concat(p.getAll('tag_ids'));
+        const lista = (ps, k) => [...ps].filter(([n]) => n === k || /^\w+\[\d*\]$/.test(n) && n.startsWith(k + '[')).map(([, v]) => String(v)).filter(Boolean);
+        const cats = lista(p, 'cats');
+        const tags = lista(p, 'tag_ids');
         catSel.clear();
         cats.map(String).filter(Boolean).forEach(id => catSel.add(id));
         tagPicker.selected = new Set(tags.map(String).filter(Boolean));
