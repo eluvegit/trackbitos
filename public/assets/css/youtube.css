@@ -1,0 +1,87 @@
+/* YouTube — vistas nuevas en estilo fv. Usa también recordatorios.css (rc-) para cabecera, cifras y formularios. */
+
+/* ---------- listas (inicio) ---------- */
+.yt-listas { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.yt-lista { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); background: var(--fv-panel); text-decoration: none; color: inherit; transition: border-color .12s; }
+.yt-lista:hover { border-color: var(--fv-border-2); }
+.yt-lista-cab { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.yt-lista-cab .rc-ico { flex: none; }
+.yt-lista-cab .n { flex: 1 1 auto; font-weight: 600; font-size: 15px; color: var(--fv-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-lista-cab .pct { flex: none; font-family: var(--fv-mono); font-size: 12px; color: var(--fv-text-3); }
+.yt-lista .rc-barra { margin-top: 0; }
+.yt-lista .s { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--fv-text-3); }
+.yt-lista .s .bi { font-size: 11px; }
+.yt-lista.hecha .rc-ico { color: var(--fv-ok); }
+.yt-lista.hecha .n { color: var(--fv-text-2); }
+.yt-lista-nueva { place-items: center; align-content: center; min-height: 110px; border-style: dashed; color: var(--fv-text-3); font-size: 13px; }
+.yt-lista-nueva .bi { font-size: 20px; }
+
+/* ---------- lista: herramientas ---------- */
+.fv.rc .yt-progreso { margin-top: -8px; }
+.yt-herr { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.yt-buscar { position: relative; flex: 1 1 220px; max-width: 340px; margin: 0; }
+.yt-buscar .bi { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--fv-text-3); font-size: 13px; pointer-events: none; }
+.yt-buscar .fv-input { width: 100%; padding-left: 32px; }
+.yt-orden { width: auto; height: 36px; font-size: 13px; }
+.yt-chips span { height: 32px; font-size: 12.5px; }
+.yt-chips small { font-family: var(--fv-mono); font-size: 11px; color: var(--fv-text-3); }
+.yt-cuenta { font-family: var(--fv-mono); font-size: 12px; color: var(--fv-text-3); margin-left: auto; white-space: nowrap; }
+@media (max-width: 620px) {
+  .yt-buscar { max-width: none; flex-basis: 100%; }
+  .yt-buscar .fv-input { height: 40px; font-size: 16px; }
+  .yt-orden { flex: 1 1 auto; height: 40px; font-size: 16px; }
+}
+
+/* ---------- lista: vídeos ---------- */
+.yt-videos { display: grid; border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); background: var(--fv-panel); overflow: hidden; }
+.yt-videos[hidden] { display: none; }
+.yt-v { display: grid; grid-template-columns: 40px 96px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 12px 8px 8px; border-top: 1px solid var(--fv-border); border-left: 3px solid transparent; transition: opacity .15s, background .12s; }
+.yt-v:first-child { border-top: 0; }
+.yt-v[hidden] { display: none; }
+.yt-v:hover { background: var(--fv-hover); }
+.yt-v.rel { border-left-color: var(--fv-warn); }
+.yt-v.visto { opacity: .5; }
+.yt-v.visto:hover, .yt-v.visto:focus-within { opacity: .9; }
+
+.yt-check { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; font-size: 24px; color: var(--fv-text-3); transition: color .12s, transform .12s; }
+.yt-check:hover { color: var(--fv-ok); }
+.yt-check:active { transform: scale(.9); }
+.yt-check[aria-pressed="true"] { color: var(--fv-ok); }
+
+.yt-mini { display: grid; place-items: center; width: 96px; aspect-ratio: 16 / 9; border-radius: var(--fv-r-sm); overflow: hidden; background: var(--fv-inset); color: var(--fv-text-3); font-size: 20px; }
+.yt-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.yt-txt { display: grid; gap: 3px; min-width: 0; padding: 2px 0; }
+.yt-txt .t { font-weight: 500; font-size: 14px; line-height: 1.35; color: var(--fv-text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.yt-txt:hover .t { color: var(--fv-accent-hover); }
+.yt-v.visto .yt-txt .t { color: var(--fv-text-2); }
+.yt-txt .rc-meta .bi { font-size: 11px; }
+.yt-tag-largo { color: var(--fv-info) !important; }
+.yt-tag-largo[hidden] { display: none !important; }
+
+.yt-b { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--fv-r-sm); color: var(--fv-text-3); font-size: 15px; transition: background .12s, color .12s; }
+.yt-b:hover { background: var(--fv-hover); color: var(--fv-text); }
+.yt-star[aria-pressed="true"] { color: var(--fv-warn); }
+.yt-largo[aria-pressed="true"] { color: var(--fv-info); background: color-mix(in srgb, var(--fv-info) 12%, transparent); }
+.yt-check:disabled, .yt-b:disabled { opacity: .5; cursor: wait; }
+
+@media (max-width: 620px) {
+  .yt-v { grid-template-columns: 36px 64px minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px 8px 4px; }
+  .yt-mini { width: 64px; }
+  .yt-check { width: 36px; height: 36px; font-size: 22px; }
+  .yt-txt .t { font-size: 13.5px; }
+  .yt-v .rc-btns { flex-direction: column; gap: 0; }
+  .yt-b { width: 32px; height: 30px; }
+}
+
+/* ---------- importar ---------- */
+.rc-form textarea.yt-json { min-height: 220px; font-family: var(--fv-mono); font-size: 12.5px; line-height: 1.5; }
+.yt-res-cifras .rc-cifra .v { font-size: 22px; }
+.yt-detalle summary { cursor: pointer; font-size: 13px; color: var(--fv-text-2); margin-bottom: 10px; }
+.yt-detalle summary:hover { color: var(--fv-text); }
+.yt-pasos { gap: 14px !important; }
+.yt-paso { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; align-items: start; }
+.yt-paso .num { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--fv-accent-weak); color: var(--fv-accent); font-family: var(--fv-mono); font-size: 12px; font-weight: 600; }
+.yt-paso .t { font-weight: 500; font-size: 13.5px; }
+.yt-cmd { display: flex; align-items: flex-start; gap: 6px; padding: 8px 6px 8px 12px; border-radius: var(--fv-r-md); background: var(--fv-inset); border: 1px solid var(--fv-border); margin-top: 4px; }
+.yt-cmd code { flex: 1 1 auto; min-width: 0; font-family: var(--fv-mono); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }

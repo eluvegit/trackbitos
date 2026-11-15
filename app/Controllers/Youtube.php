@@ -17,6 +17,7 @@ class Youtube extends Controller
     {
         $this->listas = new YoutubeListasModel();
         $this->videos = new YoutubeVideosModel();
+        helper('youtube');
     }
 
     // app/Controllers/Youtube.php
@@ -31,7 +32,7 @@ class Youtube extends Controller
             ->groupBy('youtube_listas.id')
             ->findAll();
 
-        return view('youtube/index', [
+        return view(youtube_vista('youtube/index'), [
             'listas' => $listas
         ]);
     }
@@ -105,7 +106,7 @@ class Youtube extends Controller
             $this->listas->insert(['nombre' => $nombre, 'slug' => $slug]);
             return redirect()->to(site_url('youtube'));
         }
-        return view('youtube/crear_lista');
+        return view(youtube_vista('youtube/crear_lista'));
     }
 
     public function ver(string $slug)
@@ -153,7 +154,7 @@ class Youtube extends Controller
             'pct_relev'   => $total ? round($relev  * 100 / $total, 1) : 0,
         ];
 
-        return view('youtube/ver', $data);
+        return view(youtube_vista('youtube/ver'), $data);
     }
 
     /*** ====== IMPORTADOR POR LISTA (slug en URL) ====== ***/
@@ -166,7 +167,7 @@ class Youtube extends Controller
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Lista no encontrada');
         }
 
-        return view('youtube/importar', [
+        return view(youtube_vista('youtube/importar'), [
             'lista'   => $lista,
             'results' => null,
             'errors'  => [],
@@ -182,7 +183,7 @@ class Youtube extends Controller
 
         if (!$lista) {
             return $this->response->setStatusCode(404)->setBody(
-                view('youtube/importar', [
+                view(youtube_vista('youtube/importar'), [
                     'lista'   => null,
                     'results' => null,
                     'errors'  => ['No existe la lista con slug: ' . esc($slug)],
@@ -195,7 +196,7 @@ class Youtube extends Controller
         $jsonText = trim($raw);
         if ($jsonText === '') {
             return $this->response->setStatusCode(422)->setBody(
-                view('youtube/importar', [
+                view(youtube_vista('youtube/importar'), [
                     'lista'   => $lista,
                     'results' => null,
                     'errors'  => ['El campo JSON está vacío. Pega objetos con "titulo" y "url".'],
@@ -211,7 +212,7 @@ class Youtube extends Controller
         $items = json_decode($jsonText, true);
         if (!is_array($items)) {
             return $this->response->setStatusCode(422)->setBody(
-                view('youtube/importar', [
+                view(youtube_vista('youtube/importar'), [
                     'lista'   => $lista,
                     'results' => null,
                     'errors'  => ['No se pudo interpretar el JSON. Revisa comas y llaves.'],
@@ -320,7 +321,7 @@ class Youtube extends Controller
         }
 
         return $this->response->setBody(
-            view('youtube/importar', [
+            view(youtube_vista('youtube/importar'), [
                 'lista'   => $lista,
                 'results' => $results,
                 'errors'  => [],
@@ -336,7 +337,7 @@ class Youtube extends Controller
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Lista no encontrada');
         }
 
-        return view('youtube/editar_lista', [
+        return view(youtube_vista('youtube/editar_lista'), [
             'lista'  => $lista,
             'errors' => session()->getFlashdata('errors') ?? [],
         ]);

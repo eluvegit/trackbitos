@@ -4,6 +4,7 @@
     <h3 class="mb-0">YouTube</h3>
     <a href="<?= site_url('dashboard') ?>" class="btn btn-sm btn-outline-secondary mt-3">← Volver</a>
     <a class="btn btn-sm btn-primary mt-3" href="<?= site_url('youtube/crear') ?>">Nueva lista</a>
+    <a href="<?= site_url('youtube?nueva=1') ?>" class="btn btn-sm btn-outline-secondary mt-3" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </div>
 
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-3">

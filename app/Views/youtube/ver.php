@@ -26,6 +26,9 @@ $ordenOptions = [
     <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mt-1">
         <h2 class="yt-title mb-0"><?= esc($lista['nombre']) ?></h2>
         <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= site_url('youtube/' . $lista['slug'] . '?nueva=1') ?>" title="Ir a la vista nueva">
+                <i class="bi bi-arrow-left-right"></i> <span class="d-none d-sm-inline">Vista nueva</span>
+            </a>
             <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= site_url('youtube/' . $lista['slug'] . '/importar') ?>">
                 <i class="bi bi-upload"></i> <span class="d-none d-sm-inline">Importar</span>
             </a>
