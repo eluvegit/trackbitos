@@ -415,6 +415,41 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/sincronizar',   'Rodajes::sincronizar/$1');
 
     // ---- Modo plató (móvil): marcar tomas hechas/repetir/descartadas ----
+    // ---- Flujo de stock: ideas → temáticas → revisar → ubicaciones → setups → plan ----
+    $routes->GET('(:num)/ideas',                          'RodajesFlujo::ideas/$1');
+    $routes->POST('(:num)/ideas/subir',                   'RodajesFlujo::ideasSubir/$1');
+    $routes->POST('(:num)/ideas/texto',                   'RodajesFlujo::ideasTexto/$1');
+    $routes->POST('(:num)/ideas/sesion',                  'RodajesFlujo::crearSesion/$1');
+    $routes->GET('(:num)/tematicas',                      'RodajesFlujo::tematicas/$1');
+    $routes->POST('(:num)/tematicas/mover',               'RodajesFlujo::tematicasMover/$1');
+    $routes->POST('(:num)/tematicas/(:num)/guardar',      'RodajesFlujo::tematicaGuardar/$1/$2');
+    $routes->POST('(:num)/tematicas/(:num)/borrar',       'RodajesFlujo::tematicaBorrar/$1/$2');
+    $routes->GET('(:num)/revisar',                        'RodajesFlujo::revisar/$1');
+    $routes->POST('(:num)/revisar/(:num)',                'RodajesFlujo::revisarAccion/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/variante',       'RodajesFlujo::varianteCrear/$1/$2');
+    $routes->POST('(:num)/variantes/(:num)/borrar',       'RodajesFlujo::varianteBorrar/$1/$2');
+    $routes->POST('(:num)/variantes/(:num)/principal',    'RodajesFlujo::variantePrincipal/$1/$2');
+    $routes->POST('(:num)/variantes/(:num)/separar',      'RodajesFlujo::varianteSeparar/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/a-variante',     'RodajesFlujo::tomaAVariante/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/titulo',         'RodajesFlujo::tomaTitulo/$1/$2');
+    $routes->POST('(:num)/variantes/(:num)/texto',        'RodajesFlujo::varianteTexto/$1/$2');
+    $routes->GET('(:num)/ubicaciones',                    'RodajesFlujo::ubicaciones/$1');
+    $routes->POST('(:num)/ubicaciones/crear',             'RodajesFlujo::ubicacionCrear/$1');
+    $routes->POST('(:num)/ubicaciones/(:num)/guardar',    'RodajesFlujo::ubicacionGuardar/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/mover',      'RodajesFlujo::ubicacionMover/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/imagen',     'RodajesFlujo::ubicacionImagen/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/fusionar',   'RodajesFlujo::ubicacionFusionar/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/borrar',     'RodajesFlujo::ubicacionBorrar/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/punto',      'RodajesFlujo::puntoCrear/$1/$2');
+    $routes->POST('(:num)/puntos/(:num)/borrar',          'RodajesFlujo::puntoBorrar/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/asignar',        'RodajesFlujo::asignar/$1/$2');
+    $routes->GET('(:num)/setups',                         'RodajesFlujo::setups/$1');
+    $routes->POST('(:num)/setups/crear',                  'RodajesFlujo::setupCrear/$1');
+    $routes->POST('(:num)/setups/(:num)/guardar',         'RodajesFlujo::setupGuardar/$1/$2');
+    $routes->POST('(:num)/setups/(:num)/borrar',          'RodajesFlujo::setupBorrar/$1/$2');
+    $routes->GET('(:num)/plan',                           'RodajesFlujo::plan/$1');
+    $routes->POST('(:num)/variantes/(:num)/toma',         'RodajesFlujo::varianteToma/$1/$2');
+
     $routes->GET('(:num)/plato',                     'Rodajes::plato/$1');
     $routes->POST('(:num)/plato/reiniciar',          'Rodajes::reiniciarPlato/$1');
     $routes->POST('(:num)/escenas/(:num)/toma',      'Rodajes::toma/$1/$2');

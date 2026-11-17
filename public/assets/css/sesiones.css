@@ -290,3 +290,8 @@ a.ss-cifra:hover { border-color: var(--fv-border-2); }
 /* Filtro Solo foto / Solo vídeo con el color de cada parte */
 .ss-filtro-parte button .bi { color: var(--p); }
 .ss-filtro-parte button.on[style] { color: var(--p) !important; background: color-mix(in srgb, var(--p) 14%, var(--fv-raised)) !important; }
+
+/* Ideas escritas (Rodajes → Ingesta) y descartadas */
+.ss-item > a.ss-texto { padding: 8px; align-content: start; justify-items: start; text-align: left; cursor: default; }
+.ss-item > a.ss-texto small { font-size: 11.5px; line-height: 1.35; color: var(--fv-text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
+.ss-item.descartada { opacity: .4; }

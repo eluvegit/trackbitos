@@ -32,7 +32,11 @@ class RodajesEscenaModel extends Model
         // VÍNCULO CON SESIONES + PLATÓ
         'situacion_id', 'toma_estado', 'toma_estado_at', 'toma_nota',
         'toma_estado_foto', 'toma_estado_foto_at',
+        'ubicacion_id', 'punto_id', 'setup_id', 'franja', 'prioridad', 'props',
     ];
+
+    public const FRANJAS = ['manana' => 'Mañana', 'mediodia' => 'Mediodía', 'tarde' => 'Tarde', 'dorada' => 'Hora dorada', 'noche' => 'Noche'];
+    public const PRIORIDADES = ['imp' => 'Imprescindible', 'opc' => 'Si da tiempo'];
 
     /** Formato de la escena. NULL en BD = sin definir. */
     public const FORMATOS = ['foto', 'video', 'ambas'];

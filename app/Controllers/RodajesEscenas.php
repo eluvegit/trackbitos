@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenModel};
+use App\Models\{MoodboardItemModel, RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenModel, RodajesPuntoModel, RodajesSetupModel, RodajesUbicacionModel, RodajesVarianteModel, SesionEquipoModel};
 
 class RodajesEscenas extends BaseController
 {
@@ -67,6 +67,7 @@ class RodajesEscenas extends BaseController
             'escenas'    => $escenas,
             'multimedia' => $multimedia, // Ahora sí viaja con la info de extensión
             'numMedia'   => $numMedia ?? [],
+            'pasos'      => RodajesFlujo::pasos((int) $proyectoId, $sesion),
         ]);
     }
 
@@ -105,6 +106,7 @@ class RodajesEscenas extends BaseController
         $data['bloques'] = $this->bloquesDelProyecto((int) $proyectoId);
         $ultima = (new RodajesEscenaModel())->select('orden')->where('proyecto_id', $proyectoId)->orderBy('orden', 'DESC')->first();
         $data['ordenSiguiente'] = (int) ($ultima['orden'] ?? 0) + 1;
+        $data += $this->datosFlujo($data['proyecto'], null);
         return view(rod_vista('rodajes/escenas/form'), $data);
     }
 
@@ -139,15 +141,33 @@ class RodajesEscenas extends BaseController
 
         $post = $this->request->getPost();
         if (array_key_exists('formato', $post)) $post['formato'] = $this->formatoPost();
+        $this->aplicarFlujo($post, (int) $proyectoId);
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
         }
         $escenaId = $escenas->getInsertID();
+        $this->guardarVariantes((int) $escenaId);
 
-        // Subidas múltiples por categoría -> a /public/images/rodajes/{escenaId}/
+        $idea = $this->ideaDelPost((int) $proyectoId);
+        if ($idea) {
+            (new MoodboardItemModel())->update($idea['id'], ['estado' => 'toma', 'escena_id' => $escenaId]);
+            if ($this->request->getPost('situacion_id') === null && $idea['situacion_id']) {
+                $escenas->skipValidation(true)->update($escenaId, ['situacion_id' => $idea['situacion_id']]);
+            }
+        }
         $this->handleUploads($proyectoId, $escenaId, 'lugar_objetos');
         $this->handleUploads($proyectoId, $escenaId, 'inspiracion');
+        if ($idea) {
+            $flujo = new RodajesFlujo();
+            $items = (new MoodboardItemModel())->where('sesion_id', $idea['sesion_id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+            $sig = $flujo->siguientePendiente($items, $idea);
+            return redirect()->to(site_url("rodajes/$proyectoId/revisar" . ($sig ? '?idea=' . $sig['id'] : '')))->with('success', 'Toma creada.');
+        }
+        if ($this->request->getPost('volver') === 'ubicaciones') {
+            return redirect()->to(site_url("rodajes/$proyectoId/ubicaciones"))->with('success', 'Toma creada.');
+        }
+
 
         // "Guardar y otra": encadenar escenas rápido (la lista de tomas se escribe de corrido).
         if ($this->request->getPost('otra')) {
@@ -210,6 +230,7 @@ class RodajesEscenas extends BaseController
         $data['imagenes_lugar'] = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
         $data['imagenes_insp']  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
         $data['bloques']        = $this->bloquesDelProyecto((int) $proyectoId);
+        $data += $this->datosFlujo($data['proyecto'], $data['escena']);
 
         return view(rod_vista('rodajes/escenas/form'), $data);
     }
@@ -231,10 +252,12 @@ class RodajesEscenas extends BaseController
             $previa = $escenas->where('proyecto_id', (int) $proyectoId)->find((int) $id);
             if ($previa) $post = rod_cambio_formato($previa, $post['formato']) + $post;
         }
+        $this->aplicarFlujo($post, (int) $proyectoId);
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
         }
+        $this->guardarVariantes((int) $id);
 
         // Nuevas subidas (opcionales)
         $this->handleUploads($proyectoId, $id, 'lugar_objetos');
@@ -246,7 +269,11 @@ class RodajesEscenas extends BaseController
     public function delete($proyectoId, $id)
     {
         $escenas = new RodajesEscenaModel();
-        $escenas->delete($id);
+        if ($escenas->where('proyecto_id', (int) $proyectoId)->find((int) $id)) {
+            $escenas->delete($id);
+            (new RodajesVarianteModel())->where('escena_id', (int) $id)->delete();
+            (new MoodboardItemModel())->where('escena_id', (int) $id)->set(['estado' => 'pendiente', 'escena_id' => null, 'variante_id' => null])->update();
+        }
         return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
     }
 
@@ -263,6 +290,119 @@ class RodajesEscenas extends BaseController
             $imgs->delete($imageId);
         }
         return redirect()->to(site_url("rodajes/$proyectoId/escenas/edit/$escenaId"));
+    }
+
+    private function datosFlujo(array $proyecto, ?array $escena): array
+    {
+        $pid    = (int) $proyecto['id'];
+        $zonas  = (new RodajesUbicacionModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        $puntos = $zonas ? (new RodajesPuntoModel())->whereIn('ubicacion_id', array_column($zonas, 'id'))->orderBy('orden', 'ASC')->findAll() : [];
+        $req    = $this->request;
+        $idea   = null;
+        if (!$escena && $req->getGet('idea')) $idea = $this->ideaDelPost($pid, (int) $req->getGet('idea'));
+        $refs = [];
+        if ($escena) $refs = (new MoodboardItemModel())->where('escena_id', $escena['id'])->findAll();
+        elseif ($idea) $refs = [$idea];
+        $zonaInicial = '';
+        if ($escena && $escena['ubicacion_id']) {
+            foreach ($zonas as $z) if ((int) $z['id'] === (int) $escena['ubicacion_id']) $zonaInicial = $z['nombre'];
+        } elseif (!$escena && $req->getGet('ubicacion')) {
+            foreach ($zonas as $z) if ((int) $z['id'] === (int) $req->getGet('ubicacion')) $zonaInicial = $z['nombre'];
+        }
+        return [
+            'zonas'       => $zonas,
+            'puntos'      => $puntos,
+            'setups'      => (new RodajesSetupModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll(),
+            'propsLista'  => RodajesFlujo::propsConocidos($pid, $proyecto['sesion_id'] ? (int) $proyecto['sesion_id'] : null),
+            'variantes'   => $escena ? (new RodajesVarianteModel())->where('escena_id', $escena['id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() : [],
+            'idea'        => $idea,
+            'refsIdeas'   => $refs,
+            'zonaInicial' => $zonaInicial,
+            'volver'      => $req->getGet('ubicacion') ? 'ubicaciones' : '',
+        ];
+    }
+
+    private function ideaDelPost(int $pid, ?int $id = null): ?array
+    {
+        $id ??= (int) $this->request->getPost('idea_id');
+        if (!$id) return null;
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        if (!$proyecto || !$proyecto['sesion_id']) return null;
+        return (new MoodboardItemModel())->where('sesion_id', $proyecto['sesion_id'])->find($id);
+    }
+
+    /** Campos nuevos de la ficha corta (solo si los envía el formulario nuevo). */
+    private function aplicarFlujo(array &$post, int $pid): void
+    {
+        if (!array_key_exists('flujo', $post)) return;
+        unset($post['flujo']);
+
+        $zona = trim((string) ($post['zona_nombre'] ?? ''));
+        $post['ubicacion_id'] = $zona !== '' ? RodajesFlujo::zonaId($pid, $zona) : null;
+        if ($post['ubicacion_id']) {
+            $z = (new RodajesUbicacionModel())->find($post['ubicacion_id']);
+            $post['escena_ubicacion'] = $z['nombre'];
+        } else {
+            $post['escena_ubicacion'] = '';
+        }
+        $punto = (int) ($post['punto_id'] ?? 0);
+        $p = $punto ? (new RodajesPuntoModel())->find($punto) : null;
+        $post['punto_id'] = $p && (int) $p['ubicacion_id'] === (int) $post['ubicacion_id'] ? $punto : null;
+
+        $setup = (string) ($post['setup_id'] ?? '');
+        if ($setup === 'nuevo') {
+            $n = trim((string) ($post['setup_nuevo'] ?? ''));
+            $post['setup_id'] = $n !== '' ? RodajesFlujo::nuevoSetup($pid, $n) : null;
+        } else {
+            $post['setup_id'] = (int) $setup && (new RodajesSetupModel())->where('proyecto_id', $pid)->find((int) $setup) ? (int) $setup : null;
+        }
+
+        $post['franja'] = array_key_exists((string) ($post['franja'] ?? ''), RodajesEscenaModel::FRANJAS) ? $post['franja'] : null;
+        $post['prioridad'] = ($post['prioridad'] ?? '') === 'opc' ? 'opc' : 'imp';
+
+        $props = array_map('trim', (array) ($post['props'] ?? []));
+        foreach (explode(',', (string) ($post['props_nuevo'] ?? '')) as $n) $props[] = trim($n);
+        $unicos = [];
+        foreach ($props as $pr) if ($pr !== '') $unicos[rod_normalizar($pr)] ??= mb_substr($pr, 0, 80);
+        $post['props'] = $unicos ? json_encode(array_values($unicos), JSON_UNESCAPED_UNICODE) : null;
+
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        if ($unicos && $proyecto && $proyecto['sesion_id']) {
+            $eq = new SesionEquipoModel();
+            $ya = array_map(static fn ($r) => rod_normalizar($r['item']), $eq->where('sesion_id', $proyecto['sesion_id'])->where('tipo', 'props')->findAll());
+            foreach ($unicos as $k => $pr) {
+                if (!in_array($k, $ya, true)) $eq->insert(['sesion_id' => $proyecto['sesion_id'], 'item' => $pr, 'tipo' => 'props', 'orden' => 999]);
+            }
+        }
+    }
+
+    private function guardarVariantes(int $escenaId): void
+    {
+        $post = $this->request->getPost();
+        if (!array_key_exists('flujo', $post)) return;
+        $vm = new RodajesVarianteModel();
+        $actuales = array_column($vm->where('escena_id', $escenaId)->findAll(), null, 'id');
+        $vistas = [];
+        $orden = 0;
+        foreach ((array) ($post['variantes'] ?? []) as $v) {
+            $texto = mb_substr(trim((string) ($v['texto'] ?? '')), 0, 255);
+            if ($texto === '') continue;
+            $datos = ['texto' => $texto, 'prioridad' => ($v['prioridad'] ?? '') === 'opc' ? 'opc' : 'imp', 'orden' => $orden++];
+            $id = (int) ($v['id'] ?? 0);
+            if ($id && isset($actuales[$id])) {
+                $vm->update($id, $datos);
+                $vistas[$id] = true;
+            } else {
+                $vm->insert($datos + ['escena_id' => $escenaId]);
+            }
+        }
+        foreach ($actuales as $id => $v) {
+            if (isset($vistas[$id])) continue;
+            $vm->delete($id);
+            if ($v['moodboard_item_id']) {
+                (new MoodboardItemModel())->update((int) $v['moodboard_item_id'], ['estado' => 'pendiente', 'escena_id' => null, 'variante_id' => null]);
+            }
+        }
     }
 
     /**

@@ -65,6 +65,7 @@ class Rodajes extends BaseController
     {
         $model = new RodajesProyectoModel();
         $payload = $this->request->getPost(['titulo', 'codigo', 'descripcion']);
+        $payload['codigo'] = trim((string) $payload['codigo']) ?: null;
         $payload['sesion_id'] = $this->sesionIdDelPost();
         if (!$model->save($payload)) {
             return redirect()->back()->withInput()->with('errors', $model->errors());
@@ -86,6 +87,7 @@ class Rodajes extends BaseController
     {
         $model = new RodajesProyectoModel();
         $payload = $this->request->getPost(['titulo', 'codigo', 'descripcion']);
+        $payload['codigo'] = trim((string) $payload['codigo']) ?: null;
         $payload['sesion_id'] = $this->sesionIdDelPost();
         $payload['id'] = $id;
         if (!$model->save($payload)) {
@@ -238,8 +240,8 @@ class Rodajes extends BaseController
         $proyecto = (new RodajesProyectoModel())->find((int) $id);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
 
-        $escenas = (new RodajesEscenaModel())->where('proyecto_id', $id)
-            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        $escenas = RodajesFlujo::conVariantes((new RodajesEscenaModel())->where('proyecto_id', $id)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll());
 
         // Referencias propias de cada escena (lugar + inspiración).
         $media = [];
@@ -269,16 +271,37 @@ class Rodajes extends BaseController
 
         // Orden del plató: el de la historia o el de la pizarra por ubicación / montaje (se recuerda).
         $orden = $this->request->getGet('orden');
-        if (in_array($orden, ['narrativa', 'ubicacion', 'montaje'], true)) {
+        if (in_array($orden, ['plan', 'narrativa', 'ubicacion', 'montaje'], true)) {
             session()->set('rodajes_plato_orden', $orden);
         }
-        $orden = session('rodajes_plato_orden') ?? 'narrativa';
+        $hayPlan = (bool) array_filter($escenas, static fn ($e) => $e['franja'] || $e['setup_id'] || $e['variantes']);
+        $orden = session('rodajes_plato_orden') ?? ($hayPlan ? 'plan' : 'narrativa');
+
+        $puntos = [];
+        if ($orden === 'plan') {
+            $grupos = [];
+            foreach (RodajesFlujo::construirPlan((int) $id, $escenas) as $f) {
+                foreach ($f['zonas'] as $z) {
+                    foreach ($z['setups'] as $st) {
+                        $grupos[] = ['nombre' => $z['zona']['nombre'] ?? '', 'franja' => $f['nombre'], 'zona' => $z['zona'], 'n' => $z['n'], 'setup' => $st['setup'], 'escenas' => $st['escenas']];
+                    }
+                }
+            }
+            $zids = array_filter(array_column($escenas, 'ubicacion_id'));
+            if ($zids) $puntos = array_column((new \App\Models\RodajesPuntoModel())->whereIn('ubicacion_id', array_unique($zids))->findAll(), 'nombre', 'id');
+            $colores = rod_colores($escenas, 'escena_ubicacion');
+        } else {
+            $grupos  = RodajesPizarra::grupos($escenas, $orden);
+            $colores = rod_colores($escenas, RodajesPizarra::VISTAS[$orden][2]);
+        }
 
         return view('rodajes/plato', [
             'proyecto'  => $proyecto,
             'escenas'   => $escenas,
-            'grupos'    => RodajesPizarra::grupos($escenas, $orden),
-            'colores'   => rod_colores($escenas, RodajesPizarra::VISTAS[$orden][2]),
+            'grupos'    => $grupos,
+            'colores'   => $colores,
+            'puntos'    => $puntos,
+            'fotos'     => RodajesFlujo::fotosDeTomas(array_column($escenas, 'id')),
             'orden'     => $orden,
             'media'     => $media,
             'sesion'    => $sesion,
@@ -328,6 +351,11 @@ class Rodajes extends BaseController
             ->where('proyecto_id', (int) $id)
             ->set(['toma_estado' => null, 'toma_estado_at' => null, 'toma_estado_foto' => null, 'toma_estado_foto_at' => null])
             ->update();
+        $ids = array_column((new RodajesEscenaModel())->select('id')->where('proyecto_id', (int) $id)->findAll(), 'id');
+        if ($ids) {
+            (new \App\Models\RodajesVarianteModel())->whereIn('escena_id', $ids)
+                ->set(['toma_estado' => null, 'toma_estado_at' => null, 'toma_estado_foto' => null, 'toma_estado_foto_at' => null])->update();
+        }
 
         return redirect()->to(site_url("rodajes/$id/plato"))->with('success', 'Todas las tomas vuelven a estar pendientes.');
     }

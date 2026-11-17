@@ -21,10 +21,14 @@ class MoodboardItemModel extends Model
         'url_externa',
         'nota',
         'orden',
+        'buscar_ref',
+        'estado',
+        'escena_id',
+        'variante_id',
     ];
 
     protected $validationRules = [
         'sesion_id' => 'required|is_natural_no_zero',
-        'origen'    => 'required|in_list[archivo,enlace]',
+        'origen'    => 'required|in_list[archivo,enlace,texto]',
     ];
 }

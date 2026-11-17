@@ -25,14 +25,17 @@ foreach ($escenas as $e) {
     foreach (rod_estados_partes($e) as $est) $cuenta[$est]++;
     if (!empty($e['formato'])) $hayFormato = true;
 }
+foreach ($escenas as $e) foreach ($e['variantes'] ?? [] as $va) foreach (rod_partes($e) as $col) $cuenta[($va[$col] ?? null) ?: 'pendiente']++;
 $total  = array_sum($cuenta);
+$esPlan = $orden === 'plan';
+$hayOpc = (bool) array_filter($escenas, static fn ($e) => ($e['prioridad'] ?? 'imp') === 'opc' || array_filter($e['variantes'] ?? [], static fn ($v) => $v['prioridad'] === 'opc'));
 $formatos = rod_formatos();
 $pct    = static fn (int $n) => $total ? round($n / $total * 100, 2) : 0;
 
 $sub = [];
 if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesion['id']) . '"><i class="bi bi-camera"></i>' . esc($sesion['titulo']) . '</a>';
 ?>
-<div class="fv rd plato" id="plato" data-base="<?= site_url("rodajes/$pid/escenas") ?>">
+<div class="fv rd plato" id="plato" data-base="<?= site_url("rodajes/$pid/escenas") ?>" data-var="<?= site_url("rodajes/$pid/variantes") ?>">
     <?= view('rodajes/_cabecera', [
         'migas'   => [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Plató' => null],
         'titulo'  => esc($proyecto['titulo']),
@@ -56,7 +59,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 <i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i>
             </div>
             <div class="fv-seg pl-orden" title="El orden y los grupos son los de la pizarra">
-                <?php foreach (['narrativa' => ['Historia', 'bi-book'], 'ubicacion' => ['Ubicación', 'bi-geo-alt'], 'montaje' => ['Montaje', 'bi-camera-reels']] as $k => [$txt, $ico]): ?>
+                <?php foreach (['plan' => ['Plan', 'bi-list-ol'], 'narrativa' => ['Historia', 'bi-book'], 'ubicacion' => ['Ubicación', 'bi-geo-alt'], 'montaje' => ['Montaje', 'bi-camera-reels']] as $k => [$txt, $ico]): ?>
                     <a href="<?= site_url("rodajes/$pid/plato?orden=$k") ?>" aria-pressed="<?= $orden === $k ? 'true' : 'false' ?>"><i class="bi <?= $ico ?>"></i><?= $txt ?></a>
                 <?php endforeach; ?>
             </div>
@@ -66,7 +69,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 <nav class="pl-indice" id="plIndice" hidden>
                     <?php foreach ($grupos as $gi => $g): ?>
                         <a href="#pl-g<?= $gi ?>" data-ir="<?= $gi ?>" style="--c:<?= rod_color($colores, $g['nombre']) ?>">
-                            <i class="pl-punto"></i><span class="n"><?= esc($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque') ?></span><small data-pend="<?= $gi ?>"></small>
+                            <i class="pl-punto"></i><span class="n"><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['nombre'] ?: 'Sin zona') . ($g['setup'] ? ' · ' . $g['setup']['nombre'] : '')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?></span><small data-pend="<?= $gi ?>"></small>
                         </a>
                     <?php endforeach; ?>
                 </nav>
@@ -76,6 +79,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 <button type="button" data-filtro="repetir">Repetir<span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
                 <button type="button" data-filtro="hecha">Hechas<span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
                 <button type="button" data-filtro="todas">Todas<span data-n="todas"><?= $total ?></span></button>
+                <?php if ($hayOpc): ?><button type="button" class="pl-imp" aria-pressed="false"><i class="bi bi-star"></i>Solo imprescindibles</button><?php endif; ?>
             </div>
             <?php if ($hayFormato): ?>
                 <div class="fv-seg pl-medio">
@@ -87,11 +91,21 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         </div>
 
         <div class="pl-lista">
+            <?php $franjaAnt = null; ?>
             <?php foreach ($grupos as $gi => $g): ?>
                 <?php $color = rod_color($colores, $g['nombre']); ?>
-                <?php if ($g['nombre'] !== '' || $conIndice): ?>
+                <?php if ($esPlan && $g['franja'] !== $franjaAnt): $franjaAnt = $g['franja']; ?>
+                    <div class="pl-franja" data-franja><?= esc($g['franja']) ?></div>
+                <?php endif; ?>
+                <?php if ($esPlan): ?>
+                    <div class="rd-bloque pl-grupo" id="pl-g<?= $gi ?>" data-bloque style="--c:<?= $color ?>">
+                        <i class="pl-punto"></i><?= $g['n'] ? $g['n'] . '. ' : '' ?><?= esc($g['nombre'] ?: 'Sin zona') ?> <small><?= count($g['escenas']) ?></small>
+                        <span class="pl-setup"><b><?= $g['setup'] ? 'Monta ' . esc($g['setup']['nombre']) : 'Sin setup' ?></b><?php if ($g['setup']): ?> <?= rod_setup_linea($g['setup']) ?><?php if ($g['setup']['notas']): ?><em><?= esc($g['setup']['notas']) ?></em><?php endif; ?><?php endif; ?></span>
+                    </div>
+                <?php elseif ($g['nombre'] !== '' || $conIndice): ?>
                     <div class="rd-bloque pl-grupo" id="pl-g<?= $gi ?>" data-bloque style="--c:<?= $color ?>"><i class="pl-punto"></i><?= esc($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque') ?> <small><?= count($g['escenas']) ?></small></div>
                 <?php endif; ?>
+            <?php $propsAnt = null; ?>
             <?php foreach ($g['escenas'] as $e): ?>
                 <?php
                 $eid    = (int) $e['id'];
@@ -113,13 +127,20 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                 ], static fn ($v) => trim((string) $v) !== '');
                 $refs = $media[$eid] ?? [];
                 $mood = $e['situacion_id'] ? ($moodboard[$e['situacion_id']] ?? []) : [];
+                $opcE = ($e['prioridad'] ?? 'imp') === 'opc';
+                $vars = $e['variantes'] ?? [];
+                $diff = $esPlan ? rod_props_diff($propsAnt, rod_props($e)) : '';
+                $propsAnt = rod_props($e);
                 ?>
 
                 <article class="pl-toma" data-id="<?= $eid ?>" data-estado="<?= $estado ?>" data-g="<?= $gi ?>" style="--c:<?= $color ?>">
                     <div class="pl-toma-cab" data-abrir>
                         <div class="pl-fila1">
+                            <?php $fp = $fotos['t'][$eid][0] ?? null; if ($fp && $fp['origen'] === 'archivo'): ?>
+                                <a class="pl-foto" href="<?= base_url($fp['ruta_archivo']) ?>" target="_blank" rel="noopener"><img src="<?= base_url($fp['ruta_archivo']) ?>" alt="" loading="lazy"></a>
+                            <?php endif; ?>
                             <span class="rd-num"><?= (int) $e['orden'] ?></span>
-                            <div class="pl-desc"><?= esc(rod_titulo_escena($e)) ?></div>
+                            <div class="pl-desc"><?php if ($esPlan && $hayOpc && !$opcE): ?><span class="rf-prio imp">Imp.</span> <?php endif; ?><?= esc(rod_titulo_escena($e)) ?></div>
                             <i class="bi bi-chevron-down pl-flecha"></i>
                         </div>
                         <?= rod_ficha_tecnica($e) ?>
@@ -127,12 +148,14 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                             <?= rod_formato_chip($e) ?>
                             <?php if ($orden !== 'narrativa' && $bloque !== ''): ?><span><i class="bi bi-collection"></i><?= esc($bloque) ?></span><?php endif; ?>
                             <?php if ($orden === 'ubicacion' && $soporte !== ''): ?><span><i class="bi bi-camera-reels"></i><?= esc($soporte) ?></span><?php endif; ?>
-                            <?php if ($orden !== 'ubicacion' && trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
+                            <?php if ($esPlan && !empty($puntos[$e['punto_id']])): ?><span><i class="bi bi-pin-map"></i><?= esc($puntos[$e['punto_id']]) ?></span><?php endif; ?>
+                            <?php if (!$esPlan && $orden !== 'ubicacion' && trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
                             <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
                             <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>
                             <?php if (trim((string) $e['escena_efecto_especial']) !== ''): ?><span class="e-bad"><i class="bi bi-stars"></i>FX</span><?php endif; ?>
                             <?php if ($refs || $mood): ?><span><i class="bi bi-images"></i><?= count($refs) + count($mood) ?></span><?php endif; ?>
                         </div>
+                        <?php if ($diff !== ''): ?><div class="rf-diff"><?= $diff ?></div><?php endif; ?>
                         <div class="pl-nota-vista"<?= trim((string) $e['toma_nota']) === '' ? ' hidden' : '' ?>><i class="bi bi-pencil"></i> <span><?= esc($e['toma_nota'] ?? '') ?></span></div>
                     </div>
 
@@ -148,8 +171,10 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                                 <?php foreach ($mood as $m): ?>
                                     <?php if ($m['origen'] === 'archivo'): ?>
                                         <a href="<?= base_url($m['ruta_archivo']) ?>" target="_blank" rel="noopener" title="Moodboard de la sesión"><img src="<?= base_url($m['ruta_archivo']) ?>" loading="lazy" alt=""><i class="bi bi-camera marca"></i></a>
-                                    <?php else: ?>
+                                    <?php elseif ($m['origen'] === 'enlace'): ?>
                                         <a href="<?= esc($m['url_externa'], 'attr') ?>" target="_blank" rel="noopener" title="<?= esc($m['url_externa'], 'attr') ?>"><i class="bi bi-link-45deg"></i></a>
+                                    <?php else: ?>
+                                        <span class="pl-ref-txt"><?= esc($m['nota']) ?></span>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </div>
@@ -162,14 +187,24 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
                     </div>
 
                     <?php foreach ($partes as $parte => $est): ?>
-                        <div class="pl-botones" data-parte="<?= $parte ?>" data-medio="<?= $parte ?>" data-actual="<?= $est ?>">
-                            <?php if (count($partes) > 1): ?>
-                                <div class="pl-parte"><i class="bi <?= $formatos[$parte][1] ?>"></i><?= $formatos[$parte][0] ?></div>
+                        <div class="pl-botones" data-parte="<?= $parte ?>" data-medio="<?= $parte ?>" data-actual="<?= $est ?>" data-opc="<?= $opcE ? '1' : '' ?>">
+                            <?php if (count($partes) > 1 || $vars): ?>
+                                <div class="pl-parte"><?php if (count($partes) > 1): ?><i class="bi <?= $formatos[$parte][1] ?>"></i><?php endif; ?><?= $vars ? 'Principal' : '' ?><?= count($partes) > 1 ? ($vars ? ' · ' : '') . $formatos[$parte][0] : '' ?></div>
                             <?php endif; ?>
                             <button type="button" data-estado="hecha"><i class="bi bi-check-lg"></i>Hecha</button>
                             <button type="button" data-estado="repetir"><i class="bi bi-arrow-repeat"></i>Repetir</button>
                             <button type="button" data-estado="descartada"><i class="bi bi-x-lg"></i>Descartar</button>
                         </div>
+                    <?php endforeach; ?>
+                    <?php foreach ($vars as $va): ?>
+                        <?php foreach (rod_partes($e) as $parte => $col): ?>
+                            <div class="pl-botones pl-var" data-var="<?= (int) $va['id'] ?>" data-parte="<?= $parte ?>" data-medio="<?= $parte ?>" data-actual="<?= ($va[$col] ?? null) ?: 'pendiente' ?>" data-opc="<?= $opcE || $va['prioridad'] === 'opc' ? '1' : '' ?>">
+                                <div class="pl-parte"><?php $fv = $va['moodboard_item_id'] ? ($fotos['v'][(int) $va['moodboard_item_id']] ?? null) : null; if ($fv && $fv['origen'] === 'archivo'): ?><a class="pl-foto mini" href="<?= base_url($fv['ruta_archivo']) ?>" target="_blank" rel="noopener"><img src="<?= base_url($fv['ruta_archivo']) ?>" alt="" loading="lazy"></a><?php else: ?><i class="bi bi-arrow-return-right"></i><?php endif; ?><span><?= esc($va['texto']) ?><?= count($partes) > 1 ? ' · ' . $formatos[$parte][0] : '' ?></span><?php if ($hayOpc && $va['prioridad'] === 'imp'): ?><span class="rf-prio imp">Imp.</span><?php endif; ?></div>
+                                <button type="button" data-estado="hecha"><i class="bi bi-check-lg"></i>Hecha</button>
+                                <button type="button" data-estado="repetir"><i class="bi bi-arrow-repeat"></i>Repetir</button>
+                                <button type="button" data-estado="descartada"><i class="bi bi-x-lg"></i>Descartar</button>
+                            </div>
+                        <?php endforeach; ?>
                     <?php endforeach; ?>
                 </article>
             <?php endforeach; ?>
@@ -197,6 +232,8 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
     const csrf = '<?= csrf_hash() ?>';
     let filtro = 'pendientes';
     let medio = '';   // '' | foto | video
+    let soloImp = false;
+    const varBase = raiz.dataset.var;
 
     // Mismo criterio que rod_estado_escena() en PHP.
     const combinar = ests => {
@@ -205,7 +242,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         if (ests.every(e => e === 'hecha' || e === 'descartada')) return 'hecha';
         return 'pendiente';
     };
-    const casa = g => !medio || g.dataset.medio === medio;
+    const casa = g => (!medio || g.dataset.medio === medio) && (!soloImp || g.dataset.opc !== '1');
     const visible = (ests) => ests.length > 0 && ({
         pendientes: ests.some(e => e === 'pendiente' || e === 'repetir'),
         repetir: ests.includes('repetir'),
@@ -228,6 +265,11 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
             let sig = b.nextElementSibling, alguna = false;
             while (sig && sig.classList.contains('pl-toma')) { if (!sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
             b.hidden = !alguna;
+        });
+        raiz.querySelectorAll('[data-franja]').forEach(f => {
+            let sig = f.nextElementSibling, alguna = false;
+            while (sig && !sig.hasAttribute('data-franja')) { if (sig.classList.contains('pl-toma') && !sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
+            f.hidden = !alguna;
         });
         const total = n.pendiente + n.hecha + n.repetir + n.descartada;
         raiz.querySelector('[data-n="todas"]').textContent = total;
@@ -260,16 +302,17 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         fin.querySelector('[data-fin-txt]').textContent = filtro === 'pendientes' ? '¡Todas las tomas están hechas!' : '';
     }
 
-    function enviar(toma, datos) {
-        return fetch(base + '/' + toma.dataset.id + '/toma', {
+    function enviar(toma, datos, grupo) {
+        const url = grupo && grupo.dataset.var ? varBase + '/' + grupo.dataset.var + '/toma' : base + '/' + toma.dataset.id + '/toma';
+        return fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
             body: JSON.stringify(datos),
         }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
     }
 
-    raiz.querySelectorAll('.pl-filtros button').forEach(b => b.addEventListener('click', () => {
-        raiz.querySelectorAll('.pl-filtros button').forEach(x => x.classList.toggle('on', x === b));
+    raiz.querySelectorAll('.pl-filtros button[data-filtro]').forEach(b => b.addEventListener('click', () => {
+        raiz.querySelectorAll('.pl-filtros button[data-filtro]').forEach(x => x.classList.toggle('on', x === b));
         filtro = b.dataset.filtro;
         pintar();
     }));
@@ -293,6 +336,11 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         window.scrollTo({ top: cab.getBoundingClientRect().top + window.scrollY - fija.offsetHeight - 8, behavior: 'smooth' });
     });
 
+    raiz.querySelector('.pl-imp')?.addEventListener('click', ev => {
+        soloImp = !soloImp;
+        ev.currentTarget.setAttribute('aria-pressed', soloImp);
+        pintar();
+    });
     raiz.querySelectorAll('.pl-medio button').forEach(b => b.addEventListener('click', () => {
         raiz.querySelectorAll('.pl-medio button').forEach(x => x.setAttribute('aria-pressed', x === b));
         medio = b.dataset.medio;
@@ -300,6 +348,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
     }));
 
     raiz.addEventListener('click', (ev) => {
+        if (ev.target.closest('.pl-foto')) return;
         const cab = ev.target.closest('[data-abrir]');
         if (cab) {
             const toma = cab.closest('.pl-toma');
@@ -322,7 +371,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
         recalcular();
         toma.classList.add('guardando');
         if (navigator.vibrate) navigator.vibrate(15);
-        enviar(toma, { estado: nuevo === 'pendiente' ? '' : nuevo, parte: grupo.dataset.parte })
+        enviar(toma, { estado: nuevo === 'pendiente' ? '' : nuevo, parte: grupo.dataset.parte }, grupo)
             .then(() => setTimeout(pintar, 450))
             .catch(() => { grupo.dataset.actual = anterior; recalcular(); alert('No se ha podido guardar. ¿Hay conexión?'); pintar(); })
             .finally(() => toma.classList.remove('guardando'));

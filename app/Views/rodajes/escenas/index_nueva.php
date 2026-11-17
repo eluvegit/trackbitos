@@ -30,7 +30,7 @@ if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesio
 ob_start(); ?>
 <a class="fv-btn fv-btn-pri" href="<?= site_url("rodajes/$pid/plato") ?>"><i class="bi bi-phone"></i>Plató</a>
 <a class="fv-btn" href="<?= site_url("rodajes/$pid/pizarra") ?>"><i class="bi bi-kanban"></i>Pizarra</a>
-<a class="fv-btn" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Escena</a>
+<a class="fv-btn" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Toma</a>
 <details class="rd-menu">
     <summary class="fv-btn" title="Más"><i class="bi bi-three-dots"></i></summary>
     <div class="rd-menu-pop">
@@ -61,6 +61,7 @@ ob_start(); ?>
         'sub'      => implode('<span class="fv-dot"></span>', $sub),
         'acciones' => $acciones,
     ]) ?>
+    <?= view('rodajes/flujo/_pasos', ['proyecto' => $proyecto, 'pasos' => $pasos, 'paso' => '']) ?>
 
     <?php if (!$escenas): ?>
         <div class="fv-panel rd-vacio">

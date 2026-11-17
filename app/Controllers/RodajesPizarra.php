@@ -130,6 +130,10 @@ class RodajesPizarra extends BaseController
                 $previo = trim((string) ($actual[$id][$col] ?? ''));
                 if ($previo !== $c['valor']) {
                     $cambios[$id][$col] = $c['valor'] === '' ? ($vista === 'produccion' ? null : '') : $c['valor'];
+                    if ($vista === 'ubicacion') {
+                        $cambios[$id]['ubicacion_id'] = $c['valor'] === '' ? null : RodajesFlujo::zonaId($pid, $c['valor']);
+                        $cambios[$id]['punto_id'] = null;
+                    }
                     if ($vista === 'produccion') $cambios[$id][$col . '_at'] = $c['valor'] === '' ? null : date('Y-m-d H:i:s');
                 }
                 if ($vista === 'narrativa') {

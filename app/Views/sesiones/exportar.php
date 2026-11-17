@@ -92,6 +92,8 @@
                         <div class="export-item">
                             <?php if ($item['origen'] === 'archivo'): ?>
                                 <img src="<?= base_url($item['ruta_archivo']) ?>" alt="Referencia moodboard">
+                            <?php elseif ($item['origen'] === 'texto'): ?>
+                                <div class="export-enlace"><?= esc($item['nota']) ?></div>
                             <?php else: ?>
                                 <div class="export-enlace">
                                     <a href="<?= esc($item['url_externa'], 'attr') ?>" target="_blank" rel="noopener"><?= esc($item['url_externa']) ?></a>

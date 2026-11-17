@@ -264,3 +264,46 @@ if (!function_exists('rod_chips_camara')) {
         return $out;
     }
 }
+
+if (!function_exists('rod_props')) {
+    function rod_props(array $e): array
+    {
+        $p = json_decode((string) ($e['props'] ?? ''), true);
+        return is_array($p) ? array_values(array_filter(array_map('strval', $p), static fn ($x) => trim($x) !== '')) : [];
+    }
+}
+
+if (!function_exists('rod_props_diff')) {
+    function rod_props_diff(?array $prev, array $cur): string
+    {
+        if ($prev === null) return $cur ? 'Prepara: ' . esc(implode(', ', $cur)) : '';
+        $n = array_map('rod_normalizar', $prev);
+        $c = array_map('rod_normalizar', $cur);
+        $mas = array_filter($cur, static fn ($p) => !in_array(rod_normalizar($p), $n, true));
+        $men = array_filter($prev, static fn ($p) => !in_array(rod_normalizar($p), $c, true));
+        if (!$mas && !$men) return $cur ? 'Mismos props' : '';
+        return implode(' · ', array_filter([
+            $mas ? '<span class="rf-mas">+ ' . esc(implode(', ', $mas)) . '</span>' : '',
+            $men ? '<span class="rf-menos">− ' . esc(implode(', ', $men)) . '</span>' : '',
+        ]));
+    }
+}
+
+if (!function_exists('rod_texto_idea')) {
+    function rod_texto_idea(array $i): string
+    {
+        $t = trim((string) ($i['nota'] ?? ''));
+        if ($t === '' && $i['origen'] === 'enlace') $t = preg_replace('/^www\./', '', (string) (parse_url((string) $i['url_externa'], PHP_URL_HOST) ?: $i['url_externa']));
+        return $t;
+    }
+}
+
+if (!function_exists('rod_setup_linea')) {
+    function rod_setup_linea(?array $s): string
+    {
+        if (!$s) return '';
+        $tec = implode(' · ', array_filter([trim((string) $s['optica']), trim((string) $s['soporte']), is_numeric($s['fps']) ? $s['fps'] . ' fps' : trim((string) $s['fps'])]));
+        if (rod_normalizar($tec) === rod_normalizar((string) $s['nombre'])) $tec = '';
+        return esc(implode(' · ', array_filter([$tec, trim((string) $s['luz'])])));
+    }
+}
