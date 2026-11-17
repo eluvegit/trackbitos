@@ -452,6 +452,13 @@ $colorVeredictoActual = $colorVeredicto[$veredictoActual] ?? 'secondary';
                 <i class="bi bi-trash"></i> Borrar
             </button>
         </form>
+        <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/duplicar') ?>"
+            onsubmit="return confirm('¿Duplicar «<?= esc($placa['nombre'], 'attr') ?>»? Se crea una placa nueva con las mismas piezas para volver a imprimirla.');">
+            <?= csrf_field() ?>
+            <button class="btn btn-sm btn-outline-primary" title="Crear una placa nueva con las mismas piezas (para repetirla y retocar algunas)">
+                <i class="bi bi-copy"></i> Duplicar
+            </button>
+        </form>
         <div class="d-flex gap-2 ms-auto">
             <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Volver

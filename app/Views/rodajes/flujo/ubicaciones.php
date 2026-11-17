@@ -22,17 +22,19 @@ foreach ($escenas as $e) {
     <?php endif; ?>
 
     <?php if ($sinZona): ?>
-        <div class="rf-aviso">
-            <b><?= count($sinZona) ?> <?= count($sinZona) === 1 ? 'toma sin zona' : 'tomas sin zona' ?></b>
-            <?php foreach ($sinZona as $e): ?>
-                <span><?= esc(rod_titulo_escena($e)) ?>
-                    <select class="form-select rd-sel" data-eid="<?= (int) $e['id'] ?>" data-campo="ubicacion_id" data-recargar aria-label="Zona">
-                        <option value="">Elegir zona…</option>
-                        <?php foreach ($zonas as $z): ?><option value="<?= (int) $z['id'] ?>"><?= esc($z['nombre']) ?></option><?php endforeach; ?>
-                    </select>
-                </span>
-            <?php endforeach; ?>
-        </div>
+        <?php
+        $destinos = [];
+        foreach ($zonas as $k => $z) {
+            $n = count($porZona[(int) $z['id']] ?? []);
+            $destinos[] = ['id' => (int) $z['id'], 'nombre' => ($k + 1) . '. ' . $z['nombre'], 'imagen' => $z['imagen'] ?: null, 'sub' => $n ? $n . ($n === 1 ? ' toma' : ' tomas') : 'vacía'];
+        }
+        ?>
+        <?= view('rodajes/flujo/_asignar', [
+            'pid' => $pid, 'tomas' => $sinZona, 'portadas' => $portadas ?? [], 'destinos' => $destinos,
+            'titulo' => count($sinZona) . (count($sinZona) === 1 ? ' toma sin zona' : ' tomas sin zona'),
+            'campo' => 'ubicacion_id', 'icono' => 'bi-geo-alt',
+            'sinDestinos' => 'Aún no hay zonas: escribe la zona en cada toma (formulario) o créala abajo.',
+        ]) ?>
     <?php endif; ?>
 
     <?php foreach ($zonas as $k => $z): ?>
@@ -103,6 +105,8 @@ foreach ($escenas as $e) {
                             <ul class="rf-tz">
                                 <?php foreach ($ts as $t): ?>
                                     <li>
+                                        <?php $pt = $portadas[(int) $t['id']] ?? null; ?>
+                                        <span class="rf-foto mini"><?php if ($pt): ?><img src="<?= base_url($pt) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-film"></i><?php endif; ?></span>
                                         <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><?= esc(rod_titulo_escena($t)) ?></a>
                                         <small><?= esc($franjas[$t['franja']] ?? 'Sin franja') ?></small>
                                         <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="punto_id" aria-label="Punto">

@@ -107,8 +107,10 @@ class Rodajes extends BaseController
     // ========== VÍNCULO CON SESIONES ==========
 
     /**
-     * Crea un rodaje a partir de una sesión de stock: mismo título, notas
-     * como descripción y una escena por cada situación de la sesión.
+     * Crea un rodaje a partir de una sesión de stock: mismo título y notas
+     * como descripción. Las situaciones de la sesión son las temáticas
+     * (= bloques) del rodaje; las tomas salen después al revisar sus ideas,
+     * así que no se crea ninguna escena aquí.
      */
     public function desdeSesion($sesionId)
     {
@@ -129,108 +131,24 @@ class Rodajes extends BaseController
         ]);
         $proyectoId = (int) $proyectos->getInsertID();
 
-        $n = $this->traerSituaciones($proyectoId, (int) $sesion['id']);
-
-        return redirect()->to(site_url("rodajes/$proyectoId/escenas"))
-            ->with('success', "Rodaje creado desde la sesión con $n " . ($n === 1 ? 'escena' : 'escenas') . '.');
+        return redirect()->to(site_url("rodajes/$proyectoId/ideas"))
+            ->with('success', 'Rodaje creado desde la sesión: sus situaciones son las temáticas.');
     }
 
     /**
-     * Pasa información entre el rodaje y su sesión vinculada.
-     * POST direccion=traer  → situaciones de la sesión sin escena → escenas nuevas.
-     * POST direccion=enviar → bloques de escenas sin situación → situaciones
-     *                         (reutiliza una situación existente si se llama igual).
+     * Antes había dos botones (situaciones → escenas, bloques → situaciones).
+     * Ahora la temática ES el bloque y se mantiene sola; esto solo fuerza la
+     * sincronización (por si algún enlace antiguo sigue apuntando aquí).
      */
     public function sincronizar($id)
     {
         $proyecto = (new RodajesProyectoModel())->find((int) $id);
-        $volver   = $this->request->getPost('volver') === 'sesion' && !empty($proyecto['sesion_id'])
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
+        RodajesFlujo::sincronizarBloques((int) $id);
+        $volver = $this->request->getPost('volver') === 'sesion' && !empty($proyecto['sesion_id'])
             ? site_url('sesiones/' . $proyecto['sesion_id'])
             : site_url("rodajes/$id/escenas");
-
-        if (!$proyecto || empty($proyecto['sesion_id'])) {
-            return redirect()->to(site_url('rodajes'))->with('error', 'Este rodaje no está vinculado a ninguna sesión.');
-        }
-        if (!(new SesionModel())->find((int) $proyecto['sesion_id'])) {
-            return redirect()->to($volver)->with('error', 'La sesión vinculada ya no existe.');
-        }
-
-        if ($this->request->getPost('direccion') === 'enviar') {
-            [$creadas, $vinculadas] = $this->enviarBloques((int) $id, (int) $proyecto['sesion_id']);
-            $msg = $vinculadas
-                ? "$vinculadas " . ($vinculadas === 1 ? 'escena vinculada' : 'escenas vinculadas') . " a la sesión ($creadas " . ($creadas === 1 ? 'situación nueva' : 'situaciones nuevas') . ').'
-                : 'Todas las escenas ya estaban vinculadas a una situación.';
-        } else {
-            $n   = $this->traerSituaciones((int) $id, (int) $proyecto['sesion_id']);
-            $msg = $n ? "$n " . ($n === 1 ? 'escena nueva' : 'escenas nuevas') . ' desde las situaciones de la sesión.' : 'No había situaciones nuevas que traer.';
-        }
-
-        return redirect()->to($volver)->with('success', $msg);
-    }
-
-    /** Una escena por situación que todavía no tenga escena en este rodaje. */
-    private function traerSituaciones(int $proyectoId, int $sesionId): int
-    {
-        $escenas = new RodajesEscenaModel();
-        $yaVinculadas = array_map('intval', array_column(
-            $escenas->select('situacion_id')->where('proyecto_id', $proyectoId)->where('situacion_id IS NOT NULL')->findAll(),
-            'situacion_id'
-        ));
-        $orden = (int) ($escenas->select('orden')->where('proyecto_id', $proyectoId)->orderBy('orden', 'DESC')->first()['orden'] ?? 0);
-
-        $situaciones = (new SituacionModel())->where('sesion_id', $sesionId)->orderBy('orden', 'ASC')->findAll();
-        $n = 0;
-        foreach ($situaciones as $sit) {
-            if (in_array((int) $sit['id'], $yaVinculadas, true)) {
-                continue;
-            }
-            $escenas->insert([
-                'proyecto_id'   => $proyectoId,
-                'situacion_id'  => (int) $sit['id'],
-                'escena_bloque' => $sit['nombre'],
-                'orden'         => ++$orden,
-            ]);
-            $n++;
-        }
-        return $n;
-    }
-
-    /** @return array{0:int,1:int} [situaciones creadas, escenas vinculadas] */
-    private function enviarBloques(int $proyectoId, int $sesionId): array
-    {
-        $escenasM = new RodajesEscenaModel();
-        $sitM     = new SituacionModel();
-
-        $sueltas = $escenasM->where('proyecto_id', $proyectoId)->where('situacion_id', null)
-            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
-        if (!$sueltas) {
-            return [0, 0];
-        }
-
-        $porNombre = [];
-        foreach ($sitM->where('sesion_id', $sesionId)->findAll() as $s) {
-            $porNombre[mb_strtolower(trim($s['nombre']))] = (int) $s['id'];
-        }
-        $siguienteOrden = count($porNombre);
-
-        $creadas = 0;
-        foreach ($sueltas as $e) {
-            $nombre = trim((string) ($e['escena_bloque'] ?? ''));
-            if ($nombre === '') {
-                $nombre = trim((string) ($e['escena_descripcion'] ?? '')) ?: 'Escena #' . (int) $e['orden'];
-            }
-            $nombre = mb_substr($nombre, 0, 150);
-            $clave  = mb_strtolower($nombre);
-
-            if (!isset($porNombre[$clave])) {
-                $sitM->insert(['sesion_id' => $sesionId, 'nombre' => $nombre, 'orden' => $siguienteOrden++]);
-                $porNombre[$clave] = (int) $sitM->getInsertID();
-                $creadas++;
-            }
-            $escenasM->update((int) $e['id'], ['situacion_id' => $porNombre[$clave]]);
-        }
-
-        return [$creadas, count($sueltas)];
+        return redirect()->to($volver)->with('success', 'Bloques y temáticas al día.');
     }
 
     // ========== MODO PLATÓ ==========

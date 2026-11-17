@@ -124,7 +124,10 @@ class RodajesFlujo extends BaseController
             $sm = new SituacionModel();
             $sm->insert(['sesion_id' => $sid, 'nombre' => mb_substr($nombre, 0, 150), 'orden' => $sm->where('sesion_id', $sid)->countAllResults()]);
             $destino = (int) $sm->getInsertID();
-            if ($ids) $model->where('sesion_id', $sid)->whereIn('id', $ids)->set(['situacion_id' => $destino])->update();
+            if ($ids) {
+                $model->where('sesion_id', $sid)->whereIn('id', $ids)->set(['situacion_id' => $destino])->update();
+                $this->tomasALaTematica((int) $pid, $sid, $ids, $destino);
+            }
             return $volver->with('success', "Temática «{$nombre}» creada" . ($ids ? ' con ' . count($ids) . ' ' . (count($ids) === 1 ? 'idea' : 'ideas') : '') . '.');
         }
         if (!$ids) return $volver->with('error', 'Selecciona alguna idea primero.');
@@ -135,6 +138,7 @@ class RodajesFlujo extends BaseController
             $destino = $dest === '0' ? null : (int) $dest;
             if ($destino && !(new SituacionModel())->where('sesion_id', $sid)->find($destino)) return $volver;
             $model->where('sesion_id', $sid)->whereIn('id', $ids)->set(['situacion_id' => $destino])->update();
+            $this->tomasALaTematica((int) $pid, $sid, $ids, $destino);
             return $volver->with('success', count($ids) . ' movidas.');
         }
         if ($accion === 'descartar' || $accion === 'recuperar') {
@@ -151,7 +155,11 @@ class RodajesFlujo extends BaseController
         $sm = new SituacionModel();
         $sit = $sesion ? $sm->where('sesion_id', $sesion['id'])->find((int) $sitId) : null;
         $nombre = mb_substr(trim((string) $this->request->getPost('nombre')), 0, 150);
-        if ($sit && $nombre !== '') $sm->update($sit['id'], ['nombre' => $nombre]);
+        if ($sit && $nombre !== '') {
+            $sm->update($sit['id'], ['nombre' => $nombre]);
+            // La temática es el bloque de sus tomas.
+            (new RodajesEscenaModel())->skipValidation(true)->where('proyecto_id', (int) $pid)->where('situacion_id', $sit['id'])->set(['escena_bloque' => $nombre])->update();
+        }
         return redirect()->to(site_url("rodajes/$pid/tematicas"))->with('success', 'Temática renombrada.');
     }
 
@@ -163,7 +171,7 @@ class RodajesFlujo extends BaseController
         if (!$sit) return redirect()->to(site_url("rodajes/$pid/tematicas"));
         $n = (new MoodboardItemModel())->where('situacion_id', $sit['id'])->countAllResults();
         (new MoodboardItemModel())->where('situacion_id', $sit['id'])->set(['situacion_id' => null])->update();
-        (new RodajesEscenaModel())->skipValidation(true)->where('situacion_id', $sit['id'])->set(['situacion_id' => null])->update();
+        (new RodajesEscenaModel())->skipValidation(true)->where('situacion_id', $sit['id'])->set(['situacion_id' => null, 'escena_bloque' => ''])->update();
         $sm->delete($sit['id']);
         return redirect()->to(site_url("rodajes/$pid/tematicas"))->with('success', "Temática «{$sit['nombre']}» borrada" . ($n ? ($n === 1 ? ': su idea vuelve a la bandeja.' : ": sus $n ideas vuelven a la bandeja.") : '.'));
     }
@@ -234,6 +242,7 @@ class RodajesFlujo extends BaseController
             $eid = (int) $em->insert([
                 'proyecto_id' => (int) $pid, 'escena_descripcion' => $texto ?: (rod_texto_idea($item) ?: 'Toma nueva'),
                 'situacion_id' => $item['situacion_id'], 'prioridad' => 'imp', 'orden' => (int) ($ultima['orden'] ?? 0) + 1,
+                'escena_bloque' => $item['situacion_id'] ? (string) ((new SituacionModel())->find((int) $item['situacion_id'])['nombre'] ?? '') : '',
             ]);
             $model->update($item['id'], ['estado' => 'toma', 'escena_id' => $eid]);
             return redirect()->to($volver . "#t$eid");
@@ -304,7 +313,7 @@ class RodajesFlujo extends BaseController
         $em = new RodajesEscenaModel();
         $ultima = $em->select('orden')->where('proyecto_id', (int) $pid)->orderBy('orden', 'DESC')->first();
         $nuevo = ['proyecto_id' => (int) $pid, 'escena_descripcion' => $v['texto'], 'orden' => (int) ($ultima['orden'] ?? 0) + 1];
-        foreach (['situacion_id', 'ubicacion_id', 'escena_ubicacion', 'punto_id', 'setup_id', 'franja', 'formato', 'props'] as $c) $nuevo[$c] = $e[$c];
+        foreach (['situacion_id', 'escena_bloque', 'ubicacion_id', 'escena_ubicacion', 'punto_id', 'setup_id', 'franja', 'formato', 'props'] as $c) $nuevo[$c] = $e[$c];
         foreach (['toma_estado', 'toma_estado_at', 'toma_estado_foto', 'toma_estado_foto_at'] as $c) $nuevo[$c] = $v[$c];
         $nuevo['prioridad'] = $v['prioridad'];
         $nid = (int) $em->insert($nuevo);
@@ -358,6 +367,21 @@ class RodajesFlujo extends BaseController
         if (!$e || $t === '') return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         (new RodajesVarianteModel())->update($v['id'], ['texto' => $t]);
         return $this->response->setJSON(['ok' => true, 'texto' => $t]);
+    }
+
+    /** POST JSON {ids: [...]} — nuevo orden de las variantes de una toma (arrastrando). */
+    public function variantesOrden($pid, $eid)
+    {
+        $e = (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->find((int) $eid);
+        $in = $this->request->getJSON(true) ?: $this->request->getPost();
+        if (!$e || !is_array($in['ids'] ?? null)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        $vm = new RodajesVarianteModel();
+        $mias = array_map('intval', array_column($vm->select('id')->where('escena_id', $e['id'])->findAll(), 'id'));
+        $orden = 0;
+        foreach (array_map('intval', $in['ids']) as $vid) {
+            if (in_array($vid, $mias, true)) $vm->update($vid, ['orden' => $orden++]);
+        }
+        return $this->response->setJSON(['ok' => true]);
     }
 
     private function textoJson(): string
@@ -419,6 +443,7 @@ class RodajesFlujo extends BaseController
         $escenas = (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll();
         return view('rodajes/flujo/ubicaciones', $this->base($proyecto, $sesion, 'ubicaciones') + [
             'zonas' => $zonas, 'puntos' => $porZona, 'escenas' => $escenas,
+            'portadas' => self::portadas($escenas),
         ]);
     }
 
@@ -559,7 +584,48 @@ class RodajesFlujo extends BaseController
         $escenas = (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll();
         return view('rodajes/flujo/setups', $this->base($proyecto, $sesion, 'setups') + [
             'setups' => $setups, 'escenas' => $escenas, 'zonas' => array_column($this->zonas((int) $pid), null, 'id'),
+            'portadas' => self::portadas($escenas),
         ]);
+    }
+
+    /** Foto del montaje: la que distingue un setup de otro al elegirlo. */
+    public function setupImagen($pid, $sid)
+    {
+        $m = new RodajesSetupModel();
+        $s = $m->where('proyecto_id', (int) $pid)->find((int) $sid);
+        $f = $this->request->getFile('imagen');
+        if ($s && $f && $f->isValid() && !$f->hasMoved() && str_starts_with((string) $f->getMimeType(), 'image/')) {
+            $dir = "images/rodajes/setups/$pid";
+            $abs = rtrim(FCPATH, '/') . '/' . $dir;
+            if (!is_dir($abs)) @mkdir($abs, 0775, true);
+            $nombre = $f->getRandomName();
+            $f->move($abs, $nombre);
+            if (!empty($s['imagen']) && is_file(FCPATH . $s['imagen'])) @unlink(FCPATH . $s['imagen']);
+            $m->update($s['id'], ['imagen' => "$dir/$nombre"]);
+        }
+        return redirect()->to(site_url("rodajes/$pid/setups#s" . (int) $sid));
+    }
+
+    /**
+     * [escena_id => ruta de imagen] para reconocer cada toma a simple vista:
+     * imagen subida a la escena → foto de la idea → foto de una variante.
+     */
+    public static function portadas(array $escenas): array
+    {
+        $ids = array_map('intval', array_column($escenas, 'id'));
+        if (!$ids) return [];
+        $out = [];
+        foreach ((new \App\Models\RodajesEscenaImagenModel())->whereIn('escena_id', $ids)->orderBy('id', 'ASC')->findAll() as $f) {
+            if (!rod_es_video((string) $f['ruta'])) $out[(int) $f['escena_id']] ??= $f['ruta'];
+        }
+        $fotos = self::fotosDeTomas($ids);
+        foreach ($fotos['t'] as $eid => $items) {
+            foreach ($items as $i) if ($i['origen'] === 'archivo' && $i['ruta_archivo']) { $out[$eid] ??= $i['ruta_archivo']; break; }
+        }
+        foreach ($fotos['v'] as $i) {
+            if ($i['origen'] === 'archivo' && $i['ruta_archivo']) $out[(int) $i['escena_id']] ??= $i['ruta_archivo'];
+        }
+        return $out;
     }
 
     public function setupCrear($pid)
@@ -671,6 +737,112 @@ class RodajesFlujo extends BaseController
             }
             $out[] = $es[$mejor];
             array_splice($es, $mejor, 1);
+        }
+        return $out;
+    }
+
+    /**
+     * El bloque de una toma ES su temática (situación de la sesión vinculada):
+     * `escena_bloque` es solo la copia del nombre, para las vistas que agrupan por él.
+     *  - temática borrada → la toma queda sin temática y sin bloque;
+     *  - con temática y sin bloque → el bloque toma el nombre de la temática;
+     *  - bloque cambiado a mano (formulario, pizarra) → si TODAS las tomas de la
+     *    temática pasan al mismo nombre nuevo, es un renombrado de la temática;
+     *    si no, cada toma se mueve a la temática de ese nombre (se crea si falta);
+     *  - sin temática y con bloque escrito → temática de ese nombre.
+     * Al cambiar de temática, la idea de la que salió la toma la acompaña.
+     * Sin sesión vinculada no hay temáticas y el bloque sigue siendo texto libre.
+     */
+    public static function sincronizarBloques(int $pid): void
+    {
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        $sid = (int) ($proyecto['sesion_id'] ?? 0);
+        if (!$sid) return;
+        $sm = new SituacionModel();
+        $em = (new RodajesEscenaModel())->skipValidation(true);
+        $clave = static fn ($s) => mb_strtolower(trim((string) $s));
+
+        $sits = [];
+        $porNombre = [];
+        $nombres = [];
+        foreach ($sm->where('sesion_id', $sid)->findAll() as $s) {
+            $sits[(int) $s['id']] = $s;
+            $porNombre[$clave($s['nombre'])] ??= (int) $s['id'];
+            $nombres[(int) $s['id']] = $s['nombre'];
+        }
+        $escenas = $em->select('id, situacion_id, escena_bloque')->where('proyecto_id', $pid)->findAll();
+
+        $mover = [];      // escena_id => situacion_id|null
+        $bloque = [];     // escena_id => nombre de bloque
+        $cambiadas = [];  // situacion_id => [escena_id => bloque nuevo]
+        $total = [];      // situacion_id => nº de tomas
+        foreach ($escenas as $e) {
+            $id = (int) $e['id'];
+            $s  = (int) ($e['situacion_id'] ?? 0);
+            $b  = trim((string) $e['escena_bloque']);
+            if ($s && !isset($sits[$s])) {
+                $mover[$id] = null;
+                if ($b !== '') $bloque[$id] = '';
+            } elseif ($s) {
+                $total[$s] = ($total[$s] ?? 0) + 1;
+                if ($clave($b) !== $clave($sits[$s]['nombre']) && $b !== '') $cambiadas[$s][$id] = $b;
+                elseif ($b !== $sits[$s]['nombre']) $bloque[$id] = $sits[$s]['nombre'];
+            } elseif ($b !== '') {
+                $mover[$id] = $b;
+            }
+        }
+        foreach ($cambiadas as $s => $ids) {
+            $nuevos = array_unique(array_map($clave, $ids));
+            $nombre = mb_substr(reset($ids), 0, 150);
+            if (count($ids) === $total[$s] && count($nuevos) === 1 && !isset($porNombre[$clave($nombre)])) {
+                $sm->update($s, ['nombre' => $nombre]);
+                unset($porNombre[$clave($sits[$s]['nombre'])]);
+                $porNombre[$clave($nombre)] = $s;
+                $nombres[$s] = $nombre;
+                foreach ($ids as $id => $b) if ($b !== $nombre) $bloque[$id] = $nombre;
+                continue;
+            }
+            foreach ($ids as $id => $b) $mover[$id] = $b;
+        }
+
+        $orden = count($sits);
+        foreach ($mover as $id => $b) {
+            $destino = null;
+            if ($b !== null) {
+                $nombre = mb_substr($b, 0, 150);
+                if (!isset($porNombre[$clave($nombre)])) {
+                    $sm->insert(['sesion_id' => $sid, 'nombre' => $nombre, 'orden' => $orden++]);
+                    $porNombre[$clave($nombre)] = (int) $sm->getInsertID();
+                    $nombres[$porNombre[$clave($nombre)]] = $nombre;
+                }
+                $destino = $porNombre[$clave($nombre)];
+                if ($b !== $nombres[$destino]) $bloque[$id] = $nombres[$destino];
+            }
+            $em->update($id, ['situacion_id' => $destino]);
+            (new MoodboardItemModel())->where('escena_id', $id)->whereIn('estado', ['toma', 'variante'])->set(['situacion_id' => $destino])->update();
+        }
+        foreach ($bloque as $id => $b) $em->update($id, ['escena_bloque' => $b]);
+    }
+
+    /** Las ideas que ya son toma arrastran su toma (y con ella el bloque) a la temática nueva. */
+    private function tomasALaTematica(int $pid, int $sid, array $ids, ?int $destino): void
+    {
+        $eids = array_column((new MoodboardItemModel())->select('escena_id')->where('sesion_id', $sid)->whereIn('id', $ids)
+            ->where('estado', 'toma')->where('escena_id IS NOT NULL')->findAll(), 'escena_id');
+        if (!$eids) return;
+        $nombre = $destino ? (string) ((new SituacionModel())->find($destino)['nombre'] ?? '') : '';
+        (new RodajesEscenaModel())->skipValidation(true)->where('proyecto_id', $pid)->whereIn('id', $eids)
+            ->set(['situacion_id' => $destino, 'escena_bloque' => $nombre])->update();
+        (new MoodboardItemModel())->whereIn('escena_id', $eids)->where('estado', 'variante')->set(['situacion_id' => $destino])->update();
+    }
+
+    /** [nombre de bloque en minúsculas => orden de su temática], para ordenar los grupos como las temáticas. */
+    public static function ordenBloques(?array $sesion): array
+    {
+        if (!$sesion) return [];
+        $out = [];
+        foreach ((new SituacionModel())->where('sesion_id', $sesion['id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $k => $s) {
+            $out[mb_strtolower(trim($s['nombre']))] ??= $k;
         }
         return $out;
     }

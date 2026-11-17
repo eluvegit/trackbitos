@@ -20,6 +20,7 @@ class RodajesEscenas extends BaseController
         $proyecto = $proyectos->find($proyectoId);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
 
+        RodajesFlujo::sincronizarBloques((int) $proyectoId);
         $escenas = $escenasModel->where('proyecto_id', $proyectoId)
             ->orderBy('orden', 'ASC')
             ->findAll();
@@ -57,6 +58,48 @@ class RodajesEscenas extends BaseController
             }
         }
 
+        // Las tomas creadas con el flujo (ingesta → revisar) tienen su foto en el
+        // moodboard de la sesión, no en rodajes_escena_imagenes. Si la escena no
+        // tiene imagen propia: foto de la toma → foto de una variante → imagen
+        // guía de su ubicación. Así la lista no sale llena de huecos grises.
+        $escenas  = RodajesFlujo::conVariantes($escenas);
+        $fotos    = RodajesFlujo::fotosDeTomas(array_column($escenas, 'id'));
+        $ubicImg  = [];
+        $setups   = [];
+        if ($escenas) {
+            foreach ((new \App\Models\RodajesUbicacionModel())->where('proyecto_id', (int) $proyectoId)->findAll() as $z) {
+                if (!empty($z['imagen'])) $ubicImg[(int) $z['id']] = $z['imagen'];
+            }
+            foreach ((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $proyectoId)->findAll() as $s) {
+                $setups[(int) $s['id']] = $s;
+            }
+        }
+        $esFoto = static fn ($i) => $i && $i['origen'] === 'archivo' && !empty($i['ruta_archivo']);
+        $varFotos = [];
+        foreach ($escenas as $e) {
+            $eid = (int) $e['id'];
+            $deToma = array_values(array_filter($fotos['t'][$eid] ?? [], $esFoto));
+            foreach ($e['variantes'] as $v) {
+                $i = $v['moodboard_item_id'] ? ($fotos['v'][(int) $v['moodboard_item_id']] ?? null) : null;
+                if ($esFoto($i)) $varFotos[$eid][] = ['ruta' => $i['ruta_archivo'], 'texto' => (string) $v['texto']];
+            }
+            $numMedia[$eid] = ($numMedia[$eid] ?? 0) + count($deToma) + count($varFotos[$eid] ?? []);
+            if (isset($multimedia[$eid])) continue;
+            $ruta = $deToma[0]['ruta_archivo'] ?? ($varFotos[$eid][0]['ruta'] ?? null);
+            $guia = false;
+            if (!$ruta && !empty($e['ubicacion_id']) && isset($ubicImg[(int) $e['ubicacion_id']])) {
+                $ruta = $ubicImg[(int) $e['ubicacion_id']];
+                $guia = true;
+            }
+            if ($ruta) {
+                $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+                $multimedia[$eid] = ['ruta' => $ruta, 'es_video' => in_array($ext, ['mp4', 'webm', 'ogg', 'mov'], true), 'ext' => $ext, 'guia' => $guia];
+            } elseif ($idea = ($fotos['t'][$eid][0] ?? null)) {
+                // Idea de texto o enlace: al menos se ve qué era.
+                $ideas[$eid] = ['texto' => rod_texto_idea($idea), 'enlace' => $idea['origen'] === 'enlace'];
+            }
+        }
+
         $sesion = !empty($proyecto['sesion_id'])
             ? (new \App\Models\SesionModel())->find((int) $proyecto['sesion_id'])
             : null;
@@ -67,6 +110,10 @@ class RodajesEscenas extends BaseController
             'escenas'    => $escenas,
             'multimedia' => $multimedia, // Ahora sí viaja con la info de extensión
             'numMedia'   => $numMedia ?? [],
+            'varFotos'   => $varFotos,
+            'ordenBloques' => RodajesFlujo::ordenBloques($sesion),
+            'ideas'      => $ideas ?? [],
+            'setups'     => $setups,
             'pasos'      => RodajesFlujo::pasos((int) $proyectoId, $sesion),
         ]);
     }
@@ -120,6 +167,10 @@ class RodajesEscenas extends BaseController
     /** Nombres de bloque ya usados en el proyecto (para sugerirlos en el formulario). */
     private function bloquesDelProyecto(int $proyectoId): array
     {
+        $proyecto = (new RodajesProyectoModel())->find($proyectoId);
+        if (!empty($proyecto['sesion_id'])) {
+            return array_column((new \App\Models\SituacionModel())->where('sesion_id', (int) $proyecto['sesion_id'])->orderBy('orden', 'ASC')->findAll(), 'nombre');
+        }
         $filas = (new RodajesEscenaModel())->select('escena_bloque')
             ->where('proyecto_id', $proyectoId)->where('escena_bloque !=', '')->where('escena_bloque IS NOT NULL')
             ->groupBy('escena_bloque')->findAll();
@@ -142,6 +193,7 @@ class RodajesEscenas extends BaseController
         $post = $this->request->getPost();
         if (array_key_exists('formato', $post)) $post['formato'] = $this->formatoPost();
         $this->aplicarFlujo($post, (int) $proyectoId);
+        $this->bloqueATematica($post);
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
@@ -156,6 +208,7 @@ class RodajesEscenas extends BaseController
                 $escenas->skipValidation(true)->update($escenaId, ['situacion_id' => $idea['situacion_id']]);
             }
         }
+        RodajesFlujo::sincronizarBloques((int) $proyectoId);
         $this->handleUploads($proyectoId, $escenaId, 'lugar_objetos');
         $this->handleUploads($proyectoId, $escenaId, 'inspiracion');
         if ($idea) {
@@ -253,11 +306,13 @@ class RodajesEscenas extends BaseController
             if ($previa) $post = rod_cambio_formato($previa, $post['formato']) + $post;
         }
         $this->aplicarFlujo($post, (int) $proyectoId);
+        $this->bloqueATematica($post);
 
         if (!$escenas->save($post)) {
             return redirect()->back()->withInput()->with('errors', $escenas->errors());
         }
         $this->guardarVariantes((int) $id);
+        RodajesFlujo::sincronizarBloques((int) $proyectoId);
 
         // Nuevas subidas (opcionales)
         $this->handleUploads($proyectoId, $id, 'lugar_objetos');
@@ -332,6 +387,12 @@ class RodajesEscenas extends BaseController
     }
 
     /** Campos nuevos de la ficha corta (solo si los envía el formulario nuevo). */
+    /** Bloque vacío en el formulario = la toma sale de su temática (si escribe otro, sincronizarBloques la mueve). */
+    private function bloqueATematica(array &$post): void
+    {
+        if (array_key_exists('escena_bloque', $post) && trim((string) $post['escena_bloque']) === '') $post['situacion_id'] = null;
+    }
+
     private function aplicarFlujo(array &$post, int $pid): void
     {
         if (!array_key_exists('flujo', $post)) return;
@@ -502,7 +563,15 @@ class RodajesEscenas extends BaseController
         $imagenes_lugar = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
         $imagenes_insp  = $imgs->where(['escena_id' => $id, 'categoria' => 'inspiracion'])->findAll();
 
-        // 4. Pasar todo a la vista
+        // 4. Lo que viene del flujo: foto(s) de la idea, variantes, zona con su
+        //    imagen guía y punto, setup. Antes la ficha solo miraba las imágenes
+        //    subidas a mano y una toma creada al revisar ideas salía vacía.
+        $escena = RodajesFlujo::conVariantes([$escena])[0];
+        $fotos  = RodajesFlujo::fotosDeTomas([(int) $escena['id']]);
+        $zona   = !empty($escena['ubicacion_id']) ? (new RodajesUbicacionModel())->find((int) $escena['ubicacion_id']) : null;
+        $punto  = !empty($escena['punto_id']) ? (new RodajesPuntoModel())->find((int) $escena['punto_id']) : null;
+        $setup  = !empty($escena['setup_id']) ? (new RodajesSetupModel())->find((int) $escena['setup_id']) : null;
+
         return view(rod_vista('rodajes/escenas/show'), [
             'proyecto'        => $proyecto,
             'escena'          => $escena,
@@ -510,6 +579,11 @@ class RodajesEscenas extends BaseController
             'prevId'          => $prev['id'] ?? null,
             'imagenes_lugar'  => $imagenes_lugar,
             'imagenes_insp'   => $imagenes_insp,
+            'ideas'           => $fotos['t'][(int) $escena['id']] ?? [],
+            'fotosVar'        => $fotos['v'],
+            'zona'            => $zona,
+            'punto'           => $punto,
+            'setup'           => $setup,
         ]);
     }
 

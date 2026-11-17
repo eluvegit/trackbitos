@@ -242,7 +242,7 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
 
                 <?php elseif ($clave === 'rodaje'): ?>
                     <?php if (empty($rodajes)): ?>
-                        <p class="text-muted small mb-2">Ningún rodaje vinculado. Crea uno con una escena por cada situación y úsalo en el móvil como lista de tomas (modo plató).</p>
+                        <p class="text-muted small mb-2">Ningún rodaje vinculado. Crea uno: las situaciones serán sus temáticas (los bloques) y las tomas saldrán de revisar las ideas.</p>
                         <form method="post" action="<?= site_url('rodajes/desde-sesion/' . $sesionId) ?>" class="d-inline">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-primary rounded-pill"><i class="bi bi-film"></i> Crear rodaje desde esta sesión</button>
@@ -255,14 +255,6 @@ $secciones = array_fill_keys(array_keys($secInfo), false);
                                 <a href="<?= site_url('rodajes/' . $rid . '/escenas') ?>" class="fw-semibold me-auto"><?= esc($r['titulo']) ?></a>
                                 <span class="small text-muted"><?= $hec ?>/<?= $tot ?> tomas hechas</span>
                                 <a href="<?= site_url('rodajes/' . $rid . '/plato') ?>" class="btn btn-sm btn-success rounded-pill"><i class="bi bi-phone"></i> Plató</a>
-                                <form method="post" action="<?= site_url('rodajes/' . $rid . '/sincronizar') ?>" class="d-inline">
-                                    <?= csrf_field() ?><input type="hidden" name="direccion" value="traer"><input type="hidden" name="volver" value="sesion">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill" title="Crea una escena por cada situación que aún no tenga"><i class="bi bi-box-arrow-right"></i> Situaciones → escenas</button>
-                                </form>
-                                <form method="post" action="<?= site_url('rodajes/' . $rid . '/sincronizar') ?>" class="d-inline">
-                                    <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar"><input type="hidden" name="volver" value="sesion">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill" title="Crea situaciones con los bloques de escenas que aún no tengan situación"><i class="bi bi-box-arrow-in-left"></i> Bloques → situaciones</button>
-                                </form>
                             </div>
                             <?php if ($tot): ?>
                                 <div class="progress mb-3" style="height:6px"><div class="progress-bar bg-success" style="width:<?= round($hec / $tot * 100) ?>%"></div></div>

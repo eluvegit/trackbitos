@@ -2285,6 +2285,11 @@ class Web extends BaseController
         }
         session()->remove(self::SESION_CARRITO_ORIGEN);
 
+        $this->copiarPreguntasPendientes($origenId, $placaId);
+    }
+
+    private function copiarPreguntasPendientes(int $origenId, int $placaId): void
+    {
         $orden = 0;
         foreach ($this->placaPruebaModel->where('placa_id', $origenId)->orderBy('orden')->orderBy('id')->findAll() as $prueba) {
             if (trim((string) $prueba['respuesta']) !== '') {
@@ -2826,6 +2831,78 @@ class Web extends BaseController
 
         return redirect()->to(site_url('piezas/placas'))
             ->with('success', $piezasMovidas . ' pieza(s) (' . $movidas . ' referencia(s)) repartidas en "' . $nueva['nombre'] . '".');
+    }
+
+    /**
+     * "Duplicar placa": registra al momento una placa nueva con lo mismo que
+     * llevaba esta — mismas versiones, cantidades y notas por pieza — para
+     * volver a imprimirla sin montarla desde cero (lo normal tras un fallo)
+     * y abre su bitácora, donde se quitan, añaden o actualizan las piezas
+     * que haga falta. A diferencia de "Cargar" no pasa por el carrito.
+     *
+     * Hereda lo mismo que una placa repetida desde el carrito (ajustes de
+     * impresión, preguntas sin responder, origen_placa_id → esta) más los
+     * pedidos de los que salió y la estimación del laminador. Lo que es de
+     * AQUELLA impresión se queda fuera: fecha, pesos, tiempos reales,
+     * veredicto, fallidas, fotos, enlaces, envío e inventario — la copia
+     * empieza sin imprimir.
+     */
+    public function placaDuplicar(int $id)
+    {
+        $placa = $this->placaModel->find($id);
+        if (!$placa) {
+            return redirect()->to(site_url('piezas/placas'))->with('error', 'Esa placa ya no existe.');
+        }
+
+        $filas = $this->placaVersionModel->where('placa_id', $id)->orderBy('id')->findAll();
+        if ($filas === []) {
+            return redirect()->back()->with('error', 'Esta placa no lleva piezas: no hay nada que duplicar.');
+        }
+
+        // "#48 Brazos" → "Brazos (repetida)"; sin acumular "(repetida)" si
+        // se duplica una que ya era copia.
+        $base = trim(preg_replace('/^#\d+\s*/', '', (string) $placa['nombre']));
+        $base = trim(preg_replace('/\s*\(repetida\)$/u', '', $base)) . ' (repetida)';
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $nuevaId = (int) $this->placaModel->insert(array_filter([
+            'nombre'            => mb_substr($base, 0, 150),
+            'origen_placa_id'   => $id,
+            'exposicion'        => $placa['exposicion'],
+            'resina'            => $placa['resina'],
+            'resina_id'         => $placa['resina_id'],
+            'temperatura'       => $placa['temperatura'],
+            'numero_capas'      => $placa['numero_capas'],
+            'minutos_estimados' => $placa['minutos_estimados'],
+            'resina_estimada'   => $placa['resina_estimada'],
+        ], static fn($v) => $v !== null), true);
+
+        if ($nuevaId) {
+            $this->placaModel->update($nuevaId, ['nombre' => $this->nombreDePlaca($nuevaId, $base)]);
+            $placaPedidos = new \App\Models\PiezaPlacaPedidoModel();
+            $placaPedidos->enlazar($nuevaId, $placaPedidos->deLaPlaca($id));
+            foreach ($filas as $fila) {
+                $this->placaVersionModel->insert([
+                    'placa_id'   => $nuevaId,
+                    'version_id' => $fila['version_id'],
+                    'cantidad'   => $fila['cantidad'],
+                    'notas'      => $fila['notas'],
+                ]);
+            }
+            $this->copiarPreguntasPendientes($id, $nuevaId);
+        }
+
+        $db->transComplete();
+        if (!$nuevaId || !$db->transStatus()) {
+            return redirect()->back()->with('error', 'No se pudo duplicar la placa.');
+        }
+
+        $nueva = $this->placaModel->find($nuevaId);
+
+        return redirect()->to(site_url('piezas/placa/' . $nuevaId . '/bitacora/editar'))
+            ->with('success', 'Duplicada como "' . $nueva['nombre'] . '" (' . count($filas) . ' referencia(s)). Quita, añade o actualiza aquí las piezas que cambien.');
     }
 
     /**

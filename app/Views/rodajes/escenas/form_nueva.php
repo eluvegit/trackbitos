@@ -132,6 +132,16 @@ ob_start(); ?>
                     <input class="fv-input" id="f_zona" name="zona_nombre" list="rfZonas" value="<?= esc($zonaNombre, 'attr') ?>" placeholder="Escribe y elige, o crea una nueva" autocomplete="off">
                     <datalist id="rfZonas"><?php foreach ($zonas ?? [] as $z): ?><option value="<?= esc($z['nombre'], 'attr') ?>"><?php endforeach; ?></datalist>
                     <small class="rd-ayuda" id="rfZonaAyuda" data-nueva="Se creará la zona «%s» al guardar">Una zona amplia. El punto exacto lo marcas en Ubicaciones.</small>
+                    <?php if (!empty($zonas)): ?>
+                        <div class="rf-destinos rd-pick" id="rfZonaPick">
+                            <?php foreach ($zonas as $z): ?>
+                                <button type="button" class="rf-destino" data-valor="<?= esc($z['nombre'], 'attr') ?>">
+                                    <span class="img"><?php if ($z['imagen']): ?><img src="<?= base_url($z['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-geo-alt"></i><?php endif; ?></span>
+                                    <span class="t"><?= esc($z['nombre']) ?></span>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="rd-campo" id="rfPuntoCampo">
                     <label for="f_punto">Punto <small class="t3">(opcional)</small></label>
@@ -176,6 +186,17 @@ ob_start(); ?>
                 </div>
                 <div class="rd-campo" id="rfSetupLinea" hidden><span class="rd-lbl">Monta</span><span class="t2"></span></div>
             </div>
+            <?php if (!empty($setups)): ?>
+                <div class="rf-destinos rd-pick" id="rfSetupPick">
+                    <?php foreach ($setups as $st): ?>
+                        <button type="button" class="rf-destino" data-valor="<?= (int) $st['id'] ?>">
+                            <span class="img"><?php if (!empty($st['imagen'])): ?><img src="<?= base_url($st['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-camera"></i><?php endif; ?></span>
+                            <span class="t"><?= esc($st['nombre']) ?></span>
+                            <?php if ($l = rod_setup_linea($st)): ?><small><?= $l ?></small><?php endif; ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
 
             <?php
             $propsAct = old('props') ?? rod_props($e);
@@ -199,6 +220,7 @@ ob_start(); ?>
                 <ul class="rf-vars" id="rfVars">
                     <?php foreach ($variantes ?? [] as $n => $va): ?>
                         <li>
+                            <i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i>
                             <input type="hidden" name="variantes[<?= $n ?>][id]" value="<?= (int) $va['id'] ?>">
                             <input class="fv-input" name="variantes[<?= $n ?>][texto]" value="<?= esc($va['texto'], 'attr') ?>" aria-label="Variante">
                             <input type="hidden" name="variantes[<?= $n ?>][prioridad]" value="<?= $va['prioridad'] === 'opc' ? 'opc' : 'imp' ?>">
@@ -223,7 +245,7 @@ ob_start(); ?>
             </div>
             <div class="rd-filas-f" style="grid-template-columns: minmax(0, 1fr) 90px">
                 <div class="rd-campo">
-                    <label for="f_escena_bloque">Bloque</label>
+                    <label for="f_escena_bloque"><?= !empty($proyecto['sesion_id']) ? 'Temática' : 'Bloque' ?></label>
                     <input class="fv-input" id="f_escena_bloque" name="escena_bloque" list="rdBloques"
                            value="<?= esc((string) old('escena_bloque', $e['escena_bloque'] ?? (service('request')->getGet('bloque') ?? '')), 'attr') ?>"
                            placeholder="Bloque narrativo">
@@ -308,6 +330,7 @@ ob_start(); ?>
     </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 (() => {
     document.querySelectorAll('.rd-formatos.desel input[type=radio]').forEach(r => {
@@ -329,8 +352,16 @@ ob_start(); ?>
         document.getElementById('rfPuntoCampo').hidden = !alguno;
         ayuda.textContent = z && !zonas.includes(z) ? ayuda.dataset.nueva.replace('%s', zona.value.trim()) : textoAyuda;
     };
-    zona.addEventListener('input', pintarZona);
-    pintarZona();
+    // Elegir zona / setup tocando su imagen (el campo de texto y el desplegable siguen valiendo).
+    const zonaPick = document.getElementById('rfZonaPick');
+    const marcarZona = () => zonaPick && zonaPick.querySelectorAll('.rf-destino').forEach(b => b.classList.toggle('on', norm(b.dataset.valor) === norm(zona.value)));
+    zonaPick && zonaPick.addEventListener('click', ev => {
+        const b = ev.target.closest('.rf-destino'); if (!b) return;
+        zona.value = b.classList.contains('on') ? '' : b.dataset.valor;
+        pintarZona(); marcarZona();
+    });
+    zona.addEventListener('input', () => { pintarZona(); marcarZona(); });
+    pintarZona(); marcarZona();
 
     const setup = document.getElementById('f_setup');
     const pintarSetup = () => {
@@ -340,12 +371,21 @@ ob_start(); ?>
         linea.hidden = !(o && o.dataset.linea);
         linea.querySelector('.t2').textContent = o && o.dataset.linea ? o.dataset.linea : '';
     };
-    setup.addEventListener('change', () => { pintarSetup(); if (setup.value === 'nuevo') document.getElementById('f_setup_nuevo').focus(); });
-    pintarSetup();
+    const setupPick = document.getElementById('rfSetupPick');
+    const marcarSetup = () => setupPick && setupPick.querySelectorAll('.rf-destino').forEach(b => b.classList.toggle('on', b.dataset.valor === setup.value));
+    setupPick && setupPick.addEventListener('click', ev => {
+        const b = ev.target.closest('.rf-destino'); if (!b) return;
+        setup.value = b.classList.contains('on') ? '' : b.dataset.valor;
+        pintarSetup(); marcarSetup();
+    });
+    setup.addEventListener('change', () => { pintarSetup(); marcarSetup(); if (setup.value === 'nuevo') document.getElementById('f_setup_nuevo').focus(); });
+    pintarSetup(); marcarSetup();
 
     const lista = document.getElementById('rfVars');
     const nueva = document.getElementById('rfVarNueva');
     let n = lista.children.length + 1000;
+    // El orden se guarda tal cual queda en la lista al pulsar Guardar.
+    if (window.Sortable) Sortable.create(lista, { handle: '.rf-asa', animation: 150 });
     nueva.addEventListener('keydown', ev => {
         if (ev.key !== 'Enter') return;
         ev.preventDefault();
@@ -353,7 +393,7 @@ ob_start(); ?>
         if (!t) return;
         n++;
         const li = document.createElement('li');
-        li.innerHTML = `<input class="fv-input" name="variantes[${n}][texto]" aria-label="Variante"><input type="hidden" name="variantes[${n}][prioridad]" value="imp"><button type="button" class="rf-prio imp" data-prio>Imprescindible</button><button type="button" class="fv-x" data-quitar title="Quitar"><i class="bi bi-x"></i></button>`;
+        li.innerHTML = `<i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i><input class="fv-input" name="variantes[${n}][texto]" aria-label="Variante"><input type="hidden" name="variantes[${n}][prioridad]" value="imp"><button type="button" class="rf-prio imp" data-prio>Imprescindible</button><button type="button" class="fv-x" data-quitar title="Quitar"><i class="bi bi-x"></i></button>`;
         li.querySelector('.fv-input').value = t;
         lista.appendChild(li);
         nueva.value = '';

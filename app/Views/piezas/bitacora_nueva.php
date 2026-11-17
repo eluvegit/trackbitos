@@ -129,6 +129,11 @@ if (window.top !== window.self) {
             <?php endforeach; ?>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/placa/' . $idPlaca . '/enviar') ?>" class="fv-gbtn"><i class="bi bi-send"></i> <span class="lbl-m">Enviar placa</span></a>
+            <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/duplicar') ?>"
+                onsubmit="return confirm('¿Duplicar «<?= esc($placa['nombre'], 'attr') ?>»? Se crea una placa nueva con las mismas piezas para volver a imprimirla.');">
+                <?= csrf_field() ?>
+                <button class="fv-gbtn" title="Crear una placa nueva con las mismas piezas (para repetirla y retocar algunas)"><i class="bi bi-copy"></i> <span class="lbl-m">Duplicar</span></button>
+            </form>
             <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/borrar') ?>"
                 onsubmit="return confirm('¿Borrar «<?= esc($placa['nombre'], 'attr') ?>» del histórico? Los STL y versiones no se tocan, solo esta anotación.');">
                 <?= csrf_field() ?>

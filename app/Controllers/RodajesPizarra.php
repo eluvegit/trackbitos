@@ -40,6 +40,7 @@ class RodajesPizarra extends BaseController
         $proyecto = (new RodajesProyectoModel())->find($pid);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
         if (!isset(self::VISTAS[$vista])) return redirect()->to(site_url("rodajes/$pid/pizarra"));
+        RodajesFlujo::sincronizarBloques($pid);
 
         $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)
             ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
@@ -130,6 +131,8 @@ class RodajesPizarra extends BaseController
                 $previo = trim((string) ($actual[$id][$col] ?? ''));
                 if ($previo !== $c['valor']) {
                     $cambios[$id][$col] = $c['valor'] === '' ? ($vista === 'produccion' ? null : '') : $c['valor'];
+                    // Narrativa: el bloque es la temática; a «Sin bloque» = fuera de su temática.
+                    if ($vista === 'narrativa' && $c['valor'] === '') $cambios[$id]['situacion_id'] = null;
                     if ($vista === 'ubicacion') {
                         $cambios[$id]['ubicacion_id'] = $c['valor'] === '' ? null : RodajesFlujo::zonaId($pid, $c['valor']);
                         $cambios[$id]['punto_id'] = null;
@@ -151,6 +154,7 @@ class RodajesPizarra extends BaseController
             $orden->insertBatch($filas);
         }
         $db->transComplete();
+        if ($vista === 'narrativa') RodajesFlujo::sincronizarBloques($pid);
 
         return $this->response->setJSON(['ok' => $db->transStatus()]);
     }
@@ -183,6 +187,7 @@ class RodajesPizarra extends BaseController
             if ($vista === 'produccion') $datos['toma_estado_at'] = date('Y-m-d H:i:s');
         }
         $id = (int) $model->insert($datos);
+        if ($vista === 'narrativa' && $valor !== '') RodajesFlujo::sincronizarBloques($pid);
         $e  = $model->find($id);
 
         return $this->response->setJSON([

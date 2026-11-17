@@ -242,7 +242,7 @@ ob_start(); ?>
         <?php if (!$rodajes): ?>
             <section class="fv-panel ss-vacio">
                 <i class="bi bi-film"></i>
-                <div>Ningún rodaje vinculado. Crea uno con una escena por cada situación y úsalo en el móvil como lista de tomas.</div>
+                <div>Ningún rodaje vinculado. Crea uno: las situaciones serán sus temáticas (los bloques) y las tomas saldrán de revisar las ideas.</div>
                 <div class="ss-fila-botones">
                     <form method="post" action="<?= site_url('rodajes/desde-sesion/' . $sid) ?>">
                         <?= csrf_field() ?>
@@ -262,14 +262,7 @@ ob_start(); ?>
                     </div>
                     <?php if ($tot): ?><div class="ss-barra ok"><i style="width:<?= round($hec / $tot * 100) ?>%"></i></div><?php endif; ?>
                     <div class="ss-fila-botones">
-                        <form method="post" action="<?= site_url("rodajes/$rid/sincronizar") ?>">
-                            <?= csrf_field() ?><input type="hidden" name="direccion" value="traer"><input type="hidden" name="volver" value="sesion">
-                            <button type="submit" class="fv-btn fv-btn-sm" title="Crea una escena por cada situación que aún no tenga"><i class="bi bi-box-arrow-right"></i>Situaciones → escenas</button>
-                        </form>
-                        <form method="post" action="<?= site_url("rodajes/$rid/sincronizar") ?>">
-                            <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar"><input type="hidden" name="volver" value="sesion">
-                            <button type="submit" class="fv-btn fv-btn-sm" title="Crea situaciones con los bloques de escenas que aún no tengan situación"><i class="bi bi-box-arrow-in-left"></i>Bloques → situaciones</button>
-                        </form>
+                        <a class="fv-btn fv-btn-sm" href="<?= site_url("rodajes/$rid/tematicas") ?>"><i class="bi bi-collection"></i>Temáticas</a>
                         <a class="fv-btn fv-btn-sm" href="<?= site_url("rodajes/$rid/escenas") ?>"><i class="bi bi-list-ul"></i>Escenas</a>
                     </div>
                 </section>

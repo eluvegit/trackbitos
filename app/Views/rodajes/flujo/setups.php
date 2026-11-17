@@ -14,18 +14,29 @@ foreach ($escenas as $e) {
 <div class="fv rd" id="rfSet" data-asignar="<?= $url('escenas') ?>">
     <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte, fps y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en cada toma.'])) ?>
 
+    <?php
+    // Imagen de cada setup: la suya, si no la foto de una de sus tomas.
+    $imgSetup = [];
+    foreach ($setups as $s) {
+        $img = $s['imagen'] ?? null;
+        if (!$img) foreach ($porSetup[(int) $s['id']] ?? [] as $t) if ($img = $portadas[(int) $t['id']] ?? null) break;
+        $imgSetup[(int) $s['id']] = $img ?: null;
+    }
+    ?>
     <?php if ($sinSetup): ?>
-        <div class="rf-aviso">
-            <b><?= count($sinSetup) ?> <?= count($sinSetup) === 1 ? 'toma sin setup' : 'tomas sin setup' ?></b>
-            <?php foreach ($sinSetup as $e): ?>
-                <span><?= esc(rod_titulo_escena($e)) ?>
-                    <select class="form-select rd-sel" data-eid="<?= (int) $e['id'] ?>" data-campo="setup_id" aria-label="Setup">
-                        <option value="">Elegir setup…</option>
-                        <?php foreach ($setups as $s): ?><option value="<?= (int) $s['id'] ?>"><?= esc($s['nombre']) ?></option><?php endforeach; ?>
-                    </select>
-                </span>
-            <?php endforeach; ?>
-        </div>
+        <?php
+        $destinos = [];
+        foreach ($setups as $s) {
+            $n = count($porSetup[(int) $s['id']] ?? []);
+            $destinos[] = ['id' => (int) $s['id'], 'nombre' => $s['nombre'], 'imagen' => $imgSetup[(int) $s['id']], 'sub' => html_entity_decode(strip_tags(rod_setup_linea($s)), ENT_QUOTES) ?: ($n ? $n . ($n === 1 ? ' toma' : ' tomas') : '')];
+        }
+        ?>
+        <?= view('rodajes/flujo/_asignar', [
+            'pid' => $pid, 'tomas' => $sinSetup, 'portadas' => $portadas ?? [], 'destinos' => $destinos,
+            'titulo' => count($sinSetup) . (count($sinSetup) === 1 ? ' toma sin setup' : ' tomas sin setup'),
+            'campo' => 'setup_id', 'icono' => 'bi-camera',
+            'sinDestinos' => 'Aún no hay setups: crea el primero abajo.',
+        ]) ?>
     <?php endif; ?>
 
     <div class="rf-setups">
@@ -37,6 +48,11 @@ foreach ($escenas as $e) {
             foreach ($ts as $t) $donde[($zonas[$t['ubicacion_id']]['nombre'] ?? 'Sin zona') . ($t['franja'] ? ' (' . mb_strtolower($franjas[$t['franja']] ?? '') . ')' : '')] = true;
             ?>
             <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>"><?= csrf_field() ?>
+                <label class="rf-setup-img" title="<?= !empty($s['imagen']) ? 'Cambiar la foto del montaje' : 'Subir una foto del montaje' ?>">
+                    <?php if ($imgSetup[$sid]): ?><img src="<?= base_url($imgSetup[$sid]) ?>" alt="" loading="lazy"><?php if (empty($s['imagen'])): ?><small>foto de una toma · toca para subir la del montaje</small><?php endif; ?>
+                    <?php else: ?><span><i class="bi bi-camera"></i>Foto del montaje</span><?php endif; ?>
+                    <input type="file" name="imagen" accept="image/*" form="rfSetImg<?= $sid ?>" hidden onchange="this.form.submit()">
+                </label>
                 <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
                 <div class="rd-filas-f cam">
                     <div class="rd-campo"><label>Lente</label><input class="fv-input" name="optica" value="<?= esc((string) $s['optica'], 'attr') ?>" placeholder="35mm f/1.8"></div>
@@ -58,6 +74,9 @@ foreach ($escenas as $e) {
         <?php endforeach; ?>
     </div>
 
+    <?php foreach ($setups as $s): ?>
+        <form id="rfSetImg<?= (int) $s['id'] ?>" method="post" action="<?= $url('setups/' . (int) $s['id'] . '/imagen') ?>" enctype="multipart/form-data" hidden><?= csrf_field() ?></form>
+    <?php endforeach; ?>
     <form method="post" action="<?= $url('setups/crear') ?>" class="rd-herr"><?= csrf_field() ?>
         <input class="fv-input" name="nombre" placeholder="Nuevo setup, p. ej. «50mm trípode»" autocomplete="off" required>
         <button class="fv-btn"><i class="bi bi-plus-lg"></i>Crear setup</button>

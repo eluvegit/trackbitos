@@ -7,7 +7,14 @@
  * @var array      $escenas
  * @var array      $multimedia [escena_id => ['ruta','es_video','ext']]
  * @var array      $numMedia   [escena_id => n]
+ * @var array      $varFotos   [escena_id => [['ruta','texto']]] fotos de las variantes
+ * @var array      $ideas      [escena_id => ['texto','enlace']] idea sin foto
+ * @var array      $setups     [setup_id => setup]
  */
+$varFotos ??= [];
+$ideas    ??= [];
+$setups   ??= [];
+$franjas  = \App\Models\RodajesEscenaModel::FRANJAS;
 $pid = (int) $proyecto['id'];
 $estadosUi = rod_toma_estados();
 
@@ -17,9 +24,15 @@ $cuenta = array_fill_keys(array_keys($estadosUi), 0);
 foreach ($escenas as $e) {
     $nombre = trim((string) $e['escena_bloque']);
     $clave  = mb_strtolower($nombre);
-    $grupos[$clave] ??= ['nombre' => $nombre !== '' ? $nombre : 'Sin bloque', 'escenas' => []];
+    $grupos[$clave] ??= ['nombre' => $nombre !== '' ? $nombre : ($sesion ? 'Sin temática' : 'Sin bloque'), 'escenas' => []];
     $grupos[$clave]['escenas'][] = $e;
     $cuenta[rod_estado_escena($e)]++;
+}
+// Con sesión, los bloques son las temáticas: mismo orden que en el paso Temáticas; lo suelto, al final.
+$ordenBloques ??= [];
+if ($ordenBloques) {
+    $pos = array_flip(array_keys($grupos));
+    uksort($grupos, static fn ($a, $b) => [$a === '', $ordenBloques[$a] ?? PHP_INT_MAX, $pos[$a]] <=> [$b === '', $ordenBloques[$b] ?? PHP_INT_MAX, $pos[$b]]);
 }
 $total = count($escenas);
 
@@ -39,16 +52,7 @@ ob_start(); ?>
         <a href="<?= site_url("rodajes/$pid/dialogos") ?>"><i class="bi bi-chat-quote"></i>Diálogos</a>
         <a href="<?= site_url("rodajes/edit/$pid") ?>"><i class="bi bi-pencil"></i>Editar proyecto</a>
         <?php if ($sesion): ?>
-            <hr>
-            <small>Sesión «<?= esc($sesion['titulo']) ?>» — solo añade lo que falta</small>
-            <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
-                <?= csrf_field() ?><input type="hidden" name="direccion" value="traer">
-                <button type="submit"><i class="bi bi-box-arrow-in-down"></i>Traer situaciones como escenas</button>
-            </form>
-            <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
-                <?= csrf_field() ?><input type="hidden" name="direccion" value="enviar">
-                <button type="submit"><i class="bi bi-box-arrow-up"></i>Enviar bloques como situaciones</button>
-            </form>
+            <a href="<?= site_url("rodajes/$pid/tematicas") ?>"><i class="bi bi-collection"></i>Temáticas (= bloques)</a>
         <?php endif; ?>
     </div>
 </details>
@@ -70,16 +74,17 @@ ob_start(); ?>
             <div class="rd-herr" style="justify-content:center">
                 <a class="fv-btn fv-btn-pri" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Crear la primera</a>
                 <?php if ($sesion): ?>
-                    <form method="post" action="<?= site_url("rodajes/$pid/sincronizar") ?>">
-                        <?= csrf_field() ?><input type="hidden" name="direccion" value="traer">
-                        <button type="submit" class="fv-btn"><i class="bi bi-box-arrow-in-down"></i>Traer situaciones de la sesión</button>
-                    </form>
+                    <a class="fv-btn" href="<?= site_url("rodajes/$pid/ideas") ?>"><i class="bi bi-inbox"></i>Empezar por la ingesta</a>
                 <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
         <div class="rd-herr">
             <input type="search" class="fv-input" id="rdBuscar" placeholder="Buscar en las escenas…" autocomplete="off">
+            <div class="rd-vista" id="rdVista" role="group" aria-label="Vista">
+                <button type="button" data-vista="lista" title="Lista"><i class="bi bi-list-ul"></i></button>
+                <button type="button" data-vista="galeria" title="Galería"><i class="bi bi-grid-3x2-gap"></i></button>
+            </div>
         </div>
         <nav class="rd-nav" id="rdEstados">
             <button type="button" class="on" data-estado="">Todas <small><?= $total ?></small></button>
@@ -89,10 +94,10 @@ ob_start(); ?>
             <?php endforeach; ?>
         </nav>
 
-        <div class="rd-escenas">
+        <div class="rd-escenas" id="rdEscenas">
             <?php foreach ($grupos as $g): ?>
                 <section class="rd-grupo">
-                    <?php if (count($grupos) > 1 || $g['nombre'] !== 'Sin bloque'): ?>
+                    <?php if (count($grupos) > 1 || !isset($grupos[''])): ?>
                         <div class="rd-bloque"><?= esc($g['nombre']) ?> <small><?= count($g['escenas']) ?></small></div>
                     <?php endif; ?>
                     <div class="rd-filas">
@@ -114,6 +119,9 @@ ob_start(); ?>
                                         <video src="<?= base_url($m['ruta']) ?>#t=0.1" muted playsinline preload="metadata"></video><i class="bi bi-play-fill"></i>
                                     <?php elseif ($m): ?>
                                         <img src="<?= base_url($m['ruta']) ?>" alt="" loading="lazy">
+                                        <?php if (!empty($m['guia'])): ?><span class="rd-mini-tag" title="Imagen guía de la ubicación"><i class="bi bi-geo-alt"></i></span><?php endif; ?>
+                                    <?php elseif (isset($ideas[$eid]) && $ideas[$eid]['texto'] !== ''): ?>
+                                        <span class="rd-mini-idea"><i class="bi <?= $ideas[$eid]['enlace'] ? 'bi-link-45deg' : 'bi-chat-left-text' ?>"></i><?= esc($ideas[$eid]['texto']) ?></span>
                                     <?php else: ?>
                                         <i class="bi bi-image"></i>
                                     <?php endif; ?>
@@ -128,12 +136,24 @@ ob_start(); ?>
                                             <span class="fv-estado <?= $estadosUi[$est][2] ?>"><?= count($partes) > 1 ? rod_formatos()[$parte][0] . ': ' : '' ?><?= $estadosUi[$est][0] ?></span>
                                         <?php endforeach; ?>
                                         <?php if (trim((string) $e['escena_ubicacion']) !== ''): ?><span><i class="bi bi-geo-alt"></i><?= esc($e['escena_ubicacion']) ?></span><?php endif; ?>
+                                        <?php if (!empty($e['franja']) && isset($franjas[$e['franja']])): ?><span><i class="bi bi-sun"></i><?= $franjas[$e['franja']] ?></span><?php endif; ?>
+                                        <?php if (!empty($e['setup_id']) && isset($setups[(int) $e['setup_id']])): ?><span><i class="bi bi-camera"></i><?= esc($setups[(int) $e['setup_id']]['nombre']) ?></span><?php endif; ?>
+                                        <?php if (($e['prioridad'] ?? 'imp') === 'opc'): ?><span class="e-warn"><i class="bi bi-hourglass-split"></i>si da tiempo</span><?php endif; ?>
+                                        <?php if ($e['variantes']): ?><span><i class="bi bi-diagram-2"></i><?= count($e['variantes']) ?> <?= count($e['variantes']) === 1 ? 'variante' : 'variantes' ?></span><?php endif; ?>
                                         <?php if (trim((string) $e['plano_hora_dia']) !== ''): ?><span><i class="bi bi-tag"></i><?= esc($e['plano_hora_dia']) ?></span><?php endif; ?>
                                         <?php if (($e['plano_actores'] ?? 'N') === 'S'): ?><span><i class="bi bi-person"></i>actores</span><?php endif; ?>
                                         <?php if (trim((string) $e['escena_efecto_especial']) !== ''): ?><span class="e-bad"><i class="bi bi-stars"></i>FX</span><?php endif; ?>
                                         <?php if (!empty($numMedia[$eid])): ?><span><i class="bi bi-images"></i><?= $numMedia[$eid] ?></span><?php endif; ?>
                                         <?php if (trim((string) $e['toma_nota']) !== ''): ?><span class="e-warn"><i class="bi bi-pencil"></i><?= esc($e['toma_nota']) ?></span><?php endif; ?>
                                     </div>
+                                    <?php if (!empty($varFotos[$eid])): ?>
+                                        <div class="rd-varf">
+                                            <?php foreach (array_slice($varFotos[$eid], 0, 6) as $vf): ?>
+                                                <img src="<?= base_url($vf['ruta']) ?>" alt="" loading="lazy" title="<?= esc($vf['texto'], 'attr') ?>">
+                                            <?php endforeach; ?>
+                                            <?php if (count($varFotos[$eid]) > 6): ?><small>+<?= count($varFotos[$eid]) - 6 ?></small><?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if (trim((string) $e['sonido_dialogo_escrito']) !== ''): ?>
                                         <div class="dlg"><?= esc(preg_replace('/\s+/', ' ', $e['sonido_dialogo_escrito'])) ?></div>
                                     <?php endif; ?>
@@ -175,6 +195,18 @@ ob_start(); ?>
         document.getElementById('rdNada').hidden = alguna;
     }
     buscar.addEventListener('input', filtrar);
+    // Lista / galería (se recuerda en este navegador).
+    const cont = document.getElementById('rdEscenas');
+    const vistaNav = document.getElementById('rdVista');
+    function vista(v) {
+        cont.classList.toggle('galeria', v === 'galeria');
+        vistaNav.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
+        try { localStorage.setItem('rodajes_escenas_vista', v); } catch (e) {}
+    }
+    let guardada = 'lista';
+    try { guardada = localStorage.getItem('rodajes_escenas_vista') || 'lista'; } catch (e) {}
+    vista(guardada);
+    vistaNav.addEventListener('click', ev => { const b = ev.target.closest('button'); if (b) vista(b.dataset.vista); });
     nav.addEventListener('click', ev => {
         const b = ev.target.closest('button');
         if (!b) return;

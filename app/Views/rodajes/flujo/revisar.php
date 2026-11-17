@@ -47,11 +47,11 @@ $franjas = \App\Models\RodajesEscenaModel::FRANJAS;
                             <?php if (count($ft) > 1): ?>
                                 <div class="rf-toma-mas"><?php foreach (array_slice($ft, 1) as $f): ?><?= view('rodajes/flujo/_foto', ['i' => $f]) ?><?php endforeach; ?></div>
                             <?php endif; ?>
-                            <ul class="rf-tvars">
+                            <ul class="rf-tvars" data-orden="<?= $url('escenas/' . $t['id'] . '/variantes/orden') ?>">
                                 <?php foreach ($t['variantes'] as $v): ?>
                                     <?php $fv = $v['moodboard_item_id'] ? ($fotos['v'][(int) $v['moodboard_item_id']] ?? null) : null; ?>
-                                    <li>
-                                        <i class="bi bi-arrow-return-right"></i>
+                                    <li data-id="<?= (int) $v['id'] ?>">
+                                        <i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i>
                                         <?php if ($fv): ?><?= view('rodajes/flujo/_foto', ['i' => $fv]) ?><?php endif; ?>
                                         <span class="rf-editable" data-url="<?= $url('variantes/' . $v['id'] . '/texto') ?>" title="Toca para cambiar el nombre"><?= esc($v['texto']) ?></span>
                                         <form method="post" action="<?= $url('variantes/' . $v['id'] . '/principal') ?>" onsubmit="return confirm('¿Hacer principal «<?= esc($v['texto'], 'js') ?>»? La principal actual pasa a variante.')"><?= csrf_field() ?><button class="fv-x" title="Hacer principal"><i class="bi bi-arrow-up-circle"></i></button></form>
@@ -165,5 +165,20 @@ document.querySelectorAll('.rf-editable').forEach(el => el.addEventListener('cli
 document.querySelectorAll('.rf-asig input[name=texto]').forEach(i => i.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); i.form.querySelector('[value=toma]').click(); }
 }));
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+// Ordenar variantes arrastrando por el asa; se guarda al soltar.
+document.querySelectorAll('ul[data-orden]').forEach(ul => {
+    if (!window.Sortable || ul.children.length < 2) return;
+    Sortable.create(ul, {
+        handle: '.rf-asa', animation: 150,
+        onEnd: () => fetch(ul.dataset.orden, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '<?= csrf_hash() ?>' },
+            body: JSON.stringify({ ids: [...ul.children].map(li => li.dataset.id) }),
+        }).then(r => { if (!r.ok) throw 0; }).catch(() => alert('No se ha podido guardar el orden.')),
+    });
+});
 </script>
 <?= $this->endSection() ?>

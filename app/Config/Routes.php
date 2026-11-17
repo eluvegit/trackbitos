@@ -433,6 +433,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/escenas/(:num)/a-variante',     'RodajesFlujo::tomaAVariante/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/titulo',         'RodajesFlujo::tomaTitulo/$1/$2');
     $routes->POST('(:num)/variantes/(:num)/texto',        'RodajesFlujo::varianteTexto/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/variantes/orden', 'RodajesFlujo::variantesOrden/$1/$2');
     $routes->GET('(:num)/ubicaciones',                    'RodajesFlujo::ubicaciones/$1');
     $routes->POST('(:num)/ubicaciones/crear',             'RodajesFlujo::ubicacionCrear/$1');
     $routes->POST('(:num)/ubicaciones/(:num)/guardar',    'RodajesFlujo::ubicacionGuardar/$1/$2');
@@ -447,6 +448,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/setups/crear',                  'RodajesFlujo::setupCrear/$1');
     $routes->POST('(:num)/setups/(:num)/guardar',         'RodajesFlujo::setupGuardar/$1/$2');
     $routes->POST('(:num)/setups/(:num)/borrar',          'RodajesFlujo::setupBorrar/$1/$2');
+    $routes->POST('(:num)/setups/(:num)/imagen',          'RodajesFlujo::setupImagen/$1/$2');
     $routes->GET('(:num)/plan',                           'RodajesFlujo::plan/$1');
     $routes->POST('(:num)/variantes/(:num)/toma',         'RodajesFlujo::varianteToma/$1/$2');
 
@@ -1097,6 +1099,9 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('placa/(:num)/repartir', 'Web::placaRepartir/$1');
     // Deshace un reparto: junta esta placa de vuelta con la que la originó.
     $routes->POST('placa/(:num)/deshacer-reparto', 'Web::placaDeshacerReparto/$1');
+    // Duplicar: placa nueva ya registrada con las mismas piezas (repetir
+    // tras un fallo y retocar algunas); se abre su bitácora.
+    $routes->POST('placa/(:num)/duplicar', 'Web::placaDuplicar/$1');
 
     // Bitácora de la placa (fase 38): el cuaderno de esa impresión — qué
     // llevaba y cuántas copias, qué se probaba, pesos, notas y conclusiones.
