@@ -12,6 +12,7 @@ class RodajesFlujo extends BaseController
         'ideas'       => ['Ingesta', 'bi-inbox'],
         'tematicas'   => ['Temáticas', 'bi-collection'],
         'revisar'     => ['Revisar ideas', 'bi-check2-square'],
+        'formato'     => ['Foto o vídeo', 'bi-camera-reels'],
         'ubicaciones' => ['Ubicaciones', 'bi-geo-alt'],
         'momento'     => ['Momento', 'bi-sun'],
         'setups'      => ['Setups', 'bi-camera'],
@@ -567,6 +568,17 @@ class RodajesFlujo extends BaseController
         $e  = $em->where('proyecto_id', (int) $pid)->find((int) $eid);
         $in = $this->request->getJSON(true) ?: $this->request->getPost();
         $campo = (string) ($in['campo'] ?? '');
+        if ($e && $campo === 'formato') {
+            $f = (string) ($in['valor'] ?? '') ?: null;
+            if ($f !== null && !array_key_exists($f, rod_formatos())) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            $em->skipValidation(true)->update($e['id'], ['formato' => $f] + rod_cambio_formato($e, $f));
+            $vm = new RodajesVarianteModel();
+            foreach ($vm->where('escena_id', $e['id'])->findAll() as $va) {
+                $d = rod_cambio_formato(['formato' => $e['formato']] + $va, $f);
+                if ($d) $vm->skipValidation(true)->update($va['id'], $d);
+            }
+            return $this->response->setJSON(['ok' => true]);
+        }
         if ($e && $campo === 'franja') {
             $f = (string) ($in['valor'] ?? '');
             if ($f === 'dia_noche') {
@@ -634,6 +646,17 @@ class RodajesFlujo extends BaseController
     }
 
     // ---------- momento del día ----------
+
+    public function formato($pid)
+    {
+        [$proyecto, $sesion] = $this->contexto($pid);
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
+        $escenas = (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll();
+        return view('rodajes/flujo/formato', $this->base($proyecto, $sesion, 'formato') + [
+            'escenas' => $escenas, 'zonas' => array_column($this->zonas((int) $pid), null, 'id'),
+            'portadas' => self::portadas($escenas),
+        ]);
+    }
 
     public function momento($pid)
     {
@@ -1020,9 +1043,9 @@ class RodajesFlujo extends BaseController
             $t = (int) $r['t'];
             $c = ['ideas' => (string) $t, 'tematicas' => $t ? (int) $r['a'] . "/$t" : '', 'revisar' => $t ? (int) $r['r'] . "/$t" : ''];
         }
-        $e = $db->query('SELECT COUNT(*) t, SUM(ubicacion_id IS NOT NULL) u, SUM(setup_id IS NOT NULL) s, SUM(franja IS NOT NULL) f, ' . rod_sql_hechas() . ' h FROM rodajes_escenas WHERE proyecto_id = ? AND deleted_at IS NULL', [$pid])->getRowArray();
+        $e = $db->query('SELECT COUNT(*) t, SUM(ubicacion_id IS NOT NULL) u, SUM(setup_id IS NOT NULL) s, SUM(franja IS NOT NULL) f, SUM(formato IS NOT NULL) fo, ' . rod_sql_hechas() . ' h FROM rodajes_escenas WHERE proyecto_id = ? AND deleted_at IS NULL', [$pid])->getRowArray();
         $t = (int) $e['t'];
-        foreach (['ubicaciones' => 'u', 'momento' => 'f', 'setups' => 's', 'plato' => 'h'] as $k => $col) $c[$k] = $t ? (int) $e[$col] . "/$t" : '';
+        foreach (['formato' => 'fo', 'ubicaciones' => 'u', 'momento' => 'f', 'setups' => 's', 'plato' => 'h'] as $k => $col) $c[$k] = $t ? (int) $e[$col] . "/$t" : '';
         $out = [];
         foreach (self::PASOS as $k => [$txt, $ico]) {
             $cuenta = $c[$k] ?? ''; // pasos sin contador (plan) → vacío

@@ -11,6 +11,7 @@ Simulación de referencia (solo FLUJO): artifact «Simulador de rodaje» (https:
 1. **Ingesta** — todo entra junto en una bandeja (moodboard con situacion_id NULL, el grupo «General»): soltar/pegar varias imágenes a la vez y ideas escritas (una por línea).
 2. **Temáticas** (= situaciones) — seleccionar varias ideas de la bandeja y moverlas juntas a una temática, crear temática con ellas o descartarlas. Opcional: una idea suelta también puede pasar a toma.
 3. **Revisar ideas** — por temática (y «Sin temática») y una a una: Descartar / Nueva toma / Variante de toma existente. Al crear la toma se le pone zona (sugerencias de las existentes o «+ crear» al vuelo), franja, setup (select o «+ crear»), props, prioridad y variantes. Contador «N ideas sin revisar».
+3b. **Foto o vídeo** — marcar varias tomas y tocar Foto / Vídeo / Foto y vídeo (como Momento); luego cambiar sueltas con el select. Al cambiar, el estado del plató se mueve con rod_cambio_formato (toma y variantes).
 4. **Ubicaciones** — con las zonas que han salido: ordenar la ruta (qué zona antes y cuál después), imagen guía subida por zona y **puntos** marcados sobre ella; asignar punto a las tomas de cada zona. La ubicación es una **zona** amplia; el punto es opcional. Caso inverso: crear zona aquí y «+ toma aquí».
 5. **Setups** — repasar los creados al vuelo: nombre, lente, soporte, fps, luz y notas. Solo técnico.
 6. **Plan** — orden: Franja → Zona (orden de ruta) → Setup → Toma → Variantes.

@@ -444,6 +444,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/ubicaciones/(:num)/punto',      'RodajesFlujo::puntoCrear/$1/$2');
     $routes->POST('(:num)/puntos/(:num)/borrar',          'RodajesFlujo::puntoBorrar/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/asignar',        'RodajesFlujo::asignar/$1/$2');
+    $routes->GET('(:num)/formato',                        'RodajesFlujo::formato/$1');
     $routes->GET('(:num)/momento',                        'RodajesFlujo::momento/$1');
     $routes->GET('(:num)/setups',                         'RodajesFlujo::setups/$1');
     $routes->POST('(:num)/setups/crear',                  'RodajesFlujo::setupCrear/$1');
