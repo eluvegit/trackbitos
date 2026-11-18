@@ -6,3 +6,7 @@
         </a>
     <?php endforeach; ?>
 </nav>
+<script>
+// Móvil (pasos con scroll lateral): deja a la vista el paso actual.
+(() => { const n = document.currentScript.previousElementSibling, a = n && n.querySelector('a.on'); if (a && n.scrollWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - (n.clientWidth - a.offsetWidth) / 2; })();
+</script>

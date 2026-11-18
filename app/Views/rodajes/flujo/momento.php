@@ -61,11 +61,12 @@ $cuenta = static function (array $ts): string { $n = count($ts); return $n ? $n 
                         <span class="rf-foto mini"><?php if ($pt): ?><img src="<?= base_url($pt) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-film"></i><?php endif; ?></span>
                         <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><b class="rf-tnum">#<?= (int) $t['orden'] ?></b> <?= esc($desc !== '' ? $desc : ($tema !== '' ? $tema : 'Toma')) ?></a>
                         <small><?= esc(implode(' · ', array_filter([$desc !== '' ? $tema : '', $zona]))) ?: '&nbsp;' ?></small>
-                        <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="franja" data-recargar aria-label="Momento del día">
-                            <option value="">Sin momento</option>
-                            <?php foreach ($franjas as $fk => $fl): ?><option value="<?= $fk ?>" <?= $t['franja'] === $fk ? 'selected' : '' ?>><?= esc($fl) ?></option><?php endforeach; ?>
-                            <option value="dia_noche">Día y noche (dos tomas)</option>
-                        </select>
+                        <span class="rf-seg rf-seg-mom" role="group" aria-label="Momento del día" data-campo="franja" data-eid="<?= (int) $t['id'] ?>">
+                            <?php foreach ($franjas as $fk => $fl): $on = $t['franja'] === $fk; ?>
+                                <button type="button" class="<?= $on ? 'on' : '' ?>" data-valor="<?= $fk ?>" aria-pressed="<?= $on ? 'true' : 'false' ?>" title="<?= $on ? 'Toca otra vez para dejarla sin momento' : esc($fl, 'attr') ?>"><i class="bi <?= $iconosFranja[$fk] ?? 'bi-clock' ?>"></i><span><?= esc($fl) ?></span></button>
+                            <?php endforeach; ?>
+                            <button type="button" data-valor="dia_noche" title="Desdobla la toma en dos: una de día y otra de noche"><i class="bi bi-circle-half"></i><span>Día y noche</span></button>
+                        </span>
                     </li>
                 <?php endforeach; ?>
             </ul>
@@ -74,4 +75,5 @@ $cuenta = static function (array $ts): string { $n = count($ts); return $n ? $n 
 </div>
 <?= view('rodajes/flujo/_asignar_js') ?>
 <?= view('rodajes/flujo/_sin_recarga', ['raiz' => 'rfMom']) ?>
+<?= view('rodajes/flujo/_seg_js') ?>
 <?= $this->endSection() ?>

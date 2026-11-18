@@ -518,6 +518,18 @@
 .rf-drop.subiendo label em { display: block; }
 .rf-texto { gap: 10px !important; }
 .rf-ideas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+/* Temáticas: cada toma con sus variantes enmarcada; las sueltas, al lado */
+.rf-flujo { display: flex; flex-wrap: wrap; align-items: flex-start; }
+.rf-flujo .rf-idea { flex: 0 0 150px; width: 150px; }
+.rf-tgrupo { flex: 1 1 100%; display: grid; gap: 8px; max-width: 100%; padding: 8px 10px 10px; border: 1px solid var(--fv-border-2); border-left: 3px solid var(--fv-ok); border-radius: var(--fv-r-lg); background: var(--fv-panel); }
+.rf-tgrupo.sin-toma { border-left-color: var(--fv-info); }
+.rf-tgrupo-h { display: flex; gap: 6px; align-items: center; min-width: 0; font-size: 12px; color: var(--fv-text-3); }
+.rf-tgrupo-h > .bi { color: var(--fv-ok); }
+.rf-tgrupo-h .t { font-weight: 600; color: var(--fv-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; max-width: 260px; }
+.rf-tgrupo-h .t:hover { color: var(--fv-accent); }
+.rf-tgrupo-h .der { margin-left: auto; }
+.rf-tgrupo-ideas { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 420px) { .rf-flujo .rf-idea { flex-basis: calc(50% - 5px); width: auto; } .rf-tgrupo-ideas .rf-idea { flex-basis: calc(50% - 5px); } }
 .rf-idea { position: relative; display: grid; gap: 6px; align-content: start; min-width: 0; margin: 0; cursor: pointer; color: var(--fv-text); }
 .rf-idea.off .rf-media { opacity: .35; }
 .rf-media { position: relative; aspect-ratio: 4 / 3; border-radius: var(--fv-r-md); overflow: hidden; border: 1px solid var(--fv-border); background: var(--fv-inset); display: flex; flex-direction: column; padding: 10px; font-size: 13px; line-height: 1.4; }
@@ -542,6 +554,7 @@
 .rf-selbar .fv-input { flex: 1 1 200px; height: 32px; }
 .rf-selbar button:disabled { opacity: .4; cursor: default; }
 #rfSel { display: grid; gap: 22px; }
+#rfSel .rf-sec + .rf-sec { margin-top: 40px; } /* separa las temáticas: ~2 alturas de título más */
 .rf-aviso-sesion { gap: 12px; }
 .rf-aviso-sesion .rd-sel { width: auto; }
 
@@ -968,3 +981,90 @@
   .pt-fija { padding-inline: 12px; }
   .pt-toma { border-radius: 0; }
 }
+
+/* Revisar: soltar foto / mover toma o foto a otra temática */
+.rf-toma-acc { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.rf-toma-acc form { margin: 0; }
+.rf-mover { width: auto !important; max-width: 100%; height: 30px; padding-top: 2px; padding-bottom: 2px; font-size: 12.5px; color: var(--fv-text-2); }
+
+/* Foto o vídeo: tres botones por toma en vez de desplegable */
+.rf-tz li .rf-seg { grid-column: 3; grid-row: 1 / span 2; }
+.rf-seg { display: inline-flex; border: 1px solid var(--fv-border-2); border-radius: var(--fv-r-md); overflow: hidden; background: var(--fv-inset); }
+.rf-seg button { display: inline-flex; gap: 5px; align-items: center; height: 30px; padding: 0 10px; border: 0; background: transparent; color: var(--fv-text-2); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.rf-seg button + button { border-left: 1px solid var(--fv-border-2); }
+.rf-seg button:hover { color: var(--fv-text); background: var(--fv-hover); }
+.rf-seg button.on { background: var(--fv-accent); color: #09090b; font-weight: 600; }
+.rf-seg button:disabled { opacity: .5; cursor: default; }
+@media (max-width: 560px) {
+    .rf-tz li .rf-seg { grid-column: 1 / -1; grid-row: auto; justify-self: start; margin-top: 4px; }
+    .rf-seg button span { display: none; }
+    .rf-seg button { padding: 0 14px; font-size: 15px; }
+}
+
+/* Fotos más grandes en los pasos de asignar (formato, ubicaciones, momento, setups) */
+.rf-asigna .rf-ideas { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.rf-tz li { gap: 4px 14px; padding: 10px 0; }
+.rf-tz li .rf-foto.mini { width: 112px; height: 84px; border-radius: var(--fv-r-md); }
+.rf-tz li .rf-foto.mini img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 640px) {
+    .rf-asigna .rf-tema .rf-ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .rf-tz li .rf-foto.mini { width: 88px; height: 66px; }
+}
+
+/* Momento: 7 botones, en su propia línea bajo el título de la toma */
+.rf-tz li .rf-seg-mom { grid-column: 2 / -1; grid-row: auto; justify-self: start; flex-wrap: wrap; margin-top: 4px; }
+@media (max-width: 560px) {
+    .rf-tz li .rf-seg-mom { grid-column: 1 / -1; }
+    .rf-seg-mom button span { display: inline; }
+    .rf-seg-mom button { padding: 0 9px; font-size: 12.5px; height: 34px; }
+}
+
+/* Setups: la tarjeta es estrecha → foto + desplegable arriba; título y datos debajo, a todo el ancho y en varias líneas */
+.rf-setup .rf-tz li { grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; }
+.rf-setup .rf-tz li .rf-foto { grid-column: 1; grid-row: 1; }
+.rf-setup .rf-tz li .rd-sel { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; max-width: 100%; }
+.rf-setup .rf-tz li > a { grid-column: 1 / -1; grid-row: 2; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.rf-setup .rf-tz li > small { grid-column: 1 / -1; grid-row: 3; white-space: normal; }
+
+/* Pasos: en escritorio, si no caben, bajan a otra fila (antes se cortaban sin barra visible) */
+@media (min-width: 641px) {
+    /* todas del ancho de la más larga (≈ «Revisar ideas 12/12»), en rejilla */
+    .rf-pasos { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); overflow: visible; }
+    .rf-pasos a { min-width: 0; }
+    .rf-pasos small { margin-left: auto; }
+}
+
+/* Setups: foto del montaje pequeña junto al nombre; sin foto, icono genérico discreto */
+.rf-setup-cab { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.rf-setup-cab .rf-setup-img { flex: none; width: 44px; height: 33px; aspect-ratio: auto; margin: 0; border-style: solid; border-color: var(--fv-border); font-size: 15px; opacity: .7; }
+.rf-setup-cab .rf-setup-img:hover { opacity: 1; border-color: var(--fv-border-2); color: var(--fv-text-2); }
+.rf-setup-cab .rf-setup-img:has(img) { opacity: 1; }
+.rf-setup-cab .rf-setup-n { flex: 1 1 auto; min-width: 0; }
+
+/* Plan: fotos más grandes (toma principal y variantes) */
+.rf-pt-1 { align-items: center; }
+.rf-pt-1 > .rf-foto { width: 144px; height: 108px; border-radius: var(--fv-r-md); }
+.rf-pv { gap: 6px; margin-left: 4px; }
+.rf-pv .rf-foto.mini { width: 88px; height: 66px; border-radius: var(--fv-r-sm); }
+@media (max-width: 560px) {
+    .rf-pt-1 > .rf-foto { width: 112px; height: 84px; }
+    .rf-pv .rf-foto.mini { width: 72px; height: 54px; }
+}
+.rf-pt > li:has(> .rf-pt-1 > .rf-foto)::before { top: 61px; }
+@media (max-width: 560px) { .rf-pt > li:has(> .rf-pt-1 > .rf-foto)::before { top: 49px; } }
+/* Plan: variantes más grandes y sangradas bajo el título de la toma (no bajo su foto) */
+.rf-pv { margin-left: 56px; gap: 8px; }
+.rf-pv .rf-foto.mini { width: 120px; height: 90px; border-radius: var(--fv-r-md); }
+@media (max-width: 560px) { .rf-pv { margin-left: 24px; } .rf-pv .rf-foto.mini { width: 96px; height: 72px; } }
+/* Plan: flechas para ordenar los montajes dentro de cada zona */
+.rf-ps-orden { margin-left: auto; display: inline-flex; gap: 2px; align-self: center; }
+.rf-ps-orden form { margin: 0; }
+.rf-ps-orden .fv-ibtn:disabled { opacity: .3; cursor: default; }
+.rf-pz { scroll-margin-top: 16px; }
+
+/* Plató · Más datos: ficha técnica fija (setup, lente, soporte, parámetros, luz, props) */
+.pt-ficha { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 13.5px; }
+.pt-ficha dt { color: var(--fv-text-3); font-weight: 500; }
+.pt-ficha dd { margin: 0; color: var(--fv-text); overflow-wrap: anywhere; }
+.pt-ficha dd.falta { color: var(--fv-text-3); }
+.pt-refs-h { font-size: 12px; color: var(--fv-text-3); margin-top: 4px; }

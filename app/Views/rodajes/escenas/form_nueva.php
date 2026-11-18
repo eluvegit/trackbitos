@@ -93,7 +93,7 @@ ob_start(); ?>
         <?php if (!empty($volver)): ?><input type="hidden" name="volver" value="<?= esc($volver, 'attr') ?>"><?php endif; ?>
         <?php if (!empty($refsIdeas)): ?>
             <div class="rf-refs">
-                <?php foreach ($refsIdeas as $r): ?><?= view('rodajes/flujo/_idea', ['i' => $r]) ?><?php endforeach; ?>
+                <?php foreach ($refsIdeas as $r): ?><?= view('rodajes/flujo/_idea', ['i' => $r], ['saveData' => false]) ?><?php endforeach; ?>
             </div>
         <?php endif; ?>
 
@@ -187,7 +187,7 @@ ob_start(); ?>
                     <select class="form-select rd-sel" id="f_setup" name="setup_id">
                         <option value="">Sin decidir</option>
                         <?php foreach ($setups ?? [] as $st): ?>
-                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" data-optica="<?= esc((string) $st['optica'], 'attr') ?>" data-fps="<?= esc((string) $st['fps'], 'attr') ?>" data-soporte="<?= esc((string) $st['soporte'], 'attr') ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
+                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" data-optica="<?= esc((string) $st['optica'], 'attr') ?>" data-soporte="<?= esc((string) $st['soporte'], 'attr') ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
                         <?php endforeach; ?>
                         <option value="nuevo" <?= $setupAct === 'nuevo' ? 'selected' : '' ?>>+ Nuevo setup…</option>
                     </select>
@@ -426,9 +426,9 @@ ob_start(); ?>
         linea.hidden = !(o && o.dataset.linea);
         linea.querySelector('.t2').textContent = o && o.dataset.linea ? o.dataset.linea : '';
     };
-    // Setup y cámara al unísono: elegir setup rellena óptica / fps / soporte; si
+    // Setup y cámara al unísono: elegir setup rellena óptica / soporte (los fps son de cada toma); si
     // luego los cambias aquí, al guardar se cambian en el setup y en sus tomas.
-    const camSetup = { optica: 'f_camara_optica', fps: 'f_camara_fps', soporte: 'f_camara_soporte' };
+    const camSetup = { optica: 'f_camara_optica', soporte: 'f_camara_soporte' };
     const avisoCam = document.getElementById('rfCamSetup');
     const nTomasSetup = <?= json_encode((object) ($tomasPorSetup ?? [])) ?>;
     const pintarCam = (rellenar) => {
@@ -447,8 +447,8 @@ ob_start(); ?>
         if (!hay) return;
         const otras = Math.max(0, (nTomasSetup[setup.value] || 0) - (<?= (int) ($e['setup_id'] ?? 0) ?> === +setup.value ? 1 : 0));
         avisoCam.querySelector('span').textContent = setup.value === 'nuevo'
-            ? 'Óptica, FPS y soporte serán los del setup nuevo.'
-            : 'Óptica, FPS y soporte van con el setup «' + o.textContent.trim() + '»: si los cambias aquí, cambian en el setup' + (otras ? ' y en sus otras ' + otras + (otras === 1 ? ' toma' : ' tomas') : '') + '.';
+            ? 'Óptica y soporte serán los del setup nuevo.'
+            : 'Óptica y soporte van con el setup «' + o.textContent.trim() + '»: si los cambias aquí, cambian en el setup' + (otras ? ' y en sus otras ' + otras + (otras === 1 ? ' toma' : ' tomas') : '') + '.';
     };
     setup.addEventListener('change', () => pintarCam(true));
 

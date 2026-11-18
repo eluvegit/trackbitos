@@ -12,7 +12,7 @@ foreach ($escenas as $e) {
 }
 ?>
 <div class="fv rd" id="rfSet" data-asignar="<?= $url('escenas') ?>">
-    <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte, fps y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en cada toma.'])) ?>
+    <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en cada toma.'])) ?>
 
     <?php
     // Imagen de cada setup: la suya, si no la foto de una de sus tomas.
@@ -48,12 +48,13 @@ foreach ($escenas as $e) {
             foreach ($ts as $t) $donde[($zonas[$t['ubicacion_id']]['nombre'] ?? 'Sin zona') . ($t['franja'] ? ' (' . mb_strtolower($franjas[$t['franja']] ?? '') . ')' : '')] = true;
             ?>
             <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>" data-ancla><?= csrf_field() ?>
-                <label class="rf-setup-img" title="<?= !empty($s['imagen']) ? 'Cambiar la foto del montaje' : 'Subir una foto del montaje' ?>">
-                    <?php if ($imgSetup[$sid]): ?><img src="<?= base_url($imgSetup[$sid]) ?>" alt="" loading="lazy"><?php if (empty($s['imagen'])): ?><small>foto de una toma · toca para subir la del montaje</small><?php endif; ?>
-                    <?php else: ?><span><i class="bi bi-camera"></i>Foto del montaje</span><?php endif; ?>
-                    <input type="file" name="imagen" accept="image/*" form="rfSetImg<?= $sid ?>" hidden onchange="this.form.requestSubmit()">
-                </label>
-                <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
+                <div class="rf-setup-cab">
+                    <label class="rf-setup-img" title="<?= !empty($s['imagen']) ? 'Cambiar la foto del montaje' : 'Subir una foto del montaje' ?>">
+                        <?php if (!empty($s['imagen'])): ?><img src="<?= base_url($s['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-camera"></i><?php endif; ?>
+                        <input type="file" name="imagen" accept="image/*" form="rfSetImg<?= $sid ?>" hidden onchange="this.form.requestSubmit()">
+                    </label>
+                    <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
+                </div>
                 <div class="rd-filas-f cam">
                     <div class="rd-campo"><label>Lente</label><input class="fv-input" name="optica" value="<?= esc((string) $s['optica'], 'attr') ?>" placeholder="35mm f/1.8"></div>
                     <div class="rd-campo"><label>Soporte</label>
@@ -61,7 +62,6 @@ foreach ($escenas as $e) {
                             <?php foreach (array_unique(array_filter(['Mano', 'Trípode', 'Gimbal', 'Otro', (string) $s['soporte']])) as $o): ?><option <?= $s['soporte'] === $o ? 'selected' : '' ?>><?= esc($o) ?></option><?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="rd-campo"><label>FPS</label><input class="fv-input" name="fps" value="<?= esc((string) $s['fps'], 'attr') ?>" placeholder="25"></div>
                 </div>
                 <div class="rd-campo"><label>Luz</label><input class="fv-input" name="luz" value="<?= esc((string) $s['luz'], 'attr') ?>" placeholder="Natural + reflector"></div>
                 <div class="rd-campo"><label>Notas</label><textarea class="fv-input" name="notas" rows="2" placeholder="Ajustes, perfil de color, qué revisar antes de disparar…"><?= esc((string) $s['notas']) ?></textarea></div>

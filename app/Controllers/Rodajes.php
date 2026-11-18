@@ -224,6 +224,7 @@ class Rodajes extends BaseController
             'media'     => $media,
             'sesion'    => $sesion,
             'moodboard' => $moodboard,
+            'setups'    => array_column((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $id)->findAll(), null, 'id'),
         ]);
     }
 

@@ -46,9 +46,29 @@ foreach ($situaciones as $s) $grupos[] = ['id' => (int) $s['id'], 'nombre' => $s
                         <?php endif; ?>
                     </span>
                 </div>
-                <?php if ($g['items']): ?>
-                    <div class="rf-ideas">
-                        <?php foreach ($g['items'] as $i): ?><?= view('rodajes/flujo/_idea', ['i' => $i, 'marcable' => true]) ?><?php endforeach; ?>
+                <?php if ($g['items']):
+                    // Cada toma con sus variantes en un bloque (la toma primero); las ideas sueltas, detrás.
+                    $bloques = []; $sueltas = [];
+                    foreach ($g['items'] as $i) {
+                        $eid = in_array($i['estado'], ['toma', 'variante'], true) ? (int) $i['escena_id'] : 0;
+                        if ($eid) $bloques[$eid][$i['estado'] === 'toma' ? 't' : 'v'][] = $i; else $sueltas[] = $i;
+                    }
+                ?>
+                    <div class="rf-ideas rf-flujo">
+                        <?php foreach ($bloques as $eid => $b): $nv = count($b['v'] ?? []); ?>
+                            <div class="rf-tgrupo<?= empty($b['t']) ? ' sin-toma' : '' ?>" data-grupo>
+                                <div class="rf-tgrupo-h">
+                                    <i class="bi bi-camera"></i>
+                                    <a href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>" class="t" title="Abrir la toma"><?= esc($tomas[$eid] ?? "Toma #$eid") ?></a>
+                                    <?php if ($nv): ?><span class="fv-mono">+<?= $nv ?> <?= $nv === 1 ? 'variante' : 'variantes' ?></span><?php endif; ?>
+                                    <?php if (count($b['t'] ?? []) + $nv > 1): ?><button type="button" class="fv-link der" data-todas>Marcar</button><?php endif; ?>
+                                </div>
+                                <div class="rf-tgrupo-ideas">
+                                    <?php foreach (array_merge($b['t'] ?? [], $b['v'] ?? []) as $i): ?><?= view('rodajes/flujo/_idea', ['i' => $i, 'marcable' => true], ['saveData' => false]) ?><?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php foreach ($sueltas as $i): ?><?= view('rodajes/flujo/_idea', ['i' => $i, 'marcable' => true], ['saveData' => false]) ?><?php endforeach; ?>
                     </div>
                 <?php else: ?>
                     <div class="rf-vacio"><?= $g['vacio'] ?></div>
@@ -73,7 +93,7 @@ foreach ($situaciones as $s) $grupos[] = ['id' => (int) $s['id'], 'nombre' => $s
     };
     f.addEventListener('change', contar);
     f.querySelectorAll('[data-todas]').forEach(b => b.addEventListener('click', () => {
-        const cajas = [...b.closest('.rf-sec').querySelectorAll('input[name="ids[]"]')];
+        const cajas = [...b.closest('[data-grupo], .rf-sec').querySelectorAll('input[name="ids[]"]')];
         const todas = cajas.every(c => c.checked);
         cajas.forEach(c => c.checked = !todas);
         contar();
@@ -92,6 +112,13 @@ foreach ($situaciones as $s) $grupos[] = ['id' => (int) $s['id'], 'nombre' => $s
     document.getElementById('rfNombre').addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); document.getElementById('rfNueva').click(); }
     });
+    // Viene de pinchar una idea en Ingesta: la deja marcada y a la vista, lista para moverla.
+    const ida = new URLSearchParams(location.search).get('idea');
+    const caja = ida && f.querySelector('input[name="ids[]"][value="' + CSS.escape(ida) + '"]');
+    if (caja) {
+        caja.checked = true;
+        caja.closest('.rf-idea').scrollIntoView({ block: 'center' });
+    }
     contar();
 })();
 </script>

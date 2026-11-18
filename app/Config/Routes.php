@@ -432,12 +432,14 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/variantes/(:num)/separar',      'RodajesFlujo::varianteSeparar/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/a-variante',     'RodajesFlujo::tomaAVariante/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/titulo',         'RodajesFlujo::tomaTitulo/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/tematica',       'RodajesFlujo::tomaTematica/$1/$2');
     $routes->POST('(:num)/variantes/(:num)/texto',        'RodajesFlujo::varianteTexto/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/variantes/orden', 'RodajesFlujo::variantesOrden/$1/$2');
     $routes->GET('(:num)/ubicaciones',                    'RodajesFlujo::ubicaciones/$1');
     $routes->POST('(:num)/ubicaciones/crear',             'RodajesFlujo::ubicacionCrear/$1');
     $routes->POST('(:num)/ubicaciones/(:num)/guardar',    'RodajesFlujo::ubicacionGuardar/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/mover',      'RodajesFlujo::ubicacionMover/$1/$2');
+    $routes->POST('(:num)/ubicaciones/(:num)/setup-orden', 'RodajesFlujo::zonaSetupMover/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/imagen',     'RodajesFlujo::ubicacionImagen/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/fusionar',   'RodajesFlujo::ubicacionFusionar/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/borrar',     'RodajesFlujo::ubicacionBorrar/$1/$2');

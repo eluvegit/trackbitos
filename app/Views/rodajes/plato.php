@@ -133,15 +133,18 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         $esVideo ? $pre((string) ($e['camara_fps'] ?? ''), '', ' fps') : '',
                         $pre((string) ($e['camara_nd'] ?? ''), 'ND '),
                     ]));
-                    $focal = trim((string) ($e['camara_optica'] ?? ''));
-                    $luz   = trim((string) ($e['plano_esquema_iluminacion'] ?? '')) ?: ($esPlan && $g['setup'] ? trim((string) $g['setup']['luz']) : '');
+                    // Lo técnico que no tenga la toma lo pone su setup (lente, soporte, luz).
+                    $stp   = $setups[(int) ($e['setup_id'] ?? 0)] ?? null;
+                    $focal = trim((string) ($e['camara_optica'] ?? '')) ?: trim((string) ($stp['optica'] ?? ''));
+                    $sopor = trim((string) ($e['camara_soporte'] ?? '')) ?: trim((string) ($stp['soporte'] ?? ''));
+                    $luz   = trim((string) ($e['plano_esquema_iluminacion'] ?? '')) ?: trim((string) ($stp['luz'] ?? ''));
                     $fmt   = $formatos[$e['formato'] ?? ''][0] ?? '';
 
-                    // Visor: principal, referencias, moodboard y fotos de las variantes.
+                    // Visor: fotos de la toma, sus referencias y las fotos de sus variantes.
+                    // (El moodboard de la temática no: son fotos de otras tomas y confundían.)
                     $lb = [];
                     foreach ($fotos['t'][$eid] ?? [] as $m) if ($s = $img($m)) $lb[] = ['s' => $s, 'c' => 'Foto de la toma'];
                     foreach ($media[$eid] ?? [] as $r) if (!$r['video']) $lb[] = ['s' => $r['src'], 'c' => 'Referencia'];
-                    foreach (($e['situacion_id'] ? ($moodboard[$e['situacion_id']] ?? []) : []) as $m) if ($s = $img($m)) $lb[] = ['s' => $s, 'c' => 'Moodboard'];
                     $fotoPrin = $img($fotos['t'][$eid][0] ?? null);
                     $varFoto = [];
                     foreach ($vars as $va) {
@@ -151,11 +154,18 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     if (!$fotoPrin && $lb && !$varFoto) $fotoPrin = $lb[0]['s'];
                     $idxPrin = $fotoPrin ? (int) array_search($fotoPrin, array_column($lb, 's'), true) : -1;
 
+                    // Ficha técnica: siempre a la vista (con «—» si falta) para saber qué hay que rellenar.
+                    $tecnica = [
+                        'Setup'      => $stp['nombre'] ?? '',
+                        'Lente'      => $focal,
+                        'Soporte'    => $sopor,
+                        'Parámetros' => $params,
+                        'Luz'        => $luz,
+                    ];
                     $detalle = array_filter([
                         'Plano'               => ($e['camara_tipo_plano'] ?? ''),
                         'Ángulo'              => ($e['camara_angulo'] ?? ''),
                         'Movimiento'          => ($e['camara_movimiento'] ?? ''),
-                        'Soporte'             => ($e['camara_soporte'] ?? ''),
                         'Balance'             => ($e['camara_wb'] ?? ''),
                         'Hora / luz'          => ($e['plano_hora_dia'] ?? ''),
                         'Punto'               => $esPlan ? ($puntos[($e['punto_id'] ?? '')] ?? '') : '',
@@ -163,7 +173,6 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         'Acción'              => ($e['escena_accion'] ?? ''),
                         'Toma/s'              => ($e['escena_tomas'] ?? ''),
                         'Objetos'             => ($e['plano_objetos'] ?? ''),
-                        'Iluminación'         => ($e['plano_esquema_iluminacion'] ?? ''),
                         'Toma alternativa'    => ($e['plano_toma_alternativa'] ?? ''),
                         'Efecto especial'     => ($e['escena_efecto_especial'] ?? ''),
                         'Continuidad antes'   => ($e['escena_cont_previa'] ?? ''),
@@ -196,14 +205,23 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                             </div>
 
                             <div class="pt-det" hidden>
-                                <?php if (count($lb) > 1): ?>
+                                <dl class="pt-ficha">
+                                    <?php foreach ($tecnica as $k => $v): ?><dt><?= $k ?></dt><dd<?= $v === '' ? ' class="falta"' : '' ?>><?= $v === '' ? '—' : esc($v) ?></dd><?php endforeach; ?>
+                                    <dt>Props</dt><dd<?= $props ? '' : ' class="falta"' ?>><?= $props ? esc(implode(', ', $props)) : 'ninguno' ?></dd>
+                                </dl>
+                                <?php
+                                // Solo las fotos que no se ven ya en la fila: fotos extra de la toma y referencias.
+                                $extra = array_keys(array_filter($lb, static fn ($f, $i) => $i !== $idxPrin && !in_array($i, $varFoto, true), ARRAY_FILTER_USE_BOTH));
+                                ?>
+                                <?php if ($extra): ?>
+                                    <div class="pt-refs-h">Referencias</div>
                                     <div class="pt-refs">
-                                        <?php foreach ($lb as $i => $f): ?>
-                                            <button type="button" data-foto="<?= $i ?>" aria-label="<?= esc($f['c'], 'attr') ?>" style="background-image:url('<?= esc($f['s'], 'attr') ?>')"></button>
+                                        <?php foreach ($extra as $i): ?>
+                                            <button type="button" data-foto="<?= $i ?>" aria-label="<?= esc($lb[$i]['c'], 'attr') ?>" style="background-image:url('<?= esc($lb[$i]['s'], 'attr') ?>')"></button>
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
-                                <?= rod_campos($detalle, ['Acción', 'Iluminación', 'Notas', 'Diálogo', 'Objetos', 'Toma alternativa', 'Efecto especial', 'Continuidad antes', 'Continuidad después']) ?>
+                                <?= rod_campos($detalle, ['Acción', 'Notas', 'Diálogo', 'Objetos', 'Toma alternativa', 'Efecto especial', 'Continuidad antes', 'Continuidad después']) ?>
                                 <label class="pt-nota">Nota rápida
                                     <input type="text" class="fv-input pl-nota" maxlength="255" placeholder="ISO subido, repetir con luz…" value="<?= esc($e['toma_nota'] ?? '', 'attr') ?>">
                                 </label>

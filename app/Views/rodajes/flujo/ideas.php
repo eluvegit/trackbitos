@@ -53,7 +53,7 @@
             </div>
             <?php if ($bandeja): ?>
                 <div class="rf-ideas">
-                    <?php foreach ($bandeja as $i): ?><?= view('rodajes/flujo/_idea', ['i' => $i, 'href' => site_url("rodajes/$pid/revisar?idea=" . $i['id'])]) ?><?php endforeach; ?>
+                    <?php foreach ($bandeja as $i): ?><?= view('rodajes/flujo/_idea', ['i' => $i, 'href' => site_url("rodajes/$pid/tematicas?idea=" . $i['id'])], ['saveData' => false]) ?><?php endforeach; ?>
                 </div>
             <?php else: ?>
                 <div class="rf-vacio">La bandeja está vacía.</div>

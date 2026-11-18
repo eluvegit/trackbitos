@@ -104,9 +104,14 @@ class RodajesFlujo extends BaseController
         $items = $this->items((int) $sesion['id']);
         $por = ['' => []];
         foreach ($items as $i) $por[$i['situacion_id'] ?? ''][] = $i;
+        // Títulos de las tomas a las que ya pertenecen las ideas (como toma o como variante), para agruparlas.
+        $eids  = array_values(array_unique(array_filter(array_map(static fn ($i) => in_array($i['estado'], ['toma', 'variante'], true) ? (int) $i['escena_id'] : 0, $items))));
+        $tomas = [];
+        if ($eids) foreach ((new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->whereIn('id', $eids)->findAll() as $e) $tomas[(int) $e['id']] = rod_titulo_escena($e);
         return view('rodajes/flujo/tematicas', $this->base($proyecto, $sesion, 'tematicas') + [
             'situaciones' => (new SituacionModel())->where('sesion_id', $sesion['id'])->orderBy('orden', 'ASC')->findAll(),
             'porSit'      => $por,
+            'tomas'       => $tomas,
         ]);
     }
 
@@ -260,9 +265,26 @@ class RodajesFlujo extends BaseController
         if ($destino === 'descartar' && $item['estado'] === 'pendiente') {
             $model->update($item['id'], ['estado' => 'descartada']);
         }
+        // Foto por asignar a otra temática (m:0 = sin temática).
+        $mover = (string) $this->request->getPost('mover');
+        if ($destino === '' && str_starts_with($mover, 'm:') && $item['estado'] === 'pendiente') {
+            $sit = (int) substr($mover, 2);
+            if ($sit && !(new SituacionModel())->where('sesion_id', $sesion['id'])->find($sit)) return redirect()->to($volver . '#fotos');
+            $model->update($item['id'], ['situacion_id' => $sit ?: null]);
+            return redirect()->to($volver . '#fotos')->with('success', 'Foto movida de temática.');
+        }
         if ($destino === 'deshacer') {
+            $eid = (int) $item['escena_id'];
             if ($item['estado'] === 'variante' && $item['variante_id']) (new RodajesVarianteModel())->delete((int) $item['variante_id']);
             $model->update($item['id'], ['estado' => 'pendiente', 'escena_id' => null, 'variante_id' => null]);
+            // Soltar la foto principal: si la toma se queda sin nada (ni fotos, ni variantes, ni zona/franja/setup), sobra.
+            if ($item['estado'] === 'toma' && $eid) {
+                $e = $em->where('proyecto_id', (int) $pid)->find($eid);
+                $vacia = $e && !$e['ubicacion_id'] && !$e['franja'] && !$e['setup_id']
+                    && !$model->where('escena_id', $eid)->countAllResults()
+                    && !(new RodajesVarianteModel())->where('escena_id', $eid)->countAllResults();
+                if ($vacia) $em->delete($eid);
+            }
         }
         return redirect()->to($volver . '#fotos');
     }
@@ -359,6 +381,21 @@ class RodajesFlujo extends BaseController
         if (!$e || $t === '') return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         $em->skipValidation(true)->update($e['id'], ['escena_descripcion' => $t]);
         return $this->response->setJSON(['ok' => true, 'texto' => $t]);
+    }
+
+    /** La toma entera (con sus fotos y variantes) pasa a otra temática; 0 = sin temática. */
+    public function tomaTematica($pid, $eid)
+    {
+        [, $sesion] = $this->contexto($pid);
+        $em = new RodajesEscenaModel();
+        $e  = $sesion ? $em->where('proyecto_id', (int) $pid)->find((int) $eid) : null;
+        $sit = (int) $this->request->getPost('situacion_id');
+        $s  = $sit ? (new SituacionModel())->where('sesion_id', $sesion['id'] ?? 0)->find($sit) : null;
+        if (!$e || ($sit && !$s)) return redirect()->to(site_url("rodajes/$pid/revisar"));
+        $em->skipValidation(true)->update($e['id'], ['situacion_id' => $s ? $sit : null, 'escena_bloque' => $s['nombre'] ?? '']);
+        (new MoodboardItemModel())->where('escena_id', $e['id'])->whereIn('estado', ['toma', 'variante'])->set(['situacion_id' => $s ? $sit : null])->update();
+        return redirect()->to(site_url("rodajes/$pid/revisar?tematica=" . (int) ($e['situacion_id'] ?? 0)))
+            ->with('success', '«' . rod_titulo_escena($e) . '» movida a ' . ($s ? '«' . $s['nombre'] . '»' : 'sin temática') . '.');
     }
 
     /** POST JSON {texto} */
@@ -738,9 +775,9 @@ class RodajesFlujo extends BaseController
             $p = fn ($k, $n) => mb_substr(trim((string) $this->request->getPost($k)), 0, $n) ?: null;
             $m->update($s['id'], [
                 'nombre' => $p('nombre', 150) ?? $s['nombre'], 'optica' => $p('optica', 60), 'soporte' => $p('soporte', 30),
-                'fps' => $p('fps', 10), 'luz' => $p('luz', 255), 'notas' => trim((string) $this->request->getPost('notas')) ?: null,
+                'luz' => $p('luz', 255), 'notas' => trim((string) $this->request->getPost('notas')) ?: null,
             ]);
-            self::setupATomas((int) $s['id']); // óptica / fps / soporte → cámara de sus tomas
+            self::setupATomas((int) $s['id']); // óptica / soporte → cámara de sus tomas
         }
         return redirect()->to(site_url("rodajes/$pid/setups#s" . (int) $sid))->with('success', 'Setup guardado.');
     }
@@ -787,7 +824,40 @@ class RodajesFlujo extends BaseController
 
     // ---------- piezas compartidas ----------
 
-    /** Franja → zona (orden de ruta) → setup → escenas ordenadas por parecido de props. */
+    /** Setups en el orden propio de la zona (orden_setups); los que no están en él, detrás en el orden general. */
+    public static function setupsDeZona(array $setups, ?array $zona): array
+    {
+        $propio = $zona ? (json_decode((string) ($zona['orden_setups'] ?? ''), true) ?: []) : [];
+        if (!$propio) return $setups;
+        $pos = array_flip(array_map('intval', $propio));
+        $base = array_flip(array_map('intval', array_column($setups, 'id')));
+        usort($setups, static fn ($a, $b) => [$pos[(int) $a['id']] ?? PHP_INT_MAX, $base[(int) $a['id']]] <=> [$pos[(int) $b['id']] ?? PHP_INT_MAX, $base[(int) $b['id']]]);
+        return $setups;
+    }
+
+    /** Sube/baja un montaje dentro de una zona del plan (entre los setups que tienen tomas en esa zona). */
+    public function zonaSetupMover($pid, $zid)
+    {
+        $zm = new RodajesUbicacionModel();
+        $z  = $zm->where('proyecto_id', (int) $pid)->find((int) $zid);
+        $sid = (int) $this->request->getPost('setup_id');
+        $volver = redirect()->to(site_url("rodajes/$pid/plan" . ($this->request->getPost('imp') ? '?imp=1' : '')) . '#z' . (int) $zid);
+        if (!$z || !$sid) return $volver;
+        $todos = self::setupsDeZona((new RodajesSetupModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll(), $z);
+        $ids = array_map('intval', array_column($todos, 'id'));
+        $usados = array_map('intval', array_column((new RodajesEscenaModel())->select('setup_id')->distinct()->where('proyecto_id', (int) $pid)
+            ->where('ubicacion_id', $z['id'])->where('setup_id IS NOT NULL')->findAll(), 'setup_id'));
+        $vis = array_values(array_filter($ids, static fn ($id) => in_array($id, $usados, true)));
+        $i = array_search($sid, $vis, true);
+        $j = $i === false ? false : $i + ((int) $this->request->getPost('dir') < 0 ? -1 : 1);
+        if ($i === false || !isset($vis[$j])) return $volver;
+        [$vis[$i], $vis[$j]] = [$vis[$j], $vis[$i]];
+        $orden = array_merge($vis, array_values(array_diff($ids, $vis)));
+        $zm->update($z['id'], ['orden_setups' => json_encode($orden)]);
+        return $volver;
+    }
+
+    /** Franja → zona (orden de ruta) → setup (orden propio de la zona) → escenas ordenadas por parecido de props. */
     public static function construirPlan(int $pid, array $escenas, bool $soloImp = false): array
     {
         $zonas  = (new RodajesUbicacionModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
@@ -807,7 +877,7 @@ class RodajesFlujo extends BaseController
                 $ez = array_filter($ef, static fn ($e) => (int) ($e['ubicacion_id'] ?? 0) === (int) ($z['id'] ?? 0));
                 if (!$ez) continue;
                 $bloqueS = [];
-                foreach (array_merge($setups, [null]) as $s) {
+                foreach (array_merge(self::setupsDeZona($setups, $z), [null]) as $s) {
                     $es = array_values(array_filter($ez, static fn ($e) => (int) ($e['setup_id'] ?? 0) === (int) ($s['id'] ?? 0)));
                     if ($es) $bloqueS[] = ['setup' => $s, 'escenas' => self::ordenarProps($es)];
                 }
@@ -967,8 +1037,8 @@ class RodajesFlujo extends BaseController
     }
 
     /** Campos del setup que son también datos de cámara de sus tomas: van al unísono. */
-    public const SETUP_CAMARA = ['optica' => 'camara_optica', 'fps' => 'camara_fps', 'soporte' => 'camara_soporte'];
-    private const SETUP_LARGO = ['optica' => 60, 'fps' => 10, 'soporte' => 30];
+    public const SETUP_CAMARA = ['optica' => 'camara_optica', 'soporte' => 'camara_soporte']; // los fps van solo en cada toma
+    private const SETUP_LARGO = ['optica' => 60, 'soporte' => 30];
 
     /** Datos de cámara que impone un setup (solo los que tiene rellenos: uno vacío no borra lo de la toma). */
     public static function camaraDeSetup(?array $s): array
@@ -989,7 +1059,7 @@ class RodajesFlujo extends BaseController
     }
 
     /**
-     * Toma guardada con setup: lo que trae de óptica/fps/soporte y difiere del
+     * Toma guardada con setup: lo que trae de óptica/soporte y difiere del
      * setup se escribe en el setup (y pasa a sus demás tomas); luego la toma
      * recibe los valores del setup. Devuelve el post con la cámara ya alineada.
      */
@@ -1052,6 +1122,8 @@ class RodajesFlujo extends BaseController
             [$a, $b] = array_pad(explode('/', $cuenta), 2, null);
             $out[$k] = ['txt' => $txt, 'ico' => $ico, 'cuenta' => $cuenta, 'ok' => $b !== null && $b !== '' && (int) $b > 0 && $a === $b];
         }
+        // Ingesta muestra solo el total, pero está hecha cuando la bandeja queda vacía (todo con temática o descartado).
+        $out['ideas']['ok'] = $out['tematicas']['ok'];
         return $out;
     }
 

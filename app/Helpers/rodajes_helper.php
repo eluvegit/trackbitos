@@ -302,7 +302,7 @@ if (!function_exists('rod_setup_linea')) {
     function rod_setup_linea(?array $s): string
     {
         if (!$s) return '';
-        $tec = implode(' · ', array_filter([trim((string) $s['optica']), trim((string) $s['soporte']), is_numeric($s['fps']) ? $s['fps'] . ' fps' : trim((string) $s['fps'])]));
+        $tec = implode(' · ', array_filter([trim((string) $s['optica']), trim((string) $s['soporte'])]));
         if (rod_normalizar($tec) === rod_normalizar((string) $s['nombre'])) $tec = '';
         return esc(implode(' · ', array_filter([$tec, trim((string) $s['luz'])])));
     }

@@ -83,7 +83,7 @@ ob_start(); ?>
             <?php if ($ideas): ?>
                 <section class="fv-panel rd-idea">
                     <div class="rd-idea-fotos<?= count($ideas) > 1 ? ' varias' : '' ?>">
-                        <?php foreach ($ideas as $k => $i): ?><?= view('rodajes/flujo/_foto', ['i' => $i, 'clase' => 'xl']) ?><?php endforeach; ?>
+                        <?php foreach ($ideas as $k => $i): ?><?= view('rodajes/flujo/_foto', ['i' => $i, 'clase' => 'xl'], ['saveData' => false]) ?><?php endforeach; ?>
                     </div>
                     <?php foreach ($ideas as $i): ?>
                         <?php if ($i['origen'] === 'archivo' && trim((string) $i['nota']) !== '' && trim((string) $i['nota']) !== $titulo): ?><div class="rd-idea-nota"><?= esc($i['nota']) ?></div><?php endif; ?>
@@ -99,7 +99,7 @@ ob_start(); ?>
                             <?php $fv = $v['moodboard_item_id'] ? ($fotosVar[(int) $v['moodboard_item_id']] ?? null) : null; $ev = rod_estado_escena($v + ['formato' => $e['formato'] ?? null]); ?>
                             <li class="<?= $ev ?>" data-id="<?= (int) $v['id'] ?>">
                                 <?php if (count($e['variantes']) > 1): ?><i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i><?php endif; ?>
-                                <?php if ($fv): ?><?= view('rodajes/flujo/_foto', ['i' => $fv, 'clase' => 'grande']) ?><?php else: ?><span class="rf-foto grande vacia"><i class="bi bi-diagram-2"></i></span><?php endif; ?>
+                                <?php if ($fv): ?><?= view('rodajes/flujo/_foto', ['i' => $fv, 'clase' => 'grande'], ['saveData' => false]) ?><?php else: ?><span class="rf-foto grande vacia"><i class="bi bi-diagram-2"></i></span><?php endif; ?>
                                 <div>
                                     <div class="t"><?= esc($v['texto']) ?></div>
                                     <div class="m">
