@@ -70,9 +70,9 @@ class Rodajes extends BaseController
         if (!$model->save($payload)) {
             return redirect()->back()->withInput()->with('errors', $model->errors());
         }
-        return redirect()->to(site_url('rodajes'));
+        // Rodaje recién creado: se empieza por la ingesta (primer paso del flujo).
+        return redirect()->to(site_url('rodajes/' . $model->getInsertID() . '/ideas'))->with('success', 'Rodaje creado. Empieza subiendo las ideas.');
     }
-
 
     public function edit($id)
     {

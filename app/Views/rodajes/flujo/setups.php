@@ -34,7 +34,7 @@ foreach ($escenas as $e) {
         <?= view('rodajes/flujo/_asignar', [
             'pid' => $pid, 'tomas' => $sinSetup, 'portadas' => $portadas ?? [], 'destinos' => $destinos,
             'titulo' => count($sinSetup) . (count($sinSetup) === 1 ? ' toma sin setup' : ' tomas sin setup'),
-            'campo' => 'setup_id', 'icono' => 'bi-camera',
+            'campo' => 'setup_id', 'icono' => 'bi-camera', 'prefijo' => 's',
             'sinDestinos' => 'Aún no hay setups: crea el primero abajo.',
         ]) ?>
     <?php endif; ?>
@@ -47,11 +47,11 @@ foreach ($escenas as $e) {
             $donde = [];
             foreach ($ts as $t) $donde[($zonas[$t['ubicacion_id']]['nombre'] ?? 'Sin zona') . ($t['franja'] ? ' (' . mb_strtolower($franjas[$t['franja']] ?? '') . ')' : '')] = true;
             ?>
-            <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>"><?= csrf_field() ?>
+            <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>" data-ancla><?= csrf_field() ?>
                 <label class="rf-setup-img" title="<?= !empty($s['imagen']) ? 'Cambiar la foto del montaje' : 'Subir una foto del montaje' ?>">
                     <?php if ($imgSetup[$sid]): ?><img src="<?= base_url($imgSetup[$sid]) ?>" alt="" loading="lazy"><?php if (empty($s['imagen'])): ?><small>foto de una toma · toca para subir la del montaje</small><?php endif; ?>
                     <?php else: ?><span><i class="bi bi-camera"></i>Foto del montaje</span><?php endif; ?>
-                    <input type="file" name="imagen" accept="image/*" form="rfSetImg<?= $sid ?>" hidden onchange="this.form.submit()">
+                    <input type="file" name="imagen" accept="image/*" form="rfSetImg<?= $sid ?>" hidden onchange="this.form.requestSubmit()">
                 </label>
                 <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
                 <div class="rd-filas-f cam">
@@ -65,7 +65,30 @@ foreach ($escenas as $e) {
                 </div>
                 <div class="rd-campo"><label>Luz</label><input class="fv-input" name="luz" value="<?= esc((string) $s['luz'], 'attr') ?>" placeholder="Natural + reflector"></div>
                 <div class="rd-campo"><label>Notas</label><textarea class="fv-input" name="notas" rows="2" placeholder="Ajustes, perfil de color, qué revisar antes de disparar…"><?= esc((string) $s['notas']) ?></textarea></div>
-                <small class="t3"><?= $ts ? count($ts) . ' ' . (count($ts) === 1 ? 'toma' : 'tomas') . ': ' . esc(implode(' · ', array_keys($donde))) : 'Sin tomas todavía' ?></small>
+                <div class="rd-campo">
+                    <span class="rd-lbl">Tomas con este setup<?= $ts ? ' · ' . count($ts) : '' ?></span>
+                    <?php if ($ts): ?>
+                        <ul class="rf-tz">
+                            <?php foreach ($ts as $t): ?>
+                                <?php
+                                $pt = $portadas[(int) $t['id']] ?? null;
+                                $desc = trim((string) $t['escena_descripcion']);
+                                $tema = trim((string) $t['escena_bloque']);
+                                $info = array_filter([$desc !== '' ? $tema : '', $zonas[$t['ubicacion_id']]['nombre'] ?? '', $franjas[$t['franja']] ?? '']);
+                                ?>
+                                <li>
+                                    <span class="rf-foto mini"><?php if ($pt): ?><img src="<?= base_url($pt) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-film"></i><?php endif; ?></span>
+                                    <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><b class="rf-tnum">#<?= (int) $t['orden'] ?></b> <?= esc($desc !== '' ? $desc : ($tema !== '' ? $tema : 'Toma')) ?></a>
+                                    <small><?= $info ? esc(implode(' · ', $info)) : '&nbsp;' ?></small>
+                                    <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="setup_id" data-recargar aria-label="Cambiar de setup">
+                                        <option value="">Sin setup (a la bandeja)</option>
+                                        <?php foreach ($setups as $o): ?><option value="<?= (int) $o['id'] ?>" <?= (int) $o['id'] === $sid ? 'selected' : '' ?>><?= esc($o['nombre']) ?></option><?php endforeach; ?>
+                                    </select>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?><small class="t3">Ninguna todavía: márcalas arriba y toca este setup.</small><?php endif; ?>
+                </div>
                 <div class="rd-form-pie">
                     <?php if (!$ts): ?><button class="fv-btn fv-btn-sm fv-btn-peligro izq" formaction="<?= $url("setups/$sid/borrar") ?>" onclick="return confirm('¿Quitar el setup «<?= esc($s['nombre'], 'js') ?>»?')"><i class="bi bi-trash"></i></button><?php endif; ?>
                     <button class="fv-btn fv-btn-sm"><i class="bi bi-check-lg"></i>Guardar</button>
@@ -82,15 +105,6 @@ foreach ($escenas as $e) {
         <button class="fv-btn"><i class="bi bi-plus-lg"></i>Crear setup</button>
     </form>
 </div>
-<script>
-document.getElementById('rfSet').addEventListener('change', ev => {
-    const s = ev.target.closest('select[data-eid]');
-    if (!s) return;
-    fetch(document.getElementById('rfSet').dataset.asignar + '/' + s.dataset.eid + '/asignar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '<?= csrf_hash() ?>' },
-        body: JSON.stringify({ campo: s.dataset.campo, valor: s.value }),
-    }).then(r => { if (!r.ok) throw 0; location.reload(); }).catch(() => alert('No se ha podido guardar.'));
-});
-</script>
+<?= view('rodajes/flujo/_asignar_js') ?>
+<?= view('rodajes/flujo/_sin_recarga', ['raiz' => 'rfSet']) ?>
 <?= $this->endSection() ?>

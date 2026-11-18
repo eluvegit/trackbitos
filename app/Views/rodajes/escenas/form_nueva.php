@@ -127,10 +127,23 @@ ob_start(); ?>
 
             <?php $zonaNombre = (string) old('zona_nombre', $zonaInicial ?? ''); $puntoAct = (int) old('punto_id', $e['punto_id'] ?? 0); ?>
             <div class="rd-filas-f dos">
+                <?php
+                // Desplegable de zonas; «+ Nueva zona…» abre el campo de nombre (como el setup).
+                // El servidor sigue recibiendo zona_nombre y crea la zona si no existe.
+                $zonaExiste = false;
+                foreach ($zonas ?? [] as $z) if (rod_normalizar($z['nombre']) === rod_normalizar($zonaNombre)) { $zonaNombre = $z['nombre']; $zonaExiste = true; }
+                $zonaSel = $zonaNombre === '' ? '' : ($zonaExiste ? $zonaNombre : 'nuevo');
+                ?>
                 <div class="rd-campo">
-                    <label for="f_zona">Zona</label>
-                    <input class="fv-input" id="f_zona" name="zona_nombre" list="rfZonas" value="<?= esc($zonaNombre, 'attr') ?>" placeholder="Escribe y elige, o crea una nueva" autocomplete="off">
-                    <datalist id="rfZonas"><?php foreach ($zonas ?? [] as $z): ?><option value="<?= esc($z['nombre'], 'attr') ?>"><?php endforeach; ?></datalist>
+                    <label for="f_zona_sel">Zona <a class="fv-link rd-lbl-acc" href="<?= site_url('rodajes/' . (int) $proyecto['id'] . '/ubicaciones') ?>"><i class="bi bi-geo-alt"></i>Ubicaciones</a></label>
+                    <select class="form-select rd-sel" id="f_zona_sel">
+                        <option value="">Sin zona</option>
+                        <?php foreach ($zonas ?? [] as $z): ?><option value="<?= esc($z['nombre'], 'attr') ?>" <?= $zonaSel === $z['nombre'] ? 'selected' : '' ?>><?= esc($z['nombre']) ?></option><?php endforeach; ?>
+                        <option value="nuevo" <?= $zonaSel === 'nuevo' ? 'selected' : '' ?>>+ Nueva zona…</option>
+                    </select>
+                    <div id="rfZonaNueva" hidden>
+                        <input class="fv-input" id="f_zona" name="zona_nombre" value="<?= esc($zonaNombre, 'attr') ?>" placeholder="Nombre de la zona nueva" autocomplete="off" aria-label="Nombre de la zona nueva">
+                    </div>
                     <small class="rd-ayuda" id="rfZonaAyuda" data-nueva="Se creará la zona «%s» al guardar">Una zona amplia. El punto exacto lo marcas en Ubicaciones.</small>
                     <?php if (!empty($zonas)): ?>
                         <div class="rf-destinos rd-pick" id="rfZonaPick">
@@ -174,7 +187,7 @@ ob_start(); ?>
                     <select class="form-select rd-sel" id="f_setup" name="setup_id">
                         <option value="">Sin decidir</option>
                         <?php foreach ($setups ?? [] as $st): ?>
-                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
+                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" data-optica="<?= esc((string) $st['optica'], 'attr') ?>" data-fps="<?= esc((string) $st['fps'], 'attr') ?>" data-soporte="<?= esc((string) $st['soporte'], 'attr') ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
                         <?php endforeach; ?>
                         <option value="nuevo" <?= $setupAct === 'nuevo' ? 'selected' : '' ?>>+ Nuevo setup…</option>
                     </select>
@@ -244,12 +257,28 @@ ob_start(); ?>
                 <?= $input('plano_hora_dia', 'Clasificación de rodaje', 'con actores, atrezzo…') ?>
             </div>
             <div class="rd-filas-f" style="grid-template-columns: minmax(0, 1fr) 90px">
+                <?php
+                // Desplegable de temáticas; «+ Nueva…» abre el campo de nombre. El servidor
+                // sigue recibiendo escena_bloque y sincronizarBloques crea/asigna la temática.
+                $esTema = !empty($proyecto['sesion_id']);
+                $bloqueAct = (string) old('escena_bloque', $e['escena_bloque'] ?? (service('request')->getGet('bloque') ?? ''));
+                $bloqueSel = '';
+                if ($bloqueAct !== '') {
+                    $bloqueSel = 'nuevo';
+                    foreach ($bloques ?? [] as $b) if (mb_strtolower(trim($b)) === mb_strtolower(trim($bloqueAct))) { $bloqueAct = $b; $bloqueSel = $b; }
+                }
+                ?>
                 <div class="rd-campo">
-                    <label for="f_escena_bloque"><?= !empty($proyecto['sesion_id']) ? 'Temática' : 'Bloque' ?></label>
-                    <input class="fv-input" id="f_escena_bloque" name="escena_bloque" list="rdBloques"
-                           value="<?= esc((string) old('escena_bloque', $e['escena_bloque'] ?? (service('request')->getGet('bloque') ?? '')), 'attr') ?>"
-                           placeholder="Bloque narrativo">
-                    <datalist id="rdBloques"><?php foreach ($bloques ?? [] as $b): ?><option value="<?= esc($b, 'attr') ?>"><?php endforeach; ?></datalist>
+                    <label for="f_bloque_sel"><?= $esTema ? 'Temática' : 'Bloque' ?><?php if ($esTema): ?> <a class="fv-link rd-lbl-acc" href="<?= site_url("rodajes/$pid/tematicas") ?>"><i class="bi bi-collection"></i>Temáticas</a><?php endif; ?></label>
+                    <select class="form-select rd-sel" id="f_bloque_sel">
+                        <option value="">Sin <?= $esTema ? 'temática' : 'bloque' ?></option>
+                        <?php foreach ($bloques ?? [] as $b): ?><option value="<?= esc($b, 'attr') ?>" <?= $bloqueSel === $b ? 'selected' : '' ?>><?= esc($b) ?></option><?php endforeach; ?>
+                        <option value="nuevo" <?= $bloqueSel === 'nuevo' ? 'selected' : '' ?>><?= $esTema ? '+ Nueva temática…' : '+ Nuevo bloque…' ?></option>
+                    </select>
+                    <div id="rfBloqueNuevo" class="rf-campo-nuevo" <?= $bloqueSel === 'nuevo' ? '' : 'hidden' ?>>
+                        <input class="fv-input" id="f_escena_bloque" name="escena_bloque" value="<?= esc($bloqueAct, 'attr') ?>"
+                               placeholder="<?= $esTema ? 'Nombre de la temática nueva' : 'Nombre del bloque nuevo' ?>" autocomplete="off" aria-label="Nombre nuevo">
+                    </div>
                 </div>
                 <div class="rd-campo">
                     <label for="f_orden">Orden</label>
@@ -269,6 +298,7 @@ ob_start(); ?>
 
         <details class="fv-panel rd-sec" <?= $lleno($camposCamara) ? 'open' : '' ?>>
             <?= $sec('bi-camera', 'Cámara', $lleno($camposCamara)) ?>
+            <div class="rf-cam-setup" id="rfCamSetup" hidden><i class="bi bi-link-45deg"></i><span></span></div>
             <div class="rd-filas-f cam">
                 <?= $input('camara_modelo', 'Cámara', '', 'Sony a7IV') ?>
                 <?= $input('camara_optica', 'Óptica', '24mm') ?>
@@ -342,8 +372,21 @@ ob_start(); ?>
     const zona = document.getElementById('f_zona');
     const punto = document.getElementById('f_punto');
     const ayuda = document.getElementById('rfZonaAyuda');
-    const zonas = [...document.querySelectorAll('#rfZonas option')].map(o => norm(o.value));
+    const zonaSel = document.getElementById('f_zona_sel');
+    const zonaNueva = document.getElementById('rfZonaNueva');
+    const zonas = [...zonaSel.options].filter(o => o.value && o.value !== 'nuevo').map(o => norm(o.value));
     const textoAyuda = ayuda.textContent;
+    // El desplegable manda; el campo de texto (zona_nombre) solo se ve con «+ Nueva zona…».
+    const desdeSelect = () => {
+        const nueva = zonaSel.value === 'nuevo';
+        zonaNueva.hidden = !nueva;
+        if (!nueva) zona.value = zonaSel.value;
+        else if (zonas.includes(norm(zona.value))) zona.value = '';
+    };
+    zonaSel.addEventListener('change', () => {
+        desdeSelect(); pintarZona(); marcarZona();
+        if (zonaSel.value === 'nuevo') zona.focus();
+    });
     const pintarZona = () => {
         const z = norm(zona.value);
         let alguno = false;
@@ -357,11 +400,23 @@ ob_start(); ?>
     const marcarZona = () => zonaPick && zonaPick.querySelectorAll('.rf-destino').forEach(b => b.classList.toggle('on', norm(b.dataset.valor) === norm(zona.value)));
     zonaPick && zonaPick.addEventListener('click', ev => {
         const b = ev.target.closest('.rf-destino'); if (!b) return;
-        zona.value = b.classList.contains('on') ? '' : b.dataset.valor;
-        pintarZona(); marcarZona();
+        zonaSel.value = b.classList.contains('on') ? '' : b.dataset.valor;
+        desdeSelect(); pintarZona(); marcarZona();
     });
     zona.addEventListener('input', () => { pintarZona(); marcarZona(); });
+    zonaNueva.hidden = zonaSel.value !== 'nuevo';
     pintarZona(); marcarZona();
+
+    // Temática / bloque: el desplegable manda; el campo de texto solo con «+ Nueva…».
+    const bloqueSel = document.getElementById('f_bloque_sel');
+    const bloque = document.getElementById('f_escena_bloque');
+    const bloqueNuevo = document.getElementById('rfBloqueNuevo');
+    bloqueSel && bloqueSel.addEventListener('change', () => {
+        const nuevo = bloqueSel.value === 'nuevo';
+        bloqueNuevo.hidden = !nuevo;
+        bloque.value = nuevo ? '' : bloqueSel.value;
+        if (nuevo) bloque.focus();
+    });
 
     const setup = document.getElementById('f_setup');
     const pintarSetup = () => {
@@ -371,15 +426,41 @@ ob_start(); ?>
         linea.hidden = !(o && o.dataset.linea);
         linea.querySelector('.t2').textContent = o && o.dataset.linea ? o.dataset.linea : '';
     };
+    // Setup y cámara al unísono: elegir setup rellena óptica / fps / soporte; si
+    // luego los cambias aquí, al guardar se cambian en el setup y en sus tomas.
+    const camSetup = { optica: 'f_camara_optica', fps: 'f_camara_fps', soporte: 'f_camara_soporte' };
+    const avisoCam = document.getElementById('rfCamSetup');
+    const nTomasSetup = <?= json_encode((object) ($tomasPorSetup ?? [])) ?>;
+    const pintarCam = (rellenar) => {
+        const o = setup.selectedOptions[0];
+        const hay = setup.value !== '';
+        Object.entries(camSetup).forEach(([k, id]) => {
+            const c = document.getElementById(id);
+            if (!c) return;
+            c.closest('.rd-campo')?.classList.toggle('rf-de-setup', hay);
+            if (!rellenar || !o || !o.dataset[k]) return;
+            if (c.tagName === 'SELECT' && ![...c.options].some(x => x.value === o.dataset[k])) c.add(new Option(o.dataset[k], o.dataset[k]));
+            c.value = o.dataset[k];
+        });
+        if (!avisoCam) return;
+        avisoCam.hidden = !hay;
+        if (!hay) return;
+        const otras = Math.max(0, (nTomasSetup[setup.value] || 0) - (<?= (int) ($e['setup_id'] ?? 0) ?> === +setup.value ? 1 : 0));
+        avisoCam.querySelector('span').textContent = setup.value === 'nuevo'
+            ? 'Óptica, FPS y soporte serán los del setup nuevo.'
+            : 'Óptica, FPS y soporte van con el setup «' + o.textContent.trim() + '»: si los cambias aquí, cambian en el setup' + (otras ? ' y en sus otras ' + otras + (otras === 1 ? ' toma' : ' tomas') : '') + '.';
+    };
+    setup.addEventListener('change', () => pintarCam(true));
+
     const setupPick = document.getElementById('rfSetupPick');
     const marcarSetup = () => setupPick && setupPick.querySelectorAll('.rf-destino').forEach(b => b.classList.toggle('on', b.dataset.valor === setup.value));
     setupPick && setupPick.addEventListener('click', ev => {
         const b = ev.target.closest('.rf-destino'); if (!b) return;
         setup.value = b.classList.contains('on') ? '' : b.dataset.valor;
-        pintarSetup(); marcarSetup();
+        pintarSetup(); marcarSetup(); pintarCam(true);
     });
     setup.addEventListener('change', () => { pintarSetup(); marcarSetup(); if (setup.value === 'nuevo') document.getElementById('f_setup_nuevo').focus(); });
-    pintarSetup(); marcarSetup();
+    pintarSetup(); marcarSetup(); pintarCam(false);
 
     const lista = document.getElementById('rfVars');
     const nueva = document.getElementById('rfVarNueva');

@@ -14,6 +14,11 @@ foreach ($escenas as $e) {
 <div class="fv rd" id="rfUb" data-asignar="<?= $url('escenas') ?>">
     <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'Las zonas que han salido de las tomas. Ordena la ruta, sube una imagen guía de cada zona y toca sobre ella para marcar los puntos.'])) ?>
 
+    <form method="post" action="<?= $url('ubicaciones/crear') ?>" class="rf-nueva-zona"><?= csrf_field() ?>
+        <input class="fv-input" name="nombre" placeholder="Nuevo sitio (parque, bar de la esquina…)" autocomplete="off" required enterkeyhint="done">
+        <button class="fv-btn"><i class="bi bi-plus-lg"></i>Añadir sitio</button>
+    </form>
+
     <?php if ($zonas): ?>
         <div class="rf-ruta fv-panel">
             <b>Ruta</b>
@@ -32,8 +37,9 @@ foreach ($escenas as $e) {
         <?= view('rodajes/flujo/_asignar', [
             'pid' => $pid, 'tomas' => $sinZona, 'portadas' => $portadas ?? [], 'destinos' => $destinos,
             'titulo' => count($sinZona) . (count($sinZona) === 1 ? ' toma sin zona' : ' tomas sin zona'),
-            'campo' => 'ubicacion_id', 'icono' => 'bi-geo-alt',
-            'sinDestinos' => 'Aún no hay zonas: escribe la zona en cada toma (formulario) o créala abajo.',
+            'campo' => 'ubicacion_id', 'icono' => 'bi-geo-alt', 'prefijo' => 'z',
+            'sinDestinos' => '',
+            'crear' => ['url' => $url('ubicaciones/crear'), 'texto' => 'Nuevo sitio'],
         ]) ?>
     <?php endif; ?>
 
@@ -65,12 +71,12 @@ foreach ($escenas as $e) {
                         </div>
                         <div class="rf-guia-pie"><small>Toca la imagen para marcar un punto</small>
                             <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data"><?= csrf_field() ?>
-                                <label class="fv-link"><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.submit()">Cambiar imagen</label>
+                                <label class="fv-link"><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.requestSubmit()">Cambiar imagen</label>
                             </form>
                         </div>
                     <?php else: ?>
                         <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data" class="rf-guia-vacia"><?= csrf_field() ?>
-                            <label><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.submit()">
+                            <label><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.requestSubmit()">
                                 <i class="bi bi-map"></i><b>Sube una imagen guía</b><span>Captura de mapa, plano o foto del sitio. Luego tocas sobre ella para marcar los puntos.</span></label>
                         </form>
                     <?php endif; ?>
@@ -107,8 +113,9 @@ foreach ($escenas as $e) {
                                     <li>
                                         <?php $pt = $portadas[(int) $t['id']] ?? null; ?>
                                         <span class="rf-foto mini"><?php if ($pt): ?><img src="<?= base_url($pt) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-film"></i><?php endif; ?></span>
-                                        <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><?= esc(rod_titulo_escena($t)) ?></a>
-                                        <small><?= esc($franjas[$t['franja']] ?? 'Sin franja') ?></small>
+                                        <?php $desc = trim((string) $t['escena_descripcion']); $tema = trim((string) $t['escena_bloque']); ?>
+                                        <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><b class="rf-tnum">#<?= (int) $t['orden'] ?></b> <?= esc($desc !== '' ? $desc : ($tema !== '' ? $tema : 'Toma')) ?></a>
+                                        <small><?= $tema !== '' && $desc !== '' ? esc($tema) . ' · ' : '' ?><?= esc($franjas[$t['franja']] ?? 'Sin franja') ?></small>
                                         <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="punto_id" aria-label="Punto">
                                             <option value="">Sin punto</option>
                                             <?php foreach ($ps as $p): ?><option value="<?= (int) $p['id'] ?>" <?= (int) $t['punto_id'] === (int) $p['id'] ? 'selected' : '' ?>><?= esc($p['nombre']) ?></option><?php endforeach; ?>
@@ -139,22 +146,19 @@ foreach ($escenas as $e) {
         </section>
     <?php endforeach; ?>
 
-    <form method="post" action="<?= $url('ubicaciones/crear') ?>" class="rd-herr"><?= csrf_field() ?>
-        <input class="fv-input" name="nombre" placeholder="Nueva zona (cuando ves un sitio antes que la idea)" autocomplete="off" required>
-        <button class="fv-btn"><i class="bi bi-plus-lg"></i>Crear zona</button>
-    </form>
-
-    <form method="post" id="rfPin" class="rf-pin-form" hidden><?= csrf_field() ?>
+    <form method="post" id="rfPin" class="rf-pin-form" data-cerrar hidden><?= csrf_field() ?>
         <input type="hidden" name="x"><input type="hidden" name="y">
         <input class="fv-input" name="nombre" placeholder="Nombre del punto + Enter" autocomplete="off" required>
     </form>
 </div>
+<?= view('rodajes/flujo/_sin_recarga', ['raiz' => 'rfUb']) ?>
 <script>
 (() => {
-    const raiz = document.getElementById('rfUb');
-    const pin = document.getElementById('rfPin');
-    raiz.querySelectorAll('.rf-guia').forEach(g => g.addEventListener('click', ev => {
-        if (ev.target.closest('.rf-pin-form')) return;
+    // Tocar la imagen guía: formulario flotante para nombrar el punto.
+    document.addEventListener('click', ev => {
+        const g = ev.target.closest('#rfUb .rf-guia');
+        if (!g || ev.target.closest('.rf-pin-form')) return;
+        const pin = document.getElementById('rfPin');
         const r = g.getBoundingClientRect();
         const x = ((ev.clientX - r.left) / r.width * 100).toFixed(2);
         const y = ((ev.clientY - r.top) / r.height * 100).toFixed(2);
@@ -163,19 +167,12 @@ foreach ($escenas as $e) {
         pin.style.left = x + '%'; pin.style.top = y + '%';
         g.appendChild(pin);
         pin.hidden = false;
+        pin.classList.remove('rf-enviando');
         pin.nombre.value = '';
-        pin.nombre.focus();
-    }));
-    pin.nombre.addEventListener('keydown', e => { if (e.key === 'Escape') pin.hidden = true; });
-    raiz.addEventListener('change', ev => {
-        const s = ev.target.closest('select[data-eid]');
-        if (!s) return;
-        fetch(raiz.dataset.asignar + '/' + s.dataset.eid + '/asignar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '<?= csrf_hash() ?>' },
-            body: JSON.stringify({ campo: s.dataset.campo, valor: s.value }),
-        }).then(r => { if (!r.ok) throw 0; if (s.hasAttribute('data-recargar')) location.reload(); else s.classList.add('rf-ok'); })
-          .catch(() => alert('No se ha podido guardar.'));
+        pin.nombre.focus({ preventScroll: true });
+    });
+    document.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape' && ev.target.closest('#rfPin')) document.getElementById('rfPin').hidden = true;
     });
 })();
 </script>

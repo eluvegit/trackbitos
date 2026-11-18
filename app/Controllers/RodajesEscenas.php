@@ -373,6 +373,8 @@ class RodajesEscenas extends BaseController
             'idea'        => $idea,
             'refsIdeas'   => $refs,
             'zonaInicial' => $zonaInicial,
+            // nº de tomas por setup: el aviso «cambia también en sus otras N tomas»
+            'tomasPorSetup' => array_column(db_connect()->query('SELECT setup_id, COUNT(*) n FROM rodajes_escenas WHERE proyecto_id = ? AND setup_id IS NOT NULL AND deleted_at IS NULL GROUP BY setup_id', [$pid])->getResultArray(), 'n', 'setup_id'),
             'volver'      => $req->getGet('ubicacion') ? 'ubicaciones' : '',
         ];
     }
@@ -417,6 +419,8 @@ class RodajesEscenas extends BaseController
         } else {
             $post['setup_id'] = (int) $setup && (new RodajesSetupModel())->where('proyecto_id', $pid)->find((int) $setup) ? (int) $setup : null;
         }
+        // Setup y cámara al unísono (óptica / fps / soporte).
+        if ($post['setup_id']) $post = RodajesFlujo::alinearTomaConSetup($post, (int) $post['setup_id']);
 
         $post['franja'] = array_key_exists((string) ($post['franja'] ?? ''), RodajesEscenaModel::FRANJAS) ? $post['franja'] : null;
         $post['prioridad'] = ($post['prioridad'] ?? '') === 'opc' ? 'opc' : 'imp';

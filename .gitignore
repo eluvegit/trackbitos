@@ -56,3 +56,7 @@ silo-agente/config.json
 # fotos/vídeos reales del usuario — ni deben ir al repo (contenido personal)
 # ni son la fuente (el Maestro lo es). Ver docs/silo-ingesta-propagacion.md.
 /public/assets/silo/proxies/
+
+# Subidas de la copia local (sesiones, etc.): las reales están en producción.
+# Además PHP de ServBay las crea con permisos que git no puede leer.
+/public/uploads/

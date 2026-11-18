@@ -35,7 +35,8 @@ class RodajesEscenaModel extends Model
         'ubicacion_id', 'punto_id', 'setup_id', 'franja', 'prioridad', 'props',
     ];
 
-    public const FRANJAS = ['manana' => 'Mañana', 'mediodia' => 'Mediodía', 'tarde' => 'Tarde', 'dorada' => 'Hora dorada', 'noche' => 'Noche'];
+    /** Momento del día. 'dia' = de día sin concretar más (lo habitual al marcar en bloque). */
+    public const FRANJAS = ['dia' => 'Día', 'manana' => 'Mañana', 'mediodia' => 'Mediodía', 'tarde' => 'Tarde', 'dorada' => 'Hora dorada', 'noche' => 'Noche'];
     public const PRIORIDADES = ['imp' => 'Imprescindible', 'opc' => 'Si da tiempo'];
 
     /** Formato de la escena. NULL en BD = sin definir. */

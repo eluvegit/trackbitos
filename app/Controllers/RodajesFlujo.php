@@ -13,6 +13,7 @@ class RodajesFlujo extends BaseController
         'tematicas'   => ['Temáticas', 'bi-collection'],
         'revisar'     => ['Revisar ideas', 'bi-check2-square'],
         'ubicaciones' => ['Ubicaciones', 'bi-geo-alt'],
+        'momento'     => ['Momento', 'bi-sun'],
         'setups'      => ['Setups', 'bi-camera'],
         'plan'        => ['Plan', 'bi-list-ol'],
         'plato'       => ['Plató', 'bi-phone'],
@@ -450,8 +451,12 @@ class RodajesFlujo extends BaseController
     public function ubicacionCrear($pid)
     {
         $nombre = trim((string) $this->request->getPost('nombre'));
-        if ($nombre !== '') self::zonaId((int) $pid, $nombre);
-        return redirect()->to(site_url("rodajes/$pid/ubicaciones"));
+        $zid = $nombre !== '' ? self::zonaId((int) $pid, $nombre) : null;
+        // Desde la bandeja de asignar (fetch): devuelve el id para asignarle las tomas marcadas.
+        if ($this->request->isAJAX()) {
+            return $this->response->setStatusCode($zid ? 200 : 422)->setJSON(['ok' => (bool) $zid, 'id' => $zid]);
+        }
+        return redirect()->to(site_url("rodajes/$pid/ubicaciones" . ($zid ? "#z$zid" : '')));
     }
 
     public function ubicacionGuardar($pid, $zid)
@@ -551,13 +556,27 @@ class RodajesFlujo extends BaseController
         return redirect()->to(site_url("rodajes/$pid/ubicaciones" . ($z ? '#z' . $z['id'] : '')));
     }
 
-    /** POST JSON {campo: ubicacion_id|punto_id|setup_id, valor} */
+    /**
+     * POST JSON {campo: ubicacion_id|punto_id|setup_id|franja, valor}.
+     * franja admite las de FRANJAS, '' (sin momento) y 'dia_noche': la toma se
+     * desdobla en dos (esta de día + una copia de noche).
+     */
     public function asignar($pid, $eid)
     {
         $em = new RodajesEscenaModel();
         $e  = $em->where('proyecto_id', (int) $pid)->find((int) $eid);
         $in = $this->request->getJSON(true) ?: $this->request->getPost();
         $campo = (string) ($in['campo'] ?? '');
+        if ($e && $campo === 'franja') {
+            $f = (string) ($in['valor'] ?? '');
+            if ($f === 'dia_noche') {
+                $nid = $this->desdoblarDiaNoche((int) $pid, $e);
+                return $this->response->setJSON(['ok' => true, 'copia' => $nid]);
+            }
+            if ($f !== '' && !array_key_exists($f, RodajesEscenaModel::FRANJAS)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            $em->skipValidation(true)->update($e['id'], ['franja' => $f ?: null]);
+            return $this->response->setJSON(['ok' => true]);
+        }
         $valor = (int) ($in['valor'] ?? 0) ?: null;
         if (!$e || !in_array($campo, ['ubicacion_id', 'punto_id', 'setup_id'], true)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         $datos = [$campo => $valor];
@@ -567,11 +586,64 @@ class RodajesFlujo extends BaseController
         } elseif ($campo === 'punto_id' && $valor) {
             $p = (new RodajesPuntoModel())->find($valor);
             if (!$p || (int) $p['ubicacion_id'] !== (int) $e['ubicacion_id']) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
-        } elseif ($campo === 'setup_id' && $valor && !(new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($valor)) {
-            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        } elseif ($campo === 'setup_id' && $valor) {
+            $st = (new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($valor);
+            if (!$st) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            $datos += self::camaraDeSetup($st);
         }
         $em->skipValidation(true)->update($e['id'], $datos);
         return $this->response->setJSON(['ok' => true]);
+    }
+
+    /**
+     * «Día y noche»: la toma queda de día y se crea una copia de noche con los
+     * mismos datos (zona, punto, setup, formato, cámara…) y sus variantes, sin
+     * el estado del plató. La foto de referencia se copia como archivo propio
+     * (borrar la de una no deja a la otra sin imagen). Devuelve el id nuevo.
+     */
+    private function desdoblarDiaNoche(int $pid, array $e): int
+    {
+        $em = new RodajesEscenaModel();
+        $portada = self::portadas([$e])[(int) $e['id']] ?? null;
+        // El insert del modelo ya descarta lo que no está en allowedFields.
+        $sinCopiar = ['id', 'created_at', 'updated_at', 'deleted_at', 'proyecto_id', 'orden', 'franja',
+            'toma_estado', 'toma_estado_at', 'toma_nota', 'toma_estado_foto', 'toma_estado_foto_at'];
+        $nuevo = array_diff_key($e, array_flip($sinCopiar));
+        $ultima = $em->select('orden')->where('proyecto_id', $pid)->orderBy('orden', 'DESC')->first();
+        $nuevo += ['proyecto_id' => $pid, 'orden' => (int) ($ultima['orden'] ?? 0) + 1, 'franja' => 'noche'];
+
+        $db = db_connect();
+        $db->transStart();
+        $em->skipValidation(true)->update($e['id'], ['franja' => 'dia']);
+        $nid = (int) $em->skipValidation(true)->insert($nuevo);
+        $vm = new RodajesVarianteModel();
+        foreach ($vm->where('escena_id', $e['id'])->orderBy('orden', 'ASC')->findAll() as $v) {
+            $vm->insert(['escena_id' => $nid, 'texto' => $v['texto'], 'prioridad' => $v['prioridad'], 'orden' => $v['orden']]);
+        }
+        $db->transComplete();
+
+        if ($nid && $portada && is_file(FCPATH . $portada)) {
+            $dir = "images/rodajes/$nid";
+            if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
+            $destino = $dir . '/' . bin2hex(random_bytes(6)) . '_' . basename($portada);
+            if (@copy(FCPATH . $portada, FCPATH . $destino)) {
+                (new \App\Models\RodajesEscenaImagenModel())->insert(['escena_id' => $nid, 'categoria' => 'inspiracion', 'ruta' => $destino, 'titulo' => 'Referencia (de la toma de día)']);
+            }
+        }
+        return $nid;
+    }
+
+    // ---------- momento del día ----------
+
+    public function momento($pid)
+    {
+        [$proyecto, $sesion] = $this->contexto($pid);
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
+        $escenas = (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll();
+        return view('rodajes/flujo/momento', $this->base($proyecto, $sesion, 'momento') + [
+            'escenas' => $escenas, 'zonas' => array_column($this->zonas((int) $pid), null, 'id'),
+            'portadas' => self::portadas($escenas),
+        ]);
     }
 
     // ---------- setups ----------
@@ -645,6 +717,7 @@ class RodajesFlujo extends BaseController
                 'nombre' => $p('nombre', 150) ?? $s['nombre'], 'optica' => $p('optica', 60), 'soporte' => $p('soporte', 30),
                 'fps' => $p('fps', 10), 'luz' => $p('luz', 255), 'notas' => trim((string) $this->request->getPost('notas')) ?: null,
             ]);
+            self::setupATomas((int) $s['id']); // óptica / fps / soporte → cámara de sus tomas
         }
         return redirect()->to(site_url("rodajes/$pid/setups#s" . (int) $sid))->with('success', 'Setup guardado.');
     }
@@ -870,6 +943,52 @@ class RodajesFlujo extends BaseController
         return (int) $m->getInsertID();
     }
 
+    /** Campos del setup que son también datos de cámara de sus tomas: van al unísono. */
+    public const SETUP_CAMARA = ['optica' => 'camara_optica', 'fps' => 'camara_fps', 'soporte' => 'camara_soporte'];
+    private const SETUP_LARGO = ['optica' => 60, 'fps' => 10, 'soporte' => 30];
+
+    /** Datos de cámara que impone un setup (solo los que tiene rellenos: uno vacío no borra lo de la toma). */
+    public static function camaraDeSetup(?array $s): array
+    {
+        $out = [];
+        if ($s) foreach (self::SETUP_CAMARA as $sc => $ec) {
+            $v = trim((string) ($s[$sc] ?? ''));
+            if ($v !== '') $out[$ec] = $v;
+        }
+        return $out;
+    }
+
+    /** Copia los datos de cámara del setup a todas sus tomas. */
+    public static function setupATomas(int $setupId): void
+    {
+        $d = self::camaraDeSetup((new RodajesSetupModel())->find($setupId));
+        if ($d) (new RodajesEscenaModel())->skipValidation(true)->where('setup_id', $setupId)->set($d)->update();
+    }
+
+    /**
+     * Toma guardada con setup: lo que trae de óptica/fps/soporte y difiere del
+     * setup se escribe en el setup (y pasa a sus demás tomas); luego la toma
+     * recibe los valores del setup. Devuelve el post con la cámara ya alineada.
+     */
+    public static function alinearTomaConSetup(array $post, int $setupId): array
+    {
+        $sm = new RodajesSetupModel();
+        $s  = $sm->find($setupId);
+        if (!$s) return $post;
+        $cambio = [];
+        foreach (self::SETUP_CAMARA as $sc => $ec) {
+            if (!array_key_exists($ec, $post)) continue;
+            $v = trim((string) $post[$ec]);
+            if ($v !== '' && $v !== trim((string) $s[$sc])) $cambio[$sc] = mb_substr($v, 0, self::SETUP_LARGO[$sc]);
+        }
+        if ($cambio) {
+            $sm->update($s['id'], $cambio);
+            self::setupATomas((int) $s['id']);
+            $s = array_merge($s, $cambio);
+        }
+        return array_merge($post, self::camaraDeSetup($s));
+    }
+
     public static function nuevoSetup(int $pid, string $nombre): int
     {
         $m = new RodajesSetupModel();
@@ -895,7 +1014,7 @@ class RodajesFlujo extends BaseController
     public static function pasos(int $pid, ?array $sesion): array
     {
         $db = db_connect();
-        $c  = ['ideas' => '', 'tematicas' => '', 'revisar' => ''];
+        $c  = ['ideas' => '', 'tematicas' => '', 'revisar' => '', 'plan' => ''];
         if ($sesion) {
             $r = $db->query("SELECT COUNT(*) t, SUM(situacion_id IS NOT NULL OR estado = 'descartada') a, SUM(estado <> 'pendiente') r FROM moodboard_items WHERE sesion_id = ?", [$sesion['id']])->getRowArray();
             $t = (int) $r['t'];
@@ -903,11 +1022,12 @@ class RodajesFlujo extends BaseController
         }
         $e = $db->query('SELECT COUNT(*) t, SUM(ubicacion_id IS NOT NULL) u, SUM(setup_id IS NOT NULL) s, SUM(franja IS NOT NULL) f, ' . rod_sql_hechas() . ' h FROM rodajes_escenas WHERE proyecto_id = ? AND deleted_at IS NULL', [$pid])->getRowArray();
         $t = (int) $e['t'];
-        foreach (['ubicaciones' => 'u', 'setups' => 's', 'plan' => 'f', 'plato' => 'h'] as $k => $col) $c[$k] = $t ? (int) $e[$col] . "/$t" : '';
+        foreach (['ubicaciones' => 'u', 'momento' => 'f', 'setups' => 's', 'plato' => 'h'] as $k => $col) $c[$k] = $t ? (int) $e[$col] . "/$t" : '';
         $out = [];
         foreach (self::PASOS as $k => [$txt, $ico]) {
-            [$a, $b] = array_pad(explode('/', $c[$k]), 2, null);
-            $out[$k] = ['txt' => $txt, 'ico' => $ico, 'cuenta' => $c[$k], 'ok' => $b !== null && $b !== '' && (int) $b > 0 && $a === $b];
+            $cuenta = $c[$k] ?? ''; // pasos sin contador (plan) → vacío
+            [$a, $b] = array_pad(explode('/', $cuenta), 2, null);
+            $out[$k] = ['txt' => $txt, 'ico' => $ico, 'cuenta' => $cuenta, 'ok' => $b !== null && $b !== '' && (int) $b > 0 && $a === $b];
         }
         return $out;
     }

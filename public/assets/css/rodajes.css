@@ -797,3 +797,64 @@
 .rf-asa { cursor: grab; color: var(--fv-text-3); touch-action: none; flex: none; padding: 2px; }
 .rf-asa:hover { color: var(--fv-text); }
 .sortable-ghost { opacity: .4; }
+
+/* Ubicaciones: «Añadir sitio» arriba del todo (antes quedaba al final, invisible en móvil) */
+.rf-nueva-zona { display: flex; gap: 8px; margin: 0 0 14px; }
+.rf-nueva-zona .fv-input { flex: 1; min-width: 0; }
+.rf-nueva-zona .fv-btn { flex: none; }
+/* Tarjeta «+ Nuevo sitio» dentro de la bandeja de asignar */
+.rf-destino-nuevo { margin: 0; border-style: dashed; cursor: default; }
+.rf-destino-nuevo .img { color: var(--fv-accent); }
+.rf-destino-nuevo .fv-input { margin: 0 8px; width: calc(100% - 16px); font-size: 16px; }
+.rf-destino-nuevo .fv-btn { margin: 0 8px; justify-self: start; }
+.rf-destino-nuevo.on { border-color: var(--fv-accent); opacity: .6; pointer-events: none; }
+/* Bandeja de asignar agrupada por temática */
+.rf-tema { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--fv-border); }
+.rf-sec-h + .rf-tema { border-top: 0; padding-top: 0; }
+.rf-tema-h { display: flex; align-items: baseline; gap: 8px; }
+.rf-tema-h b { font-size: 14px; font-weight: 600; }
+.rf-tema-h small { color: var(--fv-text-3); font-size: 12px; }
+.rf-tema-h .der { margin-left: auto; }
+.rf-tnum { font-family: var(--fv-mono); font-weight: 500; }
+@media (max-width: 640px) { .rf-tema .rf-ideas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } }
+/* Ubicaciones sin recarga: formulario enviándose */
+#rfUb .rf-enviando { opacity: .55; pointer-events: none; }
+#rfUb .rf-zona.rf-hecho { animation: rf-hecho 0.9s ease-out; }
+@keyframes rf-hecho { from { box-shadow: 0 0 0 2px var(--fv-accent); } to { box-shadow: 0 0 0 2px transparent; } }
+#rfUb .rf-enviando-suave { opacity: .7; }
+
+/* Paso Momento: destinos compactos (icono + nombre), Día/Noche/Ambas destacados */
+.rf-momento .rf-destinos { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.rf-momento .rf-destino { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 10px; padding: 10px 12px; }
+.rf-momento .rf-destino .img { grid-row: 1 / span 2; aspect-ratio: auto; background: none; border: 0; font-size: 22px; }
+.rf-momento .rf-destino .t, .rf-momento .rf-destino small { padding: 0; }
+.rf-momento .rf-mom-dia .img { color: #f5a524; }
+.rf-momento .rf-mom-noche .img { color: #8b9cff; }
+.rf-momento .rf-mom-ambas .img { color: var(--fv-accent); }
+.rf-momento .rf-mom-fina { opacity: .85; }
+.rf-momento .rf-mom-fina .img { font-size: 18px; }
+@media (max-width: 640px) {
+    .rf-momento .rf-destinos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .rf-momento .rf-destino { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; padding: 8px 4px; }
+    .rf-momento .rf-destino .img { grid-row: auto; }
+}
+.rf-mom-grupo .rf-mom-ico { font-size: 18px; color: var(--fv-text-3); }
+#f-dia .rf-mom-ico { color: #f5a524; }
+#f-noche .rf-mom-ico { color: #8b9cff; }
+.rf-mom-grupo .rf-tz li .rd-sel { max-width: 150px; }
+
+/* Aviso flotante «3 tomas → X · Ver» y destello del destino (todos los pasos) */
+.rf-hecho { animation: rf-hecho 0.9s ease-out; }
+.rf-aviso { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 1080; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: var(--fv-r-md); background: var(--fv-panel); border: 1px solid var(--fv-accent); color: var(--fv-text); font-size: 13.5px; box-shadow: 0 6px 24px rgb(0 0 0 / .35); }
+.rf-aviso button { border: 0; background: none; color: var(--fv-accent); font-weight: 600; padding: 2px 4px; cursor: pointer; }
+.rf-setup .rf-tz li .rd-sel { max-width: 150px; }
+/* Enlace pequeño al lado de la etiqueta de un campo (Zona → Ubicaciones) */
+.rd-lbl-acc { margin-left: 8px; font-size: 12px; font-weight: 400; display: inline-flex; gap: 4px; align-items: center; }
+#rfZonaNueva { margin-top: 6px; }
+.rf-campo-nuevo { margin-top: 6px; }
+
+/* Setup y cámara al unísono */
+.rf-cam-setup { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 8px 10px; border-radius: var(--fv-r-md); background: rgb(245 165 36 / .06); border: 1px solid rgb(245 165 36 / .3); font-size: 12.5px; color: var(--fv-text-2); }
+.rf-cam-setup .bi { color: var(--fv-accent); font-size: 15px; }
+.rd-campo.rf-de-setup > label { color: var(--fv-accent); }
+.rd-campo.rf-de-setup > label::after { content: " · setup"; font-weight: 400; opacity: .8; }

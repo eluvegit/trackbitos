@@ -415,7 +415,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/sincronizar',   'Rodajes::sincronizar/$1');
 
     // ---- Modo plató (móvil): marcar tomas hechas/repetir/descartadas ----
-    // ---- Flujo de stock: ideas → temáticas → revisar → ubicaciones → setups → plan ----
+    // ---- Flujo de stock: ideas → temáticas → revisar → ubicaciones → momento → setups → plan ----
     $routes->GET('(:num)/ideas',                          'RodajesFlujo::ideas/$1');
     $routes->POST('(:num)/ideas/subir',                   'RodajesFlujo::ideasSubir/$1');
     $routes->POST('(:num)/ideas/texto',                   'RodajesFlujo::ideasTexto/$1');
@@ -444,6 +444,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/ubicaciones/(:num)/punto',      'RodajesFlujo::puntoCrear/$1/$2');
     $routes->POST('(:num)/puntos/(:num)/borrar',          'RodajesFlujo::puntoBorrar/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/asignar',        'RodajesFlujo::asignar/$1/$2');
+    $routes->GET('(:num)/momento',                        'RodajesFlujo::momento/$1');
     $routes->GET('(:num)/setups',                         'RodajesFlujo::setups/$1');
     $routes->POST('(:num)/setups/crear',                  'RodajesFlujo::setupCrear/$1');
     $routes->POST('(:num)/setups/(:num)/guardar',         'RodajesFlujo::setupGuardar/$1/$2');
