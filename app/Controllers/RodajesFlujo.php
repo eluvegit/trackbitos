@@ -16,6 +16,7 @@ class RodajesFlujo extends BaseController
         'ubicaciones' => ['Ubicaciones', 'bi-geo-alt'],
         'momento'     => ['Momento', 'bi-sun'],
         'setups'      => ['Setups', 'bi-camera'],
+        'props'       => ['Props', 'bi-box-seam'],
         'plan'        => ['Plan', 'bi-list-ol'],
         'plato'       => ['Plató', 'bi-phone'],
     ];
@@ -340,6 +341,7 @@ class RodajesFlujo extends BaseController
         foreach (['situacion_id', 'escena_bloque', 'ubicacion_id', 'escena_ubicacion', 'punto_id', 'setup_id', 'franja', 'formato', 'props'] as $c) $nuevo[$c] = $e[$c];
         foreach (['toma_estado', 'toma_estado_at', 'toma_estado_foto', 'toma_estado_foto_at'] as $c) $nuevo[$c] = $v[$c];
         $nuevo['prioridad'] = $v['prioridad'];
+        $nuevo['props'] = ($p = rod_props_variante($e, $v)) ? json_encode($p, JSON_UNESCAPED_UNICODE) : null;
         $nid = (int) $em->insert($nuevo);
         if ($v['moodboard_item_id']) (new MoodboardItemModel())->update((int) $v['moodboard_item_id'], ['estado' => 'toma', 'escena_id' => $nid, 'variante_id' => null]);
         (new RodajesVarianteModel())->delete($v['id']);
@@ -359,7 +361,7 @@ class RodajesFlujo extends BaseController
         $db->transStart();
         $foto = $mm->where('escena_id', $e['id'])->where('estado', 'toma')->first();
         $vid = $this->nuevaVariante((int) $d['id'], mb_substr(rod_titulo_escena($e), 0, 255), $foto['id'] ?? null);
-        $vm->update($vid, ['prioridad' => $e['prioridad'] ?: 'imp']);
+        $vm->update($vid, ['prioridad' => $e['prioridad'] ?: 'imp', 'props' => ($x = rod_props_extra($d, $e)) ? json_encode($x, JSON_UNESCAPED_UNICODE) : null]);
         if ($foto) $mm->update($foto['id'], ['estado' => 'variante', 'escena_id' => $d['id'], 'variante_id' => $vid]);
         $mm->where('escena_id', $e['id'])->where('estado', 'toma')->set(['escena_id' => $d['id'], 'estado' => 'variante'])->update();
         $orden = $vm->where('escena_id', $d['id'])->countAllResults();
@@ -623,12 +625,13 @@ class RodajesFlujo extends BaseController
                 return $this->response->setJSON(['ok' => true, 'copia' => $nid]);
             }
             if ($f !== '' && !array_key_exists($f, RodajesEscenaModel::FRANJAS)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
-            $em->skipValidation(true)->update($e['id'], ['franja' => $f ?: null]);
+            $em->skipValidation(true)->update($e['id'], ['franja' => $f ?: null, 'orden_rodaje' => null]);
             return $this->response->setJSON(['ok' => true]);
         }
         $valor = (int) ($in['valor'] ?? 0) ?: null;
         if (!$e || !in_array($campo, ['ubicacion_id', 'punto_id', 'setup_id'], true)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         $datos = [$campo => $valor];
+        if ($campo !== 'punto_id') $datos['orden_rodaje'] = null;   // cambia de grupo en el plan
         if ($campo === 'ubicacion_id') {
             $z = $valor ? (new RodajesUbicacionModel())->where('proyecto_id', (int) $pid)->find($valor) : null;
             $datos = ['ubicacion_id' => $z['id'] ?? null, 'escena_ubicacion' => $z['nombre'] ?? '', 'punto_id' => null];
@@ -656,7 +659,7 @@ class RodajesFlujo extends BaseController
         $portada = self::portadas([$e])[(int) $e['id']] ?? null;
         // El insert del modelo ya descarta lo que no está en allowedFields.
         $sinCopiar = ['id', 'created_at', 'updated_at', 'deleted_at', 'proyecto_id', 'orden', 'franja',
-            'toma_estado', 'toma_estado_at', 'toma_nota', 'toma_estado_foto', 'toma_estado_foto_at'];
+            'toma_estado', 'toma_estado_at', 'toma_nota', 'toma_estado_foto', 'toma_estado_foto_at', 'orden_rodaje'];
         $nuevo = array_diff_key($e, array_flip($sinCopiar));
         $ultima = $em->select('orden')->where('proyecto_id', $pid)->orderBy('orden', 'DESC')->first();
         $nuevo += ['proyecto_id' => $pid, 'orden' => (int) ($ultima['orden'] ?? 0) + 1, 'franja' => 'noche'];
@@ -666,12 +669,35 @@ class RodajesFlujo extends BaseController
         $em->skipValidation(true)->update($e['id'], ['franja' => 'dia']);
         $nid = (int) $em->skipValidation(true)->insert($nuevo);
         $vm = new RodajesVarianteModel();
+        $mm = new MoodboardItemModel();
+        // Las fotos (ideas del moodboard) de la toma y de sus variantes se clonan con archivo propio:
+        // así la copia de noche tiene su foto en todas partes y borrar una no deja a la otra sin imagen.
+        $clonar = function (array $i, array $cambios) use ($mm): void {
+            $fila = array_intersect_key($i, array_flip(['sesion_id', 'situacion_id', 'origen', 'ruta_archivo', 'url_externa', 'nota', 'orden', 'buscar_ref', 'estado']));
+            if ($i['origen'] === 'archivo' && $i['ruta_archivo'] && is_file(FCPATH . $i['ruta_archivo'])) {
+                $destino = dirname($i['ruta_archivo']) . '/' . bin2hex(random_bytes(4)) . '_' . basename($i['ruta_archivo']);
+                if (@copy(FCPATH . $i['ruta_archivo'], FCPATH . $destino)) $fila['ruta_archivo'] = $destino;
+            }
+            $mm->skipValidation(true)->insert($cambios + $fila);
+        };
+        $conFoto = false;
+        foreach ($mm->where('escena_id', $e['id'])->where('estado', 'toma')->orderBy('id', 'ASC')->findAll() as $i) {
+            $clonar($i, ['escena_id' => $nid, 'variante_id' => null]);
+            $conFoto = true;
+        }
         foreach ($vm->where('escena_id', $e['id'])->orderBy('orden', 'ASC')->findAll() as $v) {
-            $vm->insert(['escena_id' => $nid, 'texto' => $v['texto'], 'prioridad' => $v['prioridad'], 'orden' => $v['orden']]);
+            $vm->insert(['escena_id' => $nid, 'texto' => $v['texto'], 'prioridad' => $v['prioridad'], 'props' => $v['props'] ?? null, 'orden' => $v['orden']]);
+            $nv = (int) $vm->getInsertID();
+            $iv = $v['moodboard_item_id'] ? $mm->find((int) $v['moodboard_item_id']) : null;
+            if ($iv) {
+                $clonar($iv, ['escena_id' => $nid, 'variante_id' => $nv]);
+                $vm->update($nv, ['moodboard_item_id' => (int) $mm->getInsertID()]);
+            }
         }
         $db->transComplete();
 
-        if ($nid && $portada && is_file(FCPATH . $portada)) {
+        // Sin foto en el moodboard (toma creada a mano): se copia su primera imagen como referencia.
+        if ($nid && !$conFoto && $portada && is_file(FCPATH . $portada)) {
             $dir = "images/rodajes/$nid";
             if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
             $destino = $dir . '/' . bin2hex(random_bytes(6)) . '_' . basename($portada);
@@ -793,6 +819,132 @@ class RodajesFlujo extends BaseController
 
     // ---------- plan ----------
 
+    // ---------- props ----------
+
+    public function props($pid)
+    {
+        [$proyecto, $sesion] = $this->contexto($pid);
+        if (!$proyecto) return redirect()->to(site_url('rodajes'));
+        $escenas = self::conVariantes((new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll());
+        return view('rodajes/flujo/props', $this->base($proyecto, $sesion, 'props') + [
+            'escenas'  => $escenas,
+            'lista'    => self::propsConocidos((int) $pid, $sesion ? (int) $sesion['id'] : null),
+            'portadas' => self::portadas($escenas),
+            'fotos'    => self::fotosDeTomas(array_column($escenas, 'id')),
+        ]);
+    }
+
+    /** POST JSON {tipo: t|v, id, prop, on} — pone o quita un prop a una toma o a una variante (lo que lleva además de su toma). */
+    public function propMarcar($pid)
+    {
+        $in   = $this->request->getJSON(true) ?: $this->request->getPost();
+        $prop = mb_substr(trim((string) ($in['prop'] ?? '')), 0, 80);
+        $id   = (int) ($in['id'] ?? 0);
+        $on   = !empty($in['on']);
+        $em   = new RodajesEscenaModel();
+        if ($prop === '' || !$id) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        if (($in['tipo'] ?? '') === 'v') {
+            $vm = new RodajesVarianteModel();
+            $fila = $vm->find($id);
+            $e = $fila ? $em->where('proyecto_id', (int) $pid)->find((int) $fila['escena_id']) : null;
+            if (!$e) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            $vm->update($id, ['props' => self::propsCambiar(rod_props($fila), $prop, $on)]);
+        } else {
+            $e = $em->where('proyecto_id', (int) $pid)->find($id);
+            if (!$e) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            $em->skipValidation(true)->update($id, ['props' => self::propsCambiar(rod_props($e), $prop, $on)]);
+            // Si la toma ya lo lleva, sobra como extra en sus variantes.
+            if ($on) {
+                $vm = new RodajesVarianteModel();
+                foreach ($vm->where('escena_id', $id)->findAll() as $v) {
+                    $p = rod_props($v);
+                    if (in_array(rod_normalizar($prop), array_map('rod_normalizar', $p), true)) $vm->update($v['id'], ['props' => self::propsCambiar($p, $prop, false)]);
+                }
+            }
+        }
+        if ($on) $this->propAlEquipo((int) $pid, $prop);
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    /** POST {prop} — añade props (separados por comas) a la lista: el «Qué llevar» de la sesión. */
+    public function propNuevo($pid)
+    {
+        foreach (explode(',', (string) $this->request->getPost('prop')) as $p) {
+            $p = mb_substr(trim($p), 0, 80);
+            if ($p !== '') $this->propAlEquipo((int) $pid, $p);
+        }
+        return redirect()->to(site_url("rodajes/$pid/props"));
+    }
+
+    /**
+     * POST JSON — edición rápida desde el plató: título, setup, cámara, luz, notas,
+     * props de la toma y extras de cada variante ({variantes: {id: [props]}}).
+     */
+    public function tomaRapida($pid, $eid)
+    {
+        $em = new RodajesEscenaModel();
+        $e  = $em->where('proyecto_id', (int) $pid)->find((int) $eid);
+        $in = $this->request->getJSON(true) ?: [];
+        if (!$e) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        $txt = static fn ($k, $n = 255) => mb_substr(trim((string) ($in[$k] ?? '')), 0, $n);
+        $limpiar = static function ($l): array {
+            $out = [];
+            foreach ((array) $l as $p) { $p = mb_substr(trim((string) $p), 0, 80); if ($p !== '') $out[rod_normalizar($p)] ??= $p; }
+            return array_values($out);
+        };
+        $datos = [
+            'escena_descripcion'        => $txt('titulo'),
+            'camara_optica'             => $txt('optica', 100),
+            'camara_soporte'            => $txt('soporte', 100),
+            'camara_apertura'           => $txt('apertura', 50),
+            'camara_velocidad'          => $txt('velocidad', 50),
+            'camara_iso'                => $txt('iso', 50),
+            'camara_fps'                => $txt('fps', 50),
+            'camara_nd'                 => $txt('nd', 50),
+            'plano_esquema_iluminacion' => $txt('luz', 2000),
+            'plano_notas'               => $txt('notas', 5000),
+        ];
+        $sid = (int) ($in['setup_id'] ?? 0) ?: null;
+        $st  = $sid ? (new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($sid) : null;
+        $datos['setup_id'] = $st['id'] ?? null;
+        // Setup nuevo: lo que se deje vacío de lente/soporte lo pone el setup.
+        if ((int) ($st['id'] ?? 0) !== (int) $e['setup_id']) $datos['orden_rodaje'] = null;
+        if ($st && (int) $st['id'] !== (int) $e['setup_id']) {
+            foreach (self::camaraDeSetup($st) as $c => $v) if (($datos[$c] ?? '') === '') $datos[$c] = $v;
+        }
+        $props = $limpiar($in['props'] ?? []);
+        $datos['props'] = $props ? json_encode($props, JSON_UNESCAPED_UNICODE) : null;
+        $em->skipValidation(true)->update($e['id'], $datos);
+
+        $vm = new RodajesVarianteModel();
+        $deToma = array_map('rod_normalizar', $props);
+        foreach ((array) ($in['variantes'] ?? []) as $vid => $lista) {
+            $v = $vm->where('escena_id', $e['id'])->find((int) $vid);
+            if (!$v) continue;
+            $extra = array_values(array_filter($limpiar($lista), static fn ($p) => !in_array(rod_normalizar($p), $deToma, true)));
+            $vm->update($v['id'], ['props' => $extra ? json_encode($extra, JSON_UNESCAPED_UNICODE) : null]);
+        }
+        foreach ($props as $p) $this->propAlEquipo((int) $pid, $p);
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    private static function propsCambiar(array $props, string $prop, bool $on): ?string
+    {
+        $k = rod_normalizar($prop);
+        $props = array_values(array_filter($props, static fn ($p) => rod_normalizar($p) !== $k));
+        if ($on) $props[] = $prop;
+        return $props ? json_encode($props, JSON_UNESCAPED_UNICODE) : null;
+    }
+
+    private function propAlEquipo(int $pid, string $prop): void
+    {
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        if (!$proyecto || !$proyecto['sesion_id']) return;
+        $eq = new SesionEquipoModel();
+        $ya = array_map(static fn ($r) => rod_normalizar($r['item']), $eq->where('sesion_id', $proyecto['sesion_id'])->where('tipo', 'props')->findAll());
+        if (!in_array(rod_normalizar($prop), $ya, true)) $eq->insert(['sesion_id' => $proyecto['sesion_id'], 'item' => $prop, 'tipo' => 'props', 'orden' => 999]);
+    }
+
     public function plan($pid)
     {
         [$proyecto, $sesion] = $this->contexto($pid);
@@ -804,7 +956,67 @@ class RodajesFlujo extends BaseController
             'soloImp' => $soloImp,
             'puntos'  => $this->puntosDe((int) $pid),
             'fotos'   => self::fotosDeTomas(array_column($escenas, 'id')),
+            'portadas' => self::portadas($escenas),
         ]);
+    }
+
+    /**
+     * POST multipart {eid, vid?, foto} — foto para una toma o variante que no tiene
+     * (desde el cuadrado vacío del Plan: subir, arrastrar o pegar). Si su idea era
+     * solo texto o enlace, esa misma idea pasa a ser la foto (el texto queda de nota).
+     */
+    public function planFoto($pid)
+    {
+        [$proyecto, $sesion] = $this->contexto($pid);
+        $e = $proyecto ? (new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->find((int) $this->request->getPost('eid')) : null;
+        $f = $this->request->getFile('foto');
+        if (!$e || !$f || !$f->isValid() || $f->hasMoved() || !str_starts_with((string) $f->getMimeType(), 'image/')) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Imagen no válida']);
+        }
+        $vm = new RodajesVarianteModel();
+        $vid = (int) $this->request->getPost('vid');
+        $v = $vid ? $vm->where('escena_id', $e['id'])->find($vid) : null;
+        if ($vid && !$v) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+
+        if (!$sesion) {
+            // Sin sesión no hay moodboard: la foto de la toma va a sus imágenes (las variantes necesitan sesión).
+            if ($v) return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Vincula una sesión para poner fotos a las variantes']);
+            $dir = 'images/rodajes/' . (int) $e['id'];
+            if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
+            $nombre = $f->getRandomName();
+            $f->move(FCPATH . $dir, $nombre);
+            (new \App\Models\RodajesEscenaImagenModel())->insert(['escena_id' => $e['id'], 'categoria' => 'inspiracion', 'ruta' => "$dir/$nombre", 'titulo' => 'Foto de la toma']);
+            return $this->response->setJSON(['ok' => true, 'url' => base_url("$dir/$nombre")]);
+        }
+
+        $sid = (int) $sesion['id'];
+        $dir = "uploads/sesiones/$sid";
+        if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
+        $nombre = $f->getRandomName();
+        $f->move(FCPATH . $dir, $nombre);
+        $ruta = "$dir/$nombre";
+
+        $mm = new MoodboardItemModel();
+        if ($v) {
+            $it = $v['moodboard_item_id'] ? $mm->find((int) $v['moodboard_item_id']) : null;
+        } else {
+            $it = null;
+            foreach ($mm->where('escena_id', $e['id'])->where('estado', 'toma')->orderBy('id', 'ASC')->findAll() as $i) {
+                if ($i['origen'] !== 'archivo') { $it ??= $i; continue; }
+                $it = null; break;   // ya tiene foto: se añade otra
+            }
+        }
+        if ($it && $it['origen'] !== 'archivo') {
+            $mm->skipValidation(true)->update($it['id'], ['origen' => 'archivo', 'ruta_archivo' => $ruta, 'nota' => $it['nota'] ?: ($it['url_externa'] ?? null)]);
+        } else {
+            $mm->skipValidation(true)->insert([
+                'sesion_id' => $sid, 'situacion_id' => $e['situacion_id'] ?? null, 'origen' => 'archivo', 'ruta_archivo' => $ruta,
+                'orden' => $mm->where('sesion_id', $sid)->countAllResults(), 'estado' => $v ? 'variante' : 'toma',
+                'escena_id' => $e['id'], 'variante_id' => $v['id'] ?? null,
+            ]);
+            if ($v) $vm->update($v['id'], ['moodboard_item_id' => (int) $mm->getInsertID()]);
+        }
+        return $this->response->setJSON(['ok' => true, 'url' => base_url($ruta)]);
     }
 
     /** POST JSON {estado, parte} — estado de una variante en el plató. */
@@ -857,6 +1069,47 @@ class RodajesFlujo extends BaseController
         return $volver;
     }
 
+    /** POST JSON {tipo: t|v, id} — alterna imprescindible / si da tiempo de una toma o variante. Devuelve la nueva. */
+    public function prioridad($pid)
+    {
+        $in = $this->request->getJSON(true) ?: [];
+        $id = (int) ($in['id'] ?? 0);
+        $em = new RodajesEscenaModel();
+        if (($in['tipo'] ?? '') === 'v') {
+            $vm = new RodajesVarianteModel();
+            $v = $vm->find($id);
+            if (!$v || !$em->where('proyecto_id', (int) $pid)->find((int) $v['escena_id'])) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            $nueva = $v['prioridad'] === 'opc' ? 'imp' : 'opc';
+            $vm->update($id, ['prioridad' => $nueva]);
+        } else {
+            $e = $em->where('proyecto_id', (int) $pid)->find($id);
+            if (!$e) return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+            $nueva = ($e['prioridad'] ?? 'imp') === 'opc' ? 'imp' : 'opc';
+            $em->skipValidation(true)->update($id, ['prioridad' => $nueva]);
+        }
+        return $this->response->setJSON(['ok' => true, 'prioridad' => $nueva]);
+    }
+
+    /** POST {dir: -1|1} — sube o baja una toma dentro de su setup en el plan (orden a mano). */
+    public function tomaRodajeMover($pid, $eid)
+    {
+        $dir = (int) $this->request->getPost('dir') < 0 ? -1 : 1;
+        $escenas = self::conVariantes((new RodajesEscenaModel())->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->findAll());
+        foreach (self::construirPlan((int) $pid, $escenas) as $f) foreach ($f['zonas'] as $z) foreach ($z['setups'] as $st) {
+            $ids = array_map(static fn ($e) => (int) $e['id'], $st['escenas']);
+            $i = array_search((int) $eid, $ids, true);
+            if ($i === false) continue;
+            $j = $i + $dir;
+            if (isset($ids[$j])) {
+                [$ids[$i], $ids[$j]] = [$ids[$j], $ids[$i]];
+                $em = (new RodajesEscenaModel())->skipValidation(true);
+                foreach ($ids as $n => $id) $em->update($id, ['orden_rodaje' => $n]);
+            }
+            break 3;
+        }
+        return redirect()->to(site_url("rodajes/$pid/plan") . '#t' . (int) $eid);
+    }
+
     /** Franja → zona (orden de ruta) → setup (orden propio de la zona) → escenas ordenadas por parecido de props. */
     public static function construirPlan(int $pid, array $escenas, bool $soloImp = false): array
     {
@@ -904,6 +1157,12 @@ class RodajesFlujo extends BaseController
             $out[] = $es[$mejor];
             array_splice($es, $mejor, 1);
         }
+        // Orden a mano (flechas del Plan) por encima del automático; las que no lo tienen, detrás en su orden automático.
+        if (array_filter($out, static fn ($e) => ($e['orden_rodaje'] ?? null) !== null)) {
+            $clave = [];
+            foreach ($out as $k => $e) $clave[(int) $e['id']] = ($e['orden_rodaje'] ?? null) !== null ? (int) $e['orden_rodaje'] : 1_000_000 + $k;
+            usort($out, static fn ($a, $b) => $clave[(int) $a['id']] <=> $clave[(int) $b['id']]);
+        }
         return $out;
     }
 
@@ -923,7 +1182,7 @@ class RodajesFlujo extends BaseController
     {
         $proyecto = (new RodajesProyectoModel())->find($pid);
         $sid = (int) ($proyecto['sesion_id'] ?? 0);
-        if (!$sid) return;
+        if (!$sid) { self::renumerarNarrativo($pid); return; }
         $sm = new SituacionModel();
         $em = (new RodajesEscenaModel())->skipValidation(true);
         $clave = static fn ($s) => mb_strtolower(trim((string) $s));
@@ -988,6 +1247,34 @@ class RodajesFlujo extends BaseController
             (new MoodboardItemModel())->where('escena_id', $id)->whereIn('estado', ['toma', 'variante'])->set(['situacion_id' => $destino])->update();
         }
         foreach ($bloque as $id => $b) $em->update($id, ['escena_bloque' => $b]);
+        self::renumerarNarrativo($pid);
+    }
+
+    /**
+     * Orden narrativo = temáticas como capítulos: primero por el orden de las
+     * temáticas (pestaña Temáticas / columnas de la pizarra Narrativa), dentro de
+     * cada una por su orden, y lo que no tiene temática al final. Sin sesión, los
+     * bloques en el orden en que aparecen. Renumera `orden` (1, 2, 3…) para que el
+     * número de cada toma sea su sitio en la historia en todas las vistas.
+     */
+    public static function renumerarNarrativo(int $pid): void
+    {
+        $proyecto = (new RodajesProyectoModel())->find($pid);
+        if (!$proyecto) return;
+        $em = (new RodajesEscenaModel())->skipValidation(true);
+        $escenas = $em->select('id, orden, situacion_id, escena_bloque')->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        if (!$escenas) return;
+        $pos = [];
+        if ($proyecto['sesion_id']) {
+            foreach ((new SituacionModel())->where('sesion_id', (int) $proyecto['sesion_id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $k => $st) $pos['s' . $st['id']] = $k;
+        }
+        $clave = static fn ($e) => $proyecto['sesion_id']
+            ? ($e['situacion_id'] ? 's' . $e['situacion_id'] : '')
+            : mb_strtolower(trim((string) $e['escena_bloque']));
+        foreach ($escenas as $e) { $c = $clave($e); if ($c !== '') $pos[$c] ??= count($pos) + 1000; }
+        $idx = array_flip(array_column($escenas, 'id'));
+        usort($escenas, static fn ($a, $b) => [$clave($a) === '', $pos[$clave($a)] ?? 0, $idx[$a['id']]] <=> [$clave($b) === '', $pos[$clave($b)] ?? 0, $idx[$b['id']]]);
+        foreach ($escenas as $n => $e) if ((int) $e['orden'] !== $n + 1) $em->update($e['id'], ['orden' => $n + 1]);
     }
 
     /** Las ideas que ya son toma arrastran su toma (y con ella el bloque) a la temática nueva. */
@@ -1098,6 +1385,10 @@ class RodajesFlujo extends BaseController
         }
         foreach ((new RodajesEscenaModel())->select('props')->where('proyecto_id', $pid)->where('props IS NOT NULL')->findAll() as $e) {
             foreach (rod_props($e) as $p) $lista[] = $p;
+        }
+        $ids = array_column((new RodajesEscenaModel())->select('id')->where('proyecto_id', $pid)->findAll(), 'id');
+        if ($ids) foreach ((new RodajesVarianteModel())->select('props')->whereIn('escena_id', $ids)->where('props IS NOT NULL')->findAll() as $v) {
+            foreach (rod_props($v) as $p) $lista[] = $p;
         }
         $out = [];
         foreach ($lista as $p) $out[rod_normalizar($p)] ??= $p;

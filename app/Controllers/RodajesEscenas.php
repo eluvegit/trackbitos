@@ -104,7 +104,21 @@ class RodajesEscenas extends BaseController
             ? (new \App\Models\SesionModel())->find((int) $proyecto['sesion_id'])
             : null;
 
+        // Dos órdenes: narrativo (por temáticas, el de siempre) o el de rodaje (el del Plan).
+        $ordenLista = $this->request->getGet('orden') === 'rodaje' ? 'rodaje' : 'narrativo';
+        $gruposRodaje = [];
+        if ($ordenLista === 'rodaje') {
+            foreach (RodajesFlujo::construirPlan((int) $proyectoId, $escenas) as $f) foreach ($f['zonas'] as $z) foreach ($z['setups'] as $st) {
+                $gruposRodaje[] = [
+                    'nombre'  => implode(' · ', array_filter([$f['nombre'], $z['zona'] ? $z['n'] . '. ' . $z['zona']['nombre'] : 'Sin zona', $st['setup']['nombre'] ?? 'Sin setup'])),
+                    'escenas' => $st['escenas'],
+                ];
+            }
+        }
+
         return view(rod_vista('rodajes/escenas/index'), [
+            'ordenLista'   => $ordenLista,
+            'gruposRodaje' => $gruposRodaje,
             'proyecto'   => $proyecto,
             'sesion'     => $sesion,
             'escenas'    => $escenas,
@@ -293,6 +307,7 @@ class RodajesEscenas extends BaseController
         $escenas = new RodajesEscenaModel();
 
         $post = $this->request->getPost();
+        unset($post['orden']);   // el nº en la historia lo pone la pizarra Narrativa (renumerarNarrativo)
         $post['id']               = $id;
         $post['proyecto_id']      = $proyectoId;
         $post['plano_actores']    = $this->request->getPost('plano_actores') ? 'S' : 'N';

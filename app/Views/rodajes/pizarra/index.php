@@ -14,9 +14,7 @@
 $pid       = (int) $proyecto['id'];
 $editables = $vista !== 'produccion';   // columnas que se pueden renombrar, mover y crear
 $ayuda     = [
-    'narrativa'  => 'El orden de la historia: es el que usan la lista, el storyboard y el plató.',
-    'ubicacion'  => 'Agrupa por sitio para rodar todo lo de un lugar seguido. Su orden no toca la narrativa.',
-    'montaje'    => 'Agrupa por soporte para no montar y desmontar el equipo. Su orden no toca la narrativa.',
+    'narrativa'  => 'Cómo se cuenta la historia: cada columna es una temática (un capítulo). Mueve columnas para ordenar los capítulos y tarjetas para ordenar dentro.',
     'produccion' => 'Estado de cada toma (el mismo que marcas en el plató). Las escenas de foto y vídeo salen dos veces, una por parte.',
 ][$vista];
 

@@ -14,6 +14,8 @@ $total  = array_sum($cuenta);
 $esPlan = $orden === 'plan';
 $hayOpc = (bool) array_filter($escenas, static fn ($e) => ($e['prioridad'] ?? 'imp') === 'opc' || array_filter($e['variantes'] ?? [], static fn ($v) => $v['prioridad'] === 'opc'));
 $formatos = rod_formatos();
+// Día / noche: dos botones (uno, otro o los dos) si hay tomas con franja.
+$hayDN = (bool) array_filter($escenas, static fn ($e) => !empty($e['franja']));
 $pct = static fn (int $n) => $total ? round($n / $total * 100, 2) : 0;
 
 $pre = static function (string $v, string $pref = '', string $suf = ''): string {
@@ -39,6 +41,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         'migas'   => [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Plató' => null],
         'titulo'  => esc($proyecto['titulo']),
         'sub'     => implode('', $sub),
+        'acciones' => '<a class="fv-btn" href="' . site_url("rodajes/$pid/plan") . '"><i class="bi bi-arrow-left"></i>Plan</a>',
         'clasica' => false,
     ]) ?>
 
@@ -64,6 +67,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 <button type="button" data-filtro="hecha">Hechas<span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
                 <button type="button" data-filtro="todas">Todas<span data-n="todas"><?= $total ?></span></button>
             </div>
+            <?php if ($hayDN): ?>
+                <div class="pt-seg pl-dn" role="group" aria-label="Día y noche">
+                    <button type="button" data-dn="dia" aria-pressed="true"><i class="bi bi-sun"></i>Día</button>
+                    <button type="button" data-dn="noche" aria-pressed="true"><i class="bi bi-moon-stars"></i>Noche</button>
+                </div>
+            <?php endif; ?>
             <div class="pt-aj" id="plAj" hidden>
                 <span class="pt-lbl">Vista</span>
                 <div class="pt-seg pt-chips" id="plVistas">
@@ -72,7 +81,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 </div>
                 <span class="pt-lbl">Orden</span>
                 <div class="pt-seg pt-chips">
-                    <?php foreach (['plan' => 'Plan', 'narrativa' => 'Historia', 'ubicacion' => 'Ubicación', 'montaje' => 'Montaje'] as $k => $txt): ?>
+                    <?php foreach (['plan' => 'Rodaje', 'narrativa' => 'Historia'] as $k => $txt): ?>
                         <a href="<?= site_url("rodajes/$pid/plato?orden=$k") ?>" aria-pressed="<?= $orden === $k ? 'true' : 'false' ?>"><?= $txt ?></a>
                     <?php endforeach; ?>
                 </div>
@@ -180,8 +189,17 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         'Notas'               => ($e['plano_notas'] ?? ''),
                         'Diálogo'             => ($e['sonido_dialogo_escrito'] ?? ''),
                     ], static fn ($v) => trim((string) $v) !== '');
+                    $ed = [
+                        'titulo' => (string) ($e['escena_descripcion'] ?? ''), 'setup_id' => (int) ($e['setup_id'] ?? 0),
+                        'optica' => (string) ($e['camara_optica'] ?? ''), 'soporte' => (string) ($e['camara_soporte'] ?? ''),
+                        'apertura' => (string) ($e['camara_apertura'] ?? ''), 'velocidad' => (string) ($e['camara_velocidad'] ?? ''),
+                        'iso' => (string) ($e['camara_iso'] ?? ''), 'fps' => (string) ($e['camara_fps'] ?? ''), 'nd' => (string) ($e['camara_nd'] ?? ''),
+                        'luz' => (string) ($e['plano_esquema_iluminacion'] ?? ''), 'notas' => (string) ($e['plano_notas'] ?? ''),
+                        'props' => $props, 'video' => $esVideo,
+                        'variantes' => array_map(static fn ($va) => ['id' => (int) $va['id'], 'texto' => $va['texto'], 'props' => rod_props_extra($e, $va)], $vars),
+                    ];
                     ?>
-                    <article class="pt-toma" data-id="<?= $eid ?>" data-g="<?= $gi ?>" style="--t:var(--pt-c<?= $ti++ % 4 ?>)" data-fotos="<?= esc(json_encode($lb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'attr') ?>" data-titulo="<?= esc((int) $e['orden'] . '. ' . rod_titulo_escena($e), 'attr') ?>">
+                    <article class="pt-toma" data-dn="<?= rod_dia_noche($e['franja'] ?? null) ?>" data-ed="<?= esc(json_encode($ed, JSON_UNESCAPED_UNICODE), 'attr') ?>" data-id="<?= $eid ?>" data-g="<?= $gi ?>" style="--t:var(--pt-c<?= $ti++ % 4 ?>)" data-fotos="<?= esc(json_encode($lb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'attr') ?>" data-titulo="<?= esc((int) $e['orden'] . '. ' . rod_titulo_escena($e), 'attr') ?>">
                         <div class="pt-fila" data-fila>
                             <div class="pt-par">
                                 <?php if ($fotoPrin): ?>
@@ -192,13 +210,13 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                                     <div class="pt-hueco"><b><?= (int) $e['orden'] ?></b>sin foto<span class="pt-pill"></span></div>
                                 <?php endif; ?>
                                 <button type="button" class="pt-datos" data-abrir aria-expanded="false">
-                                    <span class="pt-tit"><?php if ($hayOpc && !$opcE): ?><span class="rf-prio imp">Imp.</span> <?php endif; ?><?= esc(rod_titulo_escena($e)) ?></span>
+                                    <span class="pt-tit"><?php if ($hayDN && empty($e['franja'])): ?><span class="pt-sinfranja" title="Sin momento del día: sale en día y en noche">Sin momento</span> <?php endif; ?><?php if ($hayOpc && !$opcE): ?><span class="rf-prio imp">Imp.</span> <?php endif; ?><?= esc(rod_titulo_escena($e)) ?></span>
+                                    <span class="pt-res"><span<?= $stp ? '' : ' class="falta"' ?>><i class="bi bi-camera"></i><?= $stp ? esc($stp['nombre']) : 'sin setup' ?></span><span<?= $props ? '' : ' class="falta"' ?>><i class="bi bi-box-seam"></i><?= $props ? esc(implode(', ', $props)) : 'sin props' ?></span></span>
                                     <?php if ($focal !== '' || $fmt !== ''): ?>
                                         <span class="pt-tec"><?php if ($focal !== ''): ?><span class="pt-focal"><?= esc($focal) ?></span><?php endif; ?><?php if ($fmt !== ''): ?><span class="pt-fmt"><?= $fmt ?></span><?php endif; ?></span>
                                     <?php endif; ?>
                                     <?php if ($params !== ''): ?><span class="pt-params"><?= esc($params) ?></span><?php endif; ?>
                                     <?php if ($luz !== ''): ?><span class="pt-luz"><i class="bi bi-lightbulb"></i><span><?= esc($luz) ?></span></span><?php endif; ?>
-                                    <?php if ($props): ?><span class="pt-props"><i class="bi bi-box-seam"></i><?php foreach ($props as $p): ?><span><?= esc($p) ?></span><?php endforeach; ?></span><?php endif; ?>
                                     <?php if ($diff !== ''): ?><span class="rf-diff"><?= $diff ?></span><?php endif; ?>
                                     <span class="pt-mas"><span>Más datos</span><i class="bi bi-chevron-down"></i></span>
                                 </button>
@@ -225,7 +243,10 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                                 <label class="pt-nota">Nota rápida
                                     <input type="text" class="fv-input pl-nota" maxlength="255" placeholder="ISO subido, repetir con luz…" value="<?= esc($e['toma_nota'] ?? '', 'attr') ?>">
                                 </label>
-                                <a class="fv-link" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>"><i class="bi bi-pencil-square"></i>Editar escena completa</a>
+                                <div class="pt-edits">
+                                    <button type="button" class="fv-btn fv-btn-sm" data-editar><i class="bi bi-pencil"></i>Editar datos</button>
+                                    <a class="fv-link" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>"><i class="bi bi-box-arrow-up-right"></i>Escena completa</a>
+                                </div>
                             </div>
                             <div class="pl-nota-vista"<?= trim((string) $e['toma_nota']) === '' ? ' hidden' : '' ?>><i class="bi bi-pencil"></i> <span><?= esc($e['toma_nota'] ?? '') ?></span></div>
 
@@ -248,6 +269,8 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                                     <div class="pt-datos">
                                         <span class="pt-badge"><i class="pt-rombo"></i>Variante<?php if ($hayOpc && $va['prioridad'] === 'imp'): ?> <span class="rf-prio imp">Imp.</span><?php endif; ?></span>
                                         <span class="pt-tit"><?= esc($va['texto']) ?></span>
+                                        <?php $vx = rod_props_extra($e, $va); $vp = array_merge($props, $vx); ?>
+                                        <span class="pt-res"><span<?= $stp ? '' : ' class="falta"' ?>><i class="bi bi-camera"></i><?= $stp ? esc($stp['nombre']) : 'sin setup' ?></span><span<?= $vp ? '' : ' class="falta"' ?>><i class="bi bi-box-seam"></i><?php if ($vp): ?><?= esc(implode(', ', $props)) ?><?php if ($vx): ?><b class="pt-mas-prop"><?= $props ? ' + ' : '' ?><?= esc(implode(', ', $vx)) ?></b><?php endif; ?><?php else: ?>sin props<?php endif; ?></span></span>
                                         <?php if ($focal !== ''): ?><span class="pt-tec"><span class="pt-focal"><?= esc($focal) ?></span></span><?php endif; ?>
                                     </div>
                                 </div>
@@ -266,6 +289,35 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
             </div>
         </div>
     </div>
+
+    <dialog class="pt-ed" id="plEd" data-url="<?= site_url("rodajes/$pid/escenas") ?>">
+        <form method="dialog" class="fv">
+            <div class="pt-ed-h"><b id="plEdT">Editar toma</b><button type="button" class="pt-lb-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
+            <div class="pt-ed-cuerpo">
+                <label class="pt-ed-c pt-ed-ancho"><span>Título</span><input class="fv-input" name="titulo" maxlength="255"></label>
+                <label class="pt-ed-c pt-ed-ancho"><span>Setup</span>
+                    <select class="fv-input" name="setup_id"><option value="">Sin setup</option><?php foreach ($setups as $st): ?><option value="<?= (int) $st['id'] ?>"><?= esc($st['nombre']) ?></option><?php endforeach; ?></select>
+                </label>
+                <label class="pt-ed-c"><span>Lente</span><input class="fv-input" name="optica" maxlength="100" placeholder="del setup"></label>
+                <label class="pt-ed-c"><span>Soporte</span><input class="fv-input" name="soporte" maxlength="100" placeholder="del setup"></label>
+                <div class="pt-ed-params pt-ed-ancho">
+                    <label class="pt-ed-c"><span>Diafragma</span><input class="fv-input" name="apertura" maxlength="50" inputmode="decimal" placeholder="2.8"></label>
+                    <label class="pt-ed-c"><span>Velocidad</span><input class="fv-input" name="velocidad" maxlength="50" placeholder="1/125"></label>
+                    <label class="pt-ed-c"><span>ISO</span><input class="fv-input" name="iso" maxlength="50" inputmode="numeric"></label>
+                    <label class="pt-ed-c" data-solo-video><span>FPS</span><input class="fv-input" name="fps" maxlength="50" inputmode="numeric"></label>
+                    <label class="pt-ed-c"><span>ND</span><input class="fv-input" name="nd" maxlength="50"></label>
+                </div>
+                <label class="pt-ed-c pt-ed-ancho"><span>Luz</span><textarea class="fv-input" name="luz" rows="2" placeholder="del setup"></textarea></label>
+                <div class="pt-ed-c pt-ed-ancho"><span>Props</span><div class="pt-ed-props" data-props="t"></div></div>
+                <div class="pt-ed-vars pt-ed-ancho" id="plEdVars"></div>
+                <label class="pt-ed-c pt-ed-ancho"><span>Notas</span><textarea class="fv-input" name="notas" rows="2"></textarea></label>
+            </div>
+            <div class="pt-ed-pie">
+                <button type="button" class="fv-btn" data-cerrar>Cancelar</button>
+                <button type="button" class="fv-btn fv-btn-pri" id="plEdOk"><i class="bi bi-check-lg"></i>Guardar</button>
+            </div>
+        </form>
+    </dialog>
 
     <div class="pt-lb" id="plLb" hidden>
         <div class="pt-lb-top"><b id="plLbT"></b><span id="plLbN"></span>
@@ -289,6 +341,10 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     const csrf = '<?= csrf_hash() ?>';
     const TXT = { pendiente: 'Pendiente', hecha: 'Hecha', repetir: 'Repetir', descartada: 'Descartada' };
     let filtro = 'pendientes', medio = '', soloImp = false;
+    // Día / noche: lados visibles (se recuerda). Sin franja = sale siempre.
+    let dn = new Set(['dia', 'noche']);
+    try { const g = JSON.parse(localStorage.getItem('rodajes_dn') || 'null'); if (Array.isArray(g) && g.length) dn = new Set(g); } catch {}
+    const dnOk = t => !t.dataset.dn || dn.has(t.dataset.dn);
     const keep = new Set();
 
     const ls = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -322,6 +378,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const n = { pendiente: 0, hecha: 0, repetir: 0, descartada: 0 };
         const pend = {};
         tomas.forEach(t => {
+            if (!dnOk(t)) { t.hidden = true; return; }
             const grupos = [...t.querySelectorAll('.pt-btns')];
             grupos.forEach(g => g.hidden = !casa(g));
             t.querySelectorAll('[data-fila]').forEach(f => {
@@ -390,6 +447,16 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const fija = raiz.querySelector('.pt-fija');
         window.scrollTo({ top: cab.getBoundingClientRect().top + window.scrollY - fija.offsetHeight - 8, behavior: 'smooth' });
     });
+    const dnBtns = [...raiz.querySelectorAll('.pl-dn [data-dn]')];
+    const pintarDN = () => dnBtns.forEach(b => b.setAttribute('aria-pressed', dn.has(b.dataset.dn)));
+    pintarDN();
+    dnBtns.forEach(b => b.addEventListener('click', () => {
+        const k = b.dataset.dn;
+        // Con los dos: el que tocas queda solo. Con uno: tocar el otro vuelve a los dos.
+        if (dn.size === 2) dn = new Set([k]); else if (!dn.has(k)) dn = new Set(['dia', 'noche']); else return;
+        try { localStorage.setItem('rodajes_dn', JSON.stringify([...dn])); } catch {}
+        pintarDN(); pintar();
+    }));
     raiz.querySelector('.pl-imp')?.addEventListener('click', ev => {
         soloImp = !soloImp; ev.currentTarget.setAttribute('aria-pressed', soloImp); pintar();
     });
@@ -468,7 +535,103 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         if (ev.key === 'ArrowRight') mover(1);
     });
 
+    // ---------- edición rápida (modal) ----------
+    const LISTA = <?= json_encode(array_values($propsLista ?? []), JSON_UNESCAPED_UNICODE) ?>;
+    const dlg = document.getElementById('plEd'), dlgF = dlg.querySelector('form');
+    const norm = t => t.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let edToma = null;
+    const chips = (caja, opciones, activos) => {
+        const act = activos.map(norm);
+        caja.innerHTML = '';
+        [...new Map([...opciones, ...activos].map(p => [norm(p), p])).values()].forEach(p => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'pt-ed-chip' + (act.includes(norm(p)) ? ' on' : ''); b.textContent = p; b.dataset.prop = p;
+            caja.append(b);
+        });
+        const i = document.createElement('input');
+        i.className = 'pt-ed-otro'; i.placeholder = '+ otro'; i.autocomplete = 'off'; i.enterKeyHint = 'done';
+        caja.append(i);
+    };
+    const marcados = caja => {
+        const l = [...caja.querySelectorAll('.pt-ed-chip.on')].map(b => b.dataset.prop);
+        caja.querySelector('.pt-ed-otro').value.split(',').map(x => x.trim()).filter(Boolean).forEach(x => l.push(x));
+        return l;
+    };
+    dlg.addEventListener('click', ev => {
+        const c = ev.target.closest('.pt-ed-chip');
+        if (c) { c.classList.toggle('on'); return; }
+        if (ev.target.closest('[data-cerrar]') || ev.target === dlg) dlg.close();
+    });
+    dlg.addEventListener('keydown', ev => {
+        const i = ev.target.closest('.pt-ed-otro');
+        if (!i || ev.key !== 'Enter') return;
+        ev.preventDefault();
+        const caja = i.parentElement;
+        i.value.split(',').map(x => x.trim()).filter(Boolean).forEach(x => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'pt-ed-chip on'; b.textContent = x; b.dataset.prop = x;
+            caja.insertBefore(b, i);
+        });
+        i.value = '';
+    });
+    raiz.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-editar]');
+        if (!b) return;
+        edToma = b.closest('.pt-toma');
+        const d = JSON.parse(edToma.dataset.ed);
+        document.getElementById('plEdT').textContent = edToma.dataset.titulo;
+        ['titulo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas'].forEach(k => dlgF.elements[k].value = d[k] || '');
+        dlgF.elements.setup_id.value = d.setup_id || '';
+        dlg.querySelector('[data-solo-video]').hidden = !d.video;
+        chips(dlg.querySelector('[data-props="t"]'), LISTA, d.props);
+        const vars = document.getElementById('plEdVars');
+        vars.innerHTML = '';
+        d.variantes.forEach(v => {
+            const w = document.createElement('div');
+            w.className = 'pt-ed-c';
+            w.innerHTML = '<span></span><div class="pt-ed-props"></div>';
+            w.firstChild.textContent = 'Variante · ' + v.texto + ' — además de la toma';
+            w.lastChild.dataset.var = v.id;
+            chips(w.lastChild, LISTA, v.props);
+            vars.append(w);
+        });
+        dlg.showModal();
+    });
+    document.getElementById('plEdOk').addEventListener('click', ev => {
+        const btn = ev.currentTarget, f = dlgF.elements;
+        const datos = { setup_id: f.setup_id.value, props: marcados(dlg.querySelector('[data-props="t"]')), variantes: {} };
+        ['titulo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas'].forEach(k => datos[k] = f[k].value);
+        dlg.querySelectorAll('[data-var]').forEach(c => datos.variantes[c.dataset.var] = marcados(c));
+        btn.disabled = true;
+        fetch(dlg.dataset.url + '/' + edToma.dataset.id + '/rapida', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify(datos),
+        }).then(r => {
+            if (!r.ok) throw 0;
+            // Recarga (el setup puede cambiar la toma de grupo) volviendo al mismo sitio, con los mismos filtros.
+            try { sessionStorage.setItem('platoVolver', JSON.stringify({ id: edToma.dataset.id, top: edToma.getBoundingClientRect().top, filtro, medio, soloImp })); } catch {}
+            location.reload();
+        }).catch(() => { btn.disabled = false; alert('No se ha podido guardar. ¿Hay conexión?'); });
+    });
+
     pintar();
+
+    // Tras guardar en el modal: mismos filtros, la toma abierta y en el mismo sitio de la pantalla.
+    let volver = null;
+    try { volver = JSON.parse(sessionStorage.getItem('platoVolver') || 'null'); sessionStorage.removeItem('platoVolver'); } catch {}
+    if (volver) {
+        raiz.querySelector('.pl-filtros [data-filtro="' + volver.filtro + '"]')?.click();
+        if (volver.medio) raiz.querySelector('button[data-medio="' + volver.medio + '"]:not(.pt-btns)')?.click();
+        if (volver.soloImp) raiz.querySelector('.pl-imp')?.click();
+        const t = raiz.querySelector('.pt-toma[data-id="' + volver.id + '"]');
+        if (t) {
+            if (t.hidden) { raiz.querySelector('.pl-filtros [data-filtro="todas"]')?.click(); }
+            const cab = t.querySelector('[data-abrir]');
+            if (cab && cab.getAttribute('aria-expanded') !== 'true') cab.click();
+            window.scrollTo(0, t.getBoundingClientRect().top + window.scrollY - volver.top);
+        }
+    }
 })();
 </script>
 <?php endif; ?>

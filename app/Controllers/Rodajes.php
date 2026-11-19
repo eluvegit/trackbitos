@@ -158,6 +158,7 @@ class Rodajes extends BaseController
         $proyecto = (new RodajesProyectoModel())->find((int) $id);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
 
+        RodajesFlujo::sincronizarBloques((int) $id);
         $escenas = RodajesFlujo::conVariantes((new RodajesEscenaModel())->where('proyecto_id', $id)
             ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll());
 
@@ -189,11 +190,12 @@ class Rodajes extends BaseController
 
         // Orden del plató: el de la historia o el de la pizarra por ubicación / montaje (se recuerda).
         $orden = $this->request->getGet('orden');
-        if (in_array($orden, ['plan', 'narrativa', 'ubicacion', 'montaje'], true)) {
+        // Solo dos órdenes: el de rodaje (plan) y el de la historia (narrativa).
+        if (in_array($orden, ['plan', 'narrativa'], true)) {
             session()->set('rodajes_plato_orden', $orden);
         }
-        $hayPlan = (bool) array_filter($escenas, static fn ($e) => $e['franja'] || $e['setup_id'] || $e['variantes']);
-        $orden = session('rodajes_plato_orden') ?? ($hayPlan ? 'plan' : 'narrativa');
+        $orden = session('rodajes_plato_orden');
+        if (!in_array($orden, ['plan', 'narrativa'], true)) $orden = 'plan';
 
         $puntos = [];
         if ($orden === 'plan') {
@@ -210,7 +212,7 @@ class Rodajes extends BaseController
             $colores = rod_colores($escenas, 'escena_ubicacion');
         } else {
             $grupos  = RodajesPizarra::grupos($escenas, $orden);
-            $colores = rod_colores($escenas, RodajesPizarra::VISTAS[$orden][2]);
+            $colores = rod_colores(RodajesPizarra::conSetupNombre($escenas), RodajesPizarra::VISTAS[$orden][2]);
         }
 
         return view('rodajes/plato', [
@@ -224,7 +226,8 @@ class Rodajes extends BaseController
             'media'     => $media,
             'sesion'    => $sesion,
             'moodboard' => $moodboard,
-            'setups'    => array_column((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $id)->findAll(), null, 'id'),
+            'setups'    => array_column((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $id)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll(), null, 'id'),
+            'propsLista' => RodajesFlujo::propsConocidos((int) $id, $sesion ? (int) $sesion['id'] : null),
         ]);
     }
 

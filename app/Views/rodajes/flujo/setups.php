@@ -12,7 +12,7 @@ foreach ($escenas as $e) {
 }
 ?>
 <div class="fv rd" id="rfSet" data-asignar="<?= $url('escenas') ?>">
-    <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en cada toma.'])) ?>
+    <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en el paso siguiente.'])) ?>
 
     <?php
     // Imagen de cada setup: la suya, si no la foto de una de sus tomas.

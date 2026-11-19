@@ -273,6 +273,34 @@ if (!function_exists('rod_props')) {
     }
 }
 
+if (!function_exists('rod_dia_noche')) {
+    /** Lado de la jornada de una franja: 'noche', 'dia' o '' (sin franja, sale en los dos). */
+    function rod_dia_noche(?string $franja): string
+    {
+        if ($franja === null || $franja === '') return '';
+        return $franja === 'noche' ? 'noche' : 'dia';
+    }
+}
+
+if (!function_exists('rod_props_variante')) {
+    /** Lo que lleva una variante: los props de su toma + los suyos propios. */
+    function rod_props_variante(array $e, array $v): array
+    {
+        $out = [];
+        foreach (array_merge(rod_props($e), rod_props($v)) as $p) $out[rod_normalizar($p)] ??= $p;
+        return array_values($out);
+    }
+}
+
+if (!function_exists('rod_props_extra')) {
+    /** Solo lo que la variante lleva además de su toma. */
+    function rod_props_extra(array $e, array $v): array
+    {
+        $t = array_map('rod_normalizar', rod_props($e));
+        return array_values(array_filter(rod_props($v), static fn ($p) => !in_array(rod_normalizar($p), $t, true)));
+    }
+}
+
 if (!function_exists('rod_props_diff')) {
     function rod_props_diff(?array $prev, array $cur): string
     {

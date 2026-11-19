@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenModel, RodajesPizarraOrdenModel};
+use App\Models\{RodajesProyectoModel, RodajesEscenaModel, RodajesEscenaImagenModel, RodajesPizarraOrdenModel, RodajesSetupModel, RodajesUbicacionModel};
 
 /**
  * Pizarra de escenas: columnas por un campo de la escena y tarjetas que se
@@ -23,8 +23,8 @@ class RodajesPizarra extends BaseController
     /** vista => [título, icono, campo, nombre de la bandeja (valor vacío), columnas fijas] */
     public const VISTAS = [
         'narrativa'  => ['Narrativa', 'bi-book', 'escena_bloque', 'Sin bloque', []],
-        'ubicacion'  => ['Ubicación', 'bi-geo-alt', 'escena_ubicacion', 'Sin ubicación', []],
-        'montaje'    => ['Montaje de cámara', 'bi-camera-reels', 'camara_soporte', 'Sin soporte', ['Trípode', 'Mano', 'Gimbal', 'Otro']],
+        // El plan de rodaje como tablero (franja · zona en columnas, setups dentro). Tiene su propia plantilla.
+        'rodaje'     => ['Rodaje', 'bi-list-ol', 'franja', null, []],
         'produccion' => ['Producción', 'bi-clipboard-check', 'toma_estado', null, []],
     ];
 
@@ -42,8 +42,21 @@ class RodajesPizarra extends BaseController
         if (!isset(self::VISTAS[$vista])) return redirect()->to(site_url("rodajes/$pid/pizarra"));
         RodajesFlujo::sincronizarBloques($pid);
 
-        $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)
-            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        $escenas = self::conSetupNombre((new RodajesEscenaModel())->where('proyecto_id', $pid)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll());
+
+        if ($vista === 'rodaje') {
+            $setups = (new RodajesSetupModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+            return view('rodajes/pizarra/rodaje', [
+                'proyecto'   => $proyecto,
+                'vista'      => $vista,
+                'vistas'     => self::VISTAS,
+                'plan'       => RodajesFlujo::construirPlan($pid, RodajesFlujo::conVariantes($escenas)),
+                'setups'     => $setups,
+                'miniaturas' => $this->miniaturas(array_column($escenas, 'id')),
+                'total'      => count($escenas),
+            ]);
+        }
 
         // Tarjetas: una por escena, o una por parte en Producción.
         $tarjetas = [];
@@ -65,7 +78,7 @@ class RodajesPizarra extends BaseController
             'proyecto'   => $proyecto,
             'vista'      => $vista,
             'vistas'     => self::VISTAS,
-            'columnas'   => self::columnas($vista, $tarjetas),
+            'columnas'   => self::columnas($vista, $tarjetas, $pid),
             'miniaturas' => $this->miniaturas(array_column($escenas, 'id')),
             'total'      => count($escenas),
             'hayFormato' => $hayFormato,
@@ -83,6 +96,7 @@ class RodajesPizarra extends BaseController
         $pid   = (int) $proyectoId;
         $in    = $this->request->getJSON(true) ?? [];
         $vista = (string) ($in['vista'] ?? '');
+        if ($vista === 'rodaje') return $this->guardarRodaje($pid, (array) ($in['listas'] ?? []));
         if (!isset(self::VISTAS[$vista]) || !is_array($in['columnas'] ?? null)) {
             return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
         }
@@ -90,7 +104,7 @@ class RodajesPizarra extends BaseController
 
         $model  = new RodajesEscenaModel();
         $actual = [];
-        foreach ($model->where('proyecto_id', $pid)->findAll() as $e) {
+        foreach (self::conSetupNombre($model->where('proyecto_id', $pid)->findAll()) as $e) {
             $actual[(int) $e['id']] = $e;
         }
 
@@ -137,6 +151,7 @@ class RodajesPizarra extends BaseController
                         $cambios[$id]['ubicacion_id'] = $c['valor'] === '' ? null : RodajesFlujo::zonaId($pid, $c['valor']);
                         $cambios[$id]['punto_id'] = null;
                     }
+                    if ($vista === 'montaje') $cambios[$id] = self::datosSetup($pid, $c['valor']);
                     if ($vista === 'produccion') $cambios[$id][$col . '_at'] = $c['valor'] === '' ? null : date('Y-m-d H:i:s');
                 }
                 if ($vista === 'narrativa') {
@@ -148,14 +163,73 @@ class RodajesPizarra extends BaseController
             }
         }
         foreach ($cambios as $id => $datos) $model->update($id, $datos);
+        // Ubicación / montaje: el orden de las columnas es el orden de ruta de las zonas o el de los setups.
+        if ($vista === 'ubicacion' || $vista === 'montaje') {
+            $m = $vista === 'ubicacion' ? new RodajesUbicacionModel() : new RodajesSetupModel();
+            $porNombre = [];
+            foreach ($m->where('proyecto_id', $pid)->findAll() as $f) $porNombre[mb_strtolower(trim((string) $f['nombre']))] ??= (int) $f['id'];
+            $i = 0;
+            foreach ($columnas as $c) {
+                $k = mb_strtolower($c['valor']);
+                if ($k !== '' && isset($porNombre[$k])) { $m->update($porNombre[$k], ['orden' => $i++]); unset($porNombre[$k]); }
+            }
+        }
         $orden = new RodajesPizarraOrdenModel();
         foreach ($posiciones as $clave => $filas) {
             $orden->where('vista', $clave)->whereIn('escena_id', array_column($filas, 'escena_id'))->delete();
             $orden->insertBatch($filas);
         }
         $db->transComplete();
-        if ($vista === 'narrativa') RodajesFlujo::sincronizarBloques($pid);
+        if ($vista === 'narrativa') {
+            RodajesFlujo::sincronizarBloques($pid);
+            // El orden de las columnas es el de las temáticas (capítulos de la historia).
+            $proyecto = (new RodajesProyectoModel())->find($pid);
+            if (!empty($proyecto['sesion_id'])) {
+                $sm = new \App\Models\SituacionModel();
+                $porNombre = [];
+                foreach ($sm->where('sesion_id', (int) $proyecto['sesion_id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $st) $porNombre[mb_strtolower(trim((string) $st['nombre']))] ??= (int) $st['id'];
+                $i = 0;
+                foreach ($columnas as $c) {
+                    $k = mb_strtolower($c['valor']);
+                    if ($k !== '' && isset($porNombre[$k])) { $sm->update($porNombre[$k], ['orden' => $i++]); unset($porNombre[$k]); }
+                }
+                foreach ($porNombre as $sid) $sm->update($sid, ['orden' => $i++]);
+                RodajesFlujo::renumerarNarrativo($pid);
+            }
+        }
 
+        return $this->response->setJSON(['ok' => $db->transStatus()]);
+    }
+
+    /**
+     * Pizarra de rodaje: {listas: [{franja, zona, setup, ids: [...]}, ...]}. Cada lista
+     * es un setup dentro de una columna franja · zona: la toma toma esos tres valores
+     * y su posición en la lista es su orden de rodaje dentro del setup.
+     */
+    private function guardarRodaje(int $pid, array $listas)
+    {
+        $em = (new RodajesEscenaModel())->skipValidation(true);
+        $actual = array_column($em->where('proyecto_id', $pid)->findAll(), null, 'id');
+        $zonas  = array_column((new RodajesUbicacionModel())->where('proyecto_id', $pid)->findAll(), null, 'id');
+        $setups = array_column((new RodajesSetupModel())->where('proyecto_id', $pid)->findAll(), null, 'id');
+        $db = db_connect();
+        $db->transStart();
+        foreach ($listas as $l) {
+            $franja = (string) ($l['franja'] ?? '');
+            $franja = array_key_exists($franja, RodajesEscenaModel::FRANJAS) ? $franja : null;
+            $zid = (int) ($l['zona'] ?? 0); $z = $zonas[$zid] ?? null;
+            $sid = (int) ($l['setup'] ?? 0); $st = $setups[$sid] ?? null;
+            foreach (array_values((array) ($l['ids'] ?? [])) as $n => $id) {
+                $e = $actual[(int) $id] ?? null;
+                if (!$e) continue;
+                $d = ['orden_rodaje' => $n];
+                if ($e['franja'] !== $franja) $d['franja'] = $franja;
+                if ((int) $e['ubicacion_id'] !== (int) ($z['id'] ?? 0)) $d += ['ubicacion_id' => $z['id'] ?? null, 'escena_ubicacion' => $z['nombre'] ?? '', 'punto_id' => null];
+                if ((int) $e['setup_id'] !== (int) ($st['id'] ?? 0)) $d += ['setup_id' => $st['id'] ?? null] + RodajesFlujo::camaraDeSetup($st);
+                $em->update($e['id'], $d);
+            }
+        }
+        $db->transComplete();
         return $this->response->setJSON(['ok' => $db->transStatus()]);
     }
 
@@ -182,13 +256,15 @@ class RodajesPizarra extends BaseController
             'escena_descripcion' => $desc,
             'orden'              => (int) ($ultima['orden'] ?? 0) + 1,
         ];
-        if ($valor !== '') {
+        if ($valor !== '' && $vista === 'montaje') {
+            $datos += self::datosSetup($pid, $valor);
+        } elseif ($valor !== '') {
             $datos[self::VISTAS[$vista][2]] = $valor;
             if ($vista === 'produccion') $datos['toma_estado_at'] = date('Y-m-d H:i:s');
         }
         $id = (int) $model->insert($datos);
         if ($vista === 'narrativa' && $valor !== '') RodajesFlujo::sincronizarBloques($pid);
-        $e  = $model->find($id);
+        $e  = self::conSetupNombre([$model->find($id)])[0];
 
         return $this->response->setJSON([
             'ok'   => true,
@@ -224,6 +300,7 @@ class RodajesPizarra extends BaseController
     public static function grupos(array $escenas, string $vista): array
     {
         if ($vista === 'ubicacion' || $vista === 'montaje') {
+            $escenas = self::conSetupNombre($escenas);
             $tarjetas = array_map(static fn ($e) => ['e' => $e, 'parte' => null, 'clave' => $vista], $escenas);
             $cols = self::columnas($vista, self::ordenar($vista, $tarjetas));
             $cols[] = array_shift($cols);   // la bandeja, al final
@@ -248,7 +325,7 @@ class RodajesPizarra extends BaseController
     }
 
     /** Columnas de la vista en orden: [['valor', 'nombre', 'tarjetas', 'fija'], ...]. */
-    private static function columnas(string $vista, array $tarjetas): array
+    private static function columnas(string $vista, array $tarjetas, ?int $pid = null): array
     {
         [, , $campo, $bandeja, $fijas] = self::VISTAS[$vista];
 
@@ -274,7 +351,54 @@ class RodajesPizarra extends BaseController
         foreach ($fijas as $f) {
             $cols[mb_strtolower($f)] ??= ['valor' => $f, 'nombre' => $f, 'tarjetas' => [], 'fija' => false];
         }
+        // Ubicación / montaje: las columnas siguen el orden de las zonas (ruta) o de los setups,
+        // también las que aún están vacías; lo que no sea una zona, detrás.
+        $pid ??= (int) ($tarjetas[0]['e']['proyecto_id'] ?? 0);
+        if ($vista === 'narrativa' && $pid) {
+            $proyecto = (new RodajesProyectoModel())->find($pid);
+            if (!empty($proyecto['sesion_id'])) {
+                $orden = ['' => $cols['']];
+                foreach ((new \App\Models\SituacionModel())->where('sesion_id', (int) $proyecto['sesion_id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $st) {
+                    $k = mb_strtolower(trim((string) $st['nombre']));
+                    if ($k === '' || isset($orden[$k])) continue;
+                    $orden[$k] = $cols[$k] ?? ['valor' => trim((string) $st['nombre']), 'nombre' => trim((string) $st['nombre']), 'tarjetas' => [], 'fija' => false];
+                }
+                $cols = $orden + $cols;
+            }
+        }
+        if (($vista === 'ubicacion' || $vista === 'montaje') && $pid) {
+            $orden = ['' => $cols['']];
+            foreach (($vista === 'ubicacion' ? new RodajesUbicacionModel() : new RodajesSetupModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $z) {
+                $k = mb_strtolower(trim((string) $z['nombre']));
+                if ($k === '' || isset($orden[$k])) continue;
+                $orden[$k] = $cols[$k] ?? ['valor' => trim((string) $z['nombre']), 'nombre' => trim((string) $z['nombre']), 'tarjetas' => [], 'fija' => false];
+            }
+            $cols = $orden + $cols;
+        }
         return array_values($cols);
+    }
+
+    /** Añade a cada escena `setup_nombre` (el nombre de su setup) para agrupar el montaje por setup. */
+    public static function conSetupNombre(array $escenas): array
+    {
+        if (!$escenas) return [];
+        $ids = array_filter(array_map(static fn ($e) => (int) ($e['setup_id'] ?? 0), $escenas));
+        $nombres = $ids ? array_column((new RodajesSetupModel())->whereIn('id', array_unique($ids))->findAll(), 'nombre', 'id') : [];
+        foreach ($escenas as &$e) $e['setup_nombre'] = trim((string) ($nombres[(int) ($e['setup_id'] ?? 0)] ?? ''));
+        return $escenas;
+    }
+
+    /** Datos de la toma al pasar a la columna del setup «$nombre» (se crea si no existe; '' = sin setup). */
+    private static function datosSetup(int $pid, string $nombre): array
+    {
+        $nombre = trim($nombre);
+        if ($nombre === '') return ['setup_id' => null];
+        $st = null;
+        foreach ((new RodajesSetupModel())->where('proyecto_id', $pid)->findAll() as $f) {
+            if (mb_strtolower(trim((string) $f['nombre'])) === mb_strtolower($nombre)) { $st = $f; break; }
+        }
+        $st ??= (new RodajesSetupModel())->find(RodajesFlujo::nuevoSetup($pid, $nombre));
+        return ['setup_id' => (int) $st['id']] + RodajesFlujo::camaraDeSetup($st);
     }
 
     /** Primera imagen de cada escena (o vídeo si no hay imágenes): [escena_id => ['ruta', 'video']]. */
@@ -282,6 +406,10 @@ class RodajesPizarra extends BaseController
     {
         if (!$ids) return [];
         $mapa = [];
+        // La foto de la toma (su idea del moodboard o su primera imagen), como en el resto del flujo.
+        foreach (RodajesFlujo::portadas(array_map(static fn ($id) => ['id' => $id], $ids)) as $eid => $ruta) {
+            $mapa[(int) $eid] = ['ruta' => $ruta, 'video' => false];
+        }
         foreach ((new RodajesEscenaImagenModel())->whereIn('escena_id', $ids)->orderBy('id', 'ASC')->findAll() as $f) {
             $eid   = (int) $f['escena_id'];
             $video = rod_es_video($f['ruta']);

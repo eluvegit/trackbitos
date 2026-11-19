@@ -34,6 +34,9 @@ if ($ordenBloques) {
     $pos = array_flip(array_keys($grupos));
     uksort($grupos, static fn ($a, $b) => [$a === '', $ordenBloques[$a] ?? PHP_INT_MAX, $pos[$a]] <=> [$b === '', $ordenBloques[$b] ?? PHP_INT_MAX, $pos[$b]]);
 }
+// Orden de rodaje: los grupos del Plan (franja · zona · setup), en su orden.
+if (($ordenLista ?? '') === 'rodaje') $grupos = $gruposRodaje ?? [];
+$ordenLista ??= 'narrativo';
 $total = count($escenas);
 
 $sub = ['<span>' . $total . ' ' . ($total === 1 ? 'escena' : 'escenas') . '</span>'];
@@ -81,6 +84,10 @@ ob_start(); ?>
     <?php else: ?>
         <div class="rd-herr">
             <input type="search" class="fv-input" id="rdBuscar" placeholder="Buscar en las escenas…" autocomplete="off">
+            <div class="rd-vista rd-orden" role="group" aria-label="Orden">
+                <a href="<?= site_url("rodajes/$pid/escenas") ?>" class="<?= $ordenLista === 'narrativo' ? 'on' : '' ?>" title="Cómo se cuenta la historia (temáticas en orden)"><i class="bi bi-book"></i> Narrativo</a>
+                <a href="<?= site_url("rodajes/$pid/escenas?orden=rodaje") ?>" class="<?= $ordenLista === 'rodaje' ? 'on' : '' ?>" title="Cómo se rueda: el Plan (luz, ubicación, setup, props)"><i class="bi bi-list-ol"></i> Rodaje</a>
+            </div>
             <div class="rd-vista" id="rdVista" role="group" aria-label="Vista">
                 <button type="button" data-vista="lista" title="Lista"><i class="bi bi-list-ul"></i></button>
                 <button type="button" data-vista="galeria" title="Galería"><i class="bi bi-grid-3x2-gap"></i></button>

@@ -66,7 +66,7 @@ $nRefs = count($imagenes_lugar ?? []) + count($imagenes_insp ?? []) + $lleno(['p
 $nSonido = $lleno(['sonido_dialogo_escrito']) + (($e['sonido_ambiente'] ?? 'N') === 'S') + (($e['sonido_antiviento'] ?? 'N') === 'S');
 $hayErrores = (bool) session('errors');
 
-$titulo = $editar ? 'Editar toma #' . (int) $e['orden'] : 'Nueva toma';
+$titulo = $editar ? 'Editar toma #' . (int) $e['orden'] . ' · ' . esc(rod_titulo_escena($e)) : 'Nueva toma';
 ob_start(); ?>
 <?php if ($editar): ?>
     <?php if (!empty($prevId)): ?><a class="fv-ibtn" href="<?= site_url("rodajes/$pid/escenas/edit/$prevId") ?>" title="Editar la anterior"><i class="bi bi-chevron-left"></i></a><?php endif; ?>
@@ -76,6 +76,8 @@ ob_start(); ?>
 <?php $iconos = ob_get_clean(); ?>
 
 <div class="fv rd estrecho">
+    <?php // Cabecera + fotos de la toma: fijas arriba mientras se baja por el formulario. ?>
+    <div class="rd-ed-fija">
     <?= view('rodajes/_cabecera', [
         'migas'  => $editar
             ? [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Escena #' . (int) $e['orden'] => site_url("rodajes/$pid/escenas/show/$eid"), 'Editar' => null]
@@ -84,6 +86,12 @@ ob_start(); ?>
         'sub'    => $editar ? '' : '<span>Con el título basta. El resto, cuando quieras.</span>',
         'iconos' => $iconos,
     ]) ?>
+    <?php if (!empty($refsIdeas)): ?>
+        <div class="rf-refs rf-refs-fija">
+            <?php foreach ($refsIdeas as $r): ?><?= view('rodajes/flujo/_idea', ['i' => $r], ['saveData' => false]) ?><?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+    </div>
 
     <form class="rd-form" method="post" action="<?= $action ?>" enctype="multipart/form-data">
         <?= csrf_field() ?>
@@ -91,11 +99,6 @@ ob_start(); ?>
         <input type="hidden" name="flujo" value="1">
         <?php if (!empty($idea)): ?><input type="hidden" name="idea_id" value="<?= (int) $idea['id'] ?>"><?php endif; ?>
         <?php if (!empty($volver)): ?><input type="hidden" name="volver" value="<?= esc($volver, 'attr') ?>"><?php endif; ?>
-        <?php if (!empty($refsIdeas)): ?>
-            <div class="rf-refs">
-                <?php foreach ($refsIdeas as $r): ?><?= view('rodajes/flujo/_idea', ['i' => $r], ['saveData' => false]) ?><?php endforeach; ?>
-            </div>
-        <?php endif; ?>
 
         <div class="fv-panel">
             <div class="rd-campo">
@@ -281,8 +284,8 @@ ob_start(); ?>
                     </div>
                 </div>
                 <div class="rd-campo">
-                    <label for="f_orden">Orden</label>
-                    <input class="fv-input" id="f_orden" type="number" name="orden" value="<?= $attr('orden', (string) ($ordenSiguiente ?? 0)) ?>">
+                    <label for="f_orden">Nº en la historia</label>
+                    <input class="fv-input" id="f_orden" type="number" name="orden" value="<?= $attr('orden', (string) ($ordenSiguiente ?? 0)) ?>" readonly title="Se cambia arrastrando en la pizarra Narrativa">
                 </div>
             </div>
             <?= $area('escena_accion', 'Acción') ?>

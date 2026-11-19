@@ -10,5 +10,5 @@ class RodajesVarianteModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = false;
-    protected $allowedFields = ['escena_id', 'texto', 'prioridad', 'moodboard_item_id', 'toma_estado', 'toma_estado_at', 'toma_estado_foto', 'toma_estado_foto_at', 'orden'];
+    protected $allowedFields = ['escena_id', 'texto', 'prioridad', 'props', 'moodboard_item_id', 'toma_estado', 'toma_estado_at', 'toma_estado_foto', 'toma_estado_foto_at', 'orden'];
 }

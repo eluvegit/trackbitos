@@ -21,10 +21,10 @@ $medio  = $parte !== null && $dosPartes ? $parte : (string) ($e['formato'] ?? ''
 
 $chips = [];
 if ($vista !== 'narrativa' && trim((string) $e['escena_bloque']) !== '') $chips[] = '<span><i class="bi bi-collection"></i>' . esc($e['escena_bloque']) . '</span>';
-if ($vista !== 'ubicacion' && trim((string) $e['escena_ubicacion']) !== '') $chips[] = '<span><i class="bi bi-geo-alt"></i>' . esc($e['escena_ubicacion']) . '</span>';
-if ($vista !== 'montaje' && trim((string) $e['camara_soporte']) !== '') $chips[] = '<span><i class="bi bi-camera-reels"></i>' . esc($e['camara_soporte']) . '</span>';
+if (!in_array($vista, ['ubicacion', 'rodaje'], true) && trim((string) $e['escena_ubicacion']) !== '') $chips[] = '<span><i class="bi bi-geo-alt"></i>' . esc($e['escena_ubicacion']) . '</span>';
+if (!in_array($vista, ['montaje', 'rodaje'], true) && ($e['setup_nombre'] ?? '') !== '') $chips[] = '<span><i class="bi bi-camera-reels"></i>' . esc($e['setup_nombre']) . '</span>';
 $buscar = mb_strtolower(implode(' ', [
-    $e['escena_bloque'], $e['escena_descripcion'], $e['escena_accion'], $e['escena_ubicacion'], $e['camara_soporte'], $e['plano_notas'],
+    $e['escena_bloque'], $e['escena_descripcion'], $e['escena_accion'], $e['escena_ubicacion'], $e['camara_soporte'], $e['setup_nombre'] ?? '', $e['plano_notas'],
 ]));
 $ref = $eid . ($parte !== null && $parte !== '' ? ':' . $parte : '');
 ?>
