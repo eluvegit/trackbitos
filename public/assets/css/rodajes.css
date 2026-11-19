@@ -1272,8 +1272,8 @@
 .pt .pt-reini { border-color: var(--fv-border) !important; }
 .pt .pt-reini:hover { color: var(--fv-bad); border-color: rgb(240 85 63 / .35) !important; }
 .fv.pt { row-gap: 6px; }
-.pt-prog .pl-dn { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--fv-inset); border: 1px solid var(--fv-border); }
-.pt-prog .pl-dn .pt-ib { position: relative; width: 30px; height: 22px; border-radius: 6px; font-size: 12px; opacity: 1; color: var(--fv-text-3); }
+.pt-prog .pl-dn { margin-top: 0; flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--fv-inset); border: 1px solid var(--fv-border); }
+.pt-prog .pl-dn .pt-ib { position: relative; width: 30px; height: 22px; padding: 0; line-height: 1; border-radius: 6px; font-size: 12px; opacity: 1; color: var(--fv-text-3); }
 .pt-prog .pl-dn .pt-ib:hover { background: transparent; color: var(--fv-text-2); }
 .pt-prog .pl-dn .pt-ib[aria-pressed="true"] { background: var(--fv-raised); box-shadow: inset 0 1px 0 rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .25); }
 .pt-prog .pl-dn [data-dn="dia"][aria-pressed="true"] { color: var(--fv-warn); }
