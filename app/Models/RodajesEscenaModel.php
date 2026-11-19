@@ -32,7 +32,7 @@ class RodajesEscenaModel extends Model
         // VÍNCULO CON SESIONES + PLATÓ
         'situacion_id', 'toma_estado', 'toma_estado_at', 'toma_nota',
         'toma_estado_foto', 'toma_estado_foto_at',
-        'ubicacion_id', 'punto_id', 'setup_id', 'franja', 'prioridad', 'props', 'orden_rodaje',
+        'ubicacion_id', 'punto_id', 'setup_id', 'setup_video_id', 'franja', 'prioridad', 'props', 'orden_rodaje',
     ];
 
     /** Momento del día. 'dia' = de día sin concretar más (lo habitual al marcar en bloque). */

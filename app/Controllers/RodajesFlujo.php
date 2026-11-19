@@ -338,7 +338,7 @@ class RodajesFlujo extends BaseController
         $em = new RodajesEscenaModel();
         $ultima = $em->select('orden')->where('proyecto_id', (int) $pid)->orderBy('orden', 'DESC')->first();
         $nuevo = ['proyecto_id' => (int) $pid, 'escena_descripcion' => $v['texto'], 'orden' => (int) ($ultima['orden'] ?? 0) + 1];
-        foreach (['situacion_id', 'escena_bloque', 'ubicacion_id', 'escena_ubicacion', 'punto_id', 'setup_id', 'franja', 'formato', 'props'] as $c) $nuevo[$c] = $e[$c];
+        foreach (['situacion_id', 'escena_bloque', 'ubicacion_id', 'escena_ubicacion', 'punto_id', 'setup_id', 'setup_video_id', 'franja', 'formato', 'props'] as $c) $nuevo[$c] = $e[$c];
         foreach (['toma_estado', 'toma_estado_at', 'toma_estado_foto', 'toma_estado_foto_at'] as $c) $nuevo[$c] = $v[$c];
         $nuevo['prioridad'] = $v['prioridad'];
         $nuevo['props'] = ($p = rod_props_variante($e, $v)) ? json_encode($p, JSON_UNESCAPED_UNICODE) : null;
@@ -610,7 +610,7 @@ class RodajesFlujo extends BaseController
         if ($e && $campo === 'formato') {
             $f = (string) ($in['valor'] ?? '') ?: null;
             if ($f !== null && !array_key_exists($f, rod_formatos())) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
-            $em->skipValidation(true)->update($e['id'], ['formato' => $f] + rod_cambio_formato($e, $f));
+            $em->skipValidation(true)->update($e['id'], ['formato' => $f] + rod_cambio_formato($e, $f) + rod_cambio_formato_setup($e, $f));
             $vm = new RodajesVarianteModel();
             foreach ($vm->where('escena_id', $e['id'])->findAll() as $va) {
                 $d = rod_cambio_formato(['formato' => $e['formato']] + $va, $f);
@@ -629,7 +629,12 @@ class RodajesFlujo extends BaseController
             return $this->response->setJSON(['ok' => true]);
         }
         $valor = (int) ($in['valor'] ?? 0) ?: null;
-        if (!$e || !in_array($campo, ['ubicacion_id', 'punto_id', 'setup_id'], true)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        if (!$e || !in_array($campo, ['ubicacion_id', 'punto_id', 'setup_id', 'setup_video_id'], true)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        if ($campo === 'setup_video_id') {
+            if ($valor && !(new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($valor)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            $em->skipValidation(true)->update($e['id'], ['setup_video_id' => ($e['formato'] ?? '') === 'ambas' ? $valor : null]);
+            return $this->response->setJSON(['ok' => true]);
+        }
         $datos = [$campo => $valor];
         if ($campo !== 'punto_id') $datos['orden_rodaje'] = null;   // cambia de grupo en el plan
         if ($campo === 'ubicacion_id') {
@@ -641,6 +646,11 @@ class RodajesFlujo extends BaseController
         } elseif ($campo === 'setup_id' && $valor) {
             $st = (new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($valor);
             if (!$st) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            // En una «foto y vídeo», un setup de vídeo va a su hueco propio.
+            if (($e['formato'] ?? '') === 'ambas' && ($st['tipo'] ?? '') === 'video') {
+                $em->skipValidation(true)->update($e['id'], ['setup_video_id' => (int) $st['id']]);
+                return $this->response->setJSON(['ok' => true]);
+            }
             $datos += self::camaraDeSetup($st);
         }
         $em->skipValidation(true)->update($e['id'], $datos);
@@ -799,8 +809,11 @@ class RodajesFlujo extends BaseController
         $s = $m->where('proyecto_id', (int) $pid)->find((int) $sid);
         if ($s) {
             $p = fn ($k, $n) => mb_substr(trim((string) $this->request->getPost($k)), 0, $n) ?: null;
+            $tipo = in_array($this->request->getPost('tipo'), ['foto', 'video'], true) ? $this->request->getPost('tipo') : null;
             $m->update($s['id'], [
-                'nombre' => $p('nombre', 150) ?? $s['nombre'], 'optica' => $p('optica', 60), 'soporte' => $p('soporte', 30),
+                'nombre' => $p('nombre', 150) ?? $s['nombre'], 'tipo' => $tipo, 'optica' => $p('optica', 60), 'soporte' => $p('soporte', 30),
+                'apertura' => $p('apertura', 30), 'velocidad' => $p('velocidad', 30), 'iso' => $p('iso', 30),
+                'fps' => $tipo === 'foto' ? null : $p('fps', 30), 'nd' => $tipo === 'foto' ? null : $p('nd', 30),
                 'luz' => $p('luz', 255), 'notas' => trim((string) $this->request->getPost('notas')) ?: null,
             ]);
             self::setupATomas((int) $s['id']); // óptica / soporte → cámara de sus tomas
@@ -811,7 +824,7 @@ class RodajesFlujo extends BaseController
     public function setupBorrar($pid, $sid)
     {
         $m = new RodajesSetupModel();
-        if ($m->where('proyecto_id', (int) $pid)->find((int) $sid) && !(new RodajesEscenaModel())->where('setup_id', (int) $sid)->countAllResults()) {
+        if ($m->where('proyecto_id', (int) $pid)->find((int) $sid) && !(new RodajesEscenaModel())->groupStart()->where('setup_id', (int) $sid)->orWhere('setup_video_id', (int) $sid)->groupEnd()->countAllResults()) {
             $m->delete((int) $sid);
         }
         return redirect()->to(site_url("rodajes/$pid/setups"));
@@ -911,6 +924,10 @@ class RodajesFlujo extends BaseController
         if ((int) ($st['id'] ?? 0) !== (int) $e['setup_id']) $datos['orden_rodaje'] = null;
         if ($st && (int) $st['id'] !== (int) $e['setup_id']) {
             foreach (self::camaraDeSetup($st) as $c => $v) if (($datos[$c] ?? '') === '') $datos[$c] = $v;
+        }
+        if (array_key_exists('setup_video_id', $in)) {
+            $sv = (int) $in['setup_video_id'] ?: null;
+            $datos['setup_video_id'] = ($e['formato'] ?? '') === 'ambas' && $sv && (new RodajesSetupModel())->where('proyecto_id', (int) $pid)->find($sv) ? $sv : null;
         }
         $props = $limpiar($in['props'] ?? []);
         $datos['props'] = $props ? json_encode($props, JSON_UNESCAPED_UNICODE) : null;

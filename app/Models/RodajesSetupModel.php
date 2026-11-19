@@ -10,5 +10,5 @@ class RodajesSetupModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = false;
-    protected $allowedFields = ['proyecto_id', 'nombre', 'optica', 'soporte', 'fps', 'luz', 'notas', 'imagen', 'orden'];
+    protected $allowedFields = ['proyecto_id', 'nombre', 'tipo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas', 'imagen', 'orden'];
 }

@@ -13,9 +13,9 @@ Simulación de referencia (solo FLUJO): artifact «Simulador de rodaje» (https:
 3. **Revisar ideas** — por temática (y «Sin temática») y una a una: Descartar / Nueva toma / Variante de toma existente. Al crear la toma se le pone zona (sugerencias de las existentes o «+ crear» al vuelo), franja, setup (select o «+ crear»), props, prioridad y variantes. Contador «N ideas sin revisar».
 3b. **Foto o vídeo** — marcar varias tomas y tocar Foto / Vídeo / Foto y vídeo (como Momento); luego cambiar sueltas con el select. Al cambiar, el estado del plató se mueve con rod_cambio_formato (toma y variantes).
 4. **Ubicaciones** — con las zonas que han salido: ordenar la ruta (qué zona antes y cuál después), imagen guía subida por zona y **puntos** marcados sobre ella; asignar punto a las tomas de cada zona. La ubicación es una **zona** amplia; el punto es opcional. Caso inverso: crear zona aquí y «+ toma aquí».
-5. **Setups** — repasar los creados al vuelo: nombre, lente, soporte, fps, luz y notas. Solo técnico.
+5. **Setups** — repasar los creados al vuelo. Cada setup es de **foto** o de **vídeo** (tipo) con sus parámetros: lente, soporte, diafragma, velocidad/obturación, ISO, flash/luz (foto) y además fps y ND (vídeo). La toma «Foto y vídeo» lleva dos setups asignados por separado: `setup_id` = principal (foto; o el de vídeo si la toma es solo vídeo) y `setup_video_id` = el de vídeo. El plan y el plató agrupan por el principal (foto manda). Las variantes heredan los setups de su toma.
 6. **Plan** — orden: Franja → Zona (orden de ruta) → Setup → Toma → Variantes.
-7. **Plató** — mismo orden; setup terminado se pliega; imprescindibles marcadas; entre tomas del mismo setup se muestra el cambio de props («+ bolsas · − paraguas»).
+7. **Plató** — ficha: foto con debajo un botón por setup (foto izquierda, vídeo derecha, o uno solo) que despliega sus parámetros; a la derecha, en grande, props, focal de foto y de vídeo y flash/luz. Las variantes usan la misma ficha con una franja izquierda más gruesa. Mismo orden; setup terminado se pliega; imprescindibles marcadas; entre tomas del mismo setup se muestra el cambio de props («+ bolsas · − paraguas»).
 
 ## Toma (= escena en BD; en pantalla «Toma»)
 

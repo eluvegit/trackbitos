@@ -335,3 +335,31 @@ if (!function_exists('rod_setup_linea')) {
         return esc(implode(' · ', array_filter([$tec, trim((string) $s['luz'])])));
     }
 }
+
+if (!function_exists('rod_setups_toma')) {
+    /** ['foto' => setup|null, 'video' => setup|null] según el formato; solo las claves que la toma usa. */
+    function rod_setups_toma(array $e, array $setups): array
+    {
+        $p = $setups[(int) ($e['setup_id'] ?? 0)] ?? null;
+        $v = $setups[(int) ($e['setup_video_id'] ?? 0)] ?? null;
+        return match ($e['formato'] ?? null) {
+            'ambas' => ['foto' => $p, 'video' => $v],
+            'video' => ['video' => $p],
+            'foto'  => ['foto' => $p],
+            default => [($p['tipo'] ?? '') === 'video' ? 'video' : 'foto' => $p],
+        };
+    }
+}
+
+if (!function_exists('rod_cambio_formato_setup')) {
+    /** Al cambiar el formato, el setup de vídeo pasa a principal o al revés. */
+    function rod_cambio_formato_setup(array $e, ?string $nuevo): array
+    {
+        $viejo = ($e['formato'] ?? null) ?: null;
+        if ($viejo === $nuevo) return [];
+        if ($viejo === 'ambas' && $nuevo === 'video') return ['setup_id' => $e['setup_video_id'] ?? null, 'setup_video_id' => null];
+        if ($viejo === 'ambas') return ['setup_video_id' => null];
+        if ($viejo === 'video' && $nuevo === 'ambas') return ['setup_id' => null, 'setup_video_id' => $e['setup_id'] ?? null];
+        return [];
+    }
+}

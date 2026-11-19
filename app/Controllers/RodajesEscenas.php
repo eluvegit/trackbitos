@@ -436,6 +436,8 @@ class RodajesEscenas extends BaseController
         }
         // Setup y cámara al unísono (óptica / fps / soporte).
         if ($post['setup_id']) $post = RodajesFlujo::alinearTomaConSetup($post, (int) $post['setup_id']);
+        $sv = (int) ($post['setup_video_id'] ?? 0);
+        $post['setup_video_id'] = ($post['formato'] ?? null) === 'ambas' && $sv && (new RodajesSetupModel())->where('proyecto_id', $pid)->find($sv) ? $sv : null;
 
         $post['franja'] = array_key_exists((string) ($post['franja'] ?? ''), RodajesEscenaModel::FRANJAS) ? $post['franja'] : null;
         $post['prioridad'] = ($post['prioridad'] ?? '') === 'opc' ? 'opc' : 'imp';

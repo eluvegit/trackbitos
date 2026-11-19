@@ -24,8 +24,77 @@ $pre = static function (string $v, string $pref = '', string $suf = ''): string 
 };
 $img = static fn (?array $m) => $m && $m['origen'] === 'archivo' ? base_url($m['ruta_archivo']) : null;
 
-$sub = [];
-if ($sesion) $sub[] = '<a class="rd-ses" href="' . site_url('sesiones/' . $sesion['id']) . '"><i class="bi bi-camera"></i>' . esc($sesion['titulo']) . '</a>';
+// Parámetros de un setup para su parte (foto / vídeo). $deToma: true = la toma manda en todo; array = solo esas columnas.
+$tecnica = static function (string $parte, ?array $st, array $e, bool|array $deToma) use ($pre): array {
+    $v = static function (string $ec, string $sc) use ($st, $e, $deToma): string {
+        $t = ($deToma === true || in_array($ec, (array) $deToma, true)) ? trim((string) ($e[$ec] ?? '')) : '';
+        return $t !== '' ? $t : trim((string) ($st[$sc] ?? ''));
+    };
+    $video = $parte === 'video';
+    return array_filter([
+        'Lente'                              => $v('camara_optica', 'optica'),
+        'Soporte'                            => $v('camara_soporte', 'soporte'),
+        'Diafragma'                          => $pre($v('camara_apertura', 'apertura'), 'f/'),
+        ($video ? 'Obturación' : 'Velocidad') => $v('camara_velocidad', 'velocidad'),
+        'ISO'                                => $pre($v('camara_iso', 'iso'), 'ISO '),
+        'FPS'                                => $video ? $pre($v('camara_fps', 'fps'), '', ' fps') : '',
+        'ND'                                 => $video ? $pre($v('camara_nd', 'nd'), 'ND ') : '',
+        ($video ? 'Foco de luz' : 'Flash / luz') => $v('plano_esquema_iluminacion', 'luz'),
+    ], static fn ($x) => $x !== '');
+};
+
+// Ficha de una fila (toma o variante): foto con los setups debajo y, a la derecha, props, focales y luz.
+$ficha = static function (array $f): string {
+    $ico = ['foto' => 'bi-camera', 'video' => 'bi-camera-video'];
+    $num = $f['num'] . (!empty($f['var']) ? '·' : '');
+    ob_start(); ?>
+    <div class="pt-par">
+        <div class="pt-izq">
+            <?php if ($f['foto']): ?>
+                <button type="button" class="pt-foto" data-foto="<?= $f['foto'][0] ?>" aria-label="Ver la foto en grande" style="background-image:url('<?= esc($f['foto'][1], 'attr') ?>')">
+                    <span class="pt-num"><?= $num ?></span><span class="pt-pill"></span>
+                </button>
+            <?php else: ?>
+                <div class="pt-hueco"><b><?= $num ?></b>sin foto<span class="pt-pill"></span></div>
+            <?php endif; ?>
+        </div>
+        <div class="pt-datos">
+            <?php if ($f['pre'] !== '' && !$f['mas']): ?><?= $f['pre'] ?><?php endif; ?>
+            <span class="pt-tit"><?= $f['mas'] ? $f['pre'] : '' ?><?= $f['titulo'] ?></span>
+            <span class="pt-props-g<?= $f['props'] || $f['extra'] ? '' : ' falta' ?>"><i class="bi bi-box-seam"></i><span><?php if ($f['props'] || $f['extra']): ?><?= esc(implode(', ', $f['props'])) ?><?php if ($f['extra']): ?><b class="pt-mas-prop"><?= $f['props'] ? ' + ' : '' ?><?= esc(implode(', ', $f['extra'])) ?></b><?php endif; ?><?php else: ?>sin props<?php endif; ?></span></span>
+            <?php $luces = []; ?>
+            <?php foreach ($f['cajas'] as $parte => $c): ?>
+                <?php $l = $c['tec'][$parte === 'video' ? 'Foco de luz' : 'Flash / luz'] ?? ''; if ($l !== '') $luces[$l][] = $parte; ?>
+                <span class="pt-focal-g<?= isset($c['tec']['Lente']) ? '' : ' falta' ?>"><i class="bi <?= $ico[$parte] ?>"></i><?= esc($c['tec']['Lente'] ?? 'sin lente') ?></span>
+            <?php endforeach; ?>
+            <?php foreach ($luces as $l => $ps): ?>
+                <span class="pt-luz-g"><i class="bi <?= in_array('foto', $ps, true) && count($ps) === 1 ? 'bi-lightning-charge' : 'bi-lightbulb' ?>"></i><span><?= esc($l) ?></span></span>
+            <?php endforeach; ?>
+            <?php if ($f['diff'] !== ''): ?><span class="rf-diff"><?= $f['diff'] ?></span><?php endif; ?>
+        </div>
+    </div>
+        <div class="pt-stps">
+            <?php foreach ($f['cajas'] as $parte => $c): ?>
+                <button type="button" class="pt-stp <?= $parte ?><?= $c['st'] ? '' : ' falta' ?>" data-stp="<?= $f['clave'] . '-' . $parte ?>" aria-expanded="false">
+                    <i class="bi <?= $ico[$parte] ?>"></i>
+                    <b><?= $c['st'] ? esc($c['st']['nombre']) : 'sin setup' ?></b>
+                    <i class="bi bi-chevron-down pt-stp-ch"></i>
+                </button>
+            <?php endforeach; ?>
+            <?php if ($f['mas']): ?><button type="button" class="pt-info" data-abrir aria-expanded="false"><span>+ info</span></button><?php endif; ?>
+        </div>
+    <?php foreach ($f['cajas'] as $parte => $c): ?>
+        <div class="pt-stp-det <?= $parte ?>" data-stp-det="<?= $f['clave'] . '-' . $parte ?>" hidden>
+            <div class="pt-stp-h"><i class="bi <?= $ico[$parte] ?>"></i><?= $parte === 'video' ? 'Vídeo' : 'Foto' ?><?= $c['st'] ? ' · ' . esc($c['st']['nombre']) : '' ?></div>
+            <?php if ($c['tec']): ?>
+                <dl class="pt-ficha"><?php foreach ($c['tec'] as $k => $v): ?><dt><?= $k ?></dt><dd><?= esc($v) ?></dd><?php endforeach; ?></dl>
+            <?php else: ?><small class="t3">Sin parámetros: complétalos en Setups.</small><?php endif; ?>
+            <?php if ($c['st'] && trim((string) $c['st']['notas']) !== ''): ?><p class="pt-stp-n"><?= nl2br(esc($c['st']['notas'])) ?></p><?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+    <?php return ob_get_clean();
+};
+
 
 $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?int $var = null) {
     $ico = ['foto' => 'bi-camera', 'video' => 'bi-camera-video'][$parte] ?? 'bi-circle';
@@ -39,9 +108,9 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
 <div class="fv rd pt pt-B" id="plato" data-base="<?= site_url("rodajes/$pid/escenas") ?>" data-var="<?= site_url("rodajes/$pid/variantes") ?>">
     <?= view('rodajes/_cabecera', [
         'migas'   => [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Plató' => null],
-        'titulo'  => esc($proyecto['titulo']),
-        'sub'     => implode('', $sub),
-        'acciones' => '<a class="fv-btn" href="' . site_url("rodajes/$pid/plan") . '"><i class="bi bi-arrow-left"></i>Plan</a>',
+        'titulo'  => null,
+        'iconos'  => ($sesion ? '<a class="fv-ibtn" href="' . site_url('sesiones/' . $sesion['id']) . '" title="Sesión: ' . esc($sesion['titulo'], 'attr') . '"><i class="bi bi-camera"></i></a>' : '')
+            . '<a class="fv-gbtn" href="' . site_url("rodajes/$pid/plan") . '"><i class="bi bi-arrow-left"></i>Plan</a>',
         'clasica' => false,
     ]) ?>
 
@@ -55,24 +124,26 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     <div class="pt-cuerpo">
         <div class="pt-fija">
             <div class="pt-h1">
-                <span class="pt-cont"><b id="plHechas"><?= $cuenta['hecha'] ?></b>/<span id="plUtiles"><?= $total - $cuenta['descartada'] ?></span> hechas</span>
-                <div class="rd-barra pt-barra" aria-hidden="true">
-                    <i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i>
+                <div class="pt-filtros" role="group" aria-label="Filtrar tomas">
+                    <button type="button" class="on" aria-pressed="true" data-filtro="pendientes" title="Por hacer" aria-label="Por hacer"><i class="bi bi-circle"></i><span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
+                    <button type="button" aria-pressed="false" data-filtro="repetir" title="Repetir" aria-label="Repetir"><i class="bi bi-arrow-repeat"></i><span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
+                    <button type="button" aria-pressed="false" data-filtro="hecha" title="Hechas" aria-label="Hechas"><i class="bi bi-check-lg"></i><span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
+                    <button type="button" aria-pressed="false" data-filtro="todas" title="Todas" aria-label="Todas"><i class="bi bi-list-ul"></i><span data-n="todas"><?= $total ?></span></button>
                 </div>
-                <button type="button" class="pt-ajbtn" id="plAjBtn" aria-expanded="false" aria-label="Orden, filtros y vista"><i class="bi bi-sliders"></i></button>
-            </div>
-            <div class="pt-seg pl-filtros">
-                <button type="button" class="on" data-filtro="pendientes">Por hacer<span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
-                <button type="button" data-filtro="repetir">Repetir<span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
-                <button type="button" data-filtro="hecha">Hechas<span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
-                <button type="button" data-filtro="todas">Todas<span data-n="todas"><?= $total ?></span></button>
-            </div>
-            <?php if ($hayDN): ?>
-                <div class="pt-seg pl-dn" role="group" aria-label="Día y noche">
-                    <button type="button" data-dn="dia" aria-pressed="true"><i class="bi bi-sun"></i>Día</button>
-                    <button type="button" data-dn="noche" aria-pressed="true"><i class="bi bi-moon-stars"></i>Noche</button>
+                <div class="pt-der">
+                    <button type="button" class="pt-ib" id="plAjBtn" aria-expanded="false" title="Orden, vista y más" aria-label="Orden, vista y más"><i class="bi bi-sliders"></i></button>
                 </div>
-            <?php endif; ?>
+            </div>
+            <div class="pt-prog">
+                <?php if ($hayDN): ?>
+                    <span class="pl-dn" role="group" aria-label="Día y noche">
+                        <button type="button" class="pt-ib" data-dn="dia" aria-pressed="true" title="Día" aria-label="Día"><i class="bi bi-sun"></i></button>
+                        <button type="button" class="pt-ib" data-dn="noche" aria-pressed="true" title="Noche" aria-label="Noche"><i class="bi bi-moon-stars"></i></button>
+                    </span>
+                <?php endif; ?>
+                <span class="rd-barra pt-barra" aria-hidden="true"><i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i></span>
+                <span class="pt-cont" title="Hechas"><b id="plHechas"><?= $cuenta['hecha'] ?></b>/<span id="plUtiles"><?= $total - $cuenta['descartada'] ?></span></span>
+            </div>
             <div class="pt-aj" id="plAj" hidden>
                 <span class="pt-lbl">Vista</span>
                 <div class="pt-seg pt-chips" id="plVistas">
@@ -135,22 +206,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     $diff   = $esPlan ? rod_props_diff($propsAnt, $props) : '';
                     $propsAnt = $props;
                     $esVideo = in_array($e['formato'] ?? '', ['video', 'ambas'], true);
-                    $params = implode(' · ', array_filter([
-                        $pre((string) ($e['camara_apertura'] ?? ''), 'f/'),
-                        $pre((string) ($e['camara_velocidad'] ?? '')),
-                        $pre((string) ($e['camara_iso'] ?? ''), 'ISO '),
-                        $esVideo ? $pre((string) ($e['camara_fps'] ?? ''), '', ' fps') : '',
-                        $pre((string) ($e['camara_nd'] ?? ''), 'ND '),
-                    ]));
-                    // Lo técnico que no tenga la toma lo pone su setup (lente, soporte, luz).
-                    $stp   = $setups[(int) ($e['setup_id'] ?? 0)] ?? null;
-                    $focal = trim((string) ($e['camara_optica'] ?? '')) ?: trim((string) ($stp['optica'] ?? ''));
-                    $sopor = trim((string) ($e['camara_soporte'] ?? '')) ?: trim((string) ($stp['soporte'] ?? ''));
-                    $luz   = trim((string) ($e['plano_esquema_iluminacion'] ?? '')) ?: trim((string) ($stp['luz'] ?? ''));
-                    $fmt   = $formatos[$e['formato'] ?? ''][0] ?? '';
+                    $stp    = $setups[(int) ($e['setup_id'] ?? 0)] ?? null;
 
-                    // Visor: fotos de la toma, sus referencias y las fotos de sus variantes.
-                    // (El moodboard de la temática no: son fotos de otras tomas y confundían.)
+                    // Una caja por setup que usa la toma (foto / vídeo), con sus parámetros.
+                    $cajas = [];
+                    foreach (rod_setups_toma($e, $setups) as $parte => $st) {
+                        $principal = !($parte === 'video' && ($e['formato'] ?? '') === 'ambas');
+                        $cajas[$parte] = ['st' => $st, 'tec' => $tecnica($parte, $st, $e, $principal ? true : ['camara_fps', 'camara_nd'])];
+                    }
+
                     $lb = [];
                     foreach ($fotos['t'][$eid] ?? [] as $m) if ($s = $img($m)) $lb[] = ['s' => $s, 'c' => 'Foto de la toma'];
                     foreach ($media[$eid] ?? [] as $r) if (!$r['video']) $lb[] = ['s' => $r['src'], 'c' => 'Referencia'];
@@ -163,14 +227,6 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     if (!$fotoPrin && $lb && !$varFoto) $fotoPrin = $lb[0]['s'];
                     $idxPrin = $fotoPrin ? (int) array_search($fotoPrin, array_column($lb, 's'), true) : -1;
 
-                    // Ficha técnica: siempre a la vista (con «—» si falta) para saber qué hay que rellenar.
-                    $tecnica = [
-                        'Setup'      => $stp['nombre'] ?? '',
-                        'Lente'      => $focal,
-                        'Soporte'    => $sopor,
-                        'Parámetros' => $params,
-                        'Luz'        => $luz,
-                    ];
                     $detalle = array_filter([
                         'Plano'               => ($e['camara_tipo_plano'] ?? ''),
                         'Ángulo'              => ($e['camara_angulo'] ?? ''),
@@ -191,6 +247,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     ], static fn ($v) => trim((string) $v) !== '');
                     $ed = [
                         'titulo' => (string) ($e['escena_descripcion'] ?? ''), 'setup_id' => (int) ($e['setup_id'] ?? 0),
+                        'setup_video_id' => (int) ($e['setup_video_id'] ?? 0), 'formato' => (string) ($e['formato'] ?? ''),
                         'optica' => (string) ($e['camara_optica'] ?? ''), 'soporte' => (string) ($e['camara_soporte'] ?? ''),
                         'apertura' => (string) ($e['camara_apertura'] ?? ''), 'velocidad' => (string) ($e['camara_velocidad'] ?? ''),
                         'iso' => (string) ($e['camara_iso'] ?? ''), 'fps' => (string) ($e['camara_fps'] ?? ''), 'nd' => (string) ($e['camara_nd'] ?? ''),
@@ -201,34 +258,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     ?>
                     <article class="pt-toma" data-dn="<?= rod_dia_noche($e['franja'] ?? null) ?>" data-ed="<?= esc(json_encode($ed, JSON_UNESCAPED_UNICODE), 'attr') ?>" data-id="<?= $eid ?>" data-g="<?= $gi ?>" style="--t:var(--pt-c<?= $ti++ % 4 ?>)" data-fotos="<?= esc(json_encode($lb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'attr') ?>" data-titulo="<?= esc((int) $e['orden'] . '. ' . rod_titulo_escena($e), 'attr') ?>">
                         <div class="pt-fila" data-fila>
-                            <div class="pt-par">
-                                <?php if ($fotoPrin): ?>
-                                    <button type="button" class="pt-foto" data-foto="<?= $idxPrin ?>" aria-label="Ver la foto en grande" style="background-image:url('<?= esc($fotoPrin, 'attr') ?>')">
-                                        <span class="pt-num"><?= (int) $e['orden'] ?></span><span class="pt-pill"></span>
-                                    </button>
-                                <?php else: ?>
-                                    <div class="pt-hueco"><b><?= (int) $e['orden'] ?></b>sin foto<span class="pt-pill"></span></div>
-                                <?php endif; ?>
-                                <button type="button" class="pt-datos" data-abrir aria-expanded="false">
-                                    <span class="pt-tit"><?php if ($hayDN && empty($e['franja'])): ?><span class="pt-sinfranja" title="Sin momento del día: sale en día y en noche">Sin momento</span> <?php endif; ?><?php if ($hayOpc && !$opcE): ?><span class="rf-prio imp">Imp.</span> <?php endif; ?><?= esc(rod_titulo_escena($e)) ?></span>
-                                    <span class="pt-res"><span<?= $stp ? '' : ' class="falta"' ?>><i class="bi bi-camera"></i><?= $stp ? esc($stp['nombre']) : 'sin setup' ?></span><span<?= $props ? '' : ' class="falta"' ?>><i class="bi bi-box-seam"></i><?= $props ? esc(implode(', ', $props)) : 'sin props' ?></span></span>
-                                    <?php if ($focal !== '' || $fmt !== ''): ?>
-                                        <span class="pt-tec"><?php if ($focal !== ''): ?><span class="pt-focal"><?= esc($focal) ?></span><?php endif; ?><?php if ($fmt !== ''): ?><span class="pt-fmt"><?= $fmt ?></span><?php endif; ?></span>
-                                    <?php endif; ?>
-                                    <?php if ($params !== ''): ?><span class="pt-params"><?= esc($params) ?></span><?php endif; ?>
-                                    <?php if ($luz !== ''): ?><span class="pt-luz"><i class="bi bi-lightbulb"></i><span><?= esc($luz) ?></span></span><?php endif; ?>
-                                    <?php if ($diff !== ''): ?><span class="rf-diff"><?= $diff ?></span><?php endif; ?>
-                                    <span class="pt-mas"><span>Más datos</span><i class="bi bi-chevron-down"></i></span>
-                                </button>
-                            </div>
+                            <?= $ficha([
+                                'num' => (int) $e['orden'], 'foto' => $fotoPrin ? [$idxPrin, $fotoPrin] : null, 'cajas' => $cajas,
+                                'titulo' => esc(rod_titulo_escena($e)), 'props' => $props, 'extra' => [], 'diff' => $diff,
+                                'pre' => ($hayDN && empty($e['franja']) ? '<span class="pt-sinfranja" title="Sin momento del día: sale en día y en noche">Sin momento</span> ' : '') . ($hayOpc && !$opcE ? '<span class="rf-prio imp">Imp.</span> ' : ''),
+                                'mas' => true, 'clave' => "t$eid",
+                            ]) ?>
 
                             <div class="pt-det" hidden>
-                                <dl class="pt-ficha">
-                                    <?php foreach ($tecnica as $k => $v): ?><dt><?= $k ?></dt><dd<?= $v === '' ? ' class="falta"' : '' ?>><?= $v === '' ? '—' : esc($v) ?></dd><?php endforeach; ?>
-                                    <dt>Props</dt><dd<?= $props ? '' : ' class="falta"' ?>><?= $props ? esc(implode(', ', $props)) : 'ninguno' ?></dd>
-                                </dl>
                                 <?php
-                                // Solo las fotos que no se ven ya en la fila: fotos extra de la toma y referencias.
                                 $extra = array_keys(array_filter($lb, static fn ($f, $i) => $i !== $idxPrin && !in_array($i, $varFoto, true), ARRAY_FILTER_USE_BOTH));
                                 ?>
                                 <?php if ($extra): ?>
@@ -258,22 +296,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         <?php foreach ($vars as $va): ?>
                             <?php $vid = (int) $va['id']; $vopc = $opcE || $va['prioridad'] === 'opc'; ?>
                             <div class="pt-fila pt-var" data-fila data-opc="<?= $vopc ? '1' : '' ?>">
-                                <div class="pt-par">
-                                    <?php if (isset($varFoto[$vid])): ?>
-                                        <button type="button" class="pt-foto" data-foto="<?= $varFoto[$vid] ?>" aria-label="Ver la foto de la variante" style="background-image:url('<?= esc($lb[$varFoto[$vid]]['s'], 'attr') ?>')">
-                                            <span class="pt-num"><?= (int) $e['orden'] ?>·</span><span class="pt-pill"></span>
-                                        </button>
-                                    <?php else: ?>
-                                        <div class="pt-hueco"><b><?= (int) $e['orden'] ?>·</b>sin foto<span class="pt-pill"></span></div>
-                                    <?php endif; ?>
-                                    <div class="pt-datos">
-                                        <span class="pt-badge"><i class="pt-rombo"></i>Variante<?php if ($hayOpc && $va['prioridad'] === 'imp'): ?> <span class="rf-prio imp">Imp.</span><?php endif; ?></span>
-                                        <span class="pt-tit"><?= esc($va['texto']) ?></span>
-                                        <?php $vx = rod_props_extra($e, $va); $vp = array_merge($props, $vx); ?>
-                                        <span class="pt-res"><span<?= $stp ? '' : ' class="falta"' ?>><i class="bi bi-camera"></i><?= $stp ? esc($stp['nombre']) : 'sin setup' ?></span><span<?= $vp ? '' : ' class="falta"' ?>><i class="bi bi-box-seam"></i><?php if ($vp): ?><?= esc(implode(', ', $props)) ?><?php if ($vx): ?><b class="pt-mas-prop"><?= $props ? ' + ' : '' ?><?= esc(implode(', ', $vx)) ?></b><?php endif; ?><?php else: ?>sin props<?php endif; ?></span></span>
-                                        <?php if ($focal !== ''): ?><span class="pt-tec"><span class="pt-focal"><?= esc($focal) ?></span></span><?php endif; ?>
-                                    </div>
-                                </div>
+                                <?= $ficha([
+                                    'num' => (int) $e['orden'], 'var' => true, 'foto' => isset($varFoto[$vid]) ? [$varFoto[$vid], $lb[$varFoto[$vid]]['s']] : null, 'cajas' => $cajas,
+                                    'titulo' => esc($va['texto']), 'props' => $props, 'extra' => rod_props_extra($e, $va), 'diff' => '',
+                                    'pre' => '<span class="pt-badge"><i class="pt-rombo"></i>Variante' . ($hayOpc && $va['prioridad'] === 'imp' ? ' <span class="rf-prio imp">Imp.</span>' : '') . '</span>',
+                                    'mas' => false, 'clave' => "v$vid",
+                                ]) ?>
                                 <?php foreach ($cols as $parte => $col): ?>
                                     <?= $btns((string) $parte, ($va[$col] ?? null) ?: 'pendiente', $varias, $vopc, $vid) ?>
                                 <?php endforeach; ?>
@@ -295,8 +323,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
             <div class="pt-ed-h"><b id="plEdT">Editar toma</b><button type="button" class="pt-lb-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
             <div class="pt-ed-cuerpo">
                 <label class="pt-ed-c pt-ed-ancho"><span>Título</span><input class="fv-input" name="titulo" maxlength="255"></label>
-                <label class="pt-ed-c pt-ed-ancho"><span>Setup</span>
-                    <select class="fv-input" name="setup_id"><option value="">Sin setup</option><?php foreach ($setups as $st): ?><option value="<?= (int) $st['id'] ?>"><?= esc($st['nombre']) ?></option><?php endforeach; ?></select>
+                <?php $opts = implode('', array_map(static fn ($st) => '<option value="' . (int) $st['id'] . '" data-tipo="' . esc((string) $st['tipo'], 'attr') . '">' . esc($st['nombre']) . '</option>', $setups)); ?>
+                <label class="pt-ed-c" data-ed-setup><span id="plEdSetupT">Setup de foto</span>
+                    <select class="fv-input" name="setup_id"><option value="">Sin setup</option><?= $opts ?></select>
+                </label>
+                <label class="pt-ed-c" data-ed-setup-video><span>Setup de vídeo</span>
+                    <select class="fv-input" name="setup_video_id"><option value="">Sin setup</option><?= $opts ?></select>
                 </label>
                 <label class="pt-ed-c"><span>Lente</span><input class="fv-input" name="optica" maxlength="100" placeholder="del setup"></label>
                 <label class="pt-ed-c"><span>Soporte</span><input class="fv-input" name="soporte" maxlength="100" placeholder="del setup"></label>
@@ -431,8 +463,8 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
     }
 
-    raiz.querySelectorAll('.pl-filtros [data-filtro]').forEach(b => b.addEventListener('click', () => {
-        raiz.querySelectorAll('.pl-filtros [data-filtro]').forEach(x => x.classList.toggle('on', x === b));
+    raiz.querySelectorAll('.pt-filtros [data-filtro]').forEach(b => b.addEventListener('click', () => {
+        raiz.querySelectorAll('.pt-filtros [data-filtro]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
         filtro = b.dataset.filtro;
         pintar();
     }));
@@ -443,7 +475,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         ev.preventDefault();
         aj.hidden = true; ajBtn.setAttribute('aria-expanded', 'false');
         const cab = document.getElementById('pl-g' + a.dataset.ir);
-        if (cab.hidden) raiz.querySelector('.pl-filtros [data-filtro="todas"]').click();
+        if (cab.hidden) raiz.querySelector('.pt-filtros [data-filtro="todas"]').click();
         const fija = raiz.querySelector('.pt-fija');
         window.scrollTo({ top: cab.getBoundingClientRect().top + window.scrollY - fija.offsetHeight - 8, behavior: 'smooth' });
     });
@@ -468,12 +500,19 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     raiz.addEventListener('click', ev => {
         const f = ev.target.closest('[data-foto]');
         if (f) { abrirFoto(f.closest('.pt-toma'), +f.dataset.foto); return; }
+        const sb = ev.target.closest('[data-stp]');
+        if (sb) {
+            const fila = sb.closest('[data-fila]'), det = fila.querySelector('[data-stp-det="' + sb.dataset.stp + '"]');
+            det.hidden = !det.hidden;
+            sb.setAttribute('aria-expanded', !det.hidden);
+            return;
+        }
         const cab = ev.target.closest('[data-abrir]');
         if (cab) {
             const fila = cab.closest('[data-fila]'), det = fila.querySelector('.pt-det');
             det.hidden = !det.hidden;
             cab.setAttribute('aria-expanded', !det.hidden);
-            cab.querySelector('.pt-mas span').textContent = det.hidden ? 'Más datos' : 'Menos';
+            cab.querySelector('span').textContent = det.hidden ? '+ info' : '− info';
             return;
         }
         const btn = ev.target.closest('.pt-btns button');
@@ -539,7 +578,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     const LISTA = <?= json_encode(array_values($propsLista ?? []), JSON_UNESCAPED_UNICODE) ?>;
     const dlg = document.getElementById('plEd'), dlgF = dlg.querySelector('form');
     const norm = t => t.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    let edToma = null;
+    let edToma = null, edAmbas = false;
     const chips = (caja, opciones, activos) => {
         const act = activos.map(norm);
         caja.innerHTML = '';
@@ -581,7 +620,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const d = JSON.parse(edToma.dataset.ed);
         document.getElementById('plEdT').textContent = edToma.dataset.titulo;
         ['titulo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas'].forEach(k => dlgF.elements[k].value = d[k] || '');
+        const ambas = d.formato === 'ambas', tipoP = d.formato === 'video' ? 'video' : 'foto';
+        const filtrar = (sel, tipo) => [...sel.options].forEach(o => { o.hidden = !!o.dataset.tipo && o.dataset.tipo !== tipo && !o.selected; });
         dlgF.elements.setup_id.value = d.setup_id || '';
+        dlgF.elements.setup_video_id.value = d.setup_video_id || '';
+        filtrar(dlgF.elements.setup_id, tipoP); filtrar(dlgF.elements.setup_video_id, 'video');
+        document.getElementById('plEdSetupT').textContent = d.formato === 'video' ? 'Setup de vídeo' : (d.formato ? 'Setup de foto' : 'Setup');
+        dlg.querySelector('[data-ed-setup]').classList.toggle('pt-ed-ancho', !ambas);
+        dlg.querySelector('[data-ed-setup-video]').hidden = !ambas;
+        edAmbas = ambas;
         dlg.querySelector('[data-solo-video]').hidden = !d.video;
         chips(dlg.querySelector('[data-props="t"]'), LISTA, d.props);
         const vars = document.getElementById('plEdVars');
@@ -600,6 +647,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     document.getElementById('plEdOk').addEventListener('click', ev => {
         const btn = ev.currentTarget, f = dlgF.elements;
         const datos = { setup_id: f.setup_id.value, props: marcados(dlg.querySelector('[data-props="t"]')), variantes: {} };
+        if (edAmbas) datos.setup_video_id = f.setup_video_id.value;
         ['titulo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas'].forEach(k => datos[k] = f[k].value);
         dlg.querySelectorAll('[data-var]').forEach(c => datos.variantes[c.dataset.var] = marcados(c));
         btn.disabled = true;
@@ -621,12 +669,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     let volver = null;
     try { volver = JSON.parse(sessionStorage.getItem('platoVolver') || 'null'); sessionStorage.removeItem('platoVolver'); } catch {}
     if (volver) {
-        raiz.querySelector('.pl-filtros [data-filtro="' + volver.filtro + '"]')?.click();
+        raiz.querySelector('.pt-filtros [data-filtro="' + volver.filtro + '"]')?.click();
         if (volver.medio) raiz.querySelector('button[data-medio="' + volver.medio + '"]:not(.pt-btns)')?.click();
         if (volver.soloImp) raiz.querySelector('.pl-imp')?.click();
         const t = raiz.querySelector('.pt-toma[data-id="' + volver.id + '"]');
         if (t) {
-            if (t.hidden) { raiz.querySelector('.pl-filtros [data-filtro="todas"]')?.click(); }
+            if (t.hidden) { raiz.querySelector('.pt-filtros [data-filtro="todas"]')?.click(); }
             const cab = t.querySelector('[data-abrir]');
             if (cab && cab.getAttribute('aria-expanded') !== 'true') cab.click();
             window.scrollTo(0, t.getBoundingClientRect().top + window.scrollY - volver.top);

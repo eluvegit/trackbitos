@@ -186,7 +186,7 @@ ob_start(); ?>
             <?php $setupAct = (string) old('setup_id', (string) ($e['setup_id'] ?? '')); ?>
             <div class="rd-filas-f dos">
                 <div class="rd-campo">
-                    <label for="f_setup">Setup</label>
+                    <label for="f_setup"><?= $formato === 'video' ? 'Setup de vídeo' : ($formato ? 'Setup de foto' : 'Setup') ?></label>
                     <select class="form-select rd-sel" id="f_setup" name="setup_id">
                         <option value="">Sin decidir</option>
                         <?php foreach ($setups ?? [] as $st): ?>
@@ -201,6 +201,17 @@ ob_start(); ?>
                     <small class="rd-ayuda">Lente, soporte y fps los completas en Setups.</small>
                 </div>
                 <div class="rd-campo" id="rfSetupLinea" hidden><span class="rd-lbl">Monta</span><span class="t2"></span></div>
+                <?php $setupVid = (string) old('setup_video_id', (string) ($e['setup_video_id'] ?? '')); ?>
+                <div class="rd-campo" id="rfSetupVideo"<?= $formato === 'ambas' ? '' : ' hidden' ?>>
+                    <label for="f_setup_video"><i class="bi bi-camera-video"></i> Setup de vídeo</label>
+                    <select class="form-select rd-sel" id="f_setup_video" name="setup_video_id">
+                        <option value="">Sin decidir</option>
+                        <?php foreach ($setups ?? [] as $st): ?>
+                            <?php if (($st['tipo'] ?? '') === 'foto' && $setupVid !== (string) $st['id']) continue; ?>
+                            <option value="<?= (int) $st['id'] ?>" <?= $setupVid === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
             <?php if (!empty($setups)): ?>
                 <div class="rf-destinos rd-pick" id="rfSetupPick">
@@ -422,6 +433,12 @@ ob_start(); ?>
     });
 
     const setup = document.getElementById('f_setup');
+    document.querySelectorAll('input[name=formato]').forEach(r => r.addEventListener('change', () => {
+        const f = document.querySelector('input[name=formato][type=radio]:checked')?.value || '';
+        document.getElementById('rfSetupVideo').hidden = f !== 'ambas';
+        const l = document.querySelector('label[for=f_setup]');
+        if (l) l.textContent = f === 'video' ? 'Setup de vídeo' : (f ? 'Setup de foto' : 'Setup');
+    }));
     const pintarSetup = () => {
         const o = setup.selectedOptions[0];
         document.getElementById('rfSetupNuevo').hidden = setup.value !== 'nuevo';

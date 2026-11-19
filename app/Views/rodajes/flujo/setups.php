@@ -6,10 +6,16 @@ $url = static fn (string $r = '') => site_url("rodajes/$pid/$r");
 $franjas = \App\Models\RodajesEscenaModel::FRANJAS;
 $porSetup = [];
 $sinSetup = [];
+$sinVideo = [];
 foreach ($escenas as $e) {
     if ($e['setup_id']) $porSetup[(int) $e['setup_id']][] = $e;
     else $sinSetup[] = $e;
+    if (($e['formato'] ?? '') === 'ambas') {
+        if ($e['setup_video_id']) $porSetup[(int) $e['setup_video_id']][] = $e + ['_video' => true];
+        else $sinVideo[] = $e;
+    }
 }
+$tipos = ['foto' => ['Foto', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-video']];
 ?>
 <div class="fv rd" id="rfSet" data-asignar="<?= $url('escenas') ?>">
     <?= view('rodajes/flujo/_cab', array_merge(get_defined_vars(), ['intro' => 'El montaje técnico: lente, soporte y luz. Es lo que cuesta cambiar, así que se define una vez y cada toma lo elige. Los props van en el paso siguiente.'])) ?>
@@ -28,7 +34,7 @@ foreach ($escenas as $e) {
         $destinos = [];
         foreach ($setups as $s) {
             $n = count($porSetup[(int) $s['id']] ?? []);
-            $destinos[] = ['id' => (int) $s['id'], 'nombre' => $s['nombre'], 'imagen' => $imgSetup[(int) $s['id']], 'sub' => html_entity_decode(strip_tags(rod_setup_linea($s)), ENT_QUOTES) ?: ($n ? $n . ($n === 1 ? ' toma' : ' tomas') : '')];
+            $destinos[] = ['id' => (int) $s['id'], 'nombre' => ($s['tipo'] ? $tipos[$s['tipo']][0] . ' · ' : '') . $s['nombre'], 'imagen' => $imgSetup[(int) $s['id']], 'sub' => html_entity_decode(strip_tags(rod_setup_linea($s)), ENT_QUOTES) ?: ($n ? $n . ($n === 1 ? ' toma' : ' tomas') : '')];
         }
         ?>
         <?= view('rodajes/flujo/_asignar', [
@@ -36,6 +42,16 @@ foreach ($escenas as $e) {
             'titulo' => count($sinSetup) . (count($sinSetup) === 1 ? ' toma sin setup' : ' tomas sin setup'),
             'campo' => 'setup_id', 'icono' => 'bi-camera', 'prefijo' => 's',
             'sinDestinos' => 'Aún no hay setups: crea el primero abajo.',
+        ]) ?>
+    <?php endif; ?>
+    <?php $setupsVideo = array_values(array_filter($setups, static fn ($s) => ($s['tipo'] ?? '') !== 'foto')); ?>
+    <?php if ($sinVideo): ?>
+        <?= view('rodajes/flujo/_asignar', [
+            'pid' => $pid, 'tomas' => $sinVideo, 'portadas' => $portadas ?? [],
+            'destinos' => array_map(static fn ($s) => ['id' => (int) $s['id'], 'nombre' => $s['nombre'], 'imagen' => $imgSetup[(int) $s['id']], 'sub' => html_entity_decode(strip_tags(rod_setup_linea($s)), ENT_QUOTES)], $setupsVideo),
+            'titulo' => count($sinVideo) . (count($sinVideo) === 1 ? ' toma de foto y vídeo sin setup de vídeo' : ' tomas de foto y vídeo sin setup de vídeo'),
+            'campo' => 'setup_video_id', 'icono' => 'bi-camera-video', 'prefijo' => 's',
+            'sinDestinos' => 'Aún no hay setups de vídeo: crea uno abajo y márcalo como Vídeo.',
         ]) ?>
     <?php endif; ?>
 
@@ -55,6 +71,13 @@ foreach ($escenas as $e) {
                     </label>
                     <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
                 </div>
+                <?php $tp = (string) ($s['tipo'] ?? ''); ?>
+                <div class="rf-tipo" role="radiogroup" aria-label="Tipo de setup">
+                    <?php foreach ($tipos as $k => [$txt, $ico]): ?>
+                        <label><input type="radio" name="tipo" value="<?= $k ?>" <?= $tp === $k ? 'checked' : '' ?>><span><i class="bi <?= $ico ?>"></i><?= $txt ?></span></label>
+                    <?php endforeach; ?>
+                    <?php if ($tp === ''): ?><small class="t3">Sin marcar: elige si es de foto o de vídeo.</small><?php endif; ?>
+                </div>
                 <div class="rd-filas-f cam">
                     <div class="rd-campo"><label>Lente</label><input class="fv-input" name="optica" value="<?= esc((string) $s['optica'], 'attr') ?>" placeholder="35mm f/1.8"></div>
                     <div class="rd-campo"><label>Soporte</label>
@@ -63,7 +86,14 @@ foreach ($escenas as $e) {
                         </select>
                     </div>
                 </div>
-                <div class="rd-campo"><label>Luz</label><input class="fv-input" name="luz" value="<?= esc((string) $s['luz'], 'attr') ?>" placeholder="Natural + reflector"></div>
+                <div class="rf-params">
+                    <div class="rd-campo"><label>Diafragma</label><input class="fv-input" name="apertura" value="<?= esc((string) $s['apertura'], 'attr') ?>" placeholder="2.8" inputmode="decimal"></div>
+                    <div class="rd-campo"><label data-et-foto="Velocidad" data-et-video="Obturación"><?= $tp === 'video' ? 'Obturación' : 'Velocidad' ?></label><input class="fv-input" name="velocidad" value="<?= esc((string) $s['velocidad'], 'attr') ?>" placeholder="1/125"></div>
+                    <div class="rd-campo"><label>ISO</label><input class="fv-input" name="iso" value="<?= esc((string) $s['iso'], 'attr') ?>" inputmode="numeric"></div>
+                    <div class="rd-campo" data-tipo="video"><label>FPS</label><input class="fv-input" name="fps" value="<?= esc((string) $s['fps'], 'attr') ?>" inputmode="numeric" placeholder="25"></div>
+                    <div class="rd-campo" data-tipo="video"><label>ND</label><input class="fv-input" name="nd" value="<?= esc((string) $s['nd'], 'attr') ?>"></div>
+                </div>
+                <div class="rd-campo"><label data-et-foto="Flash / luz" data-et-video="Foco de luz"><?= $tp === 'video' ? 'Foco de luz' : ($tp === 'foto' ? 'Flash / luz' : 'Luz') ?></label><input class="fv-input" name="luz" value="<?= esc((string) $s['luz'], 'attr') ?>" placeholder="Natural + reflector"></div>
                 <div class="rd-campo"><label>Notas</label><textarea class="fv-input" name="notas" rows="2" placeholder="Ajustes, perfil de color, qué revisar antes de disparar…"><?= esc((string) $s['notas']) ?></textarea></div>
                 <div class="rd-campo">
                     <span class="rd-lbl">Tomas con este setup<?= $ts ? ' · ' . count($ts) : '' ?></span>
@@ -78,9 +108,9 @@ foreach ($escenas as $e) {
                                 ?>
                                 <li>
                                     <span class="rf-foto mini"><?php if ($pt): ?><img src="<?= base_url($pt) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-film"></i><?php endif; ?></span>
-                                    <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><b class="rf-tnum">#<?= (int) $t['orden'] ?></b> <?= esc($desc !== '' ? $desc : ($tema !== '' ? $tema : 'Toma')) ?></a>
+                                    <a href="<?= $url('escenas/edit/' . $t['id']) ?>"><b class="rf-tnum">#<?= (int) $t['orden'] ?></b><?php if (($t['formato'] ?? '') === 'ambas'): ?> <i class="bi <?= empty($t['_video']) ? 'bi-camera' : 'bi-camera-video' ?>" title="<?= empty($t['_video']) ? 'Como setup de foto' : 'Como setup de vídeo' ?>"></i><?php endif; ?> <?= esc($desc !== '' ? $desc : ($tema !== '' ? $tema : 'Toma')) ?></a>
                                     <small><?= $info ? esc(implode(' · ', $info)) : '&nbsp;' ?></small>
-                                    <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="setup_id" data-recargar aria-label="Cambiar de setup">
+                                    <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="<?= empty($t['_video']) ? 'setup_id' : 'setup_video_id' ?>" data-recargar aria-label="Cambiar de setup">
                                         <option value="">Sin setup (a la bandeja)</option>
                                         <?php foreach ($setups as $o): ?><option value="<?= (int) $o['id'] ?>" <?= (int) $o['id'] === $sid ? 'selected' : '' ?>><?= esc($o['nombre']) ?></option><?php endforeach; ?>
                                     </select>
@@ -105,6 +135,17 @@ foreach ($escenas as $e) {
         <button class="fv-btn"><i class="bi bi-plus-lg"></i>Crear setup</button>
     </form>
 </div>
+<script>
+document.querySelectorAll('.rf-setup').forEach(f => {
+    const poner = () => {
+        const t = f.querySelector('input[name=tipo]:checked')?.value || '';
+        f.dataset.tp = t;
+        f.querySelectorAll('[data-et-foto]').forEach(l => { if (t) l.textContent = l.dataset['et' + (t === 'foto' ? 'Foto' : 'Video')]; });
+    };
+    f.addEventListener('change', ev => { if (ev.target.name === 'tipo') poner(); });
+    poner();
+});
+</script>
 <?= view('rodajes/flujo/_asignar_js') ?>
 <?= view('rodajes/flujo/_sin_recarga', ['raiz' => 'rfSet']) ?>
 <?= $this->endSection() ?>
