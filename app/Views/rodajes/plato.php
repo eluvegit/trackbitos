@@ -96,6 +96,28 @@ $ficha = static function (array $f): string {
 };
 
 
+// Mosaico: cuadrado de foto, solo la imagen; imprescindible = marco rojo.
+$cuadro = static function (?array $foto, bool $imp): string {
+    $cls = 'pm-foto' . ($imp ? ' pm-imp' : '');
+    $tit = $imp ? ' title="Imprescindible"' : '';
+    if ($foto) {
+        return '<button type="button" class="' . $cls . '"' . $tit . ' data-foto="' . $foto[0] . '" aria-label="Ver la foto en grande" style="background-image:url(\'' . esc($foto[1], 'attr') . '\')"></button>';
+    }
+    return '<div class="' . $cls . ' pm-hueco"' . $tit . '><span>sin foto</span></div>';
+};
+// Mosaico: un botón «Hecha» por parte (foto / vídeo); reflejan y mueven los .pt-btns de la fila.
+$hechos = static function (array $partes, bool $corto): string {
+    $ico = ['foto' => 'bi-camera', 'video' => 'bi-camera-video'];
+    $h = '<div class="pm-hechos">';
+    foreach (array_keys($partes) as $p) {
+        $p = (string) $p;
+        $nom = ['foto' => 'foto', 'video' => 'vídeo'][$p] ?? '';
+        $h .= '<button type="button" data-mh="' . $p . '" aria-pressed="false" title="Hecha' . ($nom ? " ($nom)" : '') . '">'
+            . '<i class="bi ' . ($ico[$p] ?? 'bi-check-circle') . '"></i>' . ($corto ? '' : '<span>Hecha</span>') . '<i class="bi bi-check-lg pm-ok"></i></button>';
+    }
+    return $h . '</div>';
+};
+
 $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?int $var = null) {
     $ico = ['foto' => 'bi-camera', 'video' => 'bi-camera-video'][$parte] ?? 'bi-circle';
     $b = static fn ($st, $i, $t) => '<button type="button" data-estado="' . $st . '"><i class="bi ' . $i . '"></i><span>' . $t . '</span></button>';
@@ -125,10 +147,10 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         <div class="pt-fija">
             <div class="pt-h1">
                 <div class="pt-filtros" role="group" aria-label="Filtrar tomas">
-                    <button type="button" class="on" aria-pressed="true" data-filtro="pendientes" title="Por hacer" aria-label="Por hacer"><i class="bi bi-circle"></i><span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
+                    <button type="button" aria-pressed="false" data-filtro="pendientes" title="Por hacer" aria-label="Por hacer"><i class="bi bi-circle"></i><span data-n="pendientes"><?= $cuenta['pendiente'] + $cuenta['repetir'] ?></span></button>
                     <button type="button" aria-pressed="false" data-filtro="repetir" title="Repetir" aria-label="Repetir"><i class="bi bi-arrow-repeat"></i><span data-n="repetir"><?= $cuenta['repetir'] ?></span></button>
                     <button type="button" aria-pressed="false" data-filtro="hecha" title="Hechas" aria-label="Hechas"><i class="bi bi-check-lg"></i><span data-n="hecha"><?= $cuenta['hecha'] ?></span></button>
-                    <button type="button" aria-pressed="false" data-filtro="todas" title="Todas" aria-label="Todas"><i class="bi bi-list-ul"></i><span data-n="todas"><?= $total ?></span></button>
+                    <button type="button" class="on" aria-pressed="true" data-filtro="todas" title="Todas" aria-label="Todas"><i class="bi bi-list-ul"></i><span data-n="todas"><?= $total ?></span></button>
                 </div>
                 <div class="pt-der">
                     <button type="button" class="pt-ib" id="plAjBtn" aria-expanded="false" title="Orden, vista y más" aria-label="Orden, vista y más"><i class="bi bi-sliders"></i></button>
@@ -143,6 +165,10 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 <?php endif; ?>
                 <span class="rd-barra pt-barra" aria-hidden="true"><i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i></span>
                 <span class="pt-cont" title="Hechas"><b id="plHechas"><?= $cuenta['hecha'] ?></b>/<span id="plUtiles"><?= $total - $cuenta['descartada'] ?></span></span>
+                <span class="pt-modo" id="plModo" role="group" aria-label="Lista o mosaico">
+                    <button type="button" class="pt-ib" data-modo="lista" aria-pressed="true" title="Lista con datos" aria-label="Lista con datos"><i class="bi bi-view-list"></i></button>
+                    <button type="button" class="pt-ib" data-modo="mosaico" aria-pressed="false" title="Solo fotos" aria-label="Solo fotos"><i class="bi bi-grid-3x3-gap"></i></button>
+                </span>
             </div>
             <div class="pt-aj" id="plAj" hidden>
                 <span class="pt-lbl">Vista</span>
@@ -184,8 +210,13 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         </div>
 
         <div class="pt-lista">
-            <?php $ti = 0; ?>
+            <?php $ti = 0; $sepVisto = []; ?>
             <?php foreach ($grupos as $gi => $g): ?>
+                <?php // Galería (orden de rodaje): un sol grande antes de lo de día y una luna antes de lo de noche.
+                $gdn = $esPlan ? rod_dia_noche($g['escenas'][0]['franja'] ?? null) : ''; ?>
+                <?php if ($gdn !== '' && !isset($sepVisto[$gdn])): $sepVisto[$gdn] = true; ?>
+                    <div class="pm-sep <?= $gdn ?>" data-sep="<?= $gdn ?>" aria-hidden="true"><i class="bi <?= $gdn === 'noche' ? 'bi-moon-stars-fill' : 'bi-sun-fill' ?>"></i><span><?= $gdn === 'noche' ? 'Noche' : 'Día' ?></span></div>
+                <?php endif; ?>
                 <div class="pt-grupo" id="pl-g<?= $gi ?>" data-bloque>
                     <b><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['n'] ? $g['n'] . '. ' : '') . ($g['nombre'] ?: 'Sin zona')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?></b>
                     <?php if ($esPlan): ?>
@@ -222,7 +253,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     $varFoto = [];
                     foreach ($vars as $va) {
                         $s = $va['moodboard_item_id'] ? $img($fotos['v'][(int) $va['moodboard_item_id']] ?? null) : null;
-                        if ($s) { $varFoto[(int) $va['id']] = count($lb); $lb[] = ['s' => $s, 'c' => 'Variante · ' . $va['texto']]; }
+                        if ($s) { $varFoto[(int) $va['id']] = count($lb); $lb[] = ['s' => $s, 'c' => 'Variante · ' . $va['texto'], 'v' => $va['texto']]; }
                     }
                     if (!$fotoPrin && $lb && !$varFoto) $fotoPrin = $lb[0]['s'];
                     $idxPrin = $fotoPrin ? (int) array_search($fotoPrin, array_column($lb, 's'), true) : -1;
@@ -258,6 +289,25 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     ?>
                     <article class="pt-toma" data-dn="<?= rod_dia_noche($e['franja'] ?? null) ?>" data-ed="<?= esc(json_encode($ed, JSON_UNESCAPED_UNICODE), 'attr') ?>" data-id="<?= $eid ?>" data-g="<?= $gi ?>" style="--t:var(--pt-c<?= $ti++ % 4 ?>)" data-fotos="<?= esc(json_encode($lb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'attr') ?>" data-titulo="<?= esc((int) $e['orden'] . '. ' . rod_titulo_escena($e), 'attr') ?>">
                         <div class="pt-fila" data-fila>
+                            <div class="pm-titulo"><?= esc(rod_titulo_escena($e)) ?></div>
+                            <div class="pm pm-t">
+                                <div class="pm-izq">
+                                    <?= $cuadro($fotoPrin ? [$idxPrin, $fotoPrin] : null, $hayOpc && !$opcE) ?>
+                                    <?= $hechos($partes, false) ?>
+                                </div>
+                                <div class="pm-datos">
+                                    <?php foreach ($cajas as $parte => $c): ?>
+                                        <?php $lz = $c['tec'][$parte === 'video' ? 'Foco de luz' : 'Flash / luz'] ?? ''; ?>
+                                        <div class="pm-parte <?= $parte ?>">
+                                            <span class="pm-focal<?= isset($c['tec']['Lente']) ? '' : ' falta' ?>"><i class="bi <?= $parte === 'video' ? 'bi-camera-video' : 'bi-camera' ?>"></i><?= esc($c['tec']['Lente'] ?? 'sin lente') ?></span>
+                                            <span class="pm-luz<?= $lz === '' ? ' falta' : '' ?>"><i class="bi <?= $parte === 'video' ? 'bi-lightbulb' : 'bi-lightning-charge' ?>"></i><span><?= $lz !== '' ? esc($lz) : 'sin luz' ?></span></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <div class="pm-props<?= $props ? '' : ' falta' ?>"><i class="bi bi-box-seam"></i><span><?= $props ? esc(implode(', ', $props)) : 'sin props' ?></span></div>
+                                    <?php if ($diff !== ''): ?><span class="rf-diff pm-diff"><?= $diff ?></span><?php endif; ?>
+                                </div>
+                            </div>
+                            <button type="button" class="pm-info" data-abrir-m aria-haspopup="dialog"><i class="bi bi-info-circle"></i><span>Más info</span></button>
                             <?= $ficha([
                                 'num' => (int) $e['orden'], 'foto' => $fotoPrin ? [$idxPrin, $fotoPrin] : null, 'cajas' => $cajas,
                                 'titulo' => esc(rod_titulo_escena($e)), 'props' => $props, 'extra' => [], 'diff' => $diff,
@@ -296,6 +346,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         <?php foreach ($vars as $va): ?>
                             <?php $vid = (int) $va['id']; $vopc = $opcE || $va['prioridad'] === 'opc'; ?>
                             <div class="pt-fila pt-var" data-fila data-opc="<?= $vopc ? '1' : '' ?>">
+                                <?php $extraV = rod_props_extra($e, $va); ?>
+                                <div class="pm pm-v">
+                                    <?= $cuadro(isset($varFoto[$vid]) ? [$varFoto[$vid], $lb[$varFoto[$vid]]['s']] : null, $hayOpc && !$vopc) ?>
+                                    <?= $hechos(array_fill_keys(array_keys($cols), 1), true) ?>
+                                    <div class="pm-pie"><span><?= esc($va['texto']) ?></span><?php if ($extraV): ?><b>+ <?= esc(implode(', ', $extraV)) ?></b><?php endif; ?></div>
+                                </div>
                                 <?= $ficha([
                                     'num' => (int) $e['orden'], 'var' => true, 'foto' => isset($varFoto[$vid]) ? [$varFoto[$vid], $lb[$varFoto[$vid]]['s']] : null, 'cajas' => $cajas,
                                     'titulo' => esc($va['texto']), 'props' => $props, 'extra' => rod_props_extra($e, $va), 'diff' => '',
@@ -351,8 +407,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         </form>
     </dialog>
 
+    <dialog class="pt-ed pt-inf" id="plInfo" aria-labelledby="plInfoT">
+        <div class="fv">
+            <div class="pt-ed-h"><b id="plInfoT"></b><button type="button" class="pt-lb-x" data-cerrar aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
+            <div class="pt-ed-cuerpo pt-inf-cuerpo" id="plInfoC"></div>
+        </div>
+    </dialog>
+
     <div class="pt-lb" id="plLb" hidden>
-        <div class="pt-lb-top"><b id="plLbT"></b><span id="plLbN"></span>
+        <div class="pt-lb-top"><div class="pt-lb-tit"><b id="plLbT"></b><small id="plLbV" hidden></small></div><span id="plLbN"></span>
             <button type="button" class="pt-lb-x" id="plLbX" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
         <div class="pt-lb-img" id="plLbImg">
             <img id="plLbI" alt="">
@@ -372,7 +435,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     const varBase = raiz.dataset.var;
     const csrf = '<?= csrf_hash() ?>';
     const TXT = { pendiente: 'Pendiente', hecha: 'Hecha', repetir: 'Repetir', descartada: 'Descartada' };
-    let filtro = 'pendientes', medio = '', soloImp = false;
+    let filtro = 'todas', medio = '', soloImp = false;
     // Día / noche: lados visibles (se recuerda). Sin franja = sale siempre.
     let dn = new Set(['dia', 'noche']);
     try { const g = JSON.parse(localStorage.getItem('rodajes_dn') || 'null'); if (Array.isArray(g) && g.length) dn = new Set(g); } catch {}
@@ -385,6 +448,16 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         raiz.querySelectorAll('#plVistas [data-vista]').forEach(b => b.setAttribute('aria-pressed', b.dataset.vista === (v === 'A' ? 'A' : 'B')));
     };
     ponerVista(ls.get('rodajes_plato_vista'));
+    // Lista con datos / mosaico (solo fotos en cuadrado: toma arriba, variantes debajo).
+    const ponerModo = m => {
+        raiz.classList.toggle('pt-M', m === 'mosaico');
+        raiz.querySelectorAll('#plModo [data-modo]').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === (m === 'mosaico' ? 'mosaico' : 'lista')));
+    };
+    ponerModo(ls.get('rodajes_plato_modo'));
+    raiz.querySelector('#plModo').addEventListener('click', ev => {
+        const b = ev.target.closest('[data-modo]'); if (!b) return;
+        ls.set('rodajes_plato_modo', b.dataset.modo); ponerModo(b.dataset.modo);
+    });
     raiz.querySelector('#plVistas').addEventListener('click', ev => {
         const b = ev.target.closest('[data-vista]'); if (!b) return;
         ls.set('rodajes_plato_vista', b.dataset.vista); ponerVista(b.dataset.vista);
@@ -418,8 +491,14 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 f.hidden = !gs.length;
                 const e = combinar(gs.map(g => g.dataset.actual));
                 f.classList.toggle('hecha', gs.length > 0 && e === 'hecha');
-                const p = f.querySelector('.pt-pill');
-                if (p) { p.textContent = TXT[e]; p.className = 'pt-pill ' + e; }
+                f.querySelectorAll('.pt-pill').forEach(p => { p.textContent = TXT[e]; p.className = 'pt-pill ' + e; });
+                // Botones «Hecha» del mosaico: reflejan su grupo de la fila.
+                f.querySelectorAll('[data-mh]').forEach(b => {
+                    const g = f.querySelector('.pt-btns[data-parte="' + b.dataset.mh + '"]');
+                    b.hidden = !g || g.hidden;
+                    b.setAttribute('aria-pressed', !!g && g.dataset.actual === 'hecha');
+                    b.dataset.est = g ? g.dataset.actual : '';
+                });
             });
             const vis = grupos.filter(casa), ests = vis.map(g => g.dataset.actual);
             ests.forEach(e => n[e]++);
@@ -432,6 +511,11 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
             let sig = b.nextElementSibling, alguna = false;
             while (sig && sig.classList.contains('pt-toma')) { if (!sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
             b.hidden = !alguna;
+        });
+        raiz.querySelectorAll('[data-sep]').forEach(s => {
+            let sig = s.nextElementSibling, alguna = false;
+            while (sig && !sig.matches('[data-sep], .pt-fin')) { if (sig.matches('[data-bloque]') && !sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
+            s.hidden = !alguna;
         });
         const vistos = raiz.querySelectorAll('[data-bloque]:not([hidden])');
         raiz.querySelectorAll('[data-bloque]').forEach(b => b.classList.toggle('primero', b === vistos[0]));
@@ -452,6 +536,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const fin = raiz.querySelector('.pt-fin');
         fin.hidden = tomas.some(t => !t.hidden);
         fin.querySelector('[data-fin-txt]').textContent = filtro === 'pendientes' ? '¡Todas las tomas están hechas!' : '';
+        syncInfo?.();
     }
 
     function enviar(toma, datos, grupo) {
@@ -498,6 +583,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     }));
 
     raiz.addEventListener('click', ev => {
+        if (ev.target.closest('#plInfo')) return;
         const f = ev.target.closest('[data-foto]');
         if (f) { abrirFoto(f.closest('.pt-toma'), +f.dataset.foto); return; }
         const sb = ev.target.closest('[data-stp]');
@@ -507,6 +593,13 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
             sb.setAttribute('aria-expanded', !det.hidden);
             return;
         }
+        const mh = ev.target.closest('[data-mh]');
+        if (mh) {
+            mh.closest('[data-fila]').querySelector('.pt-btns[data-parte="' + mh.dataset.mh + '"] [data-estado="hecha"]')?.click();
+            return;
+        }
+        const cabM = ev.target.closest('[data-abrir-m]');
+        if (cabM) { abrirInfo(cabM.closest('.pt-toma')); return; }
         const cab = ev.target.closest('[data-abrir]');
         if (cab) {
             const fila = cab.closest('[data-fila]'), det = fila.querySelector('.pt-det');
@@ -533,7 +626,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         let guardado = inp.value;
         const guardar = () => {
             if (inp.value === guardado) return;
-            const toma = inp.closest('.pt-toma'), valor = inp.value;
+            const toma = inp.closest('.pt-toma') || infoToma, valor = inp.value;
             enviar(toma, { nota: valor }).then(() => {
                 guardado = valor;
                 const vista = toma.querySelector('.pl-nota-vista');
@@ -543,6 +636,79 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         };
         inp.addEventListener('blur', guardar);
         inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    });
+
+    // ---------- «Más info» de la galería: modal con todo lo de la toma ----------
+    // Los botones de estado son copias que pulsan los de la fila; .pt-det (campos, nota, editar) se mueve dentro y vuelve al cerrar.
+    const info = document.getElementById('plInfo'), infoC = document.getElementById('plInfoC');
+    let infoToma = null, infoDet = null, infoHueco = null, infoDetOculto = true, syncInfo = null, volverInfo = null;
+    const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+    function limpiarInfo() {
+        if (infoDet && infoHueco) { infoHueco.replaceWith(infoDet); infoDet.hidden = infoDetOculto; }
+        infoDet = infoHueco = null; syncInfo = null; infoC.innerHTML = '';
+    }
+    function abrirInfo(toma) {
+        if (!toma) return;
+        if (info.open) info.close();
+        limpiarInfo();
+        infoToma = toma;
+        const d = JSON.parse(toma.dataset.ed || '{}'), fotos = JSON.parse(toma.dataset.fotos || '[]');
+        const fila = toma.querySelector('.pt-fila:not(.pt-var)');
+        document.getElementById('plInfoT').textContent = toma.dataset.titulo;
+        const sec = (tit, ...nodos) => { const s = el('section', 'pt-inf-s'); if (tit) s.append(el('div', 'pt-inf-h', tit)); s.append(...nodos); infoC.append(s); };
+
+        if (fotos.length) {
+            const r = el('div', 'pt-inf-fotos');
+            fotos.forEach((f, i) => {
+                const b = el('button'); b.type = 'button'; b.dataset.foto = i; b.title = f.c; b.setAttribute('aria-label', f.c);
+                b.style.backgroundImage = 'url(' + JSON.stringify(f.s) + ')';
+                r.append(b);
+            });
+            sec('', r);
+        }
+
+        const est = el('div', 'pt-inf-est'), pares = [];
+        toma.querySelectorAll('[data-fila]').forEach(f => {
+            const gs = [...f.querySelectorAll('.pt-btns')].filter(g => !g.hidden);
+            if (!gs.length) return;
+            est.append(el('div', 'pt-inf-lbl', f.classList.contains('pt-var') ? 'Variante · ' + (f.querySelector('.pm-pie span')?.textContent || '') : 'Toma'));
+            gs.forEach(g => {
+                const c = g.cloneNode(true); c.hidden = false;
+                c.addEventListener('click', ev => { const b = ev.target.closest('[data-estado]'); if (b) g.querySelector('[data-estado="' + b.dataset.estado + '"]').click(); });
+                pares.push([g, c]); est.append(c);
+            });
+        });
+        if (pares.length) sec('Estado', est);
+        syncInfo = () => pares.forEach(([g, c]) => c.dataset.actual = g.dataset.actual);
+
+        const cams = [...fila.querySelectorAll('.pt-stp-det')].map(x => { const c = x.cloneNode(true); c.hidden = false; c.removeAttribute('data-stp-det'); return c; });
+        if (cams.length) sec('Cámara y luz', ...cams);
+
+        const props = [el('div', 'pt-inf-props' + (d.props?.length ? '' : ' falta'), d.props?.length ? d.props.join(', ') : 'sin props')];
+        (d.variantes || []).forEach(v => {
+            const l = el('div', 'pt-inf-var', 'Variante · ' + v.texto);
+            if (v.props?.length) l.append(' ', el('b', '', '+ ' + v.props.join(', ')));
+            props.push(l);
+        });
+        const diff = fila.querySelector('.pm-diff');
+        if (diff) props.push(diff.cloneNode(true));
+        sec('Props', ...props);
+
+        infoDet = fila.querySelector('.pt-det');
+        if (infoDet) {
+            infoHueco = document.createComment('pt-det'); infoDet.before(infoHueco);
+            infoDetOculto = infoDet.hidden; infoDet.hidden = false;
+            sec('Detalles', infoDet);
+        }
+        info.showModal();
+        infoC.scrollTop = 0;
+    }
+    info.addEventListener('close', limpiarInfo);
+    info.addEventListener('click', ev => {
+        if (ev.target === info || ev.target.closest('[data-cerrar]')) { info.close(); return; }
+        const f = ev.target.closest('[data-foto]');
+        // La foto en grande va por debajo del modal: se cierra y vuelve a abrirse al salir de la foto.
+        if (f) { const t = infoToma; volverInfo = t; info.close(); abrirFoto(t, +f.dataset.foto); }
     });
 
     const lb = document.getElementById('plLb'), lbI = document.getElementById('plLbI'), lbImg = document.getElementById('plLbImg');
@@ -555,10 +721,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     function verFoto() {
         const f = lbL[lbN];
         lbI.src = f.s; document.getElementById('plLbC').textContent = f.c;
+        const lbV = document.getElementById('plLbV');
+        lbV.textContent = f.v ? 'Variante · ' + f.v : ''; lbV.hidden = !f.v;
         document.getElementById('plLbN').textContent = lbL.length > 1 ? (lbN + 1) + '/' + lbL.length : '';
         document.getElementById('plLbP').hidden = document.getElementById('plLbS').hidden = lbL.length < 2;
     }
-    const cerrar = () => { lb.hidden = true; document.body.style.overflow = ''; };
+    const cerrar = () => {
+        lb.hidden = true; document.body.style.overflow = '';
+        if (volverInfo) { const t = volverInfo; volverInfo = null; abrirInfo(t); }
+    };
     const mover = d => { lbN = (lbN + d + lbL.length) % lbL.length; verFoto(); };
     document.getElementById('plLbX').onclick = cerrar;
     document.getElementById('plLbP').onclick = () => mover(-1);
@@ -616,7 +787,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     raiz.addEventListener('click', ev => {
         const b = ev.target.closest('[data-editar]');
         if (!b) return;
-        edToma = b.closest('.pt-toma');
+        edToma = b.closest('.pt-toma') || infoToma;
         const d = JSON.parse(edToma.dataset.ed);
         document.getElementById('plEdT').textContent = edToma.dataset.titulo;
         ['titulo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas'].forEach(k => dlgF.elements[k].value = d[k] || '');
@@ -675,7 +846,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const t = raiz.querySelector('.pt-toma[data-id="' + volver.id + '"]');
         if (t) {
             if (t.hidden) { raiz.querySelector('.pt-filtros [data-filtro="todas"]')?.click(); }
-            const cab = t.querySelector('[data-abrir]');
+            const cab = t.querySelector(raiz.classList.contains('pt-M') ? '[data-abrir-m]' : '[data-abrir]');
             if (cab && cab.getAttribute('aria-expanded') !== 'true') cab.click();
             window.scrollTo(0, t.getBoundingClientRect().top + window.scrollY - volver.top);
         }

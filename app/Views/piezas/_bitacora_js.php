@@ -66,36 +66,29 @@
 
     /**
      * Estimación en vivo del tiempo de la placa a partir del número de
-     * capas, con el mismo criterio que la calculadora del índice: el
-     * min/capa sale de la referencia medida (minutos ÷ capas), nunca es una
-     * constante suelta, y siempre se suman los minutos fijos de preparación.
-     * Los tres números de calibración llegan en los data-* del form.
+     * capas: solo impresión, con el min/capa ajustado sobre los tiempos
+     * reales de las placas (regla «Real» de la calculadora), sin sumar
+     * preparación. Llega en el data-por-capa-real del form.
      */
     function estimarPorCapas(form) {
         var salida = form.querySelector('[data-estimado-capas]');
         if (!salida) return;
 
         var capas    = parseInt((valor(form, 'numero_capas') || '').replace(/[^\d]/g, ''), 10);
-        var capasRef = parseFloat(form.dataset.calcCapasRef);
-        var minRef   = parseFloat(form.dataset.calcMinutosRef);
-        var minPrep  = parseFloat(form.dataset.calcMinutosPrep) || 0;
+        var porCapa  = parseFloat(form.dataset.porCapaReal);
 
-        if (!(capas > 0) || !(capasRef > 0) || !(minRef >= 0)) {
+        if (!(capas > 0) || !(porCapa > 0)) {
             salida.hidden = true;
             return;
         }
 
-        var impresion = capas * (minRef / capasRef);
-        var total     = impresion + minPrep;
+        var impresion = capas * porCapa;
 
         var ayuda = 'El laminador muestra el número de capas al abrir el archivo de la placa. '
-            + 'La estimación usa el mismo criterio que la calculadora del índice: '
-            + 'capas × minutos por capa (de la referencia medida) + minutos fijos de preparación.';
+            + 'Solo impresión: capas × minutos por capa ajustados sobre los tiempos reales de tus placas.';
 
         salida.innerHTML = '<i class="bi bi-stopwatch"></i> Estimado por capas: ≈ <strong>'
-            + duracion(Math.round(total)) + '</strong> ('
-            + duracion(Math.round(impresion)) + ' de impresión + '
-            + duracion(Math.round(minPrep)) + ' de preparación) '
+            + duracion(Math.round(impresion)) + '</strong> de impresión '
             + '<i class="bi bi-info-circle" title="' + ayuda + '" style="cursor: help;"></i>';
         salida.hidden = false;
     }

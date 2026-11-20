@@ -3056,7 +3056,7 @@ class Web extends BaseController
             'envios'     => $envios,
             'con'        => $otra ? (int) $otra['id'] : 0,
             'destino'    => (string) env('PIEZAS_PLACA_EMAIL', ''),
-            'calc'       => (new PiezaConfigModel())->calculadoraTiempo(),
+            'calc'       => $this->calcTiempoPlaca(),
             'desfase'    => (new PiezaConfigModel())->desfaseImpresoras(),
             'vecinas'    => $this->vecinasDePlaca($placa),
             'candidatas' => $this->placaModel->select('id, nombre, impresora, poner_en')
@@ -3108,10 +3108,25 @@ class Web extends BaseController
         ];
     }
 
+    /**
+     * Calculadora de tiempo + `porCapaReal`: el min/capa ajustado sobre los
+     * minutos REALES de las placas (regla «Real» del modal, solo impresión,
+     * sin preparación). Si aún no hay placas con tiempo real y capas, cae al
+     * min/capa de la referencia manual.
+     */
+    private function calcTiempoPlaca(): array
+    {
+        $calc = (new PiezaConfigModel())->calculadoraTiempo();
+        $real = $this->placaModel->reglasTiempo()['minutos_reales']['porCapa'] ?? null;
+        $calc['porCapaReal'] = $real !== null && $real > 0 ? (float) $real : (float) $calc['minutosPorCapa'];
+
+        return $calc;
+    }
+
     private function datosEnvio(array $placa): array
     {
         $id   = (int) $placa['id'];
-        $calc = (new PiezaConfigModel())->calculadoraTiempo();
+        $calc = $this->calcTiempoPlaca();
 
         // Lo guardado con "Guardar" manda sobre lo calculado.
         if ($placa['poner_en']) {
@@ -3131,7 +3146,7 @@ class Web extends BaseController
         } else {
             $ahora = time();
             $ponerEn = $ahora + (15 - (int) date('i', $ahora) % 15) * 60;
-            $minutos = $placa['numero_capas'] ? (int) round($placa['numero_capas'] * $calc['minutosPorCapa']) : null;
+            $minutos = $placa['numero_capas'] ? (int) round($placa['numero_capas'] * $calc['porCapaReal']) : null;
         }
 
         $enlaces = $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll();
@@ -3473,7 +3488,7 @@ class Web extends BaseController
             // Los tres números de la calculadora de tiempo del índice, para
             // estimar en vivo la duración de la placa a partir de su número
             // de capas — mismo criterio que el botón "stopwatch" del índice.
-            'calcTiempo' => (new PiezaConfigModel())->calculadoraTiempo(),
+            'calcTiempo' => $this->calcTiempoPlaca(),
             'pruebas'  => $this->placaPruebaModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'enlaces'  => $this->placaEnlaceModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),
             'imagenes' => $this->placaImagenModel->where('placa_id', $id)->orderBy('orden')->orderBy('id')->findAll(),

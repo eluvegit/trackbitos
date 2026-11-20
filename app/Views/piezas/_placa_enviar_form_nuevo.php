@@ -61,7 +61,7 @@ $elegida = (int) $old('imagen_id', (string) $ultimaImagen);
                 <label class="bt-campo"><span class="bt-lbl">Número de capas</span>
                     <input type="number" min="1" step="1" inputmode="numeric" name="numero_capas" id="<?= $p ?>envCapas" class="bt-ed" placeholder="1240"
                         value="<?= esc($old('numero_capas', (string) ($placa['numero_capas'] ?? '')), 'attr') ?>">
-                    <span class="en-nota t3" id="<?= $p ?>envEstimado" data-por-capa="<?= esc((string) $calc['minutosPorCapa'], 'attr') ?>"></span>
+                    <span class="en-nota t3" id="<?= $p ?>envEstimado" data-por-capa="<?= esc((string) ($calc['porCapaReal'] ?? $calc['minutosPorCapa']), 'attr') ?>"></span>
                 </label>
 
                 <div class="en-cuatro">

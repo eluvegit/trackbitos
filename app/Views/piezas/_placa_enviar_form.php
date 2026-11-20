@@ -73,7 +73,7 @@ $bloqueada = $enviada && !$old('desbloqueado');
             <input type="number" min="1" step="1" inputmode="numeric" name="numero_capas" id="<?= $p ?>envCapas"
                 class="form-control form-control-sm" placeholder="p. ej. 1240"
                 value="<?= esc($old('numero_capas', (string) ($placa['numero_capas'] ?? '')), 'attr') ?>">
-            <p class="text-muted small mb-3 mt-1" id="<?= $p ?>envEstimado" data-por-capa="<?= esc((string) $calc['minutosPorCapa'], 'attr') ?>"></p>
+            <p class="text-muted small mb-3 mt-1" id="<?= $p ?>envEstimado" data-por-capa="<?= esc((string) ($calc['porCapaReal'] ?? $calc['minutosPorCapa']), 'attr') ?>"></p>
 
             <div class="row g-2">
                 <div class="col-6">
@@ -261,7 +261,7 @@ $bloqueada = $enviada && !$old('desbloqueado');
         }, 300);
     }
 
-    // Como la calculadora del índice: capas × min/capa de la referencia,
+    // Capas × min/capa ajustado sobre los tiempos reales de las placas,
     // solo impresión. Escribir la duración a mano la deja fija.
     var porCapa = parseFloat(f('envEstimado').getAttribute('data-por-capa')) || 0;
     var manual = false;

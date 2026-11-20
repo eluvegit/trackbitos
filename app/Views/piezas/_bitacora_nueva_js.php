@@ -104,12 +104,12 @@
         var salida = raiz.querySelector('[data-estimado-capas]');
         if (!salida) return null;
         var capas = parseInt((valor('numero_capas') || '').replace(/[^\d]/g, ''), 10);
-        var capasRef = parseFloat(form.dataset.calcCapasRef), minRef = parseFloat(form.dataset.calcMinutosRef);
-        var minPrep = parseFloat(form.dataset.calcMinutosPrep) || 0;
-        if (!(capas > 0) || !(capasRef > 0) || !(minRef >= 0)) { salida.textContent = ''; return null; }
-        var total = Math.round(capas * (minRef / capasRef) + minPrep);
+        var porCapa = parseFloat(form.dataset.porCapaReal);
+        if (!(capas > 0) || !(porCapa > 0)) { salida.textContent = ''; return null; }
+        var total = Math.round(capas * porCapa);
         salida.textContent = '· ≈ ' + duracion(total);
-        salida.title = 'Capas × minutos por capa de la calculadora + ' + duracion(Math.round(minPrep)) + ' de preparación';
+        salida.title = 'Solo impresión: capas × ' + porCapa.toLocaleString('es-ES', { maximumFractionDigits: 4 })
+            + ' min/capa (ajuste sobre los tiempos reales de tus placas)';
         return total;
     }
 

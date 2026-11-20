@@ -53,7 +53,7 @@ EXPORT_SCRIPT = Path(__file__).resolve().parent / "export_batch.py"
 # PLAYMOBIL\STL"), igual que trackbitos.py ya hace con `--dir` para las
 # mesas de trabajo. Ver resolver_backup_dir()/resolver_placas_dir().
 NOMBRE_CARPETA_BIBLIOTECA = "biblioteca"
-NOMBRE_CARPETA_PLACAS = "placas"
+NOMBRE_CARPETA_PLACAS = "!!PLACAS!!"  # con !! para que salga arriba del todo al ordenar por nombre
 DEFAULT_ESCALA = 10.0
 
 # Papelera LOCAL de `generar` (2026-09-02): cuando una pieza sube de
@@ -177,7 +177,7 @@ def apartar_entregas_viejas(base_dir: Path, variante_id: int, numero_actual: int
     if not base_dir.is_dir():
         return []
 
-    especiales = {NOMBRE_CARPETA_BIBLIOTECA, NOMBRE_CARPETA_PLACAS, NOMBRE_PAPELERA_ENTREGAS}
+    especiales = {NOMBRE_CARPETA_BIBLIOTECA, NOMBRE_CARPETA_PLACAS, "placas", NOMBRE_PAPELERA_ENTREGAS}  # "placas": nombre antiguo
     apartadas = []
 
     for hijo in base_dir.iterdir():
@@ -739,33 +739,55 @@ def cmd_placa(args) -> int:
     carpeta_salida.mkdir(parents=True, exist_ok=True)
 
     bitacora, faltantes, copiados = [], [], 0
+    # Para apartar luego los STL que ya no tocan (2026-11-20): al actualizar
+    # una versión en la placa, el STL de la vieja se quedaba al lado del de
+    # la nueva. `generados` = lo que deja esta vuelta; `prefijos_fallidos` =
+    # piezas que no se pudieron exportar, cuyo STL anterior se respeta.
+    generados, prefijos_fallidos = set(), []
 
     # Mismo progreso por pieza que `biblioteca`/`revisar` (2026-09-02).
     total = len(hojas)
     for i, hoja in enumerate(hojas, 1):
         print(f"  [{i}/{total}] {_etiqueta_nodo(hoja)}...", end="", flush=True)
+        prefijo = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v"
 
         try:
             carpeta_cache, _resultado = _asegurar_stl_en_biblioteca(config, blender_exe, escala, backup_dir, hoja)
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: {e}")
+            prefijos_fallidos.append(prefijo)
             print(f" ERROR: {e}")
             continue
 
         stls = sorted(carpeta_cache.glob("*.stl"))
         if not stls:
             faltantes.append(f"{_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d}: sin ninguna collection \"STL\" en el .blend.")
+            prefijos_fallidos.append(prefijo)
             print(" sin STL")
             continue
 
         print(f" {len(stls)} STL")
         for stl in stls:
-            nombre_final = f"{_slug(hoja['familia'])}-{_slug(hoja['variante'])}-v{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
+            nombre_final = f"{prefijo}{hoja['version']['numero']:03d}-{_slug(stl.stem)}.stl"
             shutil.copy2(stl, carpeta_salida / nombre_final)
+            generados.add(nombre_final)
             copiados += 1
             bitacora.append(f"{nombre_final}\n    de: {_etiqueta_nodo(hoja)} v{hoja['version']['numero']:03d} ({hoja['version']['estado']})")
 
     faltantes.extend(avisos)
+
+    # Los STL de una vuelta anterior que ya no están en la placa (versión
+    # superada, pieza quitada) se apartan a la papelera local — nunca se
+    # borran; caducan a los 30 días como el resto de .papelera-stl.
+    viejos = [f for f in carpeta_salida.glob("*.stl")
+              if f.name not in generados and not any(f.name.startswith(p) for p in prefijos_fallidos)]
+    destino = None
+    if viejos:
+        purgar_papelera_entregas(base_dir)
+        destino = base_dir / NOMBRE_PAPELERA_ENTREGAS / f"{datetime.now():%Y%m%d-%H%M%S}-placa-{_slug(placa['nombre'])}"
+        destino.mkdir(parents=True, exist_ok=True)
+        for f in viejos:
+            shutil.move(str(f), str(destino / f.name))
 
     (carpeta_salida / "placa.txt").write_text(
         f"Placa \"{placa['nombre']}\" ({placa['fecha']})\n"
@@ -774,6 +796,8 @@ def cmd_placa(args) -> int:
         + "\n".join(bitacora) + "\n",
         encoding="utf-8",
     )
+    if not faltantes and (carpeta_salida / "FALTAN.txt").exists():
+        (carpeta_salida / "FALTAN.txt").unlink()  # el de una vuelta anterior ya no vale
     if faltantes:
         (carpeta_salida / "FALTAN.txt").write_text(
             "Piezas de esta placa sin STL en la carpeta:\n\n" + "\n".join(faltantes) + "\n",
@@ -782,6 +806,8 @@ def cmd_placa(args) -> int:
 
     print(f"\n  Placa \"{placa['nombre']}\" en {carpeta_salida}\n")
     print(f"  ✓ {copiados} STL")
+    if viejos:
+        print(f"  ↻ {len(viejos)} STL que ya no tocan, apartados a {destino}")
     if faltantes:
         print(f"  ⚠ {len(faltantes)} con problema (ver FALTAN.txt):")
         for f in faltantes:

@@ -51,8 +51,11 @@ if (window.top !== window.self) {
     $respondidas = count(array_filter($preguntas, static fn($p) => trim((string) $p['respuesta']) !== ''));
     $bins = $reparto['bins'] ?? [];
     $cabe = count($bins) <= 1;
-    $porCapas = ($placa['numero_capas'] && (float) $calc['capasReferencia'] > 0)
-        ? (int) round($placa['numero_capas'] * (float) $calc['minutosReferencia'] / (float) $calc['capasReferencia'] + (float) $calc['minutosPreparacion'])
+    // Solo impresión: capas × min/capa ajustado sobre los tiempos reales
+    // de las placas (regla «Real»), sin sumar preparación.
+    $porCapaReal = (float) ($calc['porCapaReal'] ?? 0);
+    $porCapas = ($placa['numero_capas'] && $porCapaReal > 0)
+        ? (int) round($placa['numero_capas'] * $porCapaReal)
         : null;
 
     $ahoraTs = time();
@@ -103,9 +106,7 @@ if (window.top !== window.self) {
 
 <div class="fv bt" id="bt" data-vista-momento="<?= $momento ?>" data-placa="<?= $idPlaca ?>">
     <form id="<?= $idForm ?>" method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/bitacora') ?>" class="d-none"
-        data-calc-capas-ref="<?= esc($calc['capasReferencia'], 'attr') ?>"
-        data-calc-minutos-ref="<?= esc($calc['minutosReferencia'], 'attr') ?>"
-        data-calc-minutos-prep="<?= esc($calc['minutosPreparacion'], 'attr') ?>"
+        data-por-capa-real="<?= esc((string) $porCapaReal, 'attr') ?>"
         data-csrf-name="<?= csrf_token() ?>" data-csrf-hash="<?= csrf_hash() ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="veredicto" value="<?= esc((string) $placa['veredicto'], 'attr') ?>" data-veredicto-input>
@@ -306,7 +307,7 @@ if (window.top !== window.self) {
                     <div class="bt-check">
                         <div class="<?= $piezas ? 'si' : '' ?>"><i><?= $piezas ? '✓' : '' ?></i><?= count($piezas) ?> piezas · <?= $copias ?> copias</div>
                         <div class="<?= $cabe ? 'si' : 'aviso' ?>"><i><?= $cabe ? '✓' : '!' ?></i><?= $cabe ? 'Cabe en 1 placa' : 'No cabe en 1 placa: hacen falta ' . count($bins) ?><?= ($sinMedir ?? 0) > 0 ? ' · ' . (int) $sinMedir . ' STL sin medir' : '' ?></div>
-                        <div class="<?= $placa['numero_capas'] ? 'si' : '' ?>"><i><?= $placa['numero_capas'] ? '✓' : '' ?></i><?= $placa['numero_capas'] ? (int) $placa['numero_capas'] . ' capas' . ($porCapas ? ' → ≈ ' . $durTexto($porCapas) . ' con preparación' : '') : 'Apunta las capas (las dice el laminador)' ?></div>
+                        <div class="<?= $placa['numero_capas'] ? 'si' : '' ?>"><i><?= $placa['numero_capas'] ? '✓' : '' ?></i><?= $placa['numero_capas'] ? (int) $placa['numero_capas'] . ' capas' . ($porCapas ? ' → ≈ ' . $durTexto($porCapas) . ' de impresión' : '') : 'Apunta las capas (las dice el laminador)' ?></div>
                         <div class="<?= $impActual ? 'si' : '' ?>"><i><?= $impActual ? '✓' : '' ?></i><?= $impActual ? 'Máquina ' . esc($impActual) : 'Máquina sin elegir' ?></div>
                         <?php if ($preguntas): ?><div class="aviso"><i>?</i><?= count($preguntas) ?> pregunta(s) para esta prueba</div><?php endif; ?>
                     </div>
