@@ -23,6 +23,7 @@ foreach ($escenas as $e) {
         <div class="rf-ruta fv-panel">
             <b>Ruta</b>
             <?php foreach ($zonas as $k => $z): ?><a href="#z<?= (int) $z['id'] ?>"><span class="rf-num"><?= $k + 1 ?></span><?= esc($z['nombre']) ?></a><?php if ($k < count($zonas) - 1): ?><i class="bi bi-arrow-right"></i><?php endif; ?><?php endforeach; ?>
+            <?php if (count($zonas) > 1): ?><button type="button" class="fv-btn fv-btn-sm rf-ruta-ord" onclick="document.getElementById('rfOrden').showModal()"><i class="bi bi-arrow-down-up"></i>Ordenar</button><?php endif; ?>
         </div>
     <?php endif; ?>
 
@@ -94,8 +95,12 @@ foreach ($escenas as $e) {
                         <?php if ($ps): ?>
                             <ul class="rf-puntos">
                                 <?php foreach ($ps as $pi => $p): ?>
-                                    <li><span class="rf-pin-n"><?= $pi + 1 ?></span><?= esc($p['nombre']) ?><?php if ($p['x'] === null && $z['imagen']): ?><small>sin marcar</small><?php endif; ?>
-                                        <form method="post" action="<?= $url('puntos/' . $p['id'] . '/borrar') ?>" class="der" onsubmit="return confirm('¿Quitar el punto «<?= esc($p['nombre'], 'js') ?>»?')"><?= csrf_field() ?><button class="fv-x" title="Quitar"><i class="bi bi-x"></i></button></form>
+                                    <li><span class="rf-pin-n"><?= $pi + 1 ?></span>
+                                        <form method="post" action="<?= $url('puntos/' . $p['id'] . '/guardar') ?>" class="rf-punto-ed"><?= csrf_field() ?><input class="fv-input rf-mini-in" name="nombre" value="<?= esc($p['nombre'], 'attr') ?>" required autocomplete="off" enterkeyhint="done" onchange="this.form.requestSubmit()" aria-label="Nombre del punto"></form>
+                                        <?php if ($p['x'] === null && $z['imagen']): ?><small>sin marcar</small><?php endif; ?>
+                                        <form method="post" action="<?= $url('puntos/' . $p['id'] . '/mover') ?>"><?= csrf_field() ?><input type="hidden" name="dir" value="-1"><button class="fv-ibtn" <?= $pi === 0 ? 'disabled' : '' ?> title="Antes"><i class="bi bi-arrow-up"></i></button></form>
+                                        <form method="post" action="<?= $url('puntos/' . $p['id'] . '/mover') ?>"><?= csrf_field() ?><input type="hidden" name="dir" value="1"><button class="fv-ibtn" <?= $pi === count($ps) - 1 ? 'disabled' : '' ?> title="Después"><i class="bi bi-arrow-down"></i></button></form>
+                                        <form method="post" action="<?= $url('puntos/' . $p['id'] . '/borrar') ?>" onsubmit="return confirm('¿Quitar el punto «<?= esc($p['nombre'], 'js') ?>»?')"><?= csrf_field() ?><button class="fv-x" title="Quitar"><i class="bi bi-x"></i></button></form>
                                     </li>
                                 <?php endforeach; ?>
                             </ul>
@@ -120,6 +125,12 @@ foreach ($escenas as $e) {
                                             <option value="">Sin punto</option>
                                             <?php foreach ($ps as $p): ?><option value="<?= (int) $p['id'] ?>" <?= (int) $t['punto_id'] === (int) $p['id'] ? 'selected' : '' ?>><?= esc($p['nombre']) ?></option><?php endforeach; ?>
                                         </select>
+                                        <?php if (count($zonas) > 1): ?>
+                                            <select class="form-select rd-sel" data-eid="<?= (int) $t['id'] ?>" data-campo="ubicacion_id" data-recargar aria-label="Mover a otra zona">
+                                                <?php foreach ($zonas as $ok => $o): ?><option value="<?= (int) $o['id'] ?>" <?= (int) $o['id'] === $zid ? 'selected' : '' ?>><?= (int) $o['id'] === $zid ? 'Mover a…' : ($ok + 1) . '. ' . esc($o['nombre']) ?></option><?php endforeach; ?>
+                                                <option value="">Sin zona</option>
+                                            </select>
+                                        <?php endif; ?>
                                     </li>
                                 <?php endforeach; ?>
                             </ul>
@@ -151,6 +162,22 @@ foreach ($escenas as $e) {
         <input class="fv-input" name="nombre" placeholder="Nombre del punto + Enter" autocomplete="off" required>
     </form>
 </div>
+<?php if (count($zonas) > 1): ?>
+<dialog class="rf-orden" id="rfOrden">
+    <form method="post" action="<?= $url('ubicaciones/orden') ?>" class="fv"><?= csrf_field() ?>
+        <div class="rf-orden-h"><b>Ordenar ruta</b><button type="button" class="fv-ibtn" onclick="this.closest('dialog').close()" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button></div>
+        <ol class="rf-orden-l" id="rfOrdenL">
+            <?php foreach ($zonas as $z): ?><li><input type="hidden" name="ids[]" value="<?= (int) $z['id'] ?>"><i class="bi bi-grip-vertical"></i><span><?= esc($z['nombre']) ?></span></li><?php endforeach; ?>
+        </ol>
+        <div class="rf-orden-pie">
+            <button type="button" class="fv-btn" onclick="this.closest('dialog').close()">Cancelar</button>
+            <button class="fv-btn fv-btn-pri"><i class="bi bi-check-lg"></i>Guardar orden</button>
+        </div>
+    </form>
+</dialog>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>Sortable.create(document.getElementById('rfOrdenL'), { animation: 150 });</script>
+<?php endif; ?>
 <?= view('rodajes/flujo/_sin_recarga', ['raiz' => 'rfUb']) ?>
 <script>
 (() => {

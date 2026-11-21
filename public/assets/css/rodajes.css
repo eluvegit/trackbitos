@@ -633,6 +633,18 @@
 .rf-ruta { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: 8px 10px !important; padding: 12px 16px !important; font-size: 13px; }
 .rf-ruta a { display: inline-flex; gap: 6px; align-items: center; color: var(--fv-text); }
 .rf-ruta > .bi { color: var(--fv-text-3); }
+.rf-ruta .rf-ruta-ord { margin-left: auto; }
+.rf-orden { border: 0; border-radius: 14px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--fv-panel, #fff); color: var(--fv-text); }
+.rf-orden::backdrop { background: rgba(0,0,0,.45); }
+.rf-orden form { display: flex; flex-direction: column; max-height: 80vh; }
+.rf-orden-h, .rf-orden-pie { display: flex; align-items: center; gap: 8px; padding: 12px 16px; }
+.rf-orden-h { justify-content: space-between; }
+.rf-orden-pie { justify-content: flex-end; }
+.rf-orden-l { list-style: none; margin: 0; padding: 0 12px; overflow-y: auto; counter-reset: ord; }
+.rf-orden-l li { counter-increment: ord; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px; border: 1px solid var(--fv-border, #ddd); border-radius: 10px; cursor: grab; touch-action: none; user-select: none; background: var(--fv-panel, #fff); }
+.rf-orden-l li::before { content: counter(ord); font-size: 12px; color: var(--fv-text-3); min-width: 16px; }
+.rf-orden-l li .bi { color: var(--fv-text-3); }
+.rf-orden-l .sortable-ghost { opacity: .4; }
 .rf-zona { scroll-margin-top: 16px; }
 .rf-zona-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .rf-zona-h h2 { font-size: 18px; font-weight: 600; letter-spacing: -.015em; }
@@ -664,7 +676,9 @@
 .rf-puntos { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
 .rf-puntos li { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .rf-puntos small { color: var(--fv-text-3); font-size: 11px; }
-.rf-puntos form { margin: 0 0 0 auto; }
+.rf-puntos form { margin: 0; }
+.rf-puntos .rf-punto-ed { flex: 1; min-width: 0; }
+.rf-puntos li .fv-ibtn:disabled { opacity: .3; }
 .rf-pin-n { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--fv-accent); color: var(--fv-accent); display: grid; place-items: center; font: 500 10px var(--fv-mono); flex: none; }
 .rf-mini-in { height: 32px; font-size: 13px; width: 100%; }
 .rf-tz { list-style: none; margin: 0; padding: 0; display: grid; }
@@ -673,6 +687,8 @@
 .rf-tz li .rf-foto { grid-row: 1 / span 2; }
 .rf-tz li small { grid-column: 2; color: var(--fv-text-3); font-size: 12px; }
 .rf-tz li .rd-sel { grid-column: 3; grid-row: 1 / span 2; width: auto; max-width: 160px; }
+.rf-zona .rf-tz li .rd-sel[data-campo="punto_id"] { grid-row: 1; align-self: end; }
+.rf-zona .rf-tz li .rd-sel[data-campo="ubicacion_id"] { grid-row: 2; align-self: start; }
 
 /* ---------- setups ---------- */
 .rf-setups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
@@ -854,7 +870,7 @@
 #rfUb .rf-enviando { opacity: .55; pointer-events: none; }
 #rfUb .rf-zona.rf-hecho { animation: rf-hecho 0.9s ease-out; }
 @keyframes rf-hecho { from { box-shadow: 0 0 0 2px var(--fv-accent); } to { box-shadow: 0 0 0 2px transparent; } }
-#rfUb .rf-enviando-suave { opacity: .7; }
+#rfUb .rf-enviando-suave, #rfSet .rf-enviando-suave { opacity: .7; }
 
 /* Paso Momento: destinos compactos (icono + nombre), Día/Noche/Ambas destacados */
 .rf-momento .rf-destinos { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
@@ -1459,4 +1475,16 @@
 @media (max-width: 640px) {
   .rf-vars li { flex-wrap: wrap; }
   .rf-vars .fv-input.rf-var-props { flex: 1 0 100%; order: 5; }
+}
+
+/* Setups en escritorio: parámetros a la izquierda (1/3), tomas en tarjetas a la derecha */
+@media (min-width: 992px) {
+    .rf-setups { grid-template-columns: 1fr; }
+    .rf-setup { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); column-gap: 24px !important; align-items: start; }
+    .rf-setup > * { grid-column: 1; }
+    .rf-setup > .rf-setup-tomas { grid-column: 2; grid-row: 1 / span 20; }
+    .rf-setup-tomas .rf-tz { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+    .rf-setup .rf-setup-tomas .rf-tz li { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; padding: 8px; border: 1px solid var(--fv-border); border-radius: var(--fv-r-md); }
+    .rf-setup .rf-setup-tomas .rf-tz li .rf-foto.mini { grid-column: 1; grid-row: auto; width: 100%; height: auto; aspect-ratio: 4 / 3; }
+    .rf-setup .rf-setup-tomas .rf-tz li > a, .rf-setup .rf-setup-tomas .rf-tz li > small, .rf-setup .rf-setup-tomas .rf-tz li .rd-sel { grid-column: 1; grid-row: auto; justify-self: stretch; max-width: 100%; }
 }

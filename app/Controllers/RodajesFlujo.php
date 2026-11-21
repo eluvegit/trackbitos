@@ -512,6 +512,15 @@ class RodajesFlujo extends BaseController
         return redirect()->to(site_url("rodajes/$pid/ubicaciones#z" . $z['id']))->with('success', 'Zona guardada.');
     }
 
+    public function ubicacionesOrden($pid)
+    {
+        $validos = array_map('intval', array_column($this->zonas((int) $pid), 'id'));
+        $ids = array_values(array_intersect(array_map('intval', (array) $this->request->getPost('ids')), $validos));
+        $m = new RodajesUbicacionModel();
+        foreach ($ids as $k => $id) $m->update($id, ['orden' => $k]);
+        return redirect()->to(site_url("rodajes/$pid/ubicaciones"));
+    }
+
     public function ubicacionMover($pid, $zid)
     {
         $zonas = $this->zonas((int) $pid);
@@ -583,6 +592,36 @@ class RodajesFlujo extends BaseController
             ]);
         }
         return redirect()->to(site_url("rodajes/$pid/ubicaciones#z" . (int) $zid));
+    }
+
+    private function puntoDe($pid, $puntoId): ?array
+    {
+        $p = (new RodajesPuntoModel())->find((int) $puntoId);
+        return $p && (new RodajesUbicacionModel())->where('proyecto_id', (int) $pid)->find((int) $p['ubicacion_id']) ? $p : null;
+    }
+
+    public function puntoGuardar($pid, $puntoId)
+    {
+        $p = $this->puntoDe($pid, $puntoId);
+        $nombre = trim((string) $this->request->getPost('nombre'));
+        if ($p && $nombre !== '') (new RodajesPuntoModel())->update($p['id'], ['nombre' => mb_substr($nombre, 0, 150)]);
+        return redirect()->to(site_url("rodajes/$pid/ubicaciones" . ($p ? '#z' . $p['ubicacion_id'] : '')));
+    }
+
+    public function puntoMover($pid, $puntoId)
+    {
+        $p = $this->puntoDe($pid, $puntoId);
+        if ($p) {
+            $m = new RodajesPuntoModel();
+            $ps = $m->where('ubicacion_id', $p['ubicacion_id'])->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+            $i = array_search((int) $p['id'], array_map('intval', array_column($ps, 'id')), true);
+            $j = $i + ((int) $this->request->getPost('dir') < 0 ? -1 : 1);
+            if (isset($ps[$j])) {
+                [$ps[$i], $ps[$j]] = [$ps[$j], $ps[$i]];
+                foreach ($ps as $k => $q) if ((int) $q['orden'] !== $k) $m->update($q['id'], ['orden' => $k]);
+            }
+        }
+        return redirect()->to(site_url("rodajes/$pid/ubicaciones" . ($p ? '#z' . $p['ubicacion_id'] : '')));
     }
 
     public function puntoBorrar($pid, $puntoId)
@@ -800,6 +839,34 @@ class RodajesFlujo extends BaseController
     {
         $nombre = trim((string) $this->request->getPost('nombre'));
         if ($nombre !== '') self::nuevoSetup((int) $pid, $nombre);
+        return redirect()->to(site_url("rodajes/$pid/setups"));
+    }
+
+    public function setupDuplicar($pid, $sid)
+    {
+        $m = new RodajesSetupModel();
+        $s = $m->where('proyecto_id', (int) $pid)->find((int) $sid);
+        if (!$s) return redirect()->to(site_url("rodajes/$pid/setups"));
+        $todos = $m->where('proyecto_id', (int) $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        $nuevo = array_intersect_key($s, array_flip(['proyecto_id', 'tipo', 'optica', 'soporte', 'apertura', 'velocidad', 'iso', 'fps', 'nd', 'luz', 'notas']));
+        $nuevo['nombre'] = mb_substr($s['nombre'] . ' (copia)', 0, 150);
+        if (!empty($s['imagen']) && is_file(FCPATH . $s['imagen'])) {
+            $copia = dirname($s['imagen']) . '/' . bin2hex(random_bytes(10)) . '.' . pathinfo($s['imagen'], PATHINFO_EXTENSION);
+            if (@copy(FCPATH . $s['imagen'], FCPATH . $copia)) $nuevo['imagen'] = $copia;
+        }
+        $id = $m->insert($nuevo);
+        $ids = [];
+        foreach ($todos as $t) { $ids[] = (int) $t['id']; if ((int) $t['id'] === (int) $s['id']) $ids[] = (int) $id; }
+        foreach ($ids as $k => $i) $m->update($i, ['orden' => $k]);
+        return redirect()->to(site_url("rodajes/$pid/setups#s$id"));
+    }
+
+    public function setupsOrden($pid)
+    {
+        $m = new RodajesSetupModel();
+        $validos = array_map('intval', array_column($m->where('proyecto_id', (int) $pid)->findAll(), 'id'));
+        $ids = array_values(array_intersect(array_map('intval', (array) $this->request->getPost('ids')), $validos));
+        foreach ($ids as $k => $id) $m->update($id, ['orden' => $k]);
         return redirect()->to(site_url("rodajes/$pid/setups"));
     }
 
@@ -1137,6 +1204,9 @@ class RodajesFlujo extends BaseController
             foreach ($escenas as &$e) $e['variantes'] = array_values(array_filter($e['variantes'] ?? [], static fn ($v) => $v['prioridad'] !== 'opc'));
             unset($e);
         }
+        $zids = array_column($zonas, 'id');
+        $rangoPunto = [];
+        if ($zids) foreach ((new RodajesPuntoModel())->whereIn('ubicacion_id', $zids)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $k => $p) $rangoPunto[(int) $p['id']] = $k;
         $franjas = RodajesEscenaModel::FRANJAS + ['' => 'Sin franja'];
         $plan = [];
         foreach ($franjas as $fk => $fl) {
@@ -1149,13 +1219,28 @@ class RodajesFlujo extends BaseController
                 $bloqueS = [];
                 foreach (array_merge(self::setupsDeZona($setups, $z), [null]) as $s) {
                     $es = array_values(array_filter($ez, static fn ($e) => (int) ($e['setup_id'] ?? 0) === (int) ($s['id'] ?? 0)));
-                    if ($es) $bloqueS[] = ['setup' => $s, 'escenas' => self::ordenarProps($es)];
+                    if ($es) $bloqueS[] = ['setup' => $s, 'escenas' => self::ordenarPorPunto($es, $rangoPunto)];
                 }
                 $bloqueZ[] = ['zona' => $z, 'n' => $z ? $zi + 1 : null, 'setups' => $bloqueS];
             }
             $plan[] = ['franja' => $fk, 'nombre' => $fl, 'zonas' => $bloqueZ];
         }
         return $plan;
+    }
+
+    private static function ordenarPorPunto(array $es, array $rango): array
+    {
+        $grupos = [];
+        foreach ($es as $e) $grupos[$rango[(int) ($e['punto_id'] ?? 0)] ?? PHP_INT_MAX][] = $e;
+        ksort($grupos);
+        $out = [];
+        foreach ($grupos as $g) foreach (self::ordenarProps($g) as $e) $out[] = $e;
+        if (array_filter($out, static fn ($e) => ($e['orden_rodaje'] ?? null) !== null)) {
+            $clave = [];
+            foreach ($out as $k => $e) $clave[(int) $e['id']] = ($e['orden_rodaje'] ?? null) !== null ? (int) $e['orden_rodaje'] : 1_000_000 + $k;
+            usort($out, static fn ($a, $b) => $clave[(int) $a['id']] <=> $clave[(int) $b['id']]);
+        }
+        return $out;
     }
 
     private static function ordenarProps(array $es): array

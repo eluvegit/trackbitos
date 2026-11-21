@@ -438,6 +438,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/escenas/(:num)/variantes/orden', 'RodajesFlujo::variantesOrden/$1/$2');
     $routes->GET('(:num)/ubicaciones',                    'RodajesFlujo::ubicaciones/$1');
     $routes->POST('(:num)/ubicaciones/crear',             'RodajesFlujo::ubicacionCrear/$1');
+    $routes->POST('(:num)/ubicaciones/orden',             'RodajesFlujo::ubicacionesOrden/$1');
     $routes->POST('(:num)/ubicaciones/(:num)/guardar',    'RodajesFlujo::ubicacionGuardar/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/mover',      'RodajesFlujo::ubicacionMover/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/setup-orden', 'RodajesFlujo::zonaSetupMover/$1/$2');
@@ -446,11 +447,15 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/ubicaciones/(:num)/borrar',     'RodajesFlujo::ubicacionBorrar/$1/$2');
     $routes->POST('(:num)/ubicaciones/(:num)/punto',      'RodajesFlujo::puntoCrear/$1/$2');
     $routes->POST('(:num)/puntos/(:num)/borrar',          'RodajesFlujo::puntoBorrar/$1/$2');
+    $routes->POST('(:num)/puntos/(:num)/guardar',         'RodajesFlujo::puntoGuardar/$1/$2');
+    $routes->POST('(:num)/puntos/(:num)/mover',           'RodajesFlujo::puntoMover/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/asignar',        'RodajesFlujo::asignar/$1/$2');
     $routes->GET('(:num)/formato',                        'RodajesFlujo::formato/$1');
     $routes->GET('(:num)/momento',                        'RodajesFlujo::momento/$1');
     $routes->GET('(:num)/setups',                         'RodajesFlujo::setups/$1');
     $routes->POST('(:num)/setups/crear',                  'RodajesFlujo::setupCrear/$1');
+    $routes->POST('(:num)/setups/orden',                  'RodajesFlujo::setupsOrden/$1');
+    $routes->POST('(:num)/setups/(:num)/duplicar',        'RodajesFlujo::setupDuplicar/$1/$2');
     $routes->POST('(:num)/setups/(:num)/guardar',         'RodajesFlujo::setupGuardar/$1/$2');
     $routes->POST('(:num)/setups/(:num)/borrar',          'RodajesFlujo::setupBorrar/$1/$2');
     $routes->POST('(:num)/setups/(:num)/imagen',          'RodajesFlujo::setupImagen/$1/$2');
