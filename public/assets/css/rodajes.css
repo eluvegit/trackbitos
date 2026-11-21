@@ -108,9 +108,6 @@
 .rd-mini-tag { position: absolute; left: 4px; bottom: 3px; font-size: 11px; color: #fff; text-shadow: 0 0 4px #000; }
 .rd-mini-idea { align-self: stretch; justify-self: stretch; padding: 6px 8px; font-size: 11px; line-height: 1.3; color: var(--fv-text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
 .rd-mini-idea .bi { margin-right: 4px; color: var(--fv-text-3); }
-.rd-varf { display: flex; gap: 4px; align-items: center; position: relative; z-index: 1; }
-.rd-varf img { width: 44px; height: 30px; object-fit: cover; border-radius: 4px; border: 1px solid var(--fv-border); }
-.rd-varf small { font-family: var(--fv-mono); font-size: 11px; color: var(--fv-text-3); }
 .rd-vista { display: inline-flex; border: 1px solid var(--fv-border); border-radius: var(--fv-r-sm); overflow: hidden; margin-left: auto; }
 .rd-vista button { background: none; border: 0; padding: 6px 10px; color: var(--fv-text-3); }
 .rd-vista button.on { background: var(--fv-inset); color: var(--fv-text); }
@@ -1193,6 +1190,7 @@
 /* setups foto / vídeo */
 .rf-tipo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 10px; }
 .rf-tipo label { cursor: pointer; }
+.rf-tipo .rf-tipo-ok { margin-left: auto; }
 .rf-tipo input { position: absolute; opacity: 0; pointer-events: none; }
 .rf-tipo span { display: inline-flex; gap: 6px; align-items: center; padding: 6px 14px; border: 1px solid var(--fv-border-2); border-radius: 999px; font-weight: 600; }
 .rf-tipo input:checked + span { background: var(--fv-accent); border-color: var(--fv-accent); color: #fff; }
@@ -1349,7 +1347,9 @@
 .pm-v { flex-direction: column; gap: 5px; }
 .pm-v .pm-hechos button { height: 32px; }
 .pm-v .pm-foto.pm-imp { box-shadow: inset 0 0 0 3px var(--fv-bad); }
-.pm-pie { display: grid; gap: 1px; font-size: 12px; line-height: 1.3; color: var(--fv-text-2); }
+.pm-pie { display: grid; gap: 2px; font-size: 13.5px; line-height: 1.3; color: var(--fv-text-2); }
+.pm-pie span { font-weight: 500; color: var(--fv-text); }
+.pm-pie b { font-size: 12px; }
 .pm-pie span, .pm-pie b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .pm-pie b { font-weight: 600; color: var(--fv-accent); }
 .pt-M .pt-var .pt-btns { gap: 3px; }
@@ -1384,16 +1384,79 @@
 .pt-inf-cuerpo { grid-template-columns: minmax(0, 1fr); gap: 18px; padding-bottom: 20px; }
 .pt-inf-s { display: grid; gap: 8px; min-width: 0; }
 .pt-inf-h { font-size: 11.5px; font-weight: 600; color: var(--fv-text-3); text-transform: uppercase; letter-spacing: .04em; }
-.pt-inf-fotos { display: flex; gap: 8px; overflow-x: auto; }
-.pt-inf-fotos button { width: 104px; height: 104px; flex-shrink: 0; border-radius: 10px; background-color: var(--fv-inset) !important; background-position: center; background-size: cover; background-repeat: no-repeat; cursor: zoom-in; }
-.pt-inf-est { display: grid; gap: 6px; }
-.pt-inf-est .pt-btns { padding: 0; }
-.pt-inf-lbl { font-size: 13px; font-weight: 600; color: var(--fv-text-2); }
-.pt-inf-lbl:not(:first-child) { margin-top: 6px; }
-.pt-inf .pt-stp-det { margin: 0; }
 .pt-inf .pt-det { margin: 0; padding-top: 0; border-top: 0; }
-.pt-inf .pt-det :is(.pt-refs, .pt-refs-h) { display: none; }
-.pt-inf-props { font-size: 15px; font-weight: 600; line-height: 1.35; }
-.pt-inf-props.falta { font-weight: 500; font-style: italic; color: var(--fv-text-3); }
-.pt-inf-var { font-size: 13.5px; color: var(--fv-text-2); }
-.pt-inf-var b { font-weight: 600; color: var(--fv-accent); }
+.pt-inf .pt-det { display: grid; gap: 14px; }
+.pt-sin-datos { display: block; font-style: italic; }
+
+/* ---------- vistas de tomas al nivel del plató (lista, ficha, storyboard, formulario) ---------- */
+/* chips comunes: setup por parte con su lente, props, variantes en miniatura, momento */
+.rd-stps { display: flex; flex-wrap: wrap; gap: 4px 6px; position: relative; z-index: 1; }
+.rd-stp { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--fv-border); background: var(--fv-inset); font-size: 11.5px; color: var(--fv-text-2); white-space: nowrap; }
+.rd-stp b { font-family: var(--fv-mono); font-weight: 500; color: var(--fv-text); }
+.rd-stp.falta { color: var(--fv-text-3); border-style: dashed; background: none; }
+.rd-props { display: flex; gap: 6px; align-items: baseline; font-size: 12px; color: var(--fv-text-2); min-width: 0; }
+.rd-props span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-props.falta { color: var(--fv-text-3); opacity: .7; }
+.rd-vmini { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; position: relative; z-index: 1; }
+.rd-vm { position: relative; width: 44px; height: 32px; border-radius: 4px; border: 1px solid var(--fv-border); background: var(--fv-inset); display: grid; place-items: center; color: var(--fv-text-3); font-size: 12px; overflow: hidden; }
+.rd-vm img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-vm b { position: absolute; right: 1px; top: 1px; width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; background: var(--fv-text-3); color: #09090b; }
+.rd-vm.hecha { border-color: var(--fv-ok); }
+.rd-vm.hecha b { background: var(--fv-ok); }
+.rd-vm.repetir { border-color: var(--fv-warn); }
+.rd-vm.repetir b { background: var(--fv-warn); }
+.rd-vm.descartada { opacity: .45; }
+.rd-vm em { position: absolute; left: 1px; bottom: 1px; font-style: normal; font-size: 9.5px; font-weight: 600; padding: 0 3px; border-radius: 3px; background: rgb(0 0 0 / .65); color: #fff; }
+.rd-vmini small { font-family: var(--fv-mono); font-size: 11px; color: var(--fv-text-3); }
+.rd-momento { display: inline-flex; align-items: center; gap: 4px; }
+.rd-momento .bi { margin-right: 0 !important; color: var(--fv-warn); }
+.rd-momento.noche .bi { color: var(--fv-info); }
+/* imprescindible = marco rojo en la miniatura, como el cuadrado del plató */
+.rd-mini.imp { box-shadow: inset 0 0 0 2px var(--fv-bad, #f06464); }
+
+/* filtros y separadores día / noche de la lista */
+.rd-filtros .rd-vista { margin-left: 0; }
+.rd-filtros .rd-vista button { font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.rd-sep-dn { display: flex; align-items: center; gap: 10px; margin: 14px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fv-warn); }
+.rd-sep-dn .bi { font-size: 26px; }
+.rd-sep-dn::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: .35; }
+.rd-sep-dn.noche { color: var(--fv-info); }
+.rd-sep-dn[hidden] { display: none; }
+.sb-sep { flex: 1 0 100%; margin: 0; }
+
+/* ficha: cámara por parte (foto / vídeo) con lo heredado del setup */
+.rd-cajas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.rd-caja { border: 1px solid var(--fv-border); border-radius: var(--fv-r-md); background: var(--fv-inset); padding: 10px 12px; display: grid; gap: 8px; align-content: start; }
+.rd-caja.falta { border-style: dashed; background: none; }
+.rd-caja-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--fv-text-3); }
+.rd-caja-h > span { text-transform: uppercase; letter-spacing: .05em; font-weight: 600; font-size: 11px; }
+.rd-caja-h b { color: var(--fv-text); font-size: 13.5px; font-weight: 600; }
+.rd-caja-h .rd-setup-img { flex-basis: 100%; }
+.rd-caja.video .rd-caja-h .bi { color: var(--fv-info); }
+.rd-caja-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 13px; }
+.rd-caja-dl dt { font-weight: 400; color: var(--fv-text-3); }
+.rd-caja-dl dd { margin: 0; font-family: var(--fv-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.rd-caja-n { margin: 0; font-size: 12px; color: var(--fv-text-2); }
+.rd-encuadre { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--fv-border); grid-template-columns: repeat(auto-fill, minmax(70px, auto) minmax(90px, 1fr)); }
+/* variantes en la ficha: estado propio de cada una */
+.rd-var-cuerpo { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.rd-var-estados { display: grid; gap: 4px; margin-top: 4px; }
+.rd-var-estados .rd-estado-parte { display: flex; align-items: center; gap: 6px; margin: 0 !important; }
+.rd-var-estados .rd-estado-parte > .bi { color: var(--fv-text-3); }
+.rd-estado-toma.corto { max-width: 220px; flex: 1; }
+.rd-estado-toma.corto button { padding: 5px 2px !important; }
+.rd-mas-prop { color: var(--fv-accent); }
+.rd-pasar-nota { display: block; text-align: center; margin-top: -4px; }
+
+/* storyboard: portada única (o el texto de la idea) */
+.sb-idea { display: grid; place-items: center; width: 100%; height: 100%; padding: 10px; font-size: 12px; line-height: 1.35; color: var(--fv-text-2); text-align: center; overflow: hidden; }
+.sb-idea.vacia { font-size: 26px; color: var(--fv-text-3); }
+.sb-cuerpo .rd-vm { width: 38px; height: 28px; }
+
+/* formulario: props de más por variante y pistas de lo heredado del setup */
+.rf-vars .fv-input.rf-var-props { flex: 0 1 180px; font-size: 12.5px; }
+.rd-campo.rf-hereda .fv-input::placeholder { color: var(--fv-accent); opacity: .65; }
+@media (max-width: 640px) {
+  .rf-vars li { flex-wrap: wrap; }
+  .rf-vars .fv-input.rf-var-props { flex: 1 0 100%; order: 5; }
+}

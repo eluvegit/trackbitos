@@ -59,7 +59,7 @@ $miniaturas = static function (array $imgs) use ($pid, $eid): string {
     return $html . '</div>';
 };
 
-$camposEscena = ['escena_tomas', 'escena_objetivo', 'escena_accion', 'plano_objetos', 'escena_efecto_especial', 'escena_cont_previa', 'escena_cont_posterior', 'plano_hora_dia', 'escena_bloque'];
+$camposEscena = ['escena_tomas', 'escena_objetivo', 'escena_accion', 'plano_objetos', 'escena_efecto_especial', 'escena_cont_previa', 'escena_cont_posterior', 'escena_bloque'];
 $camposCamara = ['camara_optica', 'camara_apertura', 'camara_fps', 'camara_velocidad', 'camara_iso', 'camara_wb', 'camara_nd', 'camara_tipo_plano', 'camara_angulo', 'camara_movimiento', 'camara_soporte'];
 $camposPlano  = ['plano_esquema_iluminacion', 'plano_toma_alternativa'];
 $nRefs = count($imagenes_lugar ?? []) + count($imagenes_insp ?? []) + $lleno(['plano_ref_lugar_texto', 'plano_ref_inspiracion_texto']);
@@ -80,7 +80,7 @@ ob_start(); ?>
     <div class="rd-ed-fija">
     <?= view('rodajes/_cabecera', [
         'migas'  => $editar
-            ? [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Escena #' . (int) $e['orden'] => site_url("rodajes/$pid/escenas/show/$eid"), 'Editar' => null]
+            ? [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Toma #' . (int) $e['orden'] => site_url("rodajes/$pid/escenas/show/$eid"), 'Editar' => null]
             : [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Nueva toma' => null],
         'titulo' => $titulo,
         'sub'    => $editar ? '' : '<span>Con el título basta. El resto, cuando quieras.</span>',
@@ -174,7 +174,7 @@ ob_start(); ?>
 
             <?php $franja = (string) old('franja', $e['franja'] ?? ''); ?>
             <div class="rd-campo">
-                <span class="rd-lbl">Franja <small>(tócala otra vez para quitarla)</small></span>
+                <span class="rd-lbl">Momento <small>(tócalo otra vez para quitarlo; sin momento sale de día y de noche)</small></span>
                 <div class="rd-formatos desel">
                     <input type="hidden" name="franja" value="">
                     <?php foreach (\App\Models\RodajesEscenaModel::FRANJAS as $k => $txt): ?>
@@ -190,7 +190,7 @@ ob_start(); ?>
                     <select class="form-select rd-sel" id="f_setup" name="setup_id">
                         <option value="">Sin decidir</option>
                         <?php foreach ($setups ?? [] as $st): ?>
-                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" data-optica="<?= esc((string) $st['optica'], 'attr') ?>" data-soporte="<?= esc((string) $st['soporte'], 'attr') ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
+                            <option value="<?= (int) $st['id'] ?>" data-linea="<?= rod_setup_linea($st) ?>" data-optica="<?= esc((string) $st['optica'], 'attr') ?>" data-soporte="<?= esc((string) $st['soporte'], 'attr') ?>" data-apertura="<?= esc((string) ($st['apertura'] ?? ''), 'attr') ?>" data-velocidad="<?= esc((string) ($st['velocidad'] ?? ''), 'attr') ?>" data-iso="<?= esc((string) ($st['iso'] ?? ''), 'attr') ?>" data-fps="<?= esc((string) ($st['fps'] ?? ''), 'attr') ?>" data-nd="<?= esc((string) ($st['nd'] ?? ''), 'attr') ?>" data-luz="<?= esc((string) ($st['luz'] ?? ''), 'attr') ?>" <?= $setupAct === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
                         <?php endforeach; ?>
                         <option value="nuevo" <?= $setupAct === 'nuevo' ? 'selected' : '' ?>>+ Nuevo setup…</option>
                     </select>
@@ -208,7 +208,7 @@ ob_start(); ?>
                         <option value="">Sin decidir</option>
                         <?php foreach ($setups ?? [] as $st): ?>
                             <?php if (($st['tipo'] ?? '') === 'foto' && $setupVid !== (string) $st['id']) continue; ?>
-                            <option value="<?= (int) $st['id'] ?>" <?= $setupVid === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
+                            <option value="<?= (int) $st['id'] ?>" data-fps="<?= esc((string) ($st['fps'] ?? ''), 'attr') ?>" data-nd="<?= esc((string) ($st['nd'] ?? ''), 'attr') ?>" <?= $setupVid === (string) $st['id'] ? 'selected' : '' ?>><?= esc($st['nombre']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -250,6 +250,7 @@ ob_start(); ?>
                             <i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i>
                             <input type="hidden" name="variantes[<?= $n ?>][id]" value="<?= (int) $va['id'] ?>">
                             <input class="fv-input" name="variantes[<?= $n ?>][texto]" value="<?= esc($va['texto'], 'attr') ?>" aria-label="Variante">
+                            <input class="fv-input rf-var-props" name="variantes[<?= $n ?>][props]" value="<?= esc(implode(', ', rod_props_extra($e, $va)), 'attr') ?>" placeholder="+ lleva además…" aria-label="Props que lleva además de la toma" title="Props que lleva además de los de la toma, separados por comas">
                             <input type="hidden" name="variantes[<?= $n ?>][prioridad]" value="<?= $va['prioridad'] === 'opc' ? 'opc' : 'imp' ?>">
                             <button type="button" class="rf-prio <?= $va['prioridad'] === 'opc' ? 'opc' : 'imp' ?>" data-prio><?= $va['prioridad'] === 'opc' ? 'Si da tiempo' : 'Imprescindible' ?></button>
                             <button type="button" class="fv-x" data-quitar title="Quitar"><i class="bi bi-x"></i></button>
@@ -265,11 +266,7 @@ ob_start(); ?>
         <h2 class="rf-mas-h">Más detalles</h2>
 
         <details class="fv-panel rd-sec" <?= $lleno($camposEscena) || $hayErrores ? 'open' : '' ?>>
-            <?= $sec('bi-film', 'Escena', $lleno($camposEscena)) ?>
-            <div class="rd-filas-f">
-                <?= $input('escena_tomas', 'Toma/s') ?>
-                <?= $input('plano_hora_dia', 'Clasificación de rodaje', 'con actores, atrezzo…') ?>
-            </div>
+            <?= $sec('bi-book', 'Historia', $lleno($camposEscena)) ?>
             <div class="rd-filas-f" style="grid-template-columns: minmax(0, 1fr) 90px">
                 <?php
                 // Desplegable de temáticas; «+ Nueva…» abre el campo de nombre. El servidor
@@ -307,21 +304,23 @@ ob_start(); ?>
                 <?= $input('escena_cont_posterior', 'Continuidad posterior') ?>
                 <?= $input('escena_efecto_especial', 'Efecto especial') ?>
             </div>
+            <?= $input('escena_tomas', 'Repeticiones', 'p. ej. 3 tomas') ?>
             <div class="rd-checks"><?= $check('plano_actores', 'Con actores / modelos') ?></div>
         </details>
 
         <details class="fv-panel rd-sec" <?= $lleno($camposCamara) ? 'open' : '' ?>>
             <?= $sec('bi-camera', 'Cámara', $lleno($camposCamara)) ?>
             <div class="rf-cam-setup" id="rfCamSetup" hidden><i class="bi bi-link-45deg"></i><span></span></div>
+            <small class="rd-ayuda">Vacío = lo del setup (sale en gris). Escribe solo lo que esta toma tenga distinto.</small>
             <div class="rd-filas-f cam">
                 <?= $input('camara_modelo', 'Cámara', '', 'Sony a7IV') ?>
                 <?= $input('camara_optica', 'Óptica', '24mm') ?>
                 <?= $input('camara_apertura', 'Apertura', 'f/2.8') ?>
                 <?= $input('camara_velocidad', 'Velocidad', '1/50') ?>
                 <?= $input('camara_iso', 'ISO', '800') ?>
-                <?= $input('camara_fps', 'FPS', '24') ?>
+                <div class="rd-solo-video"><?= $input('camara_fps', 'FPS', '24') ?></div>
                 <?= $input('camara_wb', 'Balance', '5600K') ?>
-                <?= $input('camara_nd', 'Filtro ND', 'ND8') ?>
+                <div class="rd-solo-video"><?= $input('camara_nd', 'Filtro ND', 'ND8') ?></div>
             </div>
             <div class="rd-filas-f cam">
                 <?= $select('camara_tipo_plano', 'Tipo de plano', ['General', 'Medio', 'Detalle', 'Primer plano', 'Americano', 'Master']) ?>
@@ -333,6 +332,7 @@ ob_start(); ?>
 
         <details class="fv-panel rd-sec" <?= $lleno($camposPlano) ? 'open' : '' ?>>
             <?= $sec('bi-lightbulb', 'Luz y alternativas', $lleno($camposPlano)) ?>
+            <small class="rd-ayuda">La luz vacía es la del setup.</small>
             <?= $area('plano_esquema_iluminacion', 'Esquema de iluminación', 2, 'Ventana a la izquierda + rebotador…') ?>
             <?= $area('plano_toma_alternativa', 'Toma alternativa', 2) ?>
         </details>
@@ -363,11 +363,11 @@ ob_start(); ?>
 
         <div class="rd-form-pie rd-pie-fijo">
             <?php if ($editar): ?>
-                <a class="fv-btn fv-btn-peligro izq" href="<?= site_url("rodajes/$pid/escenas/delete/$eid") ?>" onclick="return confirm('¿Borrar esta escena?')" title="Borrar escena"><i class="bi bi-trash"></i></a>
+                <a class="fv-btn fv-btn-peligro izq" href="<?= site_url("rodajes/$pid/escenas/delete/$eid") ?>" onclick="return confirm('¿Borrar esta toma y sus variantes?')" title="Borrar toma"><i class="bi bi-trash"></i></a>
                 <a class="fv-btn" href="<?= site_url("rodajes/$pid/escenas/show/$eid") ?>">Ver</a>
             <?php else: ?>
                 <a class="fv-btn izq" href="<?= site_url("rodajes/$pid/escenas") ?>">Cancelar</a>
-                <button type="submit" class="fv-btn" name="otra" value="1"><i class="bi bi-plus-lg"></i>Guardar y otra</button>
+                <button type="submit" class="fv-btn" name="otra" value="1"><i class="bi bi-plus-lg"></i>Guardar y otra toma</button>
             <?php endif; ?>
             <button type="submit" class="fv-btn fv-btn-pri"><i class="bi bi-check-lg"></i>Guardar</button>
         </div>
@@ -433,12 +433,38 @@ ob_start(); ?>
     });
 
     const setup = document.getElementById('f_setup');
-    document.querySelectorAll('input[name=formato]').forEach(r => r.addEventListener('change', () => {
-        const f = document.querySelector('input[name=formato][type=radio]:checked')?.value || '';
+    const setupVideo = document.getElementById('f_setup_video');
+    const formatoAct = () => document.querySelector('input[name=formato][type=radio]:checked')?.value || '';
+    // FPS y ND solo cuentan en vídeo; la velocidad de vídeo es la obturación (como en el plató).
+    const pintarFormato = () => {
+        const f = formatoAct();
+        const conVideo = f === 'video' || f === 'ambas';
         document.getElementById('rfSetupVideo').hidden = f !== 'ambas';
         const l = document.querySelector('label[for=f_setup]');
         if (l) l.textContent = f === 'video' ? 'Setup de vídeo' : (f ? 'Setup de foto' : 'Setup');
-    }));
+        document.querySelectorAll('.rd-solo-video').forEach(c => { c.hidden = !conVideo && !c.querySelector('input').value; });
+        const lv = document.querySelector('label[for=f_camara_velocidad]');
+        if (lv) lv.textContent = f === 'video' ? 'Obturación' : (f === 'ambas' ? 'Velocidad / obturación' : 'Velocidad');
+        pintarPistas();
+    };
+    // Pistas en gris: lo que la toma hereda del setup si deja el campo vacío.
+    const pistas = { apertura: 'f_camara_apertura', velocidad: 'f_camara_velocidad', iso: 'f_camara_iso', fps: 'f_camara_fps', nd: 'f_camara_nd', luz: 'f_plano_esquema_iluminacion' };
+    const pintarPistas = () => {
+        const o = setup.selectedOptions[0];
+        const ov = formatoAct() === 'ambas' && setupVideo ? setupVideo.selectedOptions[0] : null;
+        Object.entries(pistas).forEach(([k, id]) => {
+            const c = document.getElementById(id);
+            if (!c) return;
+            c.dataset.ph ??= c.placeholder || '';
+            // En «ambas», fps y ND son del setup de vídeo.
+            const fuente = (k === 'fps' || k === 'nd') && ov && ov.value ? ov : o;
+            const val = fuente && fuente.value && fuente.value !== 'nuevo' ? (fuente.dataset[k] || '') : '';
+            c.placeholder = val ? val + ' (del setup)' : c.dataset.ph;
+            c.closest('.rd-campo')?.classList.toggle('rf-hereda', !!val);
+        });
+    };
+    document.querySelectorAll('input[name=formato]').forEach(r => r.addEventListener('change', pintarFormato));
+    setupVideo && setupVideo.addEventListener('change', pintarPistas);
     const pintarSetup = () => {
         const o = setup.selectedOptions[0];
         document.getElementById('rfSetupNuevo').hidden = setup.value !== 'nuevo';
@@ -477,10 +503,10 @@ ob_start(); ?>
     setupPick && setupPick.addEventListener('click', ev => {
         const b = ev.target.closest('.rf-destino'); if (!b) return;
         setup.value = b.classList.contains('on') ? '' : b.dataset.valor;
-        pintarSetup(); marcarSetup(); pintarCam(true);
+        pintarSetup(); marcarSetup(); pintarCam(true); pintarPistas();
     });
-    setup.addEventListener('change', () => { pintarSetup(); marcarSetup(); if (setup.value === 'nuevo') document.getElementById('f_setup_nuevo').focus(); });
-    pintarSetup(); marcarSetup(); pintarCam(false);
+    setup.addEventListener('change', () => { pintarSetup(); marcarSetup(); pintarPistas(); if (setup.value === 'nuevo') document.getElementById('f_setup_nuevo').focus(); });
+    pintarSetup(); marcarSetup(); pintarCam(false); pintarFormato();
 
     const lista = document.getElementById('rfVars');
     const nueva = document.getElementById('rfVarNueva');
@@ -494,7 +520,7 @@ ob_start(); ?>
         if (!t) return;
         n++;
         const li = document.createElement('li');
-        li.innerHTML = `<i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i><input class="fv-input" name="variantes[${n}][texto]" aria-label="Variante"><input type="hidden" name="variantes[${n}][prioridad]" value="imp"><button type="button" class="rf-prio imp" data-prio>Imprescindible</button><button type="button" class="fv-x" data-quitar title="Quitar"><i class="bi bi-x"></i></button>`;
+        li.innerHTML = `<i class="bi bi-grip-vertical rf-asa" title="Arrastra para ordenar"></i><input class="fv-input" name="variantes[${n}][texto]" aria-label="Variante"><input class="fv-input rf-var-props" name="variantes[${n}][props]" placeholder="+ lleva además…" aria-label="Props que lleva además de la toma"><input type="hidden" name="variantes[${n}][prioridad]" value="imp"><button type="button" class="rf-prio imp" data-prio>Imprescindible</button><button type="button" class="fv-x" data-quitar title="Quitar"><i class="bi bi-x"></i></button>`;
         li.querySelector('.fv-input').value = t;
         lista.appendChild(li);
         nueva.value = '';

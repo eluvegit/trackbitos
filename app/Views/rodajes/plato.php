@@ -3,14 +3,9 @@
 <?php
 $pid = (int) $proyecto['id'];
 
-$cuenta = ['pendiente' => 0, 'hecha' => 0, 'repetir' => 0, 'descartada' => 0];
-$hayFormato = false;
-foreach ($escenas as $e) {
-    foreach (rod_estados_partes($e) as $est) $cuenta[$est]++;
-    foreach ($e['variantes'] ?? [] as $va) foreach (rod_partes($e) as $col) $cuenta[($va[$col] ?? null) ?: 'pendiente']++;
-    if (!empty($e['formato'])) $hayFormato = true;
-}
-$total  = array_sum($cuenta);
+$cuenta = rod_cuenta_tomas($escenas);
+$hayFormato = (bool) array_filter($escenas, static fn ($e) => !empty($e['formato']));
+$total  = $cuenta['total'];
 $esPlan = $orden === 'plan';
 $hayOpc = (bool) array_filter($escenas, static fn ($e) => ($e['prioridad'] ?? 'imp') === 'opc' || array_filter($e['variantes'] ?? [], static fn ($v) => $v['prioridad'] === 'opc'));
 $formatos = rod_formatos();
@@ -18,30 +13,7 @@ $formatos = rod_formatos();
 $hayDN = (bool) array_filter($escenas, static fn ($e) => !empty($e['franja']));
 $pct = static fn (int $n) => $total ? round($n / $total * 100, 2) : 0;
 
-$pre = static function (string $v, string $pref = '', string $suf = ''): string {
-    $v = trim($v);
-    return $v === '' ? '' : (is_numeric(str_replace(',', '.', $v)) ? $pref . $v . $suf : $v);
-};
 $img = static fn (?array $m) => $m && $m['origen'] === 'archivo' ? base_url($m['ruta_archivo']) : null;
-
-// Parámetros de un setup para su parte (foto / vídeo). $deToma: true = la toma manda en todo; array = solo esas columnas.
-$tecnica = static function (string $parte, ?array $st, array $e, bool|array $deToma) use ($pre): array {
-    $v = static function (string $ec, string $sc) use ($st, $e, $deToma): string {
-        $t = ($deToma === true || in_array($ec, (array) $deToma, true)) ? trim((string) ($e[$ec] ?? '')) : '';
-        return $t !== '' ? $t : trim((string) ($st[$sc] ?? ''));
-    };
-    $video = $parte === 'video';
-    return array_filter([
-        'Lente'                              => $v('camara_optica', 'optica'),
-        'Soporte'                            => $v('camara_soporte', 'soporte'),
-        'Diafragma'                          => $pre($v('camara_apertura', 'apertura'), 'f/'),
-        ($video ? 'Obturación' : 'Velocidad') => $v('camara_velocidad', 'velocidad'),
-        'ISO'                                => $pre($v('camara_iso', 'iso'), 'ISO '),
-        'FPS'                                => $video ? $pre($v('camara_fps', 'fps'), '', ' fps') : '',
-        'ND'                                 => $video ? $pre($v('camara_nd', 'nd'), 'ND ') : '',
-        ($video ? 'Foco de luz' : 'Flash / luz') => $v('plano_esquema_iluminacion', 'luz'),
-    ], static fn ($x) => $x !== '');
-};
 
 // Ficha de una fila (toma o variante): foto con los setups debajo y, a la derecha, props, focales y luz.
 $ficha = static function (array $f): string {
@@ -127,7 +99,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         . '</div>';
 };
 ?>
-<div class="fv rd pt pt-B" id="plato" data-base="<?= site_url("rodajes/$pid/escenas") ?>" data-var="<?= site_url("rodajes/$pid/variantes") ?>">
+<div class="fv rd pt pt-B pt-M" id="plato" data-base="<?= site_url("rodajes/$pid/escenas") ?>" data-var="<?= site_url("rodajes/$pid/variantes") ?>">
     <?= view('rodajes/_cabecera', [
         'migas'   => [$proyecto['titulo'] => site_url("rodajes/$pid/escenas"), 'Plató' => null],
         'titulo'  => null,
@@ -139,7 +111,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     <?php if (!$escenas): ?>
         <div class="fv-panel rd-vacio">
             <i class="bi bi-film"></i>
-            <div>Este rodaje no tiene escenas todavía.</div>
+            <div>Este rodaje no tiene tomas todavía.</div>
             <a class="fv-btn fv-btn-pri" href="<?= site_url("rodajes/$pid/escenas/create") ?>"><i class="bi bi-plus-lg"></i>Crear la primera</a>
         </div>
     <?php else: ?>
@@ -166,8 +138,8 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 <span class="rd-barra pt-barra" aria-hidden="true"><i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i></span>
                 <span class="pt-cont" title="Hechas"><b id="plHechas"><?= $cuenta['hecha'] ?></b>/<span id="plUtiles"><?= $total - $cuenta['descartada'] ?></span></span>
                 <span class="pt-modo" id="plModo" role="group" aria-label="Lista o mosaico">
-                    <button type="button" class="pt-ib" data-modo="lista" aria-pressed="true" title="Lista con datos" aria-label="Lista con datos"><i class="bi bi-view-list"></i></button>
-                    <button type="button" class="pt-ib" data-modo="mosaico" aria-pressed="false" title="Solo fotos" aria-label="Solo fotos"><i class="bi bi-grid-3x3-gap"></i></button>
+                    <button type="button" class="pt-ib" data-modo="lista" aria-pressed="false" title="Lista con datos" aria-label="Lista con datos"><i class="bi bi-view-list"></i></button>
+                    <button type="button" class="pt-ib" data-modo="mosaico" aria-pressed="true" title="Solo fotos" aria-label="Solo fotos"><i class="bi bi-grid-3x3-gap"></i></button>
                 </span>
             </div>
             <div class="pt-aj" id="plAj" hidden>
@@ -240,11 +212,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     $stp    = $setups[(int) ($e['setup_id'] ?? 0)] ?? null;
 
                     // Una caja por setup que usa la toma (foto / vídeo), con sus parámetros.
-                    $cajas = [];
-                    foreach (rod_setups_toma($e, $setups) as $parte => $st) {
-                        $principal = !($parte === 'video' && ($e['formato'] ?? '') === 'ambas');
-                        $cajas[$parte] = ['st' => $st, 'tec' => $tecnica($parte, $st, $e, $principal ? true : ['camara_fps', 'camara_nd'])];
-                    }
+                    $cajas = rod_cajas_toma($e, $setups);
 
                     $lb = [];
                     foreach ($fotos['t'][$eid] ?? [] as $m) if ($s = $img($m)) $lb[] = ['s' => $s, 'c' => 'Foto de la toma'];
@@ -258,7 +226,12 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     if (!$fotoPrin && $lb && !$varFoto) $fotoPrin = $lb[0]['s'];
                     $idxPrin = $fotoPrin ? (int) array_search($fotoPrin, array_column($lb, 's'), true) : -1;
 
+                    // Datos de la escena que no salen en la tarjeta (foto, lente, luz, props y setups ya están fuera).
                     $detalle = array_filter([
+                        'Momento'             => \App\Models\RodajesEscenaModel::FRANJAS[$e['franja'] ?? ''] ?? '',
+                        'Bloque'              => $esPlan ? ($e['escena_bloque'] ?? '') : '',
+                        'Objetivo'            => ($e['escena_objetivo'] ?? ''),
+                        'Cámara'              => ($e['camara_modelo'] ?? ''),
                         'Plano'               => ($e['camara_tipo_plano'] ?? ''),
                         'Ángulo'              => ($e['camara_angulo'] ?? ''),
                         'Movimiento'          => ($e['camara_movimiento'] ?? ''),
@@ -268,13 +241,18 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         'Ubicación'           => $esPlan ? '' : ($e['escena_ubicacion'] ?? ''),
                         'Acción'              => ($e['escena_accion'] ?? ''),
                         'Toma/s'              => ($e['escena_tomas'] ?? ''),
+                        'Actores'             => ($e['plano_actores'] ?? ''),
                         'Objetos'             => ($e['plano_objetos'] ?? ''),
+                        'Ref. del lugar'      => ($e['plano_ref_lugar_texto'] ?? ''),
+                        'Inspiración'         => ($e['plano_ref_inspiracion_texto'] ?? ''),
                         'Toma alternativa'    => ($e['plano_toma_alternativa'] ?? ''),
                         'Efecto especial'     => ($e['escena_efecto_especial'] ?? ''),
                         'Continuidad antes'   => ($e['escena_cont_previa'] ?? ''),
                         'Continuidad después' => ($e['escena_cont_posterior'] ?? ''),
                         'Notas'               => ($e['plano_notas'] ?? ''),
                         'Diálogo'             => ($e['sonido_dialogo_escrito'] ?? ''),
+                        'Sonido ambiente'     => ($e['sonido_ambiente'] ?? ''),
+                        'Antiviento'          => ($e['sonido_antiviento'] ?? ''),
                     ], static fn ($v) => trim((string) $v) !== '');
                     $ed = [
                         'titulo' => (string) ($e['escena_descripcion'] ?? ''), 'setup_id' => (int) ($e['setup_id'] ?? 0),
@@ -327,13 +305,14 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
-                                <?= rod_campos($detalle, ['Acción', 'Notas', 'Diálogo', 'Objetos', 'Toma alternativa', 'Efecto especial', 'Continuidad antes', 'Continuidad después']) ?>
+                                <?= rod_campos($detalle, ['Objetivo', 'Acción', 'Notas', 'Diálogo', 'Actores', 'Objetos', 'Ref. del lugar', 'Inspiración', 'Toma alternativa', 'Efecto especial', 'Continuidad antes', 'Continuidad después', 'Sonido ambiente']) ?>
+                                <?php if (!$detalle && !$extra): ?><small class="t3 pt-sin-datos">La toma no tiene más datos.</small><?php endif; ?>
                                 <label class="pt-nota">Nota rápida
                                     <input type="text" class="fv-input pl-nota" maxlength="255" placeholder="ISO subido, repetir con luz…" value="<?= esc($e['toma_nota'] ?? '', 'attr') ?>">
                                 </label>
                                 <div class="pt-edits">
                                     <button type="button" class="fv-btn fv-btn-sm" data-editar><i class="bi bi-pencil"></i>Editar datos</button>
-                                    <a class="fv-link" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>"><i class="bi bi-box-arrow-up-right"></i>Escena completa</a>
+                                    <a class="fv-link" href="<?= site_url("rodajes/$pid/escenas/edit/$eid") ?>"><i class="bi bi-box-arrow-up-right"></i>Toma completa</a>
                                 </div>
                             </div>
                             <div class="pl-nota-vista"<?= trim((string) $e['toma_nota']) === '' ? ' hidden' : '' ?>><i class="bi bi-pencil"></i> <span><?= esc($e['toma_nota'] ?? '') ?></span></div>
@@ -453,7 +432,8 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         raiz.classList.toggle('pt-M', m === 'mosaico');
         raiz.querySelectorAll('#plModo [data-modo]').forEach(b => b.setAttribute('aria-pressed', b.dataset.modo === (m === 'mosaico' ? 'mosaico' : 'lista')));
     };
-    ponerModo(ls.get('rodajes_plato_modo'));
+    // Por defecto mosaico (rejilla); la lista solo si se eligió antes.
+    ponerModo(ls.get('rodajes_plato_modo') === 'lista' ? 'lista' : 'mosaico');
     raiz.querySelector('#plModo').addEventListener('click', ev => {
         const b = ev.target.closest('[data-modo]'); if (!b) return;
         ls.set('rodajes_plato_modo', b.dataset.modo); ponerModo(b.dataset.modo);
@@ -536,7 +516,6 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const fin = raiz.querySelector('.pt-fin');
         fin.hidden = tomas.some(t => !t.hidden);
         fin.querySelector('[data-fin-txt]').textContent = filtro === 'pendientes' ? '¡Todas las tomas están hechas!' : '';
-        syncInfo?.();
     }
 
     function enviar(toma, datos, grupo) {
@@ -639,66 +618,25 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
     });
 
     // ---------- «Más info» de la galería: modal con todo lo de la toma ----------
-    // Los botones de estado son copias que pulsan los de la fila; .pt-det (campos, nota, editar) se mueve dentro y vuelve al cerrar.
+    // Solo lo que NO está ya en la tarjeta (foto, lente, luz, props, setups y estado van fuera):
+    // referencias extra, el resto de campos de la escena, nota y edición. .pt-det se mueve dentro y vuelve al cerrar.
     const info = document.getElementById('plInfo'), infoC = document.getElementById('plInfoC');
-    let infoToma = null, infoDet = null, infoHueco = null, infoDetOculto = true, syncInfo = null, volverInfo = null;
-    const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+    let infoToma = null, infoDet = null, infoHueco = null, infoDetOculto = true, volverInfo = null;
     function limpiarInfo() {
         if (infoDet && infoHueco) { infoHueco.replaceWith(infoDet); infoDet.hidden = infoDetOculto; }
-        infoDet = infoHueco = null; syncInfo = null; infoC.innerHTML = '';
+        infoDet = infoHueco = null; infoC.innerHTML = '';
     }
     function abrirInfo(toma) {
         if (!toma) return;
         if (info.open) info.close();
         limpiarInfo();
         infoToma = toma;
-        const d = JSON.parse(toma.dataset.ed || '{}'), fotos = JSON.parse(toma.dataset.fotos || '[]');
-        const fila = toma.querySelector('.pt-fila:not(.pt-var)');
         document.getElementById('plInfoT').textContent = toma.dataset.titulo;
-        const sec = (tit, ...nodos) => { const s = el('section', 'pt-inf-s'); if (tit) s.append(el('div', 'pt-inf-h', tit)); s.append(...nodos); infoC.append(s); };
-
-        if (fotos.length) {
-            const r = el('div', 'pt-inf-fotos');
-            fotos.forEach((f, i) => {
-                const b = el('button'); b.type = 'button'; b.dataset.foto = i; b.title = f.c; b.setAttribute('aria-label', f.c);
-                b.style.backgroundImage = 'url(' + JSON.stringify(f.s) + ')';
-                r.append(b);
-            });
-            sec('', r);
-        }
-
-        const est = el('div', 'pt-inf-est'), pares = [];
-        toma.querySelectorAll('[data-fila]').forEach(f => {
-            const gs = [...f.querySelectorAll('.pt-btns')].filter(g => !g.hidden);
-            if (!gs.length) return;
-            est.append(el('div', 'pt-inf-lbl', f.classList.contains('pt-var') ? 'Variante · ' + (f.querySelector('.pm-pie span')?.textContent || '') : 'Toma'));
-            gs.forEach(g => {
-                const c = g.cloneNode(true); c.hidden = false;
-                c.addEventListener('click', ev => { const b = ev.target.closest('[data-estado]'); if (b) g.querySelector('[data-estado="' + b.dataset.estado + '"]').click(); });
-                pares.push([g, c]); est.append(c);
-            });
-        });
-        if (pares.length) sec('Estado', est);
-        syncInfo = () => pares.forEach(([g, c]) => c.dataset.actual = g.dataset.actual);
-
-        const cams = [...fila.querySelectorAll('.pt-stp-det')].map(x => { const c = x.cloneNode(true); c.hidden = false; c.removeAttribute('data-stp-det'); return c; });
-        if (cams.length) sec('Cámara y luz', ...cams);
-
-        const props = [el('div', 'pt-inf-props' + (d.props?.length ? '' : ' falta'), d.props?.length ? d.props.join(', ') : 'sin props')];
-        (d.variantes || []).forEach(v => {
-            const l = el('div', 'pt-inf-var', 'Variante · ' + v.texto);
-            if (v.props?.length) l.append(' ', el('b', '', '+ ' + v.props.join(', ')));
-            props.push(l);
-        });
-        const diff = fila.querySelector('.pm-diff');
-        if (diff) props.push(diff.cloneNode(true));
-        sec('Props', ...props);
-
-        infoDet = fila.querySelector('.pt-det');
+        infoDet = toma.querySelector('.pt-fila:not(.pt-var) .pt-det');
         if (infoDet) {
             infoHueco = document.createComment('pt-det'); infoDet.before(infoHueco);
             infoDetOculto = infoDet.hidden; infoDet.hidden = false;
-            sec('Detalles', infoDet);
+            infoC.append(infoDet);
         }
         info.showModal();
         infoC.scrollTop = 0;

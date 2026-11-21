@@ -15,7 +15,6 @@ class RodajesEscenas extends BaseController
     {
         $proyectos = new RodajesProyectoModel();
         $escenasModel = new RodajesEscenaModel();
-        $imgsModel = new RodajesEscenaImagenModel();
 
         $proyecto = $proyectos->find($proyectoId);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
@@ -25,96 +24,16 @@ class RodajesEscenas extends BaseController
             ->orderBy('orden', 'ASC')
             ->findAll();
 
-        $multimedia = [];
-        if (!empty($escenas)) {
-            $ids = array_column($escenas, 'id');
-
-            // Traemos todos los archivos asociados a las escenas de este proyecto
-            $files = $imgsModel->whereIn('escena_id', $ids)->findAll();
-
-            foreach ($files as $f) {
-                $eid = $f['escena_id'];
-                $ruta = $f['ruta'];
-                $numMedia[$eid] = ($numMedia[$eid] ?? 0) + 1;
-
-                // Extraer extensión de forma segura
-                $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
-
-                // Definir si es video
-                $esVideo = in_array($ext, ['mp4', 'webm', 'ogg', 'mov']);
-
-                /**
-                 * LÓGICA DE PRIORIDAD:
-                 * 1. Si no hay nada para esta escena, lo guardamos.
-                 * 2. Si lo que hay es una imagen y lo nuevo es un vídeo, lo pisamos (prioridad vídeo).
-                 */
-                if (!isset($multimedia[$eid]) || ($esVideo && !$multimedia[$eid]['es_video'])) {
-                    $multimedia[$eid] = [
-                        'ruta'     => $ruta,
-                        'es_video' => $esVideo,
-                        'ext'      => $ext // Fundamental para el <source type="video/...">
-                    ];
-                }
-            }
-        }
-
-        // Las tomas creadas con el flujo (ingesta → revisar) tienen su foto en el
-        // moodboard de la sesión, no en rodajes_escena_imagenes. Si la escena no
-        // tiene imagen propia: foto de la toma → foto de una variante → imagen
-        // guía de su ubicación. Así la lista no sale llena de huecos grises.
-        $escenas  = RodajesFlujo::conVariantes($escenas);
-        $fotos    = RodajesFlujo::fotosDeTomas(array_column($escenas, 'id'));
-        $ubicImg  = [];
-        $setups   = [];
-        if ($escenas) {
-            foreach ((new \App\Models\RodajesUbicacionModel())->where('proyecto_id', (int) $proyectoId)->findAll() as $z) {
-                if (!empty($z['imagen'])) $ubicImg[(int) $z['id']] = $z['imagen'];
-            }
-            foreach ((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $proyectoId)->findAll() as $s) {
-                $setups[(int) $s['id']] = $s;
-            }
-        }
-        $esFoto = static fn ($i) => $i && $i['origen'] === 'archivo' && !empty($i['ruta_archivo']);
-        $varFotos = [];
-        foreach ($escenas as $e) {
-            $eid = (int) $e['id'];
-            $deToma = array_values(array_filter($fotos['t'][$eid] ?? [], $esFoto));
-            foreach ($e['variantes'] as $v) {
-                $i = $v['moodboard_item_id'] ? ($fotos['v'][(int) $v['moodboard_item_id']] ?? null) : null;
-                if ($esFoto($i)) $varFotos[$eid][] = ['ruta' => $i['ruta_archivo'], 'texto' => (string) $v['texto']];
-            }
-            $numMedia[$eid] = ($numMedia[$eid] ?? 0) + count($deToma) + count($varFotos[$eid] ?? []);
-            if (isset($multimedia[$eid])) continue;
-            $ruta = $deToma[0]['ruta_archivo'] ?? ($varFotos[$eid][0]['ruta'] ?? null);
-            $guia = false;
-            if (!$ruta && !empty($e['ubicacion_id']) && isset($ubicImg[(int) $e['ubicacion_id']])) {
-                $ruta = $ubicImg[(int) $e['ubicacion_id']];
-                $guia = true;
-            }
-            if ($ruta) {
-                $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
-                $multimedia[$eid] = ['ruta' => $ruta, 'es_video' => in_array($ext, ['mp4', 'webm', 'ogg', 'mov'], true), 'ext' => $ext, 'guia' => $guia];
-            } elseif ($idea = ($fotos['t'][$eid][0] ?? null)) {
-                // Idea de texto o enlace: al menos se ve qué era.
-                $ideas[$eid] = ['texto' => rod_texto_idea($idea), 'enlace' => $idea['origen'] === 'enlace'];
-            }
-        }
+        $escenas = RodajesFlujo::conVariantes($escenas);
+        $p = $this->portadas((int) $proyectoId, $escenas);
 
         $sesion = !empty($proyecto['sesion_id'])
             ? (new \App\Models\SesionModel())->find((int) $proyecto['sesion_id'])
             : null;
 
         // Dos órdenes: narrativo (por temáticas, el de siempre) o el de rodaje (el del Plan).
-        $ordenLista = $this->request->getGet('orden') === 'rodaje' ? 'rodaje' : 'narrativo';
-        $gruposRodaje = [];
-        if ($ordenLista === 'rodaje') {
-            foreach (RodajesFlujo::construirPlan((int) $proyectoId, $escenas) as $f) foreach ($f['zonas'] as $z) foreach ($z['setups'] as $st) {
-                $gruposRodaje[] = [
-                    'nombre'  => implode(' · ', array_filter([$f['nombre'], $z['zona'] ? $z['n'] . '. ' . $z['zona']['nombre'] : 'Sin zona', $st['setup']['nombre'] ?? 'Sin setup'])),
-                    'escenas' => $st['escenas'],
-                ];
-            }
-        }
+        $ordenLista   = $this->ordenPedido();
+        $gruposRodaje = $ordenLista === 'rodaje' ? $this->gruposRodaje((int) $proyectoId, $escenas) : [];
 
         return view(rod_vista('rodajes/escenas/index'), [
             'ordenLista'   => $ordenLista,
@@ -122,14 +41,100 @@ class RodajesEscenas extends BaseController
             'proyecto'   => $proyecto,
             'sesion'     => $sesion,
             'escenas'    => $escenas,
-            'multimedia' => $multimedia, // Ahora sí viaja con la info de extensión
-            'numMedia'   => $numMedia ?? [],
-            'varFotos'   => $varFotos,
+            'multimedia' => $p['multimedia'],
+            'varFotos'   => $p['varFotos'],
             'ordenBloques' => RodajesFlujo::ordenBloques($sesion),
-            'ideas'      => $ideas ?? [],
-            'setups'     => $setups,
+            'ideas'      => $p['ideas'],
+            'setups'     => $p['setups'],
+            'puntos'     => $p['puntos'],
             'pasos'      => RodajesFlujo::pasos((int) $proyectoId, $sesion),
         ]);
+    }
+
+    /** Orden pedido por la URL: 'rodaje' (el del Plan) o 'narrativo' (el de la historia). */
+    private function ordenPedido(): string
+    {
+        return $this->request->getGet('orden') === 'rodaje' ? 'rodaje' : 'narrativo';
+    }
+
+    /** Grupos del Plan (franja · zona · setup) en su orden, con su lado de la jornada. */
+    private function gruposRodaje(int $pid, array $escenas): array
+    {
+        $out = [];
+        foreach (RodajesFlujo::construirPlan($pid, $escenas) as $f) foreach ($f['zonas'] as $z) foreach ($z['setups'] as $st) {
+            $out[] = [
+                'nombre'  => implode(' · ', array_filter([$f['nombre'], $z['zona'] ? $z['n'] . '. ' . $z['zona']['nombre'] : 'Sin zona', $st['setup']['nombre'] ?? 'Sin setup'])),
+                'zona'    => $z['zona']['nombre'] ?? '',
+                'dn'      => rod_dia_noche($st['escenas'][0]['franja'] ?? null),
+                'escenas' => $st['escenas'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Portada de cada toma y fotos de sus variantes, igual en lista y storyboard.
+     * Portada: imagen subida a mano (un vídeo manda sobre una imagen) → foto de
+     * la idea (las tomas del flujo la guardan en el moodboard) → foto de una
+     * variante → imagen guía de su zona. Sin nada de eso, el texto de la idea.
+     * $escenas deben venir con variantes (RodajesFlujo::conVariantes).
+     */
+    private function portadas(int $pid, array $escenas): array
+    {
+        $out = ['multimedia' => [], 'varFotos' => [], 'ideas' => [], 'setups' => [], 'puntos' => []];
+        if (!$escenas) return $out;
+        $ids = array_column($escenas, 'id');
+        $esVid = static fn (string $r) => rod_es_video($r);
+        foreach ((new RodajesEscenaImagenModel())->whereIn('escena_id', $ids)->orderBy('id', 'ASC')->findAll() as $f) {
+            $eid = (int) $f['escena_id'];
+            $v = $esVid($f['ruta']);
+            if (!isset($out['multimedia'][$eid]) || ($v && !$out['multimedia'][$eid]['es_video'])) {
+                $out['multimedia'][$eid] = ['ruta' => $f['ruta'], 'es_video' => $v, 'ext' => strtolower(pathinfo($f['ruta'], PATHINFO_EXTENSION)), 'guia' => false];
+            }
+        }
+        $fotos = RodajesFlujo::fotosDeTomas($ids);
+        $ubicImg = [];
+        $zonas = (new RodajesUbicacionModel())->where('proyecto_id', $pid)->findAll();
+        foreach ($zonas as $z) if (!empty($z['imagen'])) $ubicImg[(int) $z['id']] = $z['imagen'];
+        foreach ((new RodajesSetupModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll() as $st) $out['setups'][(int) $st['id']] = $st;
+        if ($zonas) $out['puntos'] = array_column((new RodajesPuntoModel())->whereIn('ubicacion_id', array_column($zonas, 'id'))->findAll(), 'nombre', 'id');
+
+        $esFoto = static fn ($i) => $i && $i['origen'] === 'archivo' && !empty($i['ruta_archivo']);
+        foreach ($escenas as $e) {
+            $eid = (int) $e['id'];
+            foreach ($e['variantes'] ?? [] as $va) {
+                $i = $va['moodboard_item_id'] ? ($fotos['v'][(int) $va['moodboard_item_id']] ?? null) : null;
+                if ($esFoto($i)) $out['varFotos'][$eid][(int) $va['id']] = $i['ruta_archivo'];
+            }
+            if (isset($out['multimedia'][$eid])) continue;
+            $deToma = array_values(array_filter($fotos['t'][$eid] ?? [], $esFoto));
+            $ruta = $deToma[0]['ruta_archivo'] ?? (array_values($out['varFotos'][$eid] ?? [])[0] ?? null);
+            $guia = false;
+            if (!$ruta && !empty($e['ubicacion_id']) && isset($ubicImg[(int) $e['ubicacion_id']])) {
+                $ruta = $ubicImg[(int) $e['ubicacion_id']];
+                $guia = true;
+            }
+            if ($ruta) {
+                $out['multimedia'][$eid] = ['ruta' => $ruta, 'es_video' => $esVid($ruta), 'ext' => strtolower(pathinfo($ruta, PATHINFO_EXTENSION)), 'guia' => $guia];
+            } elseif ($idea = ($fotos['t'][$eid][0] ?? null)) {
+                $out['ideas'][$eid] = ['texto' => rod_texto_idea($idea), 'enlace' => $idea['origen'] === 'enlace'];
+            }
+        }
+        return $out;
+    }
+
+    /** [anterior, siguiente] de una toma en el orden pedido (narrativo o el del Plan). */
+    private function vecinas(int $pid, int $id, string $orden): array
+    {
+        $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        $ids = array_map('intval', array_column($escenas, 'id'));
+        if ($orden === 'rodaje') {
+            $ids = [];
+            foreach ($this->gruposRodaje($pid, RodajesFlujo::conVariantes($escenas)) as $g) foreach ($g['escenas'] as $e) $ids[] = (int) $e['id'];
+        }
+        $k = array_search($id, $ids, true);
+        if ($k === false) return [null, null];
+        return [$ids[$k - 1] ?? null, $ids[$k + 1] ?? null];
     }
 
     public function dialogos($proyectoId)
@@ -448,13 +453,21 @@ class RodajesEscenas extends BaseController
         foreach ($props as $pr) if ($pr !== '') $unicos[rod_normalizar($pr)] ??= mb_substr($pr, 0, 80);
         $post['props'] = $unicos ? json_encode(array_values($unicos), JSON_UNESCAPED_UNICODE) : null;
 
-        $proyecto = (new RodajesProyectoModel())->find($pid);
-        if ($unicos && $proyecto && $proyecto['sesion_id']) {
-            $eq = new SesionEquipoModel();
-            $ya = array_map(static fn ($r) => rod_normalizar($r['item']), $eq->where('sesion_id', $proyecto['sesion_id'])->where('tipo', 'props')->findAll());
-            foreach ($unicos as $k => $pr) {
-                if (!in_array($k, $ya, true)) $eq->insert(['sesion_id' => $proyecto['sesion_id'], 'item' => $pr, 'tipo' => 'props', 'orden' => 999]);
-            }
+        $this->propsAlEquipo($pid, array_values($unicos));
+    }
+
+    /** Props nuevos al «Qué llevar» de la sesión vinculada (si no estaban ya). */
+    private function propsAlEquipo(int $pid, array $props): void
+    {
+        $proyecto = $props ? (new RodajesProyectoModel())->find($pid) : null;
+        if (!$proyecto || !$proyecto['sesion_id']) return;
+        $eq = new SesionEquipoModel();
+        $ya = array_map(static fn ($r) => rod_normalizar($r['item']), $eq->where('sesion_id', $proyecto['sesion_id'])->where('tipo', 'props')->findAll());
+        foreach ($props as $pr) {
+            $k = rod_normalizar($pr);
+            if (in_array($k, $ya, true)) continue;
+            $eq->insert(['sesion_id' => $proyecto['sesion_id'], 'item' => $pr, 'tipo' => 'props', 'orden' => 999]);
+            $ya[] = $k;
         }
     }
 
@@ -466,10 +479,23 @@ class RodajesEscenas extends BaseController
         $actuales = array_column($vm->where('escena_id', $escenaId)->findAll(), null, 'id');
         $vistas = [];
         $orden = 0;
+        $toma = (new RodajesEscenaModel())->find($escenaId);
+        $deToma = array_map('rod_normalizar', $toma ? rod_props($toma) : []);
+        $nuevosProps = [];
         foreach ((array) ($post['variantes'] ?? []) as $v) {
             $texto = mb_substr(trim((string) ($v['texto'] ?? '')), 0, 255);
             if ($texto === '') continue;
             $datos = ['texto' => $texto, 'prioridad' => ($v['prioridad'] ?? '') === 'opc' ? 'opc' : 'imp', 'orden' => $orden++];
+            // Props que lleva ADEMÁS de su toma (lo que ya lleva la toma sobra aquí).
+            if (array_key_exists('props', $v)) {
+                $extra = [];
+                foreach (explode(',', (string) $v['props']) as $pr) {
+                    $pr = trim($pr);
+                    if ($pr !== '' && !in_array(rod_normalizar($pr), $deToma, true)) $extra[rod_normalizar($pr)] ??= mb_substr($pr, 0, 80);
+                }
+                $datos['props'] = $extra ? json_encode(array_values($extra), JSON_UNESCAPED_UNICODE) : null;
+                $nuevosProps = array_merge($nuevosProps, array_values($extra));
+            }
             $id = (int) ($v['id'] ?? 0);
             if ($id && isset($actuales[$id])) {
                 $vm->update($id, $datos);
@@ -478,6 +504,7 @@ class RodajesEscenas extends BaseController
                 $vm->insert($datos + ['escena_id' => $escenaId]);
             }
         }
+        $this->propsAlEquipo((int) ($toma['proyecto_id'] ?? 0), $nuevosProps);
         foreach ($actuales as $id => $v) {
             if (isset($vistas[$id])) continue;
             $vm->delete($id);
@@ -550,35 +577,9 @@ class RodajesEscenas extends BaseController
             return redirect()->to(site_url("rodajes/$proyectoId/escenas"));
         }
 
-        // 2. Lógica de navegación (Anterior / Siguiente)
-        $curOrden = (int) $escena['orden'];
-        $curId    = (int) $escena['id'];
-
-        // Siguiente escena: (orden superior) O (mismo orden pero ID superior)
-        $next = $escenasModel->where('proyecto_id', $proyectoId)
-            ->groupStart()
-            ->where('orden >', $curOrden)
-            ->orGroupStart()
-            ->where('orden', $curOrden)
-            ->where('id >', $curId)
-            ->groupEnd()
-            ->groupEnd()
-            ->orderBy('orden', 'ASC')
-            ->orderBy('id', 'ASC')
-            ->first();
-
-        // Escena anterior: (orden inferior) O (mismo orden pero ID inferior)
-        $prev = $escenasModel->where('proyecto_id', $proyectoId)
-            ->groupStart()
-            ->where('orden <', $curOrden)
-            ->orGroupStart()
-            ->where('orden', $curOrden)
-            ->where('id <', $curId)
-            ->groupEnd()
-            ->groupEnd()
-            ->orderBy('orden', 'DESC')
-            ->orderBy('id', 'DESC')
-            ->first();
+        // 2. Anterior / siguiente en el orden desde el que se llega (narrativo o el del Plan).
+        $orden = $this->ordenPedido();
+        [$prevId, $nextId] = $this->vecinas((int) $proyectoId, (int) $escena['id'], $orden);
 
         // 3. Obtener archivos multimedia por categoría
         $imagenes_lugar = $imgs->where(['escena_id' => $id, 'categoria' => 'lugar_objetos'])->findAll();
@@ -591,20 +592,20 @@ class RodajesEscenas extends BaseController
         $fotos  = RodajesFlujo::fotosDeTomas([(int) $escena['id']]);
         $zona   = !empty($escena['ubicacion_id']) ? (new RodajesUbicacionModel())->find((int) $escena['ubicacion_id']) : null;
         $punto  = !empty($escena['punto_id']) ? (new RodajesPuntoModel())->find((int) $escena['punto_id']) : null;
-        $setup  = !empty($escena['setup_id']) ? (new RodajesSetupModel())->find((int) $escena['setup_id']) : null;
 
         return view(rod_vista('rodajes/escenas/show'), [
             'proyecto'        => $proyecto,
             'escena'          => $escena,
-            'nextId'          => $next['id'] ?? null,
-            'prevId'          => $prev['id'] ?? null,
+            'nextId'          => $nextId,
+            'prevId'          => $prevId,
+            'orden'           => $orden,
+            'setups'          => array_column((new RodajesSetupModel())->where('proyecto_id', (int) $proyectoId)->findAll(), null, 'id'),
             'imagenes_lugar'  => $imagenes_lugar,
             'imagenes_insp'   => $imagenes_insp,
             'ideas'           => $fotos['t'][(int) $escena['id']] ?? [],
             'fotosVar'        => $fotos['v'],
             'zona'            => $zona,
             'punto'           => $punto,
-            'setup'           => $setup,
         ]);
     }
 
@@ -619,60 +620,57 @@ class RodajesEscenas extends BaseController
         $pid      = (int) $proyectoId;
         $proyecto = (new RodajesProyectoModel())->find($pid);
         if (!$proyecto) return redirect()->to(site_url('rodajes'));
+        // El antiguo «por clasificación» ya no existe: solo los dos órdenes.
+        if ($this->request->getGet('agrupar') === 'clasificacion') return redirect()->to(site_url("rodajes/$pid/escenas/storyboard?orden=rodaje"));
 
-        $agrupar = $this->request->getGet('agrupar') === 'clasificacion' ? 'clasificacion' : 'bloque';
-        $escenas = (new RodajesEscenaModel())->where('proyecto_id', $pid)
-            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll();
+        RodajesFlujo::sincronizarBloques($pid);
+        $orden   = $this->ordenPedido();
+        $escenas = RodajesFlujo::conVariantes((new RodajesEscenaModel())->where('proyecto_id', $pid)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll());
+        $sesion  = !empty($proyecto['sesion_id']) ? (new \App\Models\SesionModel())->find((int) $proyecto['sesion_id']) : null;
 
-        // Portadas: primera imagen de cada categoría (un vídeo solo si no hay imagen).
-        $portadas = [];
-        if ($escenas) {
-            $files = (new RodajesEscenaImagenModel())->whereIn('escena_id', array_column($escenas, 'id'))
-                ->orderBy('id', 'ASC')->findAll();
-            foreach ($files as $f) {
-                $cat    = $f['categoria'] === 'inspiracion' ? 'insp' : 'lugar';
-                $actual = $portadas[$f['escena_id']][$cat] ?? null;
-                if ($actual === null || (rod_es_video($actual) && !rod_es_video($f['ruta']))) {
-                    $portadas[$f['escena_id']][$cat] = $f['ruta'];
-                }
+        if ($orden === 'rodaje') {
+            $grupos  = $this->gruposRodaje($pid, $escenas);
+            $colores = rod_colores($escenas, 'escena_ubicacion');
+        } else {
+            // Temáticas (= bloques) en su orden; lo suelto, al final.
+            $grupos = [];
+            foreach ($escenas as $e) {
+                $nombre = trim((string) $e['escena_bloque']);
+                $grupos[mb_strtolower($nombre)] ??= ['nombre' => $nombre !== '' ? $nombre : ($sesion ? 'Sin temática' : 'Sin bloque'), 'zona' => $nombre, 'dn' => '', 'escenas' => []];
+                $grupos[mb_strtolower($nombre)]['escenas'][] = $e;
             }
+            $ordenBloques = RodajesFlujo::ordenBloques($sesion);
+            $pos = array_flip(array_keys($grupos));
+            uksort($grupos, static fn ($a, $b) => [$a === '', $ordenBloques[$a] ?? PHP_INT_MAX, $pos[$a]] <=> [$b === '', $ordenBloques[$b] ?? PHP_INT_MAX, $pos[$b]]);
+            $grupos  = array_values($grupos);
+            $colores = rod_colores($escenas, 'escena_bloque');
         }
+        // Color del grupo: el de su zona (rodaje) o el de su temática (narrativo), como en pizarra y plató.
+        foreach ($grupos as &$g) $g['color'] = rod_color($colores, $g['zona']);
+        unset($g);
 
-        // Grupos en el orden en que aparece su primera escena (las escenas ya vienen en orden narrativo).
-        $grupos = [];
-        foreach ($escenas as $e) {
-            $transicion = false;
-            if ($agrupar === 'clasificacion') {
-                $raw    = trim((string) $e['plano_hora_dia']);
-                $clave  = $raw === '' ? '~' : 'C:' . rod_normalizar($raw);
-                $titulo = $raw !== '' ? $raw : 'Sin clasificación';
-            } else {
-                $raw = trim((string) $e['escena_bloque']);
-                $n   = rod_normalizar($raw);
-                $transicion = $n !== '' && (str_starts_with($n, 'TRANS') || str_contains($n, 'TRANSICION'));
-                $clave  = $transicion ? 'T:' . $e['id'] : ($n === '' ? '~' : 'B:' . $n);
-                $titulo = $raw !== '' ? $raw : 'Sin bloque';
-            }
-            $grupos[$clave] ??= ['_title' => $titulo, '_first' => (int) $e['orden'], 'transicion' => $transicion, 'items' => []];
-            $grupos[$clave]['items'][] = [
-                'escena'      => $e,
-                'cover_lugar' => $portadas[$e['id']]['lugar'] ?? null,
-                'cover_insp'  => $portadas[$e['id']]['insp'] ?? null,
-            ];
+        $p = $this->portadas($pid, $escenas);
+        // La vista clásica (?nueva=0) sigue esperando $groups con items y portada.
+        $groups = [];
+        foreach ($grupos as $g) {
+            $groups[] = ['_title' => $g['nombre'], 'items' => array_map(static fn ($e) => [
+                'escena' => $e, 'cover_lugar' => ($p['multimedia'][(int) $e['id']]['ruta'] ?? null), 'cover_insp' => null,
+            ], $g['escenas'])];
         }
 
         return view(rod_vista('rodajes/escenas/storyboard'), [
             'proyecto'   => $proyecto,
-            'groups'     => $grupos,
-            'agrupar'    => $agrupar,
+            'groups'     => $groups,
+            'grupos'     => $grupos,
+            'orden'      => $orden,
             'hayFormato' => (bool) array_filter($escenas, static fn ($e) => !empty($e['formato'])),
-            'colores'    => rod_colores($escenas, $agrupar === 'clasificacion' ? 'plano_hora_dia' : 'escena_bloque'),
-        ]);
+        ] + $p);
     }
 
     /** Antiguo «plan por clasificación»: ahora es el storyboard agrupado por clasificación. */
     public function storyboardPorClasificacion($proyectoId)
     {
-        return redirect()->to(site_url('rodajes/' . (int) $proyectoId . '/escenas/storyboard?agrupar=clasificacion'));
+        return redirect()->to(site_url('rodajes/' . (int) $proyectoId . '/escenas/storyboard?orden=rodaje'));
     }
 }

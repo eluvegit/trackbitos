@@ -63,7 +63,8 @@ $tipos = ['foto' => ['Foto', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-vide
             $donde = [];
             foreach ($ts as $t) $donde[($zonas[$t['ubicacion_id']]['nombre'] ?? 'Sin zona') . ($t['franja'] ? ' (' . mb_strtolower($franjas[$t['franja']] ?? '') . ')' : '')] = true;
             ?>
-            <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>" data-ancla><?= csrf_field() ?>
+            <?php $tp = (string) ($s['tipo'] ?? ''); ?>
+            <form method="post" action="<?= $url("setups/$sid/guardar") ?>" class="fv-panel rd-form rf-setup" id="s<?= $sid ?>" data-tp="<?= esc($tp, 'attr') ?>" data-ancla><?= csrf_field() ?>
                 <div class="rf-setup-cab">
                     <label class="rf-setup-img" title="<?= !empty($s['imagen']) ? 'Cambiar la foto del montaje' : 'Subir una foto del montaje' ?>">
                         <?php if (!empty($s['imagen'])): ?><img src="<?= base_url($s['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-camera"></i><?php endif; ?>
@@ -71,12 +72,12 @@ $tipos = ['foto' => ['Foto', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-vide
                     </label>
                     <input class="fv-input rf-setup-n" name="nombre" value="<?= esc($s['nombre'], 'attr') ?>" aria-label="Nombre del setup">
                 </div>
-                <?php $tp = (string) ($s['tipo'] ?? ''); ?>
                 <div class="rf-tipo" role="radiogroup" aria-label="Tipo de setup">
                     <?php foreach ($tipos as $k => [$txt, $ico]): ?>
                         <label><input type="radio" name="tipo" value="<?= $k ?>" <?= $tp === $k ? 'checked' : '' ?>><span><i class="bi <?= $ico ?>"></i><?= $txt ?></span></label>
                     <?php endforeach; ?>
                     <?php if ($tp === ''): ?><small class="t3">Sin marcar: elige si es de foto o de vídeo.</small><?php endif; ?>
+                    <button class="fv-btn fv-btn-sm rf-tipo-ok"><i class="bi bi-check-lg"></i>Guardar</button>
                 </div>
                 <div class="rd-filas-f cam">
                     <div class="rd-campo"><label>Lente</label><input class="fv-input" name="optica" value="<?= esc((string) $s['optica'], 'attr') ?>" placeholder="35mm f/1.8"></div>
@@ -119,10 +120,11 @@ $tipos = ['foto' => ['Foto', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-vide
                         </ul>
                     <?php else: ?><small class="t3">Ninguna todavía: márcalas arriba y toca este setup.</small><?php endif; ?>
                 </div>
-                <div class="rd-form-pie">
-                    <?php if (!$ts): ?><button class="fv-btn fv-btn-sm fv-btn-peligro izq" formaction="<?= $url("setups/$sid/borrar") ?>" onclick="return confirm('¿Quitar el setup «<?= esc($s['nombre'], 'js') ?>»?')"><i class="bi bi-trash"></i></button><?php endif; ?>
-                    <button class="fv-btn fv-btn-sm"><i class="bi bi-check-lg"></i>Guardar</button>
-                </div>
+                <?php if (!$ts): ?>
+                    <div class="rd-form-pie">
+                        <button class="fv-btn fv-btn-sm fv-btn-peligro izq" formaction="<?= $url("setups/$sid/borrar") ?>" onclick="return confirm('¿Quitar el setup «<?= esc($s['nombre'], 'js') ?>»?')"><i class="bi bi-trash"></i></button>
+                    </div>
+                <?php endif; ?>
             </form>
         <?php endforeach; ?>
     </div>
@@ -136,14 +138,14 @@ $tipos = ['foto' => ['Foto', 'bi-camera'], 'video' => ['Vídeo', 'bi-camera-vide
     </form>
 </div>
 <script>
-document.querySelectorAll('.rf-setup').forEach(f => {
-    const poner = () => {
-        const t = f.querySelector('input[name=tipo]:checked')?.value || '';
-        f.dataset.tp = t;
-        f.querySelectorAll('[data-et-foto]').forEach(l => { if (t) l.textContent = l.dataset['et' + (t === 'foto' ? 'Foto' : 'Video')]; });
-    };
-    f.addEventListener('change', ev => { if (ev.target.name === 'tipo') poner(); });
-    poner();
+// Foto / vídeo: oculta los campos del otro tipo (data-tp + CSS) y cambia las etiquetas.
+// Delegado en document porque el guardado sin recarga sustituye los formularios.
+document.addEventListener('change', ev => {
+    const r = ev.target;
+    if (r.name !== 'tipo' || !r.closest('.rf-setup')) return;
+    const f = r.closest('.rf-setup'), t = r.value;
+    f.dataset.tp = t;
+    f.querySelectorAll('[data-et-foto]').forEach(l => { l.textContent = l.dataset['et' + (t === 'foto' ? 'Foto' : 'Video')]; });
 });
 </script>
 <?= view('rodajes/flujo/_asignar_js') ?>

@@ -304,7 +304,8 @@ if (!function_exists('rod_props_extra')) {
 if (!function_exists('rod_props_diff')) {
     function rod_props_diff(?array $prev, array $cur): string
     {
-        if ($prev === null) return $cur ? 'Prepara: ' . esc(implode(', ', $cur)) : '';
+        // Primera toma del grupo: no hay con qué comparar y sus props ya se ven al lado.
+        if ($prev === null) return '';
         $n = array_map('rod_normalizar', $prev);
         $c = array_map('rod_normalizar', $cur);
         $mas = array_filter($cur, static fn ($p) => !in_array(rod_normalizar($p), $n, true));
@@ -361,5 +362,113 @@ if (!function_exists('rod_cambio_formato_setup')) {
         if ($viejo === 'ambas') return ['setup_video_id' => null];
         if ($viejo === 'video' && $nuevo === 'ambas') return ['setup_id' => null, 'setup_video_id' => $e['setup_id'] ?? null];
         return [];
+    }
+}
+
+if (!function_exists('rod_pre')) {
+    /** Prefijo/sufijo solo si el valor es un número («2.8» → «f/2.8»; «f/2.8» se queda igual). */
+    function rod_pre(string $v, string $pref = '', string $suf = ''): string
+    {
+        $v = trim($v);
+        return $v === '' ? '' : (is_numeric(str_replace(',', '.', $v)) ? $pref . $v . $suf : $v);
+    }
+}
+
+if (!function_exists('rod_tecnica_parte')) {
+    /**
+     * Parámetros de cámara de una parte (foto / vídeo) tal como se ruedan: lo
+     * que tenga la toma y, si no, lo de su setup. $deToma: true = la toma
+     * manda en todo; array = solo en esas columnas (el setup de vídeo de una
+     * toma «ambas» solo coge de la toma los fps y el ND).
+     */
+    function rod_tecnica_parte(string $parte, ?array $st, array $e, bool|array $deToma = true): array
+    {
+        $v = static function (string $ec, string $sc) use ($st, $e, $deToma): string {
+            $t = ($deToma === true || in_array($ec, (array) $deToma, true)) ? trim((string) ($e[$ec] ?? '')) : '';
+            return $t !== '' ? $t : trim((string) ($st[$sc] ?? ''));
+        };
+        $video = $parte === 'video';
+        return array_filter([
+            'Lente'                                  => $v('camara_optica', 'optica'),
+            'Soporte'                                => $v('camara_soporte', 'soporte'),
+            'Diafragma'                              => rod_pre($v('camara_apertura', 'apertura'), 'f/'),
+            ($video ? 'Obturación' : 'Velocidad')    => $v('camara_velocidad', 'velocidad'),
+            'ISO'                                    => rod_pre($v('camara_iso', 'iso'), 'ISO '),
+            'FPS'                                    => $video ? rod_pre($v('camara_fps', 'fps'), '', ' fps') : '',
+            'ND'                                     => $video ? rod_pre($v('camara_nd', 'nd'), 'ND ') : '',
+            ($video ? 'Foco de luz' : 'Flash / luz') => $v('plano_esquema_iluminacion', 'luz'),
+        ], static fn ($x) => $x !== '');
+    }
+}
+
+if (!function_exists('rod_cajas_toma')) {
+    /**
+     * Una caja por setup que usa la toma: [parte => ['st' => setup|null, 'tec' => [...], 'luz' => '']].
+     * Mismo cálculo que el plató, para que todas las vistas digan lo mismo.
+     */
+    function rod_cajas_toma(array $e, array $setups): array
+    {
+        $out = [];
+        foreach (rod_setups_toma($e, $setups) as $parte => $st) {
+            $parte = (string) $parte;
+            $principal = !($parte === 'video' && ($e['formato'] ?? '') === 'ambas');
+            $tec = rod_tecnica_parte($parte, $st, $e, $principal ? true : ['camara_fps', 'camara_nd']);
+            $out[$parte] = ['st' => $st, 'tec' => $tec, 'luz' => $tec[$parte === 'video' ? 'Foco de luz' : 'Flash / luz'] ?? ''];
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('rod_cuenta_tomas')) {
+    /**
+     * Recuento del plató: cada toma y cada variante cuentan una vez por parte
+     * (foto / vídeo). ['pendiente','hecha','repetir','descartada','total','utiles'].
+     */
+    function rod_cuenta_tomas(array $escenas): array
+    {
+        $c = ['pendiente' => 0, 'hecha' => 0, 'repetir' => 0, 'descartada' => 0];
+        foreach ($escenas as $e) {
+            foreach (rod_estados_partes($e) as $est) $c[$est]++;
+            foreach ($e['variantes'] ?? [] as $va) foreach (rod_partes($e) as $col) $c[($va[$col] ?? null) ?: 'pendiente']++;
+        }
+        $c['total']  = $c['pendiente'] + $c['hecha'] + $c['repetir'] + $c['descartada'];
+        $c['utiles'] = $c['total'] - $c['descartada'];
+        return $c;
+    }
+}
+
+if (!function_exists('rod_estados_variante')) {
+    /** [parte => estado] de una variante (usa las mismas partes que su toma). */
+    function rod_estados_variante(array $e, array $v): array
+    {
+        return array_map(static fn ($col) => ($v[$col] ?? null) ?: 'pendiente', rod_partes($e));
+    }
+}
+
+if (!function_exists('rod_momento')) {
+    /** Chip del momento del día (sol / luna + nombre); '' si no tiene. */
+    function rod_momento(array $e, string $clase = ''): string
+    {
+        $f = (string) ($e['franja'] ?? '');
+        $txt = \App\Models\RodajesEscenaModel::FRANJAS[$f] ?? '';
+        if ($txt === '') return '';
+        return '<span class="rd-momento ' . rod_dia_noche($f) . ($clase !== '' ? ' ' . $clase : '') . '"><i class="bi ' . ($f === 'noche' ? 'bi-moon-stars' : 'bi-sun') . '"></i>' . $txt . '</span>';
+    }
+}
+
+if (!function_exists('rod_chips_setups')) {
+    /** Chips «📷 Setup · lente» por parte; en gris lo que falta. */
+    function rod_chips_setups(array $cajas): string
+    {
+        $ico = ['foto' => 'bi-camera', 'video' => 'bi-camera-video', '' => 'bi-camera'];
+        $h = '';
+        foreach ($cajas as $parte => $c) {
+            $nombre = $c['st'] ? esc($c['st']['nombre']) : 'sin setup';
+            $lente  = $c['tec']['Lente'] ?? '';
+            $h .= '<span class="rd-stp' . ($c['st'] ? '' : ' falta') . '"><i class="bi ' . ($ico[$parte] ?? 'bi-camera') . '"></i>' . $nombre
+                . ($lente !== '' && !str_contains(rod_normalizar((string) ($c['st']['nombre'] ?? '')), rod_normalizar($lente)) ? ' <b>' . esc($lente) . '</b>' : '')
+                . '</span>';
+        }
+        return $h;
     }
 }

@@ -1432,6 +1432,9 @@ class RodajesFlujo extends BaseController
         }
         // Ingesta muestra solo el total, pero está hecha cuando la bandeja queda vacía (todo con temática o descartado).
         $out['ideas']['ok'] = $out['tematicas']['ok'];
+        // Props, Plan y Plató no tienen un «todo hecho» claro: en cuanto el rodaje tiene alguna toma,
+        // se marcan con check para no parecer inacabados (el contador de Plató sigue diciendo cuántas van).
+        if ($t > 0) foreach (['props', 'plan', 'plato'] as $k) if (isset($out[$k])) $out[$k]['ok'] = true;
         return $out;
     }
 

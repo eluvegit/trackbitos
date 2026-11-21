@@ -56,7 +56,7 @@ if ($totalTomas) $sub[] = '<span>' . $hechas . ' de ' . $totalTomas . ' tomas he
                     </div>
                     <div class="rd-proy-pie">
                         <a class="fv-btn fv-btn-pri fv-btn-sm" href="<?= site_url("rodajes/$id/plato") ?>"><i class="bi bi-phone"></i>Plató</a>
-                        <a class="fv-ibtn" href="<?= site_url("rodajes/$id/escenas") ?>" title="Escenas"><i class="bi bi-list-ul"></i></a>
+                        <a class="fv-ibtn" href="<?= site_url("rodajes/$id/escenas") ?>" title="Tomas"><i class="bi bi-list-ul"></i></a>
                         <a class="fv-ibtn" href="<?= site_url("rodajes/$id/escenas/storyboard") ?>" title="Storyboard"><i class="bi bi-layout-text-window-reverse"></i></a>
                         <a class="fv-ibtn" href="<?= site_url("rodajes/$id/escenas/storyboard?agrupar=clasificacion") ?>" title="Storyboard por clasificación"><i class="bi bi-sort-down"></i></a>
                         <a class="fv-ibtn" href="<?= site_url("rodajes/$id/dialogos") ?>" title="Diálogos"><i class="bi bi-chat-quote"></i></a>
