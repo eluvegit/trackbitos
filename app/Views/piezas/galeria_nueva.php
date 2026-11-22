@@ -633,6 +633,13 @@ $total = count($piezasTodas);
                 return;
             }
 
+            // Con muchas a la vez se pregunta antes: un filtro que no se ha
+            // aplicado (o se ha quitado sin querer) deja visibles las ~200
+            // de la galería, y meterlas una a una en la placa es un destrozo.
+            if (pendientes.length > 10 && !confirm('Se van a añadir ' + pendientes.length + ' piezas a la placa. ¿Seguro?')) {
+                return;
+            }
+
             botonSeleccionarTodas.disabled = true;
 
             function siguiente(i) {

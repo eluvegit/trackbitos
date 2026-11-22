@@ -12,9 +12,14 @@ $prio = static fn (string $tipo, int $id, bool $imp) => '<button type="button" c
 // Cuadrado de foto vacío: tocar para subir, arrastrar una imagen o pegarla (Ctrl+V) con él seleccionado.
 $hueco = static fn (int $eid, ?int $vid, string $txt = '', string $clase = '') => '<button type="button" class="rf-foto rf-hueco ' . $clase . '" data-eid="' . $eid . '"' . ($vid ? ' data-vid="' . $vid . '"' : '')
     . ' title="' . esc(($txt !== '' ? $txt . ' — ' : '') . 'Sin foto: toca para subir, arrastra o pega una imagen', 'attr') . '"><i class="bi bi-camera"></i><span>Añadir foto</span></button>';
+// Imagen guía de la zona: franja ancha bajo su cabecera (filtro «Imagen del sitio»).
+$conImg = static fn (?array $zona) => $zona && !empty($zona['imagen']) && is_file(FCPATH . $zona['imagen']);
+$hayZimg = false;
+foreach ($plan as $f) foreach ($f['zonas'] as $z) if ($conImg($z['zona'])) $hayZimg = true;
 foreach ($plan as $f) foreach ($f['zonas'] as $z) foreach ($z['setups'] as $s) { $nS++; foreach ($s['escenas'] as $e) { $nT++; $nV += count($e['variantes']); if (($e['prioridad'] ?? 'imp') === 'opc') $hayOpc = true; foreach ($e['variantes'] as $v) if ($v['prioridad'] === 'opc') $hayOpc = true; } }
 ob_start(); ?>
 <a class="fv-btn" href="<?= $url('plan' . ($soloImp ? '' : '?imp=1')) ?>" aria-pressed="<?= $soloImp ? 'true' : 'false' ?>"><i class="bi <?= $soloImp ? 'bi-check-square' : 'bi-square' ?>"></i>Solo imprescindibles</a>
+<?php if ($hayZimg): ?><button type="button" class="fv-btn" id="rfZimg" aria-pressed="true"><i class="bi bi-image"></i>Imagen del sitio</button><?php endif; ?>
 <a class="fv-btn fv-btn-pri" href="<?= $url('plato?orden=plan') ?>"><i class="bi bi-phone"></i>Ir al plató</a>
 <?php $acciones = ob_get_clean(); ?>
 <div class="fv rd" id="rfPlan" data-foto="<?= $url('plan/foto') ?>" data-prio="<?= $url('plan/prioridad') ?>">
@@ -41,6 +46,9 @@ ob_start(); ?>
                         <?php if ($z['zona']): ?><span class="rf-num"><?= $z['n'] ?></span><b><?= esc($z['zona']['nombre']) ?></b><?php else: ?><b class="t3">Sin zona</b><?php endif; ?>
                         <?php if (!empty($z['zona']['notas'])): ?><p><?= esc($z['zona']['notas']) ?></p><?php endif; ?>
                     </div>
+                    <?php if ($conImg($z['zona'])): ?>
+                        <button type="button" class="pt-zimg" title="Ver entera" aria-label="Imagen del sitio: <?= esc($z['zona']['nombre'], 'attr') ?>"><img src="<?= base_url($z['zona']['imagen']) ?>" alt="" loading="lazy"></button>
+                    <?php endif; ?>
                     <?php foreach ($z['setups'] as $s): if ($s['setup']) $si++; ?>
                         <div class="rf-ps">
                             <div class="rf-ps-h">
@@ -101,6 +109,17 @@ ob_start(); ?>
 (() => {
     const raiz = document.getElementById('rfPlan'), input = document.getElementById('rfHuecoFile');
     let destino = null;
+    // Imagen del sitio: mostrar / ocultar (se recuerda) y tocarla la abre entera.
+    const zBtn = document.getElementById('rfZimg');
+    const lsZ = { get: () => { try { return localStorage.getItem('rodajes_plan_zimg'); } catch { return null; } }, set: v => { try { localStorage.setItem('rodajes_plan_zimg', v); } catch {} } };
+    const ponerZimg = on => { raiz.classList.toggle('pt-sinzimg', !on); zBtn?.setAttribute('aria-pressed', on); };
+    ponerZimg(lsZ.get() !== '0');
+    zBtn?.addEventListener('click', () => { const on = raiz.classList.contains('pt-sinzimg'); lsZ.set(on ? '1' : '0'); ponerZimg(on); });
+    raiz.addEventListener('click', ev => {
+        const z = ev.target.closest('.pt-zimg'); if (!z) return;
+        z.classList.toggle('entera');
+        z.title = z.classList.contains('entera') ? 'Recoger' : 'Ver entera';
+    });
     const subir = (h, file) => {
         if (!file || !file.type.startsWith('image/')) return;
         const fd = new FormData();

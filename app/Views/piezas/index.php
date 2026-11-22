@@ -1014,8 +1014,11 @@ foreach ($grupos as $grupo) {
                     categoría no borra sus piezas: se quedan sin clasificar, al final del listado.
                 </p>
 
+                <div data-cat-lista data-url="<?= site_url('piezas/categoria/ordenar') ?>"
+                    data-csrf-nombre="<?= csrf_token() ?>" data-csrf-valor="<?= csrf_hash() ?>">
                 <?php foreach ($categorias as $c): ?>
-                    <div class="d-flex align-items-center gap-1 mb-1">
+                    <div class="d-flex align-items-center gap-1 mb-1" data-cat-id="<?= (int) $c['id'] ?>">
+                        <span class="cat-asa text-muted px-1" title="Arrastra para ordenar" style="cursor:grab;touch-action:none"><i class="bi bi-grip-vertical"></i></span>
                         <form method="post" class="d-flex gap-1 flex-grow-1"
                             action="<?= site_url('piezas/categoria/' . (int) $c['id'] . '/renombrar') ?>">
                             <?= csrf_field() ?>
@@ -1030,6 +1033,7 @@ foreach ($grupos as $grupo) {
                         </form>
                     </div>
                 <?php endforeach; ?>
+                </div>
 
                 <?php if (empty($categorias)): ?>
                     <p class="text-muted small fst-italic">Todavía no hay ninguna.</p>
@@ -1043,7 +1047,7 @@ foreach ($grupos as $grupo) {
                     <button class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i></button>
                 </form>
                 <p class="text-muted small mt-2 mb-0">
-                    Para cambiar el orden en que aparecen, usa las flechas del botón «Organizar».
+                    Para cambiar el orden en que aparecen, arrastra cada categoría por su asa <i class="bi bi-grip-vertical"></i>: se guarda solo.
                 </p>
             </div>
         </div>

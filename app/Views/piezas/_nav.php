@@ -3,6 +3,8 @@
 <?php // Selector de huecos: convierte los <select data-hueco> en un panel visual. ?>
 <script>window.PZ_HUECOS_URL = '<?= site_url('piezas/ubicaciones/huecos/mapa') ?>';</script>
 <script src="<?= base_url('assets/js/piezas-hueco-picker.js') ?>?v=2" defer></script>
+<?php // Arrastrar para ordenar en el modal «Categorías» (esté donde esté). ?>
+<script src="<?= base_url('assets/js/piezas-categorias-orden.js') ?>?v=1" defer></script>
 <?php if (!$enIndex): ?>
 <script src="<?= base_url('assets/js/piezas-modales.js') ?>?v=1"></script>
 <script>

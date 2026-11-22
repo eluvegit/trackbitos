@@ -450,6 +450,7 @@ $routes->group('rodajes', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/puntos/(:num)/guardar',         'RodajesFlujo::puntoGuardar/$1/$2');
     $routes->POST('(:num)/puntos/(:num)/mover',           'RodajesFlujo::puntoMover/$1/$2');
     $routes->POST('(:num)/escenas/(:num)/asignar',        'RodajesFlujo::asignar/$1/$2');
+    $routes->POST('(:num)/escenas/(:num)/copiar-zona',    'RodajesFlujo::copiarAZona/$1/$2');
     $routes->GET('(:num)/formato',                        'RodajesFlujo::formato/$1');
     $routes->GET('(:num)/momento',                        'RodajesFlujo::momento/$1');
     $routes->GET('(:num)/setups',                         'RodajesFlujo::setups/$1');
@@ -818,6 +819,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // que 'familia/(:num)/...' porque 'categoria' es literal y no debe
     // competir con ningún patrón numérico.
     $routes->POST('categoria', 'Web::crearCategoria');
+    $routes->POST('categoria/ordenar', 'Web::ordenarCategorias');
     $routes->POST('categoria/(:num)/renombrar', 'Web::renombrarCategoria/$1');
     $routes->POST('categoria/(:num)/borrar', 'Web::borrarCategoria/$1');
     $routes->POST('categoria/(:num)/mover/(subir|bajar)', 'Web::moverCategoria/$1/$2');

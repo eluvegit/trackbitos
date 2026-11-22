@@ -70,15 +70,15 @@ foreach ($escenas as $e) {
                                 <?php if ($p['x'] !== null): ?><span class="rf-pin" style="left:<?= (float) $p['x'] ?>%;top:<?= (float) $p['y'] ?>%"><b><span><?= $pi + 1 ?></span></b><em><?= esc($p['nombre']) ?></em></span><?php endif; ?>
                             <?php endforeach; ?>
                         </div>
-                        <div class="rf-guia-pie"><small>Toca la imagen para marcar un punto</small>
-                            <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data"><?= csrf_field() ?>
+                        <div class="rf-guia-pie"><small>Toca la imagen para marcar un punto · arrastra o pega (Ctrl+V) otra para cambiarla</small>
+                            <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data" class="rf-img-form"><?= csrf_field() ?>
                                 <label class="fv-link"><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.requestSubmit()">Cambiar imagen</label>
                             </form>
                         </div>
                     <?php else: ?>
-                        <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data" class="rf-guia-vacia"><?= csrf_field() ?>
+                        <form method="post" action="<?= $url("ubicaciones/$zid/imagen") ?>" enctype="multipart/form-data" class="rf-guia-vacia rf-img-form"><?= csrf_field() ?>
                             <label><input type="file" name="imagen" accept="image/*" hidden onchange="this.form.requestSubmit()">
-                                <i class="bi bi-map"></i><b>Sube una imagen guía</b><span>Captura de mapa, plano o foto del sitio. Luego tocas sobre ella para marcar los puntos.</span></label>
+                                <i class="bi bi-map"></i><b>Sube una imagen guía</b><span>Toca para elegir, arrástrala aquí o pégala (Ctrl+V). Captura de mapa, plano o foto del sitio; luego tocas sobre ella para marcar los puntos.</span></label>
                         </form>
                     <?php endif; ?>
                 </div>
@@ -130,6 +130,20 @@ foreach ($escenas as $e) {
                                                 <?php foreach ($zonas as $ok => $o): ?><option value="<?= (int) $o['id'] ?>" <?= (int) $o['id'] === $zid ? 'selected' : '' ?>><?= (int) $o['id'] === $zid ? 'Mover a…' : ($ok + 1) . '. ' . esc($o['nombre']) ?></option><?php endforeach; ?>
                                                 <option value="">Sin zona</option>
                                             </select>
+                                            <button type="button" class="fv-ibtn rf-tambien-btn" title="Usar esta foto también en otra zona (se crea una copia de la toma)" aria-label="También en otra zona" onclick="const f = this.nextElementSibling; f.hidden = !f.hidden; if (!f.hidden) f.zona.focus()"><i class="bi bi-copy"></i></button>
+                                            <form method="post" action="<?= $url('escenas/' . (int) $t['id'] . '/copiar-zona') ?>" class="rf-tambien" hidden><?= csrf_field() ?>
+                                                <span>También en</span>
+                                                <select name="zona" class="form-select rd-sel" required aria-label="Zona de la copia">
+                                                    <option value="">zona…</option>
+                                                    <?php foreach ($zonas as $ok => $o): if ((int) $o['id'] === $zid) continue; ?><option value="<?= (int) $o['id'] ?>"><?= ($ok + 1) . '. ' . esc($o['nombre']) ?></option><?php endforeach; ?>
+                                                </select>
+                                                <select name="franja" class="form-select rd-sel" aria-label="Franja de la copia">
+                                                    <option value=""><?= $t['franja'] ? 'misma franja (' . esc($franjas[$t['franja']] ?? $t['franja']) . ')' : 'sin franja' ?></option>
+                                                    <?php foreach ($franjas as $fk => $fn): ?><option value="<?= esc($fk, 'attr') ?>" <?= !$t['franja'] && $fk === 'noche' ? 'selected' : '' ?>>de <?= esc(mb_strtolower($fn)) ?></option><?php endforeach; ?>
+                                                </select>
+                                                <button class="fv-btn fv-btn-sm"><i class="bi bi-copy"></i>Copiar</button>
+                                                <?php if (!$t['franja']): ?><small>Esta quedará en el otro lado (día ↔ noche).</small><?php endif; ?>
+                                            </form>
                                         <?php endif; ?>
                                     </li>
                                 <?php endforeach; ?>
@@ -200,6 +214,56 @@ foreach ($escenas as $e) {
     });
     document.addEventListener('keydown', ev => {
         if (ev.key === 'Escape' && ev.target.closest('#rfPin')) document.getElementById('rfPin').hidden = true;
+    });
+
+    // Imagen guía arrastrando un fichero sobre la zona o pegándola (Ctrl+V).
+    // Se mete el fichero en el input del formulario de imagen y se envía como si
+    // lo hubieras elegido (lo recoge _sin_recarga). El DOM se rehace tras cada
+    // envío, así que la zona se busca siempre por id.
+    const zonaDe = el => el && el.closest ? el.closest('#rfUb .rf-zona') : null;
+    const imagenDe = lista => [...(lista || [])].find(f => f && f.type && f.type.startsWith('image/'));
+    const subir = (zona, fichero) => {
+        const f = zona && zona.querySelector('form.rf-img-form');
+        if (!f || !fichero) return;
+        const dt = new DataTransfer();
+        dt.items.add(fichero);
+        const inp = f.querySelector('input[type=file]');
+        inp.files = dt.files;
+        f.requestSubmit();
+    };
+    let ultima = null; // id de la última zona donde estuvo el ratón, tocaste o escribiste
+    ['mouseover', 'focusin', 'pointerdown'].forEach(t => document.addEventListener(t, ev => { const z = zonaDe(ev.target); if (z) ultima = z.id; }));
+
+    document.addEventListener('paste', ev => {
+        const it = [...(ev.clipboardData?.items || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+        if (!it) return;
+        const zonas = document.querySelectorAll('#rfUb .rf-zona');
+        const z = zonaDe(document.activeElement) || (ultima && document.getElementById(ultima)) || (zonas.length === 1 ? zonas[0] : null);
+        if (!z) return;
+        ev.preventDefault();
+        subir(z, it.getAsFile());
+    });
+
+    const conFichero = ev => [...(ev.dataTransfer?.types || [])].includes('Files');
+    document.addEventListener('dragover', ev => {
+        const z = zonaDe(ev.target);
+        if (!z || !conFichero(ev)) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'copy';
+        document.querySelectorAll('#rfUb .rf-zona.sobre').forEach(o => { if (o !== z) o.classList.remove('sobre'); });
+        z.classList.add('sobre');
+    });
+    document.addEventListener('dragleave', ev => {
+        const z = zonaDe(ev.target);
+        if (z && !z.contains(ev.relatedTarget)) z.classList.remove('sobre');
+    });
+    document.addEventListener('drop', ev => {
+        const z = zonaDe(ev.target);
+        if (!z || !conFichero(ev)) return;
+        ev.preventDefault();
+        z.classList.remove('sobre');
+        const img = imagenDe(ev.dataTransfer.files);
+        if (img) subir(z, img); else alert('Eso no es una imagen.');
     });
 })();
 </script>

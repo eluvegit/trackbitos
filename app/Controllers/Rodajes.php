@@ -228,6 +228,8 @@ class Rodajes extends BaseController
             'moodboard' => $moodboard,
             'setups'    => array_column((new \App\Models\RodajesSetupModel())->where('proyecto_id', (int) $id)->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->findAll(), null, 'id'),
             'propsLista' => RodajesFlujo::propsConocidos((int) $id, $sesion ? (int) $sesion['id'] : null),
+            // Imagen guía de cada zona: franja ancha cuando cambia el sitio.
+            'zonaImg'   => array_column(array_filter((new \App\Models\RodajesUbicacionModel())->select('id, nombre, imagen')->where('proyecto_id', (int) $id)->findAll(), static fn ($z) => !empty($z['imagen']) && is_file(FCPATH . $z['imagen'])), null, 'id'),
         ]);
     }
 

@@ -312,6 +312,22 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             <?php if (!empty($variante['enlace_original'])): ?>
                 <a class="fv-gbtn" href="<?= esc($variante['enlace_original'], 'attr') ?>" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i><span class="lbl-m">Original</span></a>
             <?php endif; ?>
+            <?php if ($versionPlaca): ?>
+                <?php $vPlacaId = (int) $versionPlaca['id']; ?>
+                <?php if (in_array($vPlacaId, $carrito, true)): ?>
+                    <button class="fv-gbtn on" type="submit" form="fvPlaca" title="Ya va en la placa (<?= $etiqueta($versionPlaca) ?>). Pulsa para quitarla">
+                        <i class="bi bi-check-lg"></i><span class="lbl-m">En la placa</span></button>
+                    <form id="fvPlaca" method="post" action="<?= site_url('piezas/carrito/quitar/' . $vPlacaId) ?>" class="d-none"><?= csrf_field() ?></form>
+                <?php elseif ($versionPlacaVieja): ?>
+                    <button class="fv-gbtn on" type="submit" form="fvPlaca" title="En la placa va una versión anterior: pulsa para cambiarla por la <?= $etiqueta($versionPlaca) ?>">
+                        <i class="bi bi-arrow-repeat"></i><span class="lbl-m">Actualizar en la placa</span></button>
+                    <form id="fvPlaca" method="post" action="<?= site_url('piezas/carrito/actualizar/' . $versionPlacaVieja) ?>" class="d-none"><?= csrf_field() ?></form>
+                <?php else: ?>
+                    <button class="fv-gbtn" type="submit" form="fvPlaca" title="Añadir la <?= $etiqueta($versionPlaca) ?> (<?= esc($versionPlaca['estado']) ?>) a la placa de impresión">
+                        <i class="bi bi-printer"></i><span class="lbl-m">Añadir a la placa</span></button>
+                    <form id="fvPlaca" method="post" action="<?= site_url('piezas/carrito/agregar/' . $vPlacaId) ?>" class="d-none"><?= csrf_field() ?></form>
+                <?php endif; ?>
+            <?php endif; ?>
             <button class="fv-gbtn<?= $congelado ? ' on' : '' ?>" type="submit" form="fvNevera"
                 title="<?= $congelado ? 'Sacar de la nevera' : 'Aparcar en la nevera: no aparecerá en el listado, la galería ni el selector de componentes' ?>">
                 <i class="bi bi-snow"></i><span class="lbl-m"><?= $congelado ? 'Congelada' : 'Congelar' ?></span></button>

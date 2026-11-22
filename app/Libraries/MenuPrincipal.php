@@ -5,7 +5,7 @@ namespace App\Libraries;
 class MenuPrincipal
 {
     public const MODOS = ['clasica' => 'Clásica', 'a' => 'A · Rejilla', 'b' => 'B · Por áreas', 'c' => 'C · Riel + Hoy'];
-    public const FAVS_DEFECTO = ['journal', 'comidas/diario/hoy', 'piezas'];
+    public const FAVS_DEFECTO = ['journal', 'comidas/diario/hoy', 'piezas/pedidos'];
 
     public static function modo(): string
     {
@@ -41,7 +41,7 @@ class MenuPrincipal
             ['ruta' => 'buscapp', 'emoji' => '📟', 'icono' => 'bi-broadcast', 'titulo' => 'Buscapp', 'area' => 'captura', 'corto' => 'Avisos tipo busca', 'texto' => 'Avisos de llamada estilo busca/telegrama: usuarios y envíos de la app.'],
             ['ruta' => 'rodajes', 'emoji' => '🎬', 'icono' => 'bi-film', 'titulo' => 'Rodajes', 'area' => 'creacion', 'corto' => 'Escenas de un rodaje', 'texto' => 'Permite gestionar las escenas de un rodaje.'],
             ['ruta' => 'sesiones', 'emoji' => '📸', 'icono' => 'bi-camera', 'titulo' => 'Sesiones', 'area' => 'creacion', 'corto' => 'Kanban de sesiones', 'texto' => 'Kanban de sesiones de foto/vídeo: moodboard, equipo y model releases.'],
-            ['ruta' => 'piezas', 'emoji' => '🧱', 'icono' => 'bi-box', 'titulo' => 'Piezas', 'area' => 'creacion', 'corto' => 'Modelos 3D y stock', 'texto' => 'Versionado de modelos 3D en Blender: qué versión es la buena y dónde está.'],
+            ['ruta' => 'piezas/pedidos', 'emoji' => '🧱', 'icono' => 'bi-box', 'titulo' => 'Piezas', 'area' => 'creacion', 'corto' => 'Modelos 3D y stock', 'texto' => 'Versionado de modelos 3D en Blender: qué versión es la buena y dónde está.'],
             ['ruta' => 'silo', 'emoji' => '🗄️', 'icono' => 'bi-archive', 'titulo' => 'Silo', 'area' => 'creacion', 'corto' => 'Material terminado', 'texto' => 'Archivo de material resultante: fotos y vídeos editados, clasificados y ubicados.'],
         ];
     }
@@ -51,6 +51,8 @@ class MenuPrincipal
         $rutas = array_column(self::modulos(), 'ruta');
         $c = $_COOKIE['tb_favs'] ?? null;
         $favs = $c === null ? self::FAVS_DEFECTO : array_filter(explode(',', $c));
+        // Piezas entraba por el catálogo; ahora entra por Pedidos.
+        $favs = array_map(static fn ($r) => $r === 'piezas' ? 'piezas/pedidos' : $r, $favs);
         return array_values(array_intersect($favs, $rutas));
     }
 

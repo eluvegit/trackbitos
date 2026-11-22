@@ -196,6 +196,26 @@ class PiezaService
     }
 
     /**
+     * Orden completo de las categorías tal y como queda tras arrastrarlas
+     * en el modal. Las que no vengan en la lista (creada en otra pestaña
+     * mientras tanto) se quedan detrás, en su orden de antes.
+     *
+     * @param list<int> $ids
+     */
+    public function ordenarCategorias(array $ids): void
+    {
+        $existentes = array_map('intval', array_column($this->categoriaModel->ordenadas(), 'id'));
+        $ids        = array_values(array_intersect(array_unique(array_map('intval', $ids)), $existentes));
+        $final      = array_merge($ids, array_values(array_diff($existentes, $ids)));
+
+        $this->transaccion('reordenar las categorías', function () use ($final) {
+            foreach ($final as $posicion => $id) {
+                $this->categoriaModel->update($id, ['orden' => $posicion + 1]);
+            }
+        });
+    }
+
+    /**
      * Mete una pieza en una categoría, o la saca de todas ($categoriaId
      * null). Es una reorganización, no un cambio de identidad: nada del
      * historial de versiones depende de dónde esté colocada la pieza.

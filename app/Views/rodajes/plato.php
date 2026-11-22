@@ -12,6 +12,9 @@ $formatos = rod_formatos();
 // Día / noche: dos botones (uno, otro o los dos) si hay tomas con franja.
 $hayDN = (bool) array_filter($escenas, static fn ($e) => !empty($e['franja']));
 $pct = static fn (int $n) => $total ? round($n / $total * 100, 2) : 0;
+// Imagen guía de la zona (filtro «Imagen del sitio») si alguna toma está en una zona con imagen.
+$zonaImg = $zonaImg ?? [];
+$hayZimg = (bool) array_filter($escenas, static fn ($e) => isset($zonaImg[(int) ($e['ubicacion_id'] ?? 0)]));
 
 $img = static fn (?array $m) => $m && $m['origen'] === 'archivo' ? base_url($m['ruta_archivo']) : null;
 
@@ -137,6 +140,9 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                 <?php endif; ?>
                 <span class="rd-barra pt-barra" aria-hidden="true"><i class="hecha" style="width:<?= $pct($cuenta['hecha']) ?>%"></i><i class="repetir" style="width:<?= $pct($cuenta['repetir']) ?>%"></i><i class="descartada" style="width:<?= $pct($cuenta['descartada']) ?>%"></i></span>
                 <span class="pt-cont" title="Hechas"><b id="plHechas"><?= $cuenta['hecha'] ?></b>/<span id="plUtiles"><?= $total - $cuenta['descartada'] ?></span></span>
+                <?php if ($hayZimg): ?>
+                    <button type="button" class="pt-ib" id="plZimg" aria-pressed="true" title="Imagen del sitio" aria-label="Mostrar u ocultar la imagen del sitio"><i class="bi bi-image"></i></button>
+                <?php endif; ?>
                 <span class="pt-modo" id="plModo" role="group" aria-label="Lista o mosaico">
                     <button type="button" class="pt-ib" data-modo="lista" aria-pressed="false" title="Lista con datos" aria-label="Lista con datos"><i class="bi bi-view-list"></i></button>
                     <button type="button" class="pt-ib" data-modo="mosaico" aria-pressed="true" title="Solo fotos" aria-label="Solo fotos"><i class="bi bi-grid-3x3-gap"></i></button>
@@ -196,7 +202,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         <span><?= $g['setup'] ? 'Monta ' . esc($g['setup']['nombre']) . ($tx !== '' ? ' · ' . $tx : '') : 'Sin setup' ?></span>
                     <?php endif; ?>
                 </div>
-                <?php $propsAnt = null; ?>
+                <?php $propsAnt = null; $zonaAnt = null; ?>
                 <?php foreach ($g['escenas'] as $e): ?>
                     <?php
                     $eid    = (int) $e['id'];
@@ -265,6 +271,15 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                         'variantes' => array_map(static fn ($va) => ['id' => (int) $va['id'], 'texto' => $va['texto'], 'props' => rod_props_extra($e, $va)], $vars),
                     ];
                     ?>
+                    <?php // Imagen del sitio: franja ancha al empezar cada grupo y cada vez que cambia la zona (o el lado día/noche) dentro de él.
+                    $zid = (int) ($e['ubicacion_id'] ?? 0);
+                    $zk  = $zid . '|' . rod_dia_noche($e['franja'] ?? null);
+                    if ($zk !== $zonaAnt): $zonaAnt = $zk; $zr = $zonaImg[$zid] ?? null; if ($zr): ?>
+                        <button type="button" class="pt-zimg" data-zimg="<?= esc($zk, 'attr') ?>" title="Ver entera" aria-label="Imagen del sitio: <?= esc($zr['nombre'], 'attr') ?>">
+                            <img src="<?= base_url($zr['imagen']) ?>" alt="" loading="lazy">
+                            <span><i class="bi bi-geo-alt-fill"></i><?= esc($zr['nombre']) ?></span>
+                        </button>
+                    <?php endif; endif; ?>
                     <article class="pt-toma" data-dn="<?= rod_dia_noche($e['franja'] ?? null) ?>" data-ed="<?= esc(json_encode($ed, JSON_UNESCAPED_UNICODE), 'attr') ?>" data-id="<?= $eid ?>" data-g="<?= $gi ?>" style="--t:var(--pt-c<?= $ti++ % 4 ?>)" data-fotos="<?= esc(json_encode($lb, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'attr') ?>" data-titulo="<?= esc((int) $e['orden'] . '. ' . rod_titulo_escena($e), 'attr') ?>">
                         <div class="pt-fila" data-fila>
                             <div class="pm-titulo"><?= esc(rod_titulo_escena($e)) ?></div>
@@ -438,6 +453,19 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         const b = ev.target.closest('[data-modo]'); if (!b) return;
         ls.set('rodajes_plato_modo', b.dataset.modo); ponerModo(b.dataset.modo);
     });
+    // Imagen del sitio: mostrar / ocultar (se recuerda) y tocarla la abre entera.
+    const zBtn = document.getElementById('plZimg');
+    const ponerZimg = on => { raiz.classList.toggle('pt-sinzimg', !on); zBtn?.setAttribute('aria-pressed', on); };
+    ponerZimg(ls.get('rodajes_plato_zimg') !== '0');
+    zBtn?.addEventListener('click', () => {
+        const on = raiz.classList.contains('pt-sinzimg');
+        ls.set('rodajes_plato_zimg', on ? '1' : '0'); ponerZimg(on);
+    });
+    raiz.addEventListener('click', ev => {
+        const z = ev.target.closest('.pt-zimg'); if (!z) return;
+        z.classList.toggle('entera');
+        z.title = z.classList.contains('entera') ? 'Recoger' : 'Ver entera';
+    });
     raiz.querySelector('#plVistas').addEventListener('click', ev => {
         const b = ev.target.closest('[data-vista]'); if (!b) return;
         ls.set('rodajes_plato_vista', b.dataset.vista); ponerVista(b.dataset.vista);
@@ -489,8 +517,14 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
         });
         raiz.querySelectorAll('[data-bloque]').forEach(b => {
             let sig = b.nextElementSibling, alguna = false;
-            while (sig && sig.classList.contains('pt-toma')) { if (!sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
+            while (sig && sig.matches('.pt-toma, .pt-zimg')) { if (sig.matches('.pt-toma') && !sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
             b.hidden = !alguna;
+        });
+        // Imagen del sitio: sale en cada grupo (aunque el anterior sea el mismo sitio) si tiene alguna toma visible detrás.
+        raiz.querySelectorAll('[data-zimg]').forEach(z => {
+            let sig = z.nextElementSibling, alguna = false;
+            while (sig && sig.matches('.pt-toma')) { if (!sig.hidden) { alguna = true; break; } sig = sig.nextElementSibling; }
+            z.hidden = !alguna;
         });
         raiz.querySelectorAll('[data-sep]').forEach(s => {
             let sig = s.nextElementSibling, alguna = false;

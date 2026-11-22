@@ -704,6 +704,40 @@ class RodajesFlujo extends BaseController
      */
     private function desdoblarDiaNoche(int $pid, array $e): int
     {
+        return $this->copiarToma($pid, $e, ['franja' => 'noche'], ['franja' => 'dia'], 'Referencia (de la toma de día)');
+    }
+
+    /**
+     * «También en otra zona»: la misma foto sirve para otro sitio (p. ej. de día
+     * en el jardín y de noche en el salón). Crea una copia de la toma en la zona
+     * elegida, igual que el desdoble «Día y noche». POST zona, franja ('' = la
+     * misma que la original). Si la original no tenía franja y a la copia se le
+     * da una, la original queda en el otro lado (copia de noche → original de día;
+     * copia de día → original de noche).
+     */
+    public function copiarAZona($pid, $eid)
+    {
+        $em = new RodajesEscenaModel();
+        $e  = $em->where('proyecto_id', (int) $pid)->find((int) $eid);
+        $z  = (new RodajesUbicacionModel())->where('proyecto_id', (int) $pid)->find((int) $this->request->getPost('zona'));
+        if (!$e || !$z) return redirect()->to(site_url("rodajes/$pid/ubicaciones"));
+        $f = (string) $this->request->getPost('franja');
+        $f = array_key_exists($f, RodajesEscenaModel::FRANJAS) ? $f : null;
+
+        $copia = ['ubicacion_id' => (int) $z['id'], 'escena_ubicacion' => $z['nombre'], 'punto_id' => null, 'franja' => $f ?? $e['franja']];
+        $original = [];
+        if ($f && !$e['franja']) $original['franja'] = rod_dia_noche($f) === 'noche' ? 'dia' : 'noche';
+        $this->copiarToma((int) $pid, $e, $copia, $original, 'Referencia (de la toma de ' . ($e['escena_ubicacion'] ?: 'otra zona') . ')');
+        return redirect()->to(site_url("rodajes/$pid/ubicaciones#z" . (int) $z['id']))->with('success', 'Toma copiada a «' . $z['nombre'] . '».');
+    }
+
+    /**
+     * Copia una toma con sus variantes y fotos (archivo propio), sin el estado
+     * del plató. $copia pisa datos de la copia; $original, de la toma de origen.
+     * Devuelve el id nuevo.
+     */
+    private function copiarToma(int $pid, array $e, array $copia, array $original, string $tituloRef): int
+    {
         $em = new RodajesEscenaModel();
         $portada = self::portadas([$e])[(int) $e['id']] ?? null;
         // El insert del modelo ya descarta lo que no está en allowedFields.
@@ -711,11 +745,13 @@ class RodajesFlujo extends BaseController
             'toma_estado', 'toma_estado_at', 'toma_nota', 'toma_estado_foto', 'toma_estado_foto_at', 'orden_rodaje'];
         $nuevo = array_diff_key($e, array_flip($sinCopiar));
         $ultima = $em->select('orden')->where('proyecto_id', $pid)->orderBy('orden', 'DESC')->first();
-        $nuevo += ['proyecto_id' => $pid, 'orden' => (int) ($ultima['orden'] ?? 0) + 1, 'franja' => 'noche'];
+        $nuevo = $copia + $nuevo + ['proyecto_id' => $pid, 'orden' => (int) ($ultima['orden'] ?? 0) + 1];
 
         $db = db_connect();
         $db->transStart();
-        $em->skipValidation(true)->update($e['id'], ['franja' => 'dia']);
+        // Si la original cambia de franja, cambia de grupo en el plan.
+        if (array_key_exists('franja', $original) && $original['franja'] !== $e['franja']) $original['orden_rodaje'] = null;
+        if ($original) $em->skipValidation(true)->update($e['id'], $original);
         $nid = (int) $em->skipValidation(true)->insert($nuevo);
         $vm = new RodajesVarianteModel();
         $mm = new MoodboardItemModel();
@@ -751,7 +787,7 @@ class RodajesFlujo extends BaseController
             if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
             $destino = $dir . '/' . bin2hex(random_bytes(6)) . '_' . basename($portada);
             if (@copy(FCPATH . $portada, FCPATH . $destino)) {
-                (new \App\Models\RodajesEscenaImagenModel())->insert(['escena_id' => $nid, 'categoria' => 'inspiracion', 'ruta' => $destino, 'titulo' => 'Referencia (de la toma de día)']);
+                (new \App\Models\RodajesEscenaImagenModel())->insert(['escena_id' => $nid, 'categoria' => 'inspiracion', 'ruta' => $destino, 'titulo' => mb_substr($tituloRef, 0, 150)]);
             }
         }
         return $nid;

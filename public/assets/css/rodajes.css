@@ -672,6 +672,10 @@
 .rf-guia-vacia label { display: grid; place-items: center; align-content: center; gap: 6px; text-align: center; aspect-ratio: 4 / 3; max-width: 100%; padding: 18px; margin: 0; border: 1.5px dashed var(--fv-border-2); border-radius: var(--fv-r-md); cursor: pointer; color: var(--fv-text); }
 .rf-guia-vacia label:hover { border-color: var(--fv-accent); }
 .rf-guia-vacia .bi { font-size: 26px; color: var(--fv-text-3); }
+/* Arrastrando una imagen sobre la zona: se resalta donde va a caer. */
+.rf-zona.sobre { outline: 2px solid var(--fv-accent); outline-offset: -2px; }
+.rf-zona.sobre .rf-guia, .rf-zona.sobre .rf-guia-vacia label { border-color: var(--fv-accent); border-style: solid; background: color-mix(in srgb, var(--fv-accent) 14%, transparent); }
+.rf-zona.sobre .rf-guia img { opacity: .55; }
 .rf-guia-vacia span { font-size: 13px; color: var(--fv-text-3); max-width: 34ch; }
 .rf-puntos { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
 .rf-puntos li { display: flex; gap: 8px; align-items: center; font-size: 13px; }
@@ -689,6 +693,13 @@
 .rf-tz li .rd-sel { grid-column: 3; grid-row: 1 / span 2; width: auto; max-width: 160px; }
 .rf-zona .rf-tz li .rd-sel[data-campo="punto_id"] { grid-row: 1; align-self: end; }
 .rf-zona .rf-tz li .rd-sel[data-campo="ubicacion_id"] { grid-row: 2; align-self: start; }
+/* «También en otra zona»: botón en una 4.ª columna y formulario a todo lo ancho debajo */
+.rf-tz li:has(> .rf-tambien-btn) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.rf-tz li > .rf-tambien-btn { grid-column: 4; grid-row: 1 / span 2; }
+.rf-tz li > .rf-tambien { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; padding: 8px 10px; border-radius: var(--fv-r-md); background: var(--fv-inset); border: 1px solid var(--fv-border-2); }
+.rf-tz li > .rf-tambien[hidden] { display: none; }
+.rf-tz li > .rf-tambien .rd-sel { width: auto; max-width: 180px; }
+.rf-tz li > .rf-tambien small { grid-column: auto; flex-basis: 100%; }
 
 /* ---------- setups ---------- */
 .rf-setups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
@@ -1488,3 +1499,16 @@
     .rf-setup .rf-setup-tomas .rf-tz li .rf-foto.mini { grid-column: 1; grid-row: auto; width: 100%; height: auto; aspect-ratio: 4 / 3; }
     .rf-setup .rf-setup-tomas .rf-tz li > a, .rf-setup .rf-setup-tomas .rf-tz li > small, .rf-setup .rf-setup-tomas .rf-tz li .rd-sel { grid-column: 1; grid-row: auto; justify-self: stretch; max-width: 100%; }
 }
+
+/* Imagen del sitio (plató y plan): franja ancha a todo el ancho, baja; tocarla la abre entera */
+.pt-zimg { position: relative; display: block; width: 100%; height: 110px; padding: 0; border: 1px solid var(--fv-border-2); border-radius: var(--fv-r-md); overflow: hidden; background: var(--fv-inset); cursor: zoom-in; }
+.pt-zimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pt-zimg span { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgb(0 0 0 / .6); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.pt-zimg.entera { height: auto; cursor: zoom-out; }
+.pt-zimg.entera img { height: auto; max-height: 75vh; object-fit: contain; }
+.pt-zimg[hidden], .pt-sinzimg .pt-zimg { display: none; }
+@media (min-width: 761px) { .pt-zimg { height: 140px; } }
+.pt-grupo + .pt-zimg { margin-top: -14px; }
+#plZimg[aria-pressed="false"] { opacity: .45; }
+.rf-pz .pt-zimg { border-radius: 0; border-width: 1px 0 0; }
+#rfZimg[aria-pressed="false"] { opacity: .6; }

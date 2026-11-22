@@ -1431,6 +1431,18 @@ class Web extends BaseController
         );
     }
 
+    /** Orden de las categorías arrastrándolas en el modal (fetch, JSON). */
+    public function ordenarCategorias()
+    {
+        try {
+            $this->servicio->ordenarCategorias((array) $this->request->getPost('orden'));
+        } catch (\Throwable $e) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
     /**
      * Mueve una pieza de categoría desde el propio listado (el modo
      * "Organizar"): valor vacío = sacarla de todas, que es distinto de
@@ -1541,6 +1553,18 @@ class Web extends BaseController
             }
         }
 
+        // Botón "Añadir a la placa" de la cabecera: la misma versión que
+        // ofrece la galería (validada, o la última para imprimir/sin juzgar),
+        // y si en la placa ya va otra versión más vieja de esta variante, se
+        // ofrece actualizarla en vez de meter la pieza dos veces.
+        $carrito        = $this->carritoActual();
+        $versionPlaca   = $this->versionParaImprimir($id);
+        $versionPlacaVieja = null;
+        if ($versionPlaca && $carrito !== [] && !in_array((int) $versionPlaca['id'], $carrito, true)) {
+            $vieja = $this->versionModel->whereIn('id', $carrito)->where('variante_id', $id)->first();
+            $versionPlacaVieja = $vieja ? (int) $vieja['id'] : null;
+        }
+
         $nueva = $this->request->getGet('nueva');
         if ($nueva !== null) {
             session()->set('ficha_variante_nueva', $nueva === '1');
@@ -1587,7 +1611,9 @@ class Web extends BaseController
             'descendientes' => $this->servicio->descendientesEnLaPieza($id),
             'hermanasVivas' => $this->varianteModel->where('familia_id', $variante['familia_id'])
                 ->where('borrado_en', null)->where('id !=', $id)->countAllResults(),
-            'carrito'   => $this->carritoActual(),
+            'carrito'   => $carrito,
+            'versionPlaca'      => $versionPlaca,
+            'versionPlacaVieja' => $versionPlacaVieja,
             // "Compuesta de" (spec 11.1 ampliado): qué otras piezas estaban
             // en la escena de esta variante. Puramente informativo.
             'componentes'           => $this->componentesDe($id),
@@ -2127,6 +2153,11 @@ class Web extends BaseController
         $nueva = $this->carritoDesfasadas()[$versionId] ?? null;
         if ($nueva) {
             $this->carritoSustituir([$versionId => (int) $nueva['id']]);
+        }
+
+        // La ficha de la pieza lo llama con un formulario normal.
+        if (!$this->request->isAJAX()) {
+            return redirect()->back()->with('success', 'Actualizada en la placa a la última versión.');
         }
 
         return $this->response->setJSON([
