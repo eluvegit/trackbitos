@@ -22,43 +22,100 @@ class PiezaPartes
     }
 
     /**
-     * Solo devuelve las variantes que tienen partes.
+     * Solo devuelve las variantes que tienen partes. El stock lo saca de los
+     * movimientos en bruto: el descuento de unidades sin partes se hace aquí.
      *
-     * @param list<int>       $varianteIds vacío = todas
-     * @param array<int,int>  $stock       varianteId => unidades
+     * @param list<int> $varianteIds vacío = todas
      */
-    public function resumenes(array $varianteIds, array $stock): array
+    public function resumenes(array $varianteIds): array
     {
-        $q = $this->partes->orderBy('orden')->orderBy('id');
-        if ($varianteIds !== []) {
-            $q->whereIn('variante_id', $varianteIds);
-        }
-        $lista = $q->findAll();
-        if ($lista === []) {
+        [$porVariante, $saldos] = $this->cargar($varianteIds);
+        if ($porVariante === []) {
             return [];
         }
-
-        $saldos = $this->saldos(array_map(static fn ($p) => (int) $p['id'], $lista));
-        $porVariante = [];
-        foreach ($lista as $p) {
-            $porVariante[(int) $p['variante_id']][] = $p;
-        }
+        $bruto = (new PiezaInventario())->stockBrutoPorVariante(array_keys($porVariante));
 
         $res = [];
         foreach ($porVariante as $vid => $partes) {
-            $res[$vid] = $this->calcular($partes, $saldos, max(0, (int) ($stock[$vid] ?? 0)));
+            $res[$vid] = $this->calcular($partes, $saldos, (int) ($bruto[$vid] ?? 0));
         }
 
         return $res;
     }
 
-    public function resumenDe(int $varianteId, int $stock): ?array
+    public function resumenDe(int $varianteId): ?array
     {
-        return $this->resumenes([$varianteId], [$varianteId => $stock])[$varianteId] ?? null;
+        return $this->resumenes([$varianteId])[$varianteId] ?? null;
     }
 
-    private function calcular(array $partes, array $saldos, int $unidades): array
+    /**
+     * Unidades que no existen: si falta una de CADA parte, esa unidad no
+     * está, aunque los movimientos de stock la sigan contando. Es solo
+     * cálculo, no se apunta nada. Solo salen las variantes con algo que
+     * descontar.
+     *
+     * @param array<int,int> $bruto varianteId => stock de los movimientos
+     * @return array<int,int> varianteId => unidades a descontar
+     */
+    public function descontadas(array $bruto): array
     {
+        $ids = array_keys(array_filter($bruto, static fn ($n) => $n > 0));
+        if ($ids === []) {
+            return [];
+        }
+        [$porVariante, $saldos] = $this->cargar($ids);
+        $res = [];
+        foreach ($porVariante as $vid => $partes) {
+            $n = $this->sinPartes($partes, $saldos, (int) $bruto[$vid]);
+            if ($n > 0) {
+                $res[$vid] = $n;
+            }
+        }
+
+        return $res;
+    }
+
+    /** @return array{0: array<int, list<array>>, 1: array<int,int>} partes por variante y saldo por parte */
+    private function cargar(array $varianteIds): array
+    {
+        $q = $this->partes->orderBy('orden')->orderBy('id');
+        if ($varianteIds !== []) {
+            $q->whereIn('variante_id', array_map('intval', $varianteIds));
+        }
+        $lista = $q->findAll();
+        if ($lista === []) {
+            return [[], []];
+        }
+        $porVariante = [];
+        foreach ($lista as $p) {
+            $porVariante[(int) $p['variante_id']][] = $p;
+        }
+
+        return [$porVariante, $this->saldos(array_map(static fn ($p) => (int) $p['id'], $lista))];
+    }
+
+    /** Cuántas de $bruto unidades no tienen ninguna de sus partes. */
+    private function sinPartes(array $partes, array $saldos, int $bruto): int
+    {
+        if ($partes === [] || $bruto < 1) {
+            return 0;
+        }
+        $n = $bruto;
+        foreach ($partes as $p) {
+            $n = min($n, intdiv(max(0, -($saldos[(int) $p['id']] ?? 0)), max(1, (int) $p['por_unidad'])));
+        }
+
+        return max(0, $n);
+    }
+
+    private function calcular(array $partes, array $saldos, int $bruto): array
+    {
+        // Las unidades sin ninguna parte no cuentan, y sus faltas tampoco.
+        $descontadas = $this->sinPartes($partes, $saldos, $bruto);
+        foreach ($partes as $p) {
+            $saldos[(int) $p['id']] = ($saldos[(int) $p['id']] ?? 0) + $descontadas * max(1, (int) $p['por_unidad']);
+        }
+        $unidades = max(0, $bruto - $descontadas);
         $completas = $unidades;
         $montables = PHP_INT_MAX;
         $filas = [];
@@ -83,6 +140,7 @@ class PiezaPartes
         return [
             'partes'      => $filas,
             'unidades'    => $unidades,
+            'descontadas' => $descontadas,
             'completas'   => $completas,
             'incompletas' => $unidades - $completas,
             'imprimir'    => $faltan,
@@ -172,9 +230,8 @@ class PiezaPartes
             return 0;
         }
         $inventario = new PiezaInventario();
-        $stock = $inventario->stockPorVariante($varianteIds);
         $total = 0;
-        foreach ($this->resumenes($varianteIds, $stock) as $vid => $r) {
+        foreach ($this->resumenes($varianteIds) as $vid => $r) {
             $n = (int) $r['montables'];
             if ($n < 1) {
                 continue;

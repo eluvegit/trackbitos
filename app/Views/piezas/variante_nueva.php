@@ -873,12 +873,33 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                         <?php if ($existencias['minimo'] > 0): ?><b style="left: <?= round($existencias['minimo'] * 100 / $stockMax) ?>%"></b><?php endif; ?>
                     </div>
                     <?php if ($existencias['estado'] === 'bajo'): ?><div class="fv-aviso-mini">Por debajo del stock mínimo.</div><?php endif; ?>
-                    <?php if ($avisoPartes = partes_aviso($existencias['partes'] ?? null, true)): ?><div class="fv-aviso-mini"><a href="<?= site_url('piezas/existencias/' . $vid) . '#partes' ?>"><?= $avisoPartes ?></a></div><?php endif; ?>
+                    <?php helper('piezas_stock'); if ($avisoPartes = partes_aviso($existencias['partes'] ?? null, true)): ?><div class="fv-aviso-mini"><a href="<?= site_url('piezas/existencias/' . $vid) . '#partes' ?>"><?= $avisoPartes ?></a></div><?php endif; ?>
                 </div>
                 <?php helper('piezas_stock'); $nombreMovStock = trim(($familia['nombre'] ?? '') . ' ' . ($variante['nombre'] ?? '')); ?>
                 <div class="fv-duo" style="margin-top: 14px">
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($vid, $nombreMovStock, $existencias['desglose'], 'alta', null, (bool) $existencias['hueco']) ?>><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta</span></button>
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($vid, $nombreMovStock, $existencias['desglose'], 'baja', null, (bool) $existencias['hueco']) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja</span></button>
+                </div>
+                <div id="partes" style="margin-top: 14px">
+                    <div class="t3" style="font-size: .85rem; margin-bottom: .35rem"><i class="bi bi-puzzle"></i> Partes
+                        <?php if (!empty($existencias['partes'])): ?>
+                            · <a href="<?= site_url('piezas/existencias/' . $vid) . '#partes' ?>">apuntar / editar</a>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!empty($existencias['partes'])): ?>
+                        <div style="display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .4rem">
+                            <?php foreach ($existencias['partes']['partes'] as $pa): ?>
+                                <span class="fv-estado <?= $pa['faltan'] > 0 ? 'e-bad' : '' ?>" title="<?= (int) $pa['hay'] ?> hay<?= $pa['faltan'] > 0 ? ' · faltan ' . (int) $pa['faltan'] : '' ?><?= $pa['sobran'] > 0 ? ' · sobran ' . (int) $pa['sobran'] : '' ?>"><?= esc($pa['nombre']) ?><?= (int) $pa['por_unidad'] > 1 ? ' <span class="t3">×' . (int) $pa['por_unidad'] . '</span>' : '' ?> <b class="fv-mono"><?= (int) $pa['hay'] ?></b><?php if ($pa['faltan'] > 0): ?> · faltan <?= (int) $pa['faltan'] ?><?php elseif ($pa['sobran'] > 0): ?> · <?= (int) $pa['sobran'] ?> sueltas<?php endif; ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <form method="post" action="<?= site_url('piezas/existencias/' . $vid . '/partes') ?>" style="display: flex; gap: .35rem; align-items: center">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="volver" value="ficha">
+                        <input type="text" name="nombre" class="fv-input" maxlength="100" placeholder="+ Parte (cabeza, brazos…)" required style="flex: 1 1 8rem; min-width: 0">
+                        <input type="number" name="por_unidad" min="1" max="20" value="1" class="fv-input" title="Cuántas lleva cada unidad (brazos: 2)" style="width: 4.2rem">
+                        <button class="fv-btn fv-btn-sm">Añadir</button>
+                    </form>
                 </div>
             </section>
 

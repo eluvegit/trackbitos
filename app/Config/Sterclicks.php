@@ -7,7 +7,8 @@ use CodeIgniter\Config\BaseConfig;
 class Sterclicks extends BaseConfig
 {
     public string $apiToken;
-    public string $baseUrl = 'https://v2.sterclicks.host/public/index.php/api/piezas';
+    // v2.sterclicks.host ya no existe; la web vive en sterclicks.es
+    public string $baseUrl = 'https://sterclicks.es/api/piezas';
 
     public function __construct()
     {

@@ -802,7 +802,7 @@ class Web extends BaseController
     private function rankingGastadas(?string $desde): array
     {
         $movimientos = new \App\Models\PiezaStockMovimientoModel();
-        $stock = $movimientos->stockPorVariante();
+        $stock = (new PiezaInventario())->stockPorVariante();
 
         $q = $movimientos->select('variante_id, delta, creado_en')
             ->groupStart()->whereNotIn('motivo', ['guardado', 'cambio_caja'])->orWhere('motivo', null)->groupEnd();
@@ -3549,7 +3549,7 @@ class Web extends BaseController
     {
         $vids = array_values(array_unique(array_filter(array_map(static fn ($p) => (int) ($p['variante']['id'] ?? 0), $piezas))));
         $partes = new \App\Services\PiezaPartes();
-        $resumen = $vids === [] ? [] : $partes->resumenes($vids, (new PiezaInventario())->stockPorVariante($vids));
+        $resumen = $vids === [] ? [] : $partes->resumenes($vids);
 
         return [
             'partesPieza' => $resumen,
@@ -4457,7 +4457,7 @@ class Web extends BaseController
             'sueltas'  => $huecoId === null ? $d['hueco'] : 0,
             'impresas' => $d['impresas'],
             'pedido'   => $d['pedido'],
-            'partes'   => (new \App\Services\PiezaPartes())->resumenDe($id, $stock),
+            'partes'   => (new \App\Services\PiezaPartes())->resumenDe($id),
         ];
     }
 

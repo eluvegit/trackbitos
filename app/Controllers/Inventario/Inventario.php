@@ -8,6 +8,7 @@ use App\Models\PiezaRenderModel;
 use App\Services\InventarioCatalogo;
 use App\Services\PiezaAlmacen;
 use App\Services\PiezaGuias;
+use App\Services\SterclicksClient;
 use CodeIgniter\Exceptions\PageNotFoundException;
 
 /**
@@ -179,6 +180,43 @@ class Inventario extends BaseController
         }
 
         return $this->pintar('inventario/guia', $datos);
+    }
+
+    /**
+     * Carta de colores de pistola del taller de sterclicks. Allí se edita;
+     * aquí se lee en vivo (con la última copia buena si sterclicks no responde).
+     */
+    public function colores()
+    {
+        $cliente = new SterclicksClient();
+        $carta   = $cliente->cartaColores();
+
+        return $this->pintar('inventario/colores', [
+            'seccion'   => 'colores',
+            'colores'   => $carta['colores'] ?? [],
+            'desfasada' => $carta !== null && $carta['desfasada'],
+            'sinCarta'  => $carta === null,
+            'generado'  => $carta['generado_en'] ?? null,
+            // El motivo técnico solo se enseña a un admin
+            'error'     => in_groups('admin') ? $cliente->ultimoError : null,
+            'q'         => trim((string) $this->request->getGet('q')),
+        ]);
+    }
+
+    /** Foto de ejemplo de un color, pedida a sterclicks con el token de la API (el navegador no lo tiene). */
+    public function fotoColor(int $id)
+    {
+        session()->close();
+        $foto = (new SterclicksClient())->fotoColor($id);
+        if (!$foto) {
+            throw PageNotFoundException::forPageNotFound();
+        }
+
+        // La URL lleva ?v=<versión de la foto>: al cambiar la foto cambia la URL
+        return $this->response
+            ->setHeader('Content-Type', $foto['mime'])
+            ->setHeader('Cache-Control', 'private, max-age=31536000, immutable')
+            ->setBody($foto['body']);
     }
 
     /** Respaldo para fotos sin copia pública en piezas-img/. */

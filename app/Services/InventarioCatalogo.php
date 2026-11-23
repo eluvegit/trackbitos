@@ -65,7 +65,7 @@ class InventarioCatalogo
         $huecos = $this->codigosDeHueco();
         $fotos  = $this->fotos($ids);
         // Solo las que tienen partes: cuántas unidades están incompletas y qué les falta.
-        $partes = (new PiezaPartes())->resumenes($ids, $stock);
+        $partes = (new PiezaPartes())->resumenes($ids);
 
         $piezas = [];
         foreach ($variantes as $id => $v) {

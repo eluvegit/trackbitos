@@ -59,7 +59,8 @@
         <div class="fv-flash fv-flash-err"><i class="bi bi-exclamation-triangle"></i> <?= esc(session('error')) ?></div>
     <?php endif; ?>
 
-    <div class="al-grid">
+    <?php /* Arriba en columnas lo que se consulta; abajo, a lo ancho, los listados que crecen. */ ?>
+    <div class="exv-cols">
         <div class="fv-col">
             <section class="fv-panel">
                 <div class="fv-ph"><h3>Stock</h3></div>
@@ -85,7 +86,8 @@
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'baja', null, (bool) $hueco) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja<small>Salen o se rompen</small></span></button>
                 </div>
             </section>
-
+        </div>
+        <div class="fv-col">
             <section class="fv-panel" id="partes">
                 <div class="fv-ph"><i class="bi bi-puzzle t3"></i><h3>Partes</h3>
                     <?php if ($partes): ?><span class="cuenta"><?= (int) $partes['completas'] ?>/<?= (int) $partes['unidades'] ?> completas</span><?php endif; ?>
@@ -99,6 +101,9 @@
                         <p class="pz-imprimir ok"><i class="bi bi-check-circle"></i> Todas completas.</p>
                     <?php else: ?>
                         <p class="pz-imprimir t3">No hay unidades en stock.</p>
+                    <?php endif; ?>
+                    <?php if (!empty($partes['descontadas'])): ?>
+                        <p class="pz-imprimir t3"><i class="bi bi-dash-circle"></i> <?= (int) $partes['descontadas'] ?> unidad<?= $partes['descontadas'] > 1 ? 'es' : '' ?> descontada<?= $partes['descontadas'] > 1 ? 's' : '' ?> del stock: falta una de cada parte, así que no existe<?= $partes['descontadas'] > 1 ? 'n' : '' ?>.</p>
                     <?php endif; ?>
                     <?php if ($partes['sueltas']): ?>
                         <p class="pz-imprimir sueltas"><i class="bi bi-boxes"></i> Sueltas: <b><?= esc(implode(', ', $partes['sueltas'])) ?></b></p>
@@ -150,54 +155,9 @@
                     <input type="number" name="por_unidad" min="1" max="20" value="1" class="fv-input" title="Cuántas lleva cada unidad (brazos: 2)">
                     <button class="fv-btn fv-btn-sm">Añadir</button>
                 </form>
-                <?php if (!empty($historialPartes)): ?>
-                    <details class="fv-mas">
-                        <summary><i class="bi bi-chevron-right ch"></i> Movimientos de partes (<?= count($historialPartes) ?>)</summary>
-                        <div class="pv-lista exv-movs">
-                            <?php foreach ($historialPartes as $m): ?>
-                                <?php $d = (int) $m['delta']; $deBitacora = $m['placa_version_id'] !== null; ?>
-                                <div class="pv-fila">
-                                    <span class="exv-delta <?= $d < 0 ? 'e-bad' : 'e-ok' ?>"><?= $d > 0 ? '+' : '' ?><?= $d ?></span>
-                                    <div class="pv-cuerpo">
-                                        <span class="exv-tipo"><?= esc($m['parte']) ?> <span class="t3">· <?= esc(['rota' => 'rota', 'suelta' => 'impresa suelta', 'ajuste' => 'ajuste', 'placa' => 'bitácora'][$m['motivo']] ?? $m['motivo']) ?></span></span>
-                                        <div class="pv-sub">
-                                            <span class="fv-mono"><?= esc($m['creado_en'] ? date('d/m/Y H:i', strtotime($m['creado_en'])) : '—') ?></span>
-                                            <?php if ($deBitacora): ?>
-                                                <a href="<?= site_url('piezas/placa/' . (int) $m['placa_id'] . '/bitacora/editar') ?>" class="t2"><i class="bi bi-journal-text"></i> Placa #<?= (int) $m['placa_id'] ?></a>
-                                                <?php if ($m['inventario_sincronizado_en'] === null): ?><span class="t3">(no cuenta: placa sin dar de alta)</span><?php endif; ?>
-                                            <?php elseif (trim((string) $m['nota']) !== ''): ?>
-                                                <span class="nota t2"><?= esc($m['nota']) ?></span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    <?php if (!$deBitacora): ?>
-                                        <form method="post" action="<?= site_url('piezas/existencias/partes/movimiento/' . (int) $m['id'] . '/borrar') ?>" class="pv-acc" onsubmit="return confirm('¿Borrar este movimiento de parte?');">
-                                            <?= csrf_field() ?>
-                                            <button class="fv-ibtn peligro" title="Borrar"><i class="bi bi-trash"></i></button>
-                                        </form>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </details>
-                <?php endif; ?>
             </section>
-
-            <section class="fv-panel">
-                <div class="fv-ph"><i class="bi bi-bell t3"></i><h3>Aviso de mínimo</h3></div>
-                <form method="post" action="<?= site_url('piezas/existencias/' . $idVar . '/minimo') ?>" class="exv-min" data-min-form>
-                    <?= csrf_field() ?>
-                    <span class="t3" style="font-size:13px">Avísame cuando baje de</span>
-                    <div class="exv-paso">
-                        <button type="button" class="fv-ibtn" data-min-step="-1" aria-label="Menos"><i class="bi bi-dash-lg"></i></button>
-                        <input type="number" name="stock_minimo" min="0" step="1" value="<?= (int) $minimo ?>" class="fv-input" data-min-input>
-                        <button type="button" class="fv-ibtn" data-min-step="1" aria-label="Más"><i class="bi bi-plus-lg"></i></button>
-                    </div>
-                    <button class="fv-btn fv-btn-sm fv-btn-pri" data-min-guardar disabled>Guardar</button>
-                    <span class="exv-eco" data-min-eco><?= $minimo > 0 ? 'Ahora: ' . (int) $minimo : 'Sin mínimo — solo se avisa a cero' ?></span>
-                </form>
-            </section>
-
+        </div>
+        <div class="fv-col">
             <section class="fv-panel">
                 <div class="fv-ph"><i class="bi bi-geo-alt t3"></i><h3>Dónde está</h3></div>
                 <?php if (empty($huecosDisponibles)): ?>
@@ -240,9 +200,25 @@
                     </form>
                 <?php endif; ?>
             </section>
-        </div>
 
-        <div class="fv-col">
+            <section class="fv-panel">
+                <div class="fv-ph"><i class="bi bi-bell t3"></i><h3>Aviso de mínimo</h3></div>
+                <form method="post" action="<?= site_url('piezas/existencias/' . $idVar . '/minimo') ?>" class="exv-min" data-min-form>
+                    <?= csrf_field() ?>
+                    <span class="t3" style="font-size:13px">Avísame cuando baje de</span>
+                    <div class="exv-paso">
+                        <button type="button" class="fv-ibtn" data-min-step="-1" aria-label="Menos"><i class="bi bi-dash-lg"></i></button>
+                        <input type="number" name="stock_minimo" min="0" step="1" value="<?= (int) $minimo ?>" class="fv-input" data-min-input>
+                        <button type="button" class="fv-ibtn" data-min-step="1" aria-label="Más"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    <button class="fv-btn fv-btn-sm fv-btn-pri" data-min-guardar disabled>Guardar</button>
+                    <span class="exv-eco" data-min-eco><?= $minimo > 0 ? 'Ahora: ' . (int) $minimo : 'Sin mínimo — solo se avisa a cero' ?></span>
+                </form>
+            </section>
+        </div>
+    </div>
+
+    <div class="exv-listas">
             <section class="fv-panel">
                 <div class="fv-ph"><h3>Movimientos</h3><span class="cuenta"><?= count($historial) ?></span></div>
                 <?php if (empty($historial)): ?>
@@ -282,7 +258,38 @@
                     <p class="es-ayuda">Las líneas de <b class="t2">impresión</b> son un reflejo de la bitácora de su placa: si allí cambian las copias o las fallidas y se vuelve a dar de alta, esta misma línea se recuadra, no se añade otra.</p>
                 <?php endif; ?>
             </section>
-        </div>
+
+            <?php if (!empty($historialPartes)): ?>
+            <section class="fv-panel">
+                <div class="fv-ph"><i class="bi bi-puzzle t3"></i><h3>Movimientos de partes</h3><span class="cuenta"><?= count($historialPartes) ?></span></div>
+                <div class="pv-lista exv-movs">
+                    <?php foreach ($historialPartes as $m): ?>
+                        <?php $d = (int) $m['delta']; $deBitacora = $m['placa_version_id'] !== null; ?>
+                        <div class="pv-fila">
+                            <span class="exv-delta <?= $d < 0 ? 'e-bad' : 'e-ok' ?>"><?= $d > 0 ? '+' : '' ?><?= $d ?></span>
+                            <div class="pv-cuerpo">
+                                <span class="exv-tipo"><?= esc($m['parte']) ?> <span class="t3">· <?= esc(['rota' => 'rota', 'suelta' => 'impresa suelta', 'ajuste' => 'ajuste', 'placa' => 'bitácora'][$m['motivo']] ?? $m['motivo']) ?></span></span>
+                                <div class="pv-sub">
+                                    <span class="fv-mono"><?= esc($m['creado_en'] ? date('d/m/Y H:i', strtotime($m['creado_en'])) : '—') ?></span>
+                                    <?php if ($deBitacora): ?>
+                                        <a href="<?= site_url('piezas/placa/' . (int) $m['placa_id'] . '/bitacora/editar') ?>" class="t2"><i class="bi bi-journal-text"></i> Placa #<?= (int) $m['placa_id'] ?></a>
+                                        <?php if ($m['inventario_sincronizado_en'] === null): ?><span class="t3">(no cuenta: placa sin dar de alta)</span><?php endif; ?>
+                                    <?php elseif (trim((string) $m['nota']) !== ''): ?>
+                                        <span class="nota t2"><?= esc($m['nota']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php if (!$deBitacora): ?>
+                                <form method="post" action="<?= site_url('piezas/existencias/partes/movimiento/' . (int) $m['id'] . '/borrar') ?>" class="pv-acc" onsubmit="return confirm('¿Borrar este movimiento de parte?');">
+                                    <?= csrf_field() ?>
+                                    <button class="fv-ibtn peligro" title="Borrar"><i class="bi bi-trash"></i></button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <?php endif; ?>
     </div>
 </div>
 
@@ -319,6 +326,11 @@
 </script>
 
 <style>
+    .exv-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+    .exv-cols > .fv-col { min-width: 0; }
+    .exv-listas { display: grid; gap: 20px; margin-top: 20px; }
+    @media (max-width: 1200px) { .exv-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } .exv-cols > .fv-col:last-child { grid-column: 1 / -1; } }
+    @media (max-width: 760px) { .exv-cols { grid-template-columns: minmax(0, 1fr); } }
     .pz-imprimir { margin: 0 0 .5rem; font-size: .9rem; color: var(--fv-warn); }
     .pz-imprimir.ok, .pz-imprimir.sueltas { color: var(--fv-ok); }
     .pz-imprimir.t3 { color: inherit; }

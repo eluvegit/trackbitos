@@ -20,6 +20,9 @@ $rutasInventario    = static function ($routes) {
     $routes->GET('estuches/(:num)', 'Inventario::estuche/$1');
     $routes->GET('guia/(:num)', 'Inventario::guia/$1');
     $routes->GET('imagen/(:num)', 'Inventario::imagen/$1');
+    // Carta de colores del taller de sterclicks (leída en vivo de su API)
+    $routes->GET('colores', 'Inventario::colores');
+    $routes->GET('colores/(:num)/foto', 'Inventario::fotoColor/$1');
     $routes->GET('ayuda', 'Inventario::ayuda');
 };
 

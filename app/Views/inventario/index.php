@@ -21,6 +21,11 @@
         <strong>Estuches</strong>
         <span><?= (int) $estuches ?> estuches</span>
     </a>
+    <a href="<?= inventario_url('colores') ?>" class="inv-boton">
+        <span class="inv-boton-icono"><i class="bi bi-palette"></i></span>
+        <strong>Colores</strong>
+        <span>Carta de colores del taller</span>
+    </a>
     <?php foreach ($guias as $g): ?>
         <a href="<?= inventario_url('guia/' . (int) $g['id']) ?>" class="inv-boton">
             <span class="inv-boton-icono"><?= icono_guia($g['icono']) ?></span>

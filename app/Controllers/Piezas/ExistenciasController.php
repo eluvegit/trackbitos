@@ -185,7 +185,7 @@ class ExistenciasController extends BaseController
             'filtro'       => $filtro,
             'imagenes'     => $imagenes,
             'ubicaciones'  => $ubicaciones,
-            'partesPieza'  => (new PiezaPartes())->resumenes([], array_map(static fn (array $d) => $d['total'], $desglose)),
+            'partesPieza'  => (new PiezaPartes())->resumenes([]),
             'categorias'     => $categorias,
             'categoriaSel'   => $categoriaSel,
             'soloSterclicks' => $soloSterclicks,
@@ -253,20 +253,22 @@ class ExistenciasController extends BaseController
             'hueco'      => $huecoId !== null ? ($huecosPorId[$huecoId] ?? null) : null,
             'huecosDisponibles' => $huecosDisponibles,
             'imagen'     => $imagen,
-            'partes'     => (new PiezaPartes())->resumenDe($id, $stock),
+            'partes'     => (new PiezaPartes())->resumenDe($id),
             'historialPartes' => (new PiezaPartes())->historialDe($id),
         ]);
     }
 
     public function parteCrear(int $id)
     {
+        // Se añaden desde el stock de la variante o desde su ficha (volver=ficha).
+        $volver = site_url(($this->request->getPost('volver') === 'ficha' ? 'piezas/variante/' : 'piezas/existencias/') . $id) . '#partes';
         $nombre = trim((string) $this->request->getPost('nombre'));
         if (!$this->variantes->find($id) || $nombre === '') {
-            return redirect()->to(site_url('piezas/existencias/' . $id))->with('error', 'Escribe el nombre de la parte.');
+            return redirect()->to($volver)->with('error', 'Escribe el nombre de la parte.');
         }
         (new PiezaPartes())->crear($id, $nombre, (int) $this->request->getPost('por_unidad') ?: 1);
 
-        return redirect()->to(site_url('piezas/existencias/' . $id) . '#partes')->with('success', 'Parte añadida.');
+        return redirect()->to($volver)->with('success', 'Parte añadida.');
     }
 
     public function parteActualizar(int $parteId)

@@ -559,7 +559,7 @@ class UbicacionesController extends BaseController
         }
 
         $filas = [];
-        $partesHueco = $ids === [] ? [] : (new \App\Services\PiezaPartes())->resumenes($ids, array_map(static fn (array $d) => $d['total'], $desglose));
+        $partesHueco = $ids === [] ? [] : (new \App\Services\PiezaPartes())->resumenes($ids);
         if ($stock !== []) {
             foreach ($this->variantes->whereIn('id', array_keys($stock))->findAll() as $v) {
                 $familia = $familias[(int) $v['familia_id']] ?? null;

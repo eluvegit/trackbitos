@@ -43,14 +43,34 @@ class PiezaInventario
 
     public function stockDeVariante(int $varianteId): int
     {
-        return $this->movimientos->stockDe($varianteId);
+        return $this->stockPorVariante([$varianteId])[$varianteId] ?? 0;
     }
 
     /**
+     * Stock real: lo de los movimientos menos las unidades a las que les
+     * falta una de cada parte (esas no existen; ver PiezaPartes::descontadas).
+     *
      * @param list<int> $varianteIds
      * @return array<int,int>
      */
     public function stockPorVariante(array $varianteIds = []): array
+    {
+        $stock = $this->stockBrutoPorVariante($varianteIds);
+        foreach ((new PiezaPartes())->descontadas($stock) as $vid => $n) {
+            $stock[$vid] -= $n;
+        }
+
+        return $stock;
+    }
+
+    /**
+     * Solo la suma de los movimientos, sin descontar partes. Para cuentas
+     * internas (partes, cuadres); para pintar, stockPorVariante().
+     *
+     * @param list<int> $varianteIds
+     * @return array<int,int>
+     */
+    public function stockBrutoPorVariante(array $varianteIds = []): array
     {
         return $this->movimientos->stockPorVariante($varianteIds);
     }
@@ -137,6 +157,17 @@ class PiezaInventario
             $mapa[(int) $id] ??= ['total' => 0, 'hueco' => 0, 'impresas' => 0, 'pedido' => 0];
         }
 
+        // Las unidades sin partes salen del hueco primero, luego de las cajas.
+        $descontar = (new PiezaPartes())->descontadas(array_map(static fn (array $d) => (int) $d['total'], $mapa));
+        foreach ($descontar as $vid => $n) {
+            $mapa[$vid]['total'] -= $n;
+            foreach (['hueco', 'impresas', 'pedido'] as $donde) {
+                $x = min($n, max(0, (int) $mapa[$vid][$donde]));
+                $mapa[$vid][$donde] -= $x;
+                $n -= $x;
+            }
+        }
+
         return $mapa;
     }
 
@@ -168,7 +199,24 @@ class PiezaInventario
     /** @return array<string, array<int,int>>  caja => (varianteId => unidades) */
     public function stockEnCajas(array $varianteIds = []): array
     {
-        return $this->movimientos->stockEnCajas($varianteIds);
+        $cajas = $this->movimientos->stockEnCajas($varianteIds);
+        $tocadas = [];
+        foreach ($cajas as $porVariante) {
+            $tocadas += $porVariante;
+        }
+        if ($tocadas !== []) {
+            $desglose = $this->desglose(array_keys($tocadas));
+            foreach ($cajas as $caja => $porVariante) {
+                foreach ($porVariante as $vid => $n) {
+                    $cajas[$caja][$vid] = min($n, (int) ($desglose[$vid][$caja] ?? $n));
+                    if ($cajas[$caja][$vid] === 0) {
+                        unset($cajas[$caja][$vid]);
+                    }
+                }
+            }
+        }
+
+        return $cajas;
     }
 
     /**
@@ -355,7 +403,7 @@ class PiezaInventario
     {
         $ahora = date('Y-m-d H:i:s');
         $filas = [];
-        foreach ($this->stockEnCajas($varianteIds) as $caja => $porVariante) {
+        foreach ($this->movimientos->stockEnCajas($varianteIds) as $caja => $porVariante) {
             foreach ($porVariante as $vid => $n) {
                 if ($n >= 0) {
                     continue;
