@@ -674,6 +674,18 @@ $routes->group('sesiones', ['filter' => 'admin'], static function ($routes) {
     $routes->POST('(:num)/mensajes/(:num)/borrar', 'Sesiones::mensajeModeloBorrar/$1/$2');
 
     $routes->GET('(:num)/exportar', 'Sesiones::exportar/$1');
+    // Brief: hora en cada ubicación del rodaje vinculado
+    $routes->POST('(:num)/ubicaciones/(:num)/hora', 'Sesiones::ubicacionHora/$1/$2');
+    // Modelos: perfiles reutilizables + opciones de ropa (elegidas por sesión)
+    $routes->POST('(:num)/modelos/agregar', 'Sesiones::modeloAgregar/$1');
+    $routes->POST('(:num)/modelos/(:num)/quitar', 'Sesiones::modeloQuitar/$1/$2');
+    $routes->POST('(:num)/modelos/(:num)/guardar', 'Sesiones::modeloGuardar/$1/$2');
+    $routes->POST('(:num)/modelos/(:num)/fotos/subir', 'Sesiones::fotoPerfilSubir/$1/$2');
+    $routes->POST('(:num)/modelos/(:num)/fotos/(:num)/borrar', 'Sesiones::fotoPerfilBorrar/$1/$2/$3');
+    $routes->POST('(:num)/modelos/(:num)/fotos/(:num)/principal', 'Sesiones::fotoPerfilPrincipal/$1/$2/$3');
+    $routes->POST('(:num)/modelos/(:num)/ropa/crear', 'Sesiones::ropaCrear/$1/$2');
+    $routes->POST('(:num)/modelos/(:num)/ropa/(:num)/borrar', 'Sesiones::ropaBorrar/$1/$2/$3');
+    $routes->POST('(:num)/modelos/(:num)/ropa/(:num)/elegir', 'Sesiones::ropaElegir/$1/$2/$3');
 });
 
 // ---- Recordatorios: fechas de eventos recurrentes (ITV, DNI, vacunas, etc.) ----

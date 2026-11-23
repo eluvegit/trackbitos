@@ -29,9 +29,15 @@ $esIdea = old('es_idea') !== null ? (bool) old('es_idea') : !empty($defaultIdea)
                 <label for="ssTitulo">Título</label>
                 <input class="fv-input ss-grande" id="ssTitulo" name="titulo" required maxlength="150" value="<?= esc(old('titulo', $s['titulo'] ?? ''), 'attr') ?>" <?= $editar ? '' : 'autofocus' ?> placeholder="Ej.: Café en terraza, otoño">
             </div>
-            <div class="ss-campo" style="max-width: 220px">
-                <label for="ssFecha">Fecha del shooting</label>
-                <input class="fv-input" id="ssFecha" type="date" name="fecha_sesion" value="<?= esc(old('fecha_sesion', $s['fecha_sesion'] ?? ''), 'attr') ?>">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap">
+                <div class="ss-campo" style="flex: 0 1 220px">
+                    <label for="ssFecha">Fecha del shooting</label>
+                    <input class="fv-input" id="ssFecha" type="date" name="fecha_sesion" value="<?= esc(old('fecha_sesion', $s['fecha_sesion'] ?? ''), 'attr') ?>">
+                </div>
+                <div class="ss-campo" style="flex: 0 1 140px">
+                    <label for="ssHoraF">Hora</label>
+                    <input class="fv-input" id="ssHoraF" type="time" name="hora_sesion" style="color-scheme: dark" value="<?= esc(substr((string) old('hora_sesion', $s['hora_sesion'] ?? ''), 0, 5), 'attr') ?>">
+                </div>
             </div>
 
             <div class="ss-campo">

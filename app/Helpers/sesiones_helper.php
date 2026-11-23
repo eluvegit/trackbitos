@@ -93,3 +93,24 @@ if (!function_exists('ses_fecha_relativa')) {
         };
     }
 }
+
+if (!function_exists('ses_instagram')) {
+    /**
+     * Usuario de Instagram a partir del contacto de un modelo: acepta
+     * «@usuario», «usuario» o una URL de instagram.com. Devuelve null si
+     * parece otra cosa (teléfono, email, texto con espacios…).
+     */
+    function ses_instagram(?string $contacto): ?string
+    {
+        $c = trim((string) $contacto);
+        if ($c === '') return null;
+        if (preg_match('~instagram\.com/([A-Za-z0-9._]{1,30})~i', $c, $m)) {
+            $u = $m[1];
+        } elseif (preg_match('~^@?([A-Za-z0-9._]{1,30})$~', $c, $m) && !ctype_digit(str_replace(['.', '_'], '', $m[1]))) {
+            $u = $m[1];
+        } else {
+            return null;
+        }
+        return in_array(strtolower($u), ['p', 'reel', 'reels', 'stories', 'explore'], true) ? null : $u;
+    }
+}

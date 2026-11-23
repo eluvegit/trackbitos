@@ -34,8 +34,9 @@
     }
     secs.addEventListener('click', e => { const b = e.target.closest('button'); if (b) abrirTab(b.dataset.tab); });
     let tabInicial = location.hash.slice(1);
-    if (!$(`[data-panel="${tabInicial}"]`, raiz)) { try { tabInicial = sessionStorage.getItem(claveTab) || 'plan'; } catch (e) { tabInicial = 'plan'; } }
-    abrirTab($(`[data-panel="${tabInicial}"]`, raiz) ? tabInicial : 'plan');
+    if (!$(`[data-panel="${tabInicial}"]`, raiz)) { try { tabInicial = sessionStorage.getItem(claveTab) || 'brief'; } catch (e) { tabInicial = 'brief'; } }
+    abrirTab($(`[data-panel="${tabInicial}"]`, raiz) ? tabInicial : 'brief');
+    raiz.addEventListener('click', e => { const a = e.target.closest('[data-ir-tab]'); if (a) { e.preventDefault(); abrirTab(a.dataset.irTab); } });
     const cuenta = (k, v) => { const el = $(`[data-cuenta="${k}"]`, secs); if (el) el.textContent = v; };
 
     // ---------- menú "más" ----------
@@ -405,7 +406,7 @@
     const releases = $('#ssReleases');
     const recontarModelos = () => {
         const nr = $$('li', releases).length, nm = $$('.ss-msg', raiz).length;
-        $('#ssRelCuenta').textContent = nr; $('#ssMsgCuenta').textContent = nm; cuenta('modelos', nr + nm);
+        $('#ssRelCuenta').textContent = nr; $('#ssMsgCuenta').textContent = nm; cuenta('modelos', $$('.ss-modelo', raiz).length + nr + nm);
     };
     $('#ssRelForm')?.addEventListener('change', e => {
         if (e.target.type === 'file') e.target.nextElementSibling.nextElementSibling.textContent = e.target.files[0]?.name || 'Archivo';
@@ -454,4 +455,198 @@
             try { await post(`/mensajes/${msg.dataset.id}/borrar`); msg.remove(); recontarModelos(); } catch (err) { fallo(); }
         }
     });
+
+    // ---------- brief: hora y ubicaciones (del rodaje vinculado) ----------
+    const hora = $('#ssHora');
+    hora?.addEventListener('change', async () => {
+        await guardarCampo('hora_sesion', hora.value);
+        const chip = $('#ssHoraChip');
+        if (chip) { chip.hidden = !hora.value; $('b', chip).textContent = hora.value; }
+        const enTab = $('[data-cuenta="hora"]', secs);
+        if (enTab) { enTab.hidden = !hora.value; enTab.textContent = hora.value; }
+    });
+    $('#ssUbis')?.addEventListener('change', async e => {
+        const inp = e.target.closest('.ss-ubi-hora');
+        if (!inp) return;
+        try { await post(`/ubicaciones/${inp.closest('li').dataset.id}/hora`, { hora: inp.value }); marcaGuardado('hora_sesion', '✓ Guardado'); }
+        catch (err) { fallo(); }
+    });
+
+    // ---------- modelos: perfiles con opciones de ropa ----------
+    const modelos = $('#ssModelos');
+    const perfiles = $('#ssPerfiles');
+    const recontarTodo = () => {
+        const nr = $$('li', releases).length, nm = $$('.ss-msg', raiz).length;
+        cuenta('modelos', $$('.ss-modelo', modelos).length + nr + nm);
+    };
+    function ponerTarjeta(id, html) {
+        const vieja = $(`.ss-modelo[data-id="${id}"]`, modelos);
+        if (!html) { vieja?.remove(); return; }
+        if (vieja) vieja.outerHTML = html; else modelos.insertAdjacentHTML('beforeend', html);
+    }
+    async function agregarModelo(datos) {
+        let r;
+        try { r = await post('/modelos/agregar', datos); } catch (err) { return fallo('No se ha podido añadir el modelo.'); }
+        ponerTarjeta(r.id, r.html);
+        $(`.ss-chip[data-id="${r.id}"]`, perfiles)?.remove();
+        $$('#ssPerfilesLista option').forEach(o => { if (o.value === datos.nombre) o.remove(); });
+        if (perfiles) perfiles.hidden = !$('.ss-chip', perfiles);
+        recontarTodo();
+    }
+    const modNombre = $('#ssModNombre');
+    $('#ssModCrear')?.addEventListener('click', () => {
+        const n = modNombre.value.trim();
+        if (!n) return modNombre.focus();
+        modNombre.value = '';
+        agregarModelo({ nombre: n });
+    });
+    modNombre?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#ssModCrear').click(); } });
+    perfiles?.addEventListener('click', e => { const c = e.target.closest('.ss-chip'); if (c) agregarModelo({ modelo_id: c.dataset.id }); });
+
+    if (modelos) {
+        // Datos del perfil: se guardan solos al salir del campo.
+        modelos.addEventListener('focusin', e => { const c = e.target.closest('[data-campo]'); if (c) c._previo = c.value; });
+        modelos.addEventListener('focusout', async e => {
+            const c = e.target.closest('[data-campo]');
+            if (!c || c.value === c._previo) return;
+            if (c.dataset.campo === 'nombre' && !c.value.trim()) { c.value = c._previo; return; }
+            const card = c.closest('.ss-modelo');
+            let r;
+            try { r = await post(`/modelos/${card.dataset.id}/guardar`, { [c.dataset.campo]: c.value }); c._previo = c.value; }
+            catch (err) { return fallo(); }
+            if ('instagram' in r) {
+                const ig = $('[data-ig]', card);
+                ig.hidden = !r.instagram;
+                if (r.instagram) { ig.href = `https://www.instagram.com/${encodeURIComponent(r.instagram)}/`; $('span', ig).textContent = '@' + r.instagram; }
+            }
+        });
+        modelos.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[data-campo]')) { e.preventDefault(); e.target.blur(); } });
+
+        modelos.addEventListener('click', async e => {
+            const card = e.target.closest('.ss-modelo');
+            if (!card) return;
+            const mid = card.dataset.id;
+            if (e.target.closest('.ss-mod-quitar')) {
+                if (!confirm('¿Quitar este modelo de la sesión? El perfil y su ropa se conservan para otras sesiones.')) return;
+                let r;
+                try { r = await post(`/modelos/${mid}/quitar`); } catch (err) { return fallo(); }
+                card.remove();
+                if (r.perfil && perfiles) {
+                    perfiles.insertAdjacentHTML('beforeend', `<button type="button" class="ss-chip" data-id="${r.perfil.id}"><i class="bi bi-plus"></i>${esc(r.perfil.nombre)}</button>`);
+                    perfiles.hidden = false;
+                    $('#ssPerfilesLista')?.insertAdjacentHTML('beforeend', `<option value="${esc(r.perfil.nombre)}">`);
+                }
+                return recontarTodo();
+            }
+            const foto = e.target.closest('.ss-mod-foto');
+            if (foto && e.target.closest('.ss-foto-borrar')) {
+                if (!confirm('¿Borrar esta foto del perfil?')) return;
+                try { const r = await post(`/modelos/${mid}/fotos/${foto.dataset.id}/borrar`); ponerTarjeta(mid, r.html); } catch (err) { fallo(); }
+                return;
+            }
+            if (foto && e.target.closest('.ss-foto-principal')) {
+                try { const r = await post(`/modelos/${mid}/fotos/${foto.dataset.id}/principal`); ponerTarjeta(mid, r.html); } catch (err) { fallo(); }
+                return;
+            }
+            const op = e.target.closest('.ss-ropa-op');
+            if (op && e.target.closest('.ss-ropa-borrar')) {
+                if (!confirm('¿Borrar esta opción de ropa del perfil? Desaparece también de las demás sesiones.')) return;
+                try { const r = await post(`/modelos/${mid}/ropa/${op.dataset.id}/borrar`); ponerTarjeta(mid, r.html); } catch (err) { fallo(); }
+                return;
+            }
+            if (op && e.target.closest('.ss-ropa-elegir')) {
+                let r;
+                try { r = await post(`/modelos/${mid}/ropa/${op.dataset.id}/elegir`); } catch (err) { return fallo(); }
+                op.classList.toggle('on', !!r.elegida);
+                const n = $$('.ss-ropa-op', card).length, ok = $$('.ss-ropa-op.on', card).length;
+                $('.fv-ph .cuenta', card).textContent = `${ok}/${n}`;
+            }
+        });
+        modelos.addEventListener('change', e => {
+            if (e.target.matches('.ss-mod-foto-add input[type="file"]')) {
+                subirFotosPerfil(e.target.closest('.ss-modelo'), e.target.files);
+                return;
+            }
+            if (e.target.matches('.ss-ropa-nueva input[type="file"]')) {
+                e.target.parentElement.querySelector('span').textContent = e.target.files[0]?.name || 'Foto';
+            }
+        });
+        // Outfits arrastrando o pegando imágenes (Ctrl+V) sobre la tarjeta del modelo.
+        let modeloActivo = null;
+        const marcarModelo = c => { modeloActivo = c; $$('.ss-modelo', modelos).forEach(x => x.classList.toggle('activo', x === c)); };
+        marcarModelo($('.ss-modelo', modelos)); // por defecto, el primero: así siempre se ve dónde irá lo pegado
+        modelos.addEventListener('pointerdown', e => { const c = e.target.closest('.ss-modelo'); if (c) marcarModelo(c); });
+        modelos.addEventListener('focusin', e => { const c = e.target.closest('.ss-modelo'); if (c) marcarModelo(c); });
+        async function subirOutfits(card, files, texto = '') {
+            files = [...files].filter(f => f.type.startsWith('image/'));
+            if (!card || !files.length) return;
+            const mid = card.dataset.id;
+            card.classList.add('subiendo');
+            let html = null;
+            for (const f of files) {
+                const fd = new FormData();
+                fd.append('imagen', f, f.name || 'outfit.png');
+                fd.append('texto', files.length === 1 ? texto : '');
+                try { html = (await post(`/modelos/${mid}/ropa/crear`, fd)).html; } catch (err) { fallo('No se ha podido subir alguna imagen.'); break; }
+            }
+            if (html) { ponerTarjeta(mid, html); marcarModelo($(`.ss-modelo[data-id="${mid}"]`, modelos)); }
+            else card.classList.remove('subiendo');
+        }
+        async function subirFotosPerfil(card, files) {
+            files = [...files].filter(f => f.type.startsWith('image/'));
+            if (!card || !files.length) return;
+            const mid = card.dataset.id;
+            const fd = new FormData();
+            files.forEach(f => fd.append('fotos[]', f, f.name || 'foto.png'));
+            card.classList.add('subiendo');
+            try { const r = await post(`/modelos/${mid}/fotos/subir`, fd); ponerTarjeta(mid, r.html); marcarModelo($(`.ss-modelo[data-id="${mid}"]`, modelos)); }
+            catch (err) { card.classList.remove('subiendo'); fallo('No se han podido subir las fotos.'); }
+        }
+        modelos.addEventListener('dragover', e => {
+            if (![...e.dataTransfer.types].includes('Files')) return;
+            const c = e.target.closest('.ss-modelo');
+            if (!c) return;
+            e.preventDefault();
+            $$('.ss-modelo.soltar', modelos).forEach(x => x !== c && x.classList.remove('soltar'));
+            c.classList.add('soltar');
+            $$('[data-zona="fotos"]', modelos).forEach(z => z.classList.toggle('soltar', z.contains(e.target)));
+        });
+        modelos.addEventListener('dragleave', e => {
+            const c = e.target.closest('.ss-modelo');
+            if (c && !c.contains(e.relatedTarget)) { c.classList.remove('soltar'); $$('[data-zona="fotos"].soltar', c).forEach(z => z.classList.remove('soltar')); }
+        });
+        modelos.addEventListener('drop', e => {
+            const c = e.target.closest('.ss-modelo');
+            if (!c || !e.dataTransfer.files.length) return;
+            e.preventDefault();
+            c.classList.remove('soltar');
+            $$('[data-zona="fotos"].soltar', modelos).forEach(z => z.classList.remove('soltar'));
+            if (e.target.closest('[data-zona="fotos"]')) subirFotosPerfil(c, e.dataTransfer.files);
+            else subirOutfits(c, e.dataTransfer.files);
+        });
+        document.addEventListener('paste', e => {
+            if ($('[data-panel="modelos"]', raiz).hidden) return;
+            const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+            if (!files.length) return; // texto normal: se pega como siempre
+            const card = e.target.closest?.('.ss-modelo') || modeloActivo || $('.ss-modelo', modelos);
+            if (!card) return;
+            e.preventDefault();
+            // Si se pega en «Nueva opción», lo escrito ahí se usa como nombre del outfit.
+            const inp = e.target.closest?.('.ss-ropa-nueva input[name="texto"]');
+            const texto = inp ? inp.value.trim() : '';
+            if (inp) inp.value = '';
+            subirOutfits(card, files, texto);
+        });
+
+        modelos.addEventListener('submit', async e => {
+            const f = e.target.closest('.ss-ropa-nueva');
+            if (!f) return;
+            e.preventDefault();
+            if (!f.texto.value.trim() && !f.imagen.files.length) return f.texto.focus();
+            const mid = f.closest('.ss-modelo').dataset.id;
+            try { const r = await post(`/modelos/${mid}/ropa/crear`, new FormData(f)); ponerTarjeta(mid, r.html); }
+            catch (err) { fallo('No se ha podido añadir la opción de ropa.'); }
+            $(`.ss-modelo[data-id="${mid}"] .ss-ropa-nueva input[name="texto"]`, modelos)?.focus();
+        });
+    }
 })();

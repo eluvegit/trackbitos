@@ -6,6 +6,8 @@ use App\Models\MoodboardItemModel;
 use App\Models\ModelReleaseModel;
 use App\Models\SesionEquipoModel;
 use App\Models\SesionMensajeModeloModel;
+use App\Models\SesionModeloPerfilModel;
+use App\Models\SesionModeloRopaModel;
 use App\Models\SesionModel;
 use App\Models\SituacionModel;
 
@@ -102,6 +104,7 @@ class Sesiones extends BaseController
         $data  = [
             'titulo'       => $post['titulo'] ?? '',
             'fecha_sesion' => ($post['fecha_sesion'] ?? '') ?: null,
+            'hora_sesion'  => ($post['hora_sesion'] ?? '') ?: null,
             'notas'        => $post['notas'] ?? null,
             'briefing'     => $post['briefing'] ?? null,
             'estado_foto'  => in_array('foto', $partes, true) ? $estadoInicial : null,
@@ -132,6 +135,15 @@ class Sesiones extends BaseController
 
         $vista = ses_vista('sesiones/show');
         if ($vista === 'sesiones/show_nueva') {
+            // Brief: ubicaciones de los rodajes vinculados (con su hora) y modelos.
+            $detalle['ubicaciones'] = $this->ubicacionesRodaje(array_column($detalle['rodajes'], 'id'));
+            $detalle['modelos']     = (new SesionModeloPerfilModel())->deSesion($id);
+            // Perfiles que aún no están en esta sesión, para añadirlos con un toque.
+            $detalle['perfiles_libres'] = (new SesionModeloPerfilModel())
+                ->select('id, nombre')
+                ->whereNotIn('id', array_merge([0], array_column($detalle['modelos'], 'id')))
+                ->orderBy('nombre', 'ASC')->findAll();
+
             // Otras sesiones con equipo, para poder copiar su lista.
             $detalle['equipo_de_otras'] = db_connect()->table('sesion_equipo q')
                 ->select('s.id, s.titulo, COUNT(*) AS n')->join('sesiones s', 's.id = q.sesion_id')
@@ -168,7 +180,7 @@ class Sesiones extends BaseController
             'fecha_sesion' => ($post['fecha_sesion'] ?? '') ?: null,
         ];
 
-        foreach (['notas', 'briefing'] as $campo) {
+        foreach (['notas', 'briefing', 'hora_sesion'] as $campo) {
             if (array_key_exists($campo, $post)) {
                 $data[$campo] = $post[$campo] !== '' ? $post[$campo] : null;
             }
@@ -591,6 +603,242 @@ class Sesiones extends BaseController
         return $this->response->setJSON(['ok' => true]);
     }
 
+    // ========== BRIEF: HORA Y UBICACIONES ==========
+
+    /**
+     * Ubicaciones (zonas) de los rodajes vinculados, ordenadas por hora
+     * (las que no tienen hora, al final en su orden del rodaje).
+     */
+    private function ubicacionesRodaje(array $rodajeIds): array
+    {
+        if (!$rodajeIds) return [];
+
+        return db_connect()->table('rodajes_ubicaciones u')
+            ->select('u.id, u.proyecto_id, u.nombre, u.notas, u.hora, u.imagen, p.titulo AS rodaje')
+            ->join('rodajes_proyectos p', 'p.id = u.proyecto_id')
+            ->whereIn('u.proyecto_id', $rodajeIds)
+            ->orderBy('u.hora IS NULL', 'ASC', false)->orderBy('u.hora', 'ASC')->orderBy('u.orden', 'ASC')
+            ->get()->getResultArray();
+    }
+
+    /** Hora prevista en una ubicación del rodaje vinculado (POST {hora}, vacío = sin hora). */
+    public function ubicacionHora(int $sesionId, int $ubicacionId)
+    {
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $hora  = trim((string) ($input['hora'] ?? ''));
+        if ($hora !== '' && !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $hora)) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        }
+
+        // Solo ubicaciones de un rodaje vinculado a esta sesión.
+        $valida = db_connect()->table('rodajes_ubicaciones u')
+            ->join('rodajes_proyectos p', 'p.id = u.proyecto_id')
+            ->where('u.id', $ubicacionId)->where('p.sesion_id', $sesionId)->where('p.deleted_at', null)
+            ->countAllResults();
+        if (!$valida) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+
+        (new \App\Models\RodajesUbicacionModel())->update($ubicacionId, ['hora' => $hora !== '' ? $hora : null]);
+
+        return $this->response->setJSON(['ok' => true, 'hora' => $hora]);
+    }
+
+    // ========== MODELOS (perfiles reutilizables + opciones de ropa) ==========
+
+    /** HTML de la tarjeta de un modelo dentro de esta sesión (o '' si no está). */
+    private function tarjetaModelo(int $sesionId, int $modeloId): string
+    {
+        $m = (new SesionModeloPerfilModel())->deSesion($sesionId, $modeloId);
+
+        return $m ? view('sesiones/_modelo_nueva', ['m' => $m[0], 'sid' => $sesionId]) : '';
+    }
+
+    private function modeloEnSesion(int $sesionId, int $modeloId): bool
+    {
+        return db_connect()->table('sesion_modelos_sesion')
+            ->where('sesion_id', $sesionId)->where('modelo_id', $modeloId)->countAllResults() > 0;
+    }
+
+    /**
+     * Añade un modelo a la sesión: uno existente (modelo_id) o un perfil
+     * nuevo con ese nombre (nombre; si ya existe uno igual, se reutiliza).
+     */
+    public function modeloAgregar(int $sesionId)
+    {
+        $input  = $this->request->getJSON(true) ?: $this->request->getPost();
+        $perfil = new SesionModeloPerfilModel();
+        $mid    = (int) ($input['modelo_id'] ?? 0);
+        $nombre = trim((string) ($input['nombre'] ?? ''));
+
+        if (!(new SesionModel())->find($sesionId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        if ($mid) {
+            if (!$perfil->find($mid)) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        } else {
+            if ($nombre === '' || mb_strlen($nombre) > 150) return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+            $ya  = $perfil->where('nombre', $nombre)->first();
+            $mid = $ya ? (int) $ya['id'] : (int) $perfil->insert(['nombre' => $nombre]);
+        }
+
+        if (!$this->modeloEnSesion($sesionId, $mid)) {
+            db_connect()->table('sesion_modelos_sesion')->insert(['sesion_id' => $sesionId, 'modelo_id' => $mid]);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'id' => $mid, 'html' => $this->tarjetaModelo($sesionId, $mid)]);
+    }
+
+    /** Quita el modelo de ESTA sesión (el perfil y su ropa se conservan). */
+    public function modeloQuitar(int $sesionId, int $modeloId)
+    {
+        $db = db_connect();
+        $ropaIds = array_column($db->table('sesion_modelo_ropa')->select('id')->where('modelo_id', $modeloId)->get()->getResultArray(), 'id');
+        if ($ropaIds) $db->table('sesion_ropa_elegida')->where('sesion_id', $sesionId)->whereIn('ropa_id', $ropaIds)->delete();
+        $db->table('sesion_modelos_sesion')->where('sesion_id', $sesionId)->where('modelo_id', $modeloId)->delete();
+
+        $p = (new SesionModeloPerfilModel())->select('id, nombre')->find($modeloId);
+
+        return $this->response->setJSON(['ok' => true, 'perfil' => $p]);
+    }
+
+    /** Guarda nombre/contacto/notas del perfil (vale para todas sus sesiones). */
+    public function modeloGuardar(int $sesionId, int $modeloId)
+    {
+        $input = $this->request->getJSON(true) ?: $this->request->getPost();
+        $data  = [];
+        foreach (['nombre', 'contacto', 'notas'] as $c) {
+            if (array_key_exists($c, $input)) $data[$c] = trim((string) $input[$c]) !== '' ? trim((string) $input[$c]) : null;
+        }
+        if (!$data || !$this->modeloEnSesion($sesionId, $modeloId)
+            || (array_key_exists('nombre', $data) && $data['nombre'] === null)
+            || mb_strlen((string) ($data['nombre'] ?? '')) > 150 || mb_strlen((string) ($data['contacto'] ?? '')) > 150) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        }
+
+        (new SesionModeloPerfilModel())->update($modeloId, $data);
+
+        // Si el contacto es un Instagram, se devuelve el usuario para mostrar el enlace al perfil.
+        $out = ['ok' => true];
+        if (array_key_exists('contacto', $data)) $out['instagram'] = ses_instagram($data['contacto']);
+
+        return $this->response->setJSON($out);
+    }
+
+    /** Nueva opción de ropa en el perfil (texto y/o foto). Devuelve la tarjeta. */
+    public function ropaCrear(int $sesionId, int $modeloId)
+    {
+        $texto  = trim((string) $this->request->getPost('texto'));
+        $file   = $this->request->getFile('imagen');
+        $hayImg = $file && $file->isValid() && !$file->hasMoved() && strpos((string) $file->getMimeType(), 'image/') === 0;
+
+        if (!$this->modeloEnSesion($sesionId, $modeloId) || mb_strlen($texto) > 150 || ($texto === '' && !$hayImg)) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false]);
+        }
+
+        $ruta = null;
+        if ($hayImg) {
+            $dir = rtrim($this->publicDir, '/') . '/modelos/' . $modeloId;
+            if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
+            $nombre = $file->getRandomName();
+            $file->move(FCPATH . $dir, $nombre);
+            $ruta = "$dir/$nombre";
+        }
+
+        $m = new SesionModeloRopaModel();
+        $m->insert([
+            'modelo_id' => $modeloId,
+            'texto'     => $texto !== '' ? $texto : 'Outfit',
+            'imagen'    => $ruta,
+            'orden'     => $m->where('modelo_id', $modeloId)->countAllResults(),
+        ]);
+
+        return $this->response->setJSON(['ok' => true, 'html' => $this->tarjetaModelo($sesionId, $modeloId)]);
+    }
+
+    /** Sube una o varias fotos al perfil del modelo (campo fotos[]). Devuelve la tarjeta. */
+    public function fotoPerfilSubir(int $sesionId, int $modeloId)
+    {
+        if (!$this->modeloEnSesion($sesionId, $modeloId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        $files = $this->request->getFileMultiple('fotos') ?? [];
+        $dir   = rtrim($this->publicDir, '/') . '/modelos/' . $modeloId . '/perfil';
+        $db    = db_connect();
+        $orden = $db->table('sesion_modelo_fotos')->where('modelo_id', $modeloId)->countAllResults();
+        $n = 0;
+        foreach ($files as $file) {
+            if (!$file || !$file->isValid() || $file->hasMoved() || strpos((string) $file->getMimeType(), 'image/') !== 0) continue;
+            if (!is_dir(FCPATH . $dir)) @mkdir(FCPATH . $dir, 0775, true);
+            $nombre = $file->getRandomName();
+            $file->move(FCPATH . $dir, $nombre);
+            $db->table('sesion_modelo_fotos')->insert(['modelo_id' => $modeloId, 'imagen' => "$dir/$nombre", 'orden' => $orden++]);
+            $n++;
+        }
+        if (!$n) {
+            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'error' => 'Ninguna imagen válida.']);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'html' => $this->tarjetaModelo($sesionId, $modeloId)]);
+    }
+
+    /** Borra una foto del perfil (y su archivo). */
+    public function fotoPerfilBorrar(int $sesionId, int $modeloId, int $fotoId)
+    {
+        $t    = db_connect()->table('sesion_modelo_fotos');
+        $foto = $t->where('modelo_id', $modeloId)->where('id', $fotoId)->get()->getRowArray();
+        if (!$foto || !$this->modeloEnSesion($sesionId, $modeloId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        $this->borrarArchivoFisico($foto['imagen']);
+        db_connect()->table('sesion_modelo_fotos')->where('id', $fotoId)->delete();
+
+        return $this->response->setJSON(['ok' => true, 'html' => $this->tarjetaModelo($sesionId, $modeloId)]);
+    }
+
+    /** Pone una foto como principal (avatar): pasa a la primera posición. */
+    public function fotoPerfilPrincipal(int $sesionId, int $modeloId, int $fotoId)
+    {
+        $db  = db_connect();
+        $ids = array_map('intval', array_column($db->table('sesion_modelo_fotos')->select('id')->where('modelo_id', $modeloId)
+            ->orderBy('orden', 'ASC')->orderBy('id', 'ASC')->get()->getResultArray(), 'id'));
+        if (!in_array($fotoId, $ids, true) || !$this->modeloEnSesion($sesionId, $modeloId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        $ids = array_merge([$fotoId], array_values(array_diff($ids, [$fotoId])));
+        foreach ($ids as $i => $id) $db->table('sesion_modelo_fotos')->where('id', $id)->update(['orden' => $i]);
+
+        return $this->response->setJSON(['ok' => true, 'html' => $this->tarjetaModelo($sesionId, $modeloId)]);
+    }
+
+    /** Borra una opción de ropa del perfil (de todas sus sesiones) y su foto. */
+    public function ropaBorrar(int $sesionId, int $modeloId, int $ropaId)
+    {
+        $m    = new SesionModeloRopaModel();
+        $ropa = $m->where('modelo_id', $modeloId)->find($ropaId);
+        if (!$ropa || !$this->modeloEnSesion($sesionId, $modeloId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        if ($ropa['imagen']) $this->borrarArchivoFisico($ropa['imagen']);
+        $m->delete($ropaId);
+
+        return $this->response->setJSON(['ok' => true, 'html' => $this->tarjetaModelo($sesionId, $modeloId)]);
+    }
+
+    /** Marca / desmarca una opción de ropa como elegida para ESTA sesión. */
+    public function ropaElegir(int $sesionId, int $modeloId, int $ropaId)
+    {
+        if (!$this->modeloEnSesion($sesionId, $modeloId) || !(new SesionModeloRopaModel())->where('modelo_id', $modeloId)->find($ropaId)) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false]);
+        }
+        $db = db_connect();
+        $ya = $db->table('sesion_ropa_elegida')->where('sesion_id', $sesionId)->where('ropa_id', $ropaId)->countAllResults() > 0;
+        if ($ya) $db->table('sesion_ropa_elegida')->where('sesion_id', $sesionId)->where('ropa_id', $ropaId)->delete();
+        else     $db->table('sesion_ropa_elegida')->insert(['sesion_id' => $sesionId, 'ropa_id' => $ropaId]);
+
+        return $this->response->setJSON(['ok' => true, 'elegida' => !$ya]);
+    }
+
     // ========== EXPORTAR ==========
 
     public function exportar(int $id)
@@ -613,7 +861,14 @@ class Sesiones extends BaseController
             $grupos[] = ['nombre' => 'General', 'items' => $general];
         }
 
-        return view('sesiones/exportar', ['sesion' => $detalle['sesion'], 'grupos' => $grupos]);
+        $rodajeIds = array_column((new \App\Models\RodajesProyectoModel())->select('id')->where('sesion_id', $id)->findAll(), 'id');
+
+        return view('sesiones/exportar', [
+            'sesion'      => $detalle['sesion'],
+            'grupos'      => $grupos,
+            'ubicaciones' => $this->ubicacionesRodaje($rodajeIds),
+            'modelos'     => (new SesionModeloPerfilModel())->deSesion($id),
+        ]);
     }
 
     public function exportarSituacion(int $sesionId, int $situacionId)

@@ -10,5 +10,5 @@ class RodajesUbicacionModel extends Model
     protected $primaryKey    = 'id';
     protected $returnType    = 'array';
     protected $useTimestamps = false;
-    protected $allowedFields = ['proyecto_id', 'nombre', 'notas', 'imagen', 'orden', 'orden_setups'];
+    protected $allowedFields = ['proyecto_id', 'nombre', 'notas', 'hora', 'imagen', 'orden', 'orden_setups'];
 }

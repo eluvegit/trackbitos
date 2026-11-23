@@ -43,7 +43,7 @@ ob_start(); ?>
                 ?>
                 <div class="fv-panel rf-pz"<?= $ancla ?>>
                     <div class="rf-pz-h">
-                        <?php if ($z['zona']): ?><span class="rf-num"><?= $z['n'] ?></span><b><?= esc($z['zona']['nombre']) ?></b><?php else: ?><b class="t3">Sin zona</b><?php endif; ?>
+                        <?php if ($z['zona']): ?><span class="rf-num"><?= $z['n'] ?></span><b><?= esc($z['zona']['nombre']) ?></b><?php if (!empty($z['zona']['hora'])): ?><span class="rod-hora" title="Hora prevista (se pone en Sesiones → Hora y ubicación)"><i class="bi bi-clock"></i><?= esc(substr($z['zona']['hora'], 0, 5)) ?></span><?php endif; ?><?php else: ?><b class="t3">Sin zona</b><?php endif; ?>
                         <?php if (!empty($z['zona']['notas'])): ?><p><?= esc($z['zona']['notas']) ?></p><?php endif; ?>
                     </div>
                     <?php if ($conImg($z['zona'])): ?>

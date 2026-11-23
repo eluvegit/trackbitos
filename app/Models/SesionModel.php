@@ -20,6 +20,7 @@ class SesionModel extends Model
         'pausada',
         'entrega_modelos',
         'fecha_sesion',
+        'hora_sesion',
         'notas',
         'briefing',
     ];
@@ -27,6 +28,7 @@ class SesionModel extends Model
     protected $validationRules = [
         'titulo'          => 'required|max_length[150]',
         'fecha_sesion'    => 'permit_empty|valid_date',
+        'hora_sesion'     => 'permit_empty|regex_match[/^\d{2}:\d{2}(:\d{2})?$/]',
         'estado_foto'     => 'permit_empty|in_list[idea,planificacion,edicion,subiendo,completado]',
         'estado_video'    => 'permit_empty|in_list[idea,planificacion,edicion,subiendo,completado]',
         'entrega_modelos' => 'permit_empty|in_list[no_aplica,pendiente,entregado]',

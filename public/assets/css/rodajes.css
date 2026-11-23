@@ -1512,3 +1512,7 @@
 #plZimg[aria-pressed="false"] { opacity: .45; }
 .rf-pz .pt-zimg { border-radius: 0; border-width: 1px 0 0; }
 #rfZimg[aria-pressed="false"] { opacity: .6; }
+
+/* Hora prevista de la zona (informativa; se edita en Sesiones → Hora y ubicación) */
+.rod-hora { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 99px; font-family: var(--fv-mono); font-size: 12px; font-weight: 500; color: var(--fv-accent); background: var(--fv-accent-weak); vertical-align: middle; white-space: nowrap; }
+.rod-hora .bi { font-size: 11px; }

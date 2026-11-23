@@ -3,11 +3,13 @@
 <?php
 /**
  * Ficha de sesión (estilo fv). Etapas arriba (un toque para cambiar) y el
- * contenido en pestañas: Plan · Moodboard · Equipo · Modelos · Rodaje.
+ * contenido en pestañas: Brief · Hora y ubicación · Moodboard · Equipo · Modelos · Rodaje.
  * Todo se guarda sin recargar (assets/js/sesiones.js).
  *
  * @var array $sesion, $situaciones, $moodboard_por_situacion, $equipo,
- *            $model_releases, $mensajes_modelo, $rodajes, $equipo_de_otras
+ *            $model_releases, $mensajes_modelo, $rodajes, $equipo_de_otras,
+ *            $ubicaciones (zonas de los rodajes vinculados, con hora),
+ *            $modelos (perfiles en esta sesión + ropa), $perfiles_libres
  */
 $s   = $sesion;
 $sid = (int) $s['id'];
@@ -28,7 +30,9 @@ $listas = [
 ];
 $porTipo = array_fill_keys(array_keys($listas), []);
 foreach ($equipo as $it) $porTipo[($it['tipo'] ?? 'equipo') === 'props' ? 'props' : 'equipo'][] = $it;
-$nModelos = count($model_releases) + count($mensajes_modelo);
+$nModelos = count($modelos) + count($model_releases) + count($mensajes_modelo);
+$hora = $s['hora_sesion'] ? substr($s['hora_sesion'], 0, 5) : '';
+$varios = count(array_unique(array_column($ubicaciones, 'proyecto_id'))) > 1;
 
 // Briefing: HTML de Quill; si es texto plano antiguo, se envuelve en <p> por línea.
 $briefingHtml = trim((string) ($s['briefing'] ?? ''));
@@ -39,6 +43,7 @@ if ($briefingHtml !== '' && strip_tags($briefingHtml) === $briefingHtml) {
 $sub = [];
 if ($s['fecha_sesion']) $sub[] = '<span title="' . esc($s['fecha_sesion'], 'attr') . '"><i class="bi bi-calendar3"></i> ' . esc(ses_fecha_relativa($s['fecha_sesion'])) . ' · ' . esc(date('d/m/Y', strtotime($s['fecha_sesion']))) . '</span>';
 else $sub[] = '<span class="t3"><i class="bi bi-calendar3"></i> sin fecha</span>';
+$sub[] = '<span id="ssHoraChip"' . ($hora ? '' : ' hidden') . '><i class="bi bi-clock"></i> <b>' . esc($hora) . '</b></span>';
 $sub[] = '<span id="ssPausaChip" class="e-warn"' . ($pausada ? '' : ' hidden') . '><i class="bi bi-pause-fill"></i> Pausada</span>';
 if ($s['entrega_modelos'] === 'pendiente') $sub[] = '<span class="e-warn"><i class="bi bi-send"></i> Pendiente de entregar a modelos</span>';
 
@@ -94,33 +99,70 @@ ob_start(); ?>
 
     <!-- Pestañas -->
     <div class="fv-secs ss-secs" id="ssSecs">
-        <button type="button" data-tab="plan" aria-pressed="true"><i class="bi bi-journal-text"></i>Plan</button>
+        <button type="button" data-tab="brief" aria-pressed="true"><i class="bi bi-journal-text"></i>Brief</button>
+        <button type="button" data-tab="hora" aria-pressed="false"><i class="bi bi-clock"></i>Hora y ubicación <span data-cuenta="hora"<?= $hora ? '' : ' hidden' ?>><?= esc($hora) ?></span></button>
         <button type="button" data-tab="moodboard" aria-pressed="false"><i class="bi bi-images"></i>Moodboard <span data-cuenta="moodboard"><?= $nMood ?></span></button>
         <button type="button" data-tab="equipo" aria-pressed="false"><i class="bi bi-bag-check"></i>Qué llevar <span data-cuenta="equipo"><?= $nEqOk ?>/<?= $nEquipo ?></span></button>
         <button type="button" data-tab="modelos" aria-pressed="false"><i class="bi bi-person-badge"></i>Modelos <span data-cuenta="modelos"><?= $nModelos ?></span></button>
         <button type="button" data-tab="rodaje" aria-pressed="false"><i class="bi bi-film"></i>Rodaje <?php if ($rodajes): ?><span><?= count($rodajes) ?></span><?php endif; ?></button>
     </div>
 
-    <!-- PLAN -->
-    <div class="ss-tab" data-panel="plan">
-        <div class="ss-dos">
-            <section class="fv-panel">
-                <div class="fv-ph">
-                    <h3>Briefing</h3>
-                    <span class="ss-guardado" data-guardado="briefing"></span>
-                    <a class="fv-link der" href="<?= site_url("sesiones/$sid/exportar") ?>" target="_blank"><i class="bi bi-printer"></i>Informe</a>
-                </div>
-                <div class="ss-quill"><div id="ssBriefing"><?= $briefingHtml ?></div></div>
-                <div class="ss-pie-panel">
-                    <span class="ss-ayuda">Va en el informe exportable (para pasárselo a la modelo).</span>
-                    <button type="button" class="fv-btn fv-btn-sm fv-btn-pri" id="ssGuardarBriefing">Guardar briefing</button>
-                </div>
-            </section>
-            <section class="fv-panel">
-                <div class="fv-ph"><h3>Notas</h3><span class="ss-guardado" data-guardado="notas"></span></div>
-                <textarea class="fv-input ss-notas" id="ssNotas" placeholder="Apuntes rápidos: se guardan solos al salir del cuadro."><?= esc($s['notas'] ?? '') ?></textarea>
-            </section>
-        </div>
+    <!-- BRIEF -->
+    <div class="ss-tab" data-panel="brief">
+        <section class="fv-panel">
+            <div class="fv-ph">
+                <h3>Briefing</h3>
+                <span class="ss-guardado" data-guardado="briefing"></span>
+                <a class="fv-link der" href="<?= site_url("sesiones/$sid/exportar") ?>" target="_blank"><i class="bi bi-printer"></i>Informe</a>
+            </div>
+            <div class="ss-quill"><div id="ssBriefing"><?= $briefingHtml ?></div></div>
+            <div class="ss-pie-panel">
+                <span class="ss-ayuda">Va en el informe exportable (para pasárselo a la modelo).</span>
+                <button type="button" class="fv-btn fv-btn-sm fv-btn-pri" id="ssGuardarBriefing">Guardar briefing</button>
+            </div>
+        </section>
+        <section class="fv-panel">
+            <div class="fv-ph"><h3>Notas</h3><span class="ss-guardado" data-guardado="notas"></span></div>
+            <textarea class="fv-input ss-notas" id="ssNotas" placeholder="Apuntes rápidos: se guardan solos al salir del cuadro."><?= esc($s['notas'] ?? '') ?></textarea>
+        </section>
+    </div>
+
+    <!-- HORA Y UBICACIÓN -->
+    <div class="ss-tab" data-panel="hora" hidden>
+        <section class="fv-panel ss-horario" id="ssHorario">
+            <div class="fv-ph">
+                <i class="bi bi-clock t3"></i><h3 class="t1">Hora y ubicación</h3>
+                <span class="ss-guardado" data-guardado="hora_sesion"></span>
+                <?php foreach ($rodajes as $r): ?>
+                    <a class="fv-link der" href="<?= site_url('rodajes/' . (int) $r['id'] . '/ubicaciones') ?>"><i class="bi bi-geo-alt"></i>Ubicaciones<?= count($rodajes) > 1 ? ' · ' . esc($r['titulo']) : '' ?></a>
+                <?php endforeach; ?>
+            </div>
+            <label class="ss-hora-gen">
+                <span>Hora de la sesión</span>
+                <input class="fv-input" type="time" id="ssHora" value="<?= esc($hora, 'attr') ?>">
+            </label>
+            <?php if ($ubicaciones): ?>
+                <ul class="ss-ubis" id="ssUbis">
+                    <?php foreach ($ubicaciones as $u): ?>
+                        <li data-id="<?= (int) $u['id'] ?>">
+                            <input class="fv-input ss-ubi-hora" type="time" value="<?= esc($u['hora'] ? substr($u['hora'], 0, 5) : '', 'attr') ?>" aria-label="Hora en <?= esc($u['nombre'], 'attr') ?>">
+                            <span class="ss-ubi-img"><?php if ($u['imagen']): ?><img src="<?= base_url($u['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-geo-alt"></i><?php endif; ?></span>
+                            <span class="ss-ubi-txt">
+                                <b><?= esc($u['nombre']) ?></b>
+                                <?php if ($varios || trim((string) $u['notas']) !== ''): ?>
+                                    <small><?= $varios ? esc($u['rodaje']) . (trim((string) $u['notas']) !== '' ? ' · ' : '') : '' ?><?= esc(trim((string) $u['notas'])) ?></small>
+                                <?php endif; ?>
+                            </span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="ss-ayuda">Las ubicaciones salen del rodaje vinculado (se crean y editan allí); aquí solo pones la hora de cada una. Se ordenan por hora al recargar.</p>
+            <?php elseif ($rodajes): ?>
+                <p class="ss-ayuda"><i class="bi bi-lightbulb"></i> El rodaje vinculado aún no tiene ubicaciones: créalas en <a href="<?= site_url('rodajes/' . (int) $rodajes[0]['id'] . '/ubicaciones') ?>">Ubicaciones del rodaje</a>.</p>
+            <?php else: ?>
+                <p class="ss-ayuda"><i class="bi bi-lightbulb"></i> Las ubicaciones se toman del rodaje: vincula o crea uno en la pestaña <a href="#rodaje" data-ir-tab="rodaje">Rodaje</a>.</p>
+            <?php endif; ?>
+        </section>
     </div>
 
     <!-- MOODBOARD -->
@@ -191,6 +233,25 @@ ob_start(); ?>
 
     <!-- MODELOS -->
     <div class="ss-tab" data-panel="modelos" hidden>
+        <div class="ss-modelos" id="ssModelos">
+            <?php foreach ($modelos as $m): ?>
+                <?= view('sesiones/_modelo_nueva', ['m' => $m, 'sid' => $sid]) ?>
+            <?php endforeach; ?>
+        </div>
+        <section class="fv-panel">
+            <div class="ss-form-mini" id="ssModAdd">
+                <input class="fv-input" id="ssModNombre" maxlength="150" placeholder="Nuevo modelo: nombre" list="ssPerfilesLista">
+                <button type="button" class="fv-btn fv-btn-sm fv-btn-pri" id="ssModCrear"><i class="bi bi-person-plus"></i>Añadir modelo</button>
+                <datalist id="ssPerfilesLista"><?php foreach ($perfiles_libres as $p): ?><option value="<?= esc($p['nombre'], 'attr') ?>"><?php endforeach; ?></datalist>
+            </div>
+            <div class="ss-perfiles" id="ssPerfiles"<?= $perfiles_libres ? '' : ' hidden' ?>>
+                <span class="ss-ayuda">Perfiles ya creados:</span>
+                <?php foreach ($perfiles_libres as $p): ?>
+                    <button type="button" class="ss-chip" data-id="<?= (int) $p['id'] ?>"><i class="bi bi-plus"></i><?= esc($p['nombre']) ?></button>
+                <?php endforeach; ?>
+            </div>
+            <p class="ss-ayuda"><i class="bi bi-lightbulb"></i> El perfil (contacto, notas y opciones de ropa) se guarda para siempre y se reutiliza en otras sesiones; aquí solo eliges qué ropa va en esta.</p>
+        </section>
         <section class="fv-panel">
             <div class="fv-ph"><h3>Entrega del material a modelos</h3></div>
             <div class="ss-seg ss-entrega" id="ssEntrega">
@@ -228,7 +289,7 @@ ob_start(); ?>
                     <summary><i class="bi bi-plus-lg"></i>Guardar un mensaje</summary>
                     <form class="ss-form-mini col" id="ssMsgForm">
                         <input class="fv-input" name="nombre_modelo" placeholder="Para quién (modelo o dueño del sitio)" required list="ssModelosLista">
-                        <datalist id="ssModelosLista"><?php foreach ($model_releases as $r): ?><option value="<?= esc($r['nombre_modelo'], 'attr') ?>"><?php endforeach; ?></datalist>
+                        <datalist id="ssModelosLista"><?php foreach (array_unique(array_merge(array_column($modelos, 'nombre'), array_column($model_releases, 'nombre_modelo'))) as $nm): ?><option value="<?= esc($nm, 'attr') ?>"><?php endforeach; ?></datalist>
                         <textarea class="fv-input" name="mensaje" rows="5" placeholder="Mensaje completo: horario, ubicación, enlaces de referencia…" required></textarea>
                         <button type="submit" class="fv-btn fv-btn-sm fv-btn-pri"><i class="bi bi-plus-lg"></i>Guardar mensaje</button>
                     </form>

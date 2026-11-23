@@ -73,9 +73,56 @@
 
     <h1 class="mb-4"><?= esc($sesion['titulo']) ?></h1>
 
+    <?php
+    $ubicaciones ??= [];
+    $modelos ??= [];
+    $horaS = !empty($sesion['hora_sesion']) ? substr($sesion['hora_sesion'], 0, 5) : '';
+    ?>
+    <?php if (!empty($sesion['fecha_sesion']) || $horaS): ?>
+        <p class="fs-5 mb-3">
+            <i class="bi bi-calendar3"></i> <?= !empty($sesion['fecha_sesion']) ? esc(date('d/m/Y', strtotime($sesion['fecha_sesion']))) : '' ?>
+            <?php if ($horaS): ?> · <i class="bi bi-clock"></i> <?= esc($horaS) ?><?php endif; ?>
+        </p>
+    <?php endif; ?>
+
     <?php if (!empty($sesion['briefing'])): ?>
         <div class="export-briefing"><?= $sesion['briefing'] ?></div>
     <?php endif; ?>
+
+    <?php if ($ubicaciones): ?>
+        <div class="export-group">
+            <h2>Hora y ubicaciones</h2>
+            <table class="table table-sm align-middle">
+                <?php foreach ($ubicaciones as $u): ?>
+                    <tr>
+                        <td style="width: 70px" class="fw-semibold"><?= $u['hora'] ? esc(substr($u['hora'], 0, 5)) : '—' ?></td>
+                        <td><?= esc($u['nombre']) ?><?php if (trim((string) $u['notas']) !== ''): ?><br><small class="text-muted"><?= esc($u['notas']) ?></small><?php endif; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        </div>
+    <?php endif; ?>
+
+    <?php foreach ($modelos as $m): ?>
+        <?php $elegidas = array_values(array_filter($m['ropa'], static fn ($r) => (int) $r['elegida'] === 1)); ?>
+        <div class="export-group">
+            <h2><?= esc($m['nombre']) ?> — ropa</h2>
+            <?php if (!$elegidas): ?>
+                <p class="text-muted small">Sin ropa elegida para esta sesión.</p>
+            <?php else: ?>
+                <div class="export-grid">
+                    <?php foreach ($elegidas as $r): ?>
+                        <div>
+                            <div class="export-item">
+                                <?php if ($r['imagen']): ?><img src="<?= base_url($r['imagen']) ?>" alt=""><?php else: ?><div class="export-enlace"><?= esc($r['texto']) ?></div><?php endif; ?>
+                            </div>
+                            <?php if ($r['imagen']): ?><small><?= esc($r['texto']) ?></small><?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
 
     <?php if (empty($grupos)): ?>
         <p class="text-muted">No hay elementos de moodboard para exportar.</p>

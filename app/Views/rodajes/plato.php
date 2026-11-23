@@ -175,7 +175,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     <span class="pt-lbl">Ir a</span>
                     <nav class="pt-indice" id="plIndice">
                         <?php foreach ($grupos as $gi => $g): ?>
-                            <a href="#pl-g<?= $gi ?>" data-ir="<?= $gi ?>"><span><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['nombre'] ?: 'Sin zona')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?></span><small data-pend="<?= $gi ?>"></small></a>
+                            <a href="#pl-g<?= $gi ?>" data-ir="<?= $gi ?>"><span><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['nombre'] ?: 'Sin zona')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?><?= $esPlan && !empty($g['zona']['hora']) ? ' · ' . esc(substr($g['zona']['hora'], 0, 5)) : '' ?></span><small data-pend="<?= $gi ?>"></small></a>
                         <?php endforeach; ?>
                     </nav>
                 <?php endif; ?>
@@ -196,7 +196,7 @@ $btns = static function (string $parte, string $est, bool $varias, bool $opc, ?i
                     <div class="pm-sep <?= $gdn ?>" data-sep="<?= $gdn ?>" aria-hidden="true"><i class="bi <?= $gdn === 'noche' ? 'bi-moon-stars-fill' : 'bi-sun-fill' ?>"></i><span><?= $gdn === 'noche' ? 'Noche' : 'Día' ?></span></div>
                 <?php endif; ?>
                 <div class="pt-grupo" id="pl-g<?= $gi ?>" data-bloque>
-                    <b><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['n'] ? $g['n'] . '. ' : '') . ($g['nombre'] ?: 'Sin zona')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?></b>
+                    <b><?= esc($esPlan ? ($g['franja'] . ' · ' . ($g['n'] ? $g['n'] . '. ' : '') . ($g['nombre'] ?: 'Sin zona')) : ($g['nombre'] !== '' ? $g['nombre'] : 'Sin bloque')) ?><?php if ($esPlan && !empty($g['zona']['hora'])): ?> <?php if (!empty($g['zona']['hora'])): ?><span class="rod-hora" title="Hora prevista (se pone en Sesiones → Hora y ubicación)"><i class="bi bi-clock"></i><?= esc(substr($g['zona']['hora'], 0, 5)) ?></span><?php endif; ?><?php endif; ?></b>
                     <?php if ($esPlan): ?>
                         <?php $tx = $g['setup'] ? rod_setup_linea($g['setup']) : ''; ?>
                         <span><?= $g['setup'] ? 'Monta ' . esc($g['setup']['nombre']) . ($tx !== '' ? ' · ' . $tx : '') : 'Sin setup' ?></span>
