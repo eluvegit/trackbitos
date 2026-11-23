@@ -41,6 +41,7 @@
         <h1><?= esc($nombre) ?></h1>
         <div class="fv-meta">
             <span class="fv-estado <?= $tono[$estado] ?>"><?= esc($rotulo[$estado]) ?></span>
+            <?php if ($aviso = partes_aviso($partes)): ?><span class="fv-dot"></span><a href="#partes"><?= $aviso ?></a><?php endif; ?>
             <?php if (!empty($variante['sku'])): ?><span class="fv-dot"></span><span class="fv-mono"><?= esc($variante['sku']) ?></span><?php endif; ?>
             <span class="fv-dot"></span>
             <?php if ($hueco): ?>
@@ -83,6 +84,103 @@
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'alta', null, (bool) $hueco) ?>><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta<small>Entran piezas</small></span></button>
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'baja', null, (bool) $hueco) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja<small>Salen o se rompen</small></span></button>
                 </div>
+            </section>
+
+            <section class="fv-panel" id="partes">
+                <div class="fv-ph"><i class="bi bi-puzzle t3"></i><h3>Partes</h3>
+                    <?php if ($partes): ?><span class="cuenta"><?= (int) $partes['completas'] ?>/<?= (int) $partes['unidades'] ?> completas</span><?php endif; ?>
+                </div>
+                <?php if (!$partes): ?>
+                    <p class="fv-vacio">Sin partes. Si se imprime en trozos (cabeza, torso, brazos…), añádelos para saber cuántas hay completas y qué imprimir.</p>
+                <?php else: ?>
+                    <?php if ($partes['imprimir']): ?>
+                        <p class="pz-imprimir"><i class="bi bi-printer"></i> Imprimir para completar: <b><?= esc(implode(', ', $partes['imprimir'])) ?></b></p>
+                    <?php elseif ($partes['unidades'] > 0): ?>
+                        <p class="pz-imprimir ok"><i class="bi bi-check-circle"></i> Todas completas.</p>
+                    <?php else: ?>
+                        <p class="pz-imprimir t3">No hay unidades en stock.</p>
+                    <?php endif; ?>
+                    <?php if ($partes['sueltas']): ?>
+                        <p class="pz-imprimir sueltas"><i class="bi bi-boxes"></i> Sueltas: <b><?= esc(implode(', ', $partes['sueltas'])) ?></b></p>
+                    <?php endif; ?>
+                    <?php if ($partes['montables'] > 0): ?>
+                        <p class="pz-imprimir t3">Con lo suelto sale<?= $partes['montables'] > 1 ? 'n ' . (int) $partes['montables'] . ' unidades' : ' 1 unidad' ?>: se sumará<?= $partes['montables'] > 1 ? 'n' : '' ?> al stock en el próximo apunte.</p>
+                    <?php endif; ?>
+                    <div class="pv-lista">
+                        <?php foreach ($partes['partes'] as $pa): ?>
+                            <?php $s = (int) $pa['saldo']; ?>
+                            <div class="pv-fila pz-parte">
+                                <div class="pv-cuerpo">
+                                    <span class="exv-tipo"><?= esc($pa['nombre']) ?><?= (int) $pa['por_unidad'] > 1 ? ' <span class="t3">×' . (int) $pa['por_unidad'] . '</span>' : '' ?></span>
+                                    <div class="pv-sub">
+                                        <span class="fv-mono"><?= (int) $pa['hay'] ?> hay</span>
+                                        <?php if ($pa['faltan'] > 0): ?><span class="fv-estado e-bad">faltan <?= (int) $pa['faltan'] ?></span>
+                                        <?php elseif ($pa['sobran'] > 0): ?><span class="fv-estado e-ok">sobran <?= (int) $pa['sobran'] ?></span>
+                                        <?php else: ?><span class="t3">cuadra</span><?php endif; ?>
+                                    </div>
+                                    <form method="post" action="<?= site_url('piezas/existencias/partes/' . (int) $pa['id'] . '/movimiento') ?>" class="pz-mov">
+                                        <?= csrf_field() ?>
+                                        <input type="number" name="cantidad" min="1" value="1" class="fv-input" aria-label="Cantidad">
+                                        <select name="motivo" class="fv-input" aria-label="Qué pasa">
+                                            <option value="rota">Rota / falta (−)</option>
+                                            <option value="suelta">Impresa suelta (+)</option>
+                                            <option value="ajuste_mas">Ajuste (+)</option>
+                                            <option value="ajuste_menos">Ajuste (−)</option>
+                                        </select>
+                                        <button class="fv-btn fv-btn-sm">Apuntar</button>
+                                    </form>
+                                </div>
+                                <details class="pz-edit">
+                                    <summary class="fv-ibtn" title="Editar parte"><i class="bi bi-pencil"></i></summary>
+                                    <form method="post" action="<?= site_url('piezas/existencias/partes/' . (int) $pa['id']) ?>" class="pz-mov">
+                                        <?= csrf_field() ?>
+                                        <input type="text" name="nombre" value="<?= esc($pa['nombre'], 'attr') ?>" class="fv-input" maxlength="100" aria-label="Nombre">
+                                        <input type="number" name="por_unidad" min="1" max="20" value="<?= (int) $pa['por_unidad'] ?>" class="fv-input" title="Cuántas lleva cada unidad">
+                                        <button class="fv-btn fv-btn-sm">Guardar</button>
+                                        <button class="fv-ibtn peligro" name="borrar" value="1" title="Quitar parte" onclick="return confirm('¿Quitar la parte «<?= esc($pa['nombre'], 'js') ?>» y su recuento?');"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </details>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <form method="post" action="<?= site_url('piezas/existencias/' . $idVar . '/partes') ?>" class="pz-mov pz-nueva">
+                    <?= csrf_field() ?>
+                    <input type="text" name="nombre" class="fv-input" maxlength="100" placeholder="+ Parte (cabeza, brazos…)" required>
+                    <input type="number" name="por_unidad" min="1" max="20" value="1" class="fv-input" title="Cuántas lleva cada unidad (brazos: 2)">
+                    <button class="fv-btn fv-btn-sm">Añadir</button>
+                </form>
+                <?php if (!empty($historialPartes)): ?>
+                    <details class="fv-mas">
+                        <summary><i class="bi bi-chevron-right ch"></i> Movimientos de partes (<?= count($historialPartes) ?>)</summary>
+                        <div class="pv-lista exv-movs">
+                            <?php foreach ($historialPartes as $m): ?>
+                                <?php $d = (int) $m['delta']; $deBitacora = $m['placa_version_id'] !== null; ?>
+                                <div class="pv-fila">
+                                    <span class="exv-delta <?= $d < 0 ? 'e-bad' : 'e-ok' ?>"><?= $d > 0 ? '+' : '' ?><?= $d ?></span>
+                                    <div class="pv-cuerpo">
+                                        <span class="exv-tipo"><?= esc($m['parte']) ?> <span class="t3">· <?= esc(['rota' => 'rota', 'suelta' => 'impresa suelta', 'ajuste' => 'ajuste', 'placa' => 'bitácora'][$m['motivo']] ?? $m['motivo']) ?></span></span>
+                                        <div class="pv-sub">
+                                            <span class="fv-mono"><?= esc($m['creado_en'] ? date('d/m/Y H:i', strtotime($m['creado_en'])) : '—') ?></span>
+                                            <?php if ($deBitacora): ?>
+                                                <a href="<?= site_url('piezas/placa/' . (int) $m['placa_id'] . '/bitacora/editar') ?>" class="t2"><i class="bi bi-journal-text"></i> Placa #<?= (int) $m['placa_id'] ?></a>
+                                                <?php if ($m['inventario_sincronizado_en'] === null): ?><span class="t3">(no cuenta: placa sin dar de alta)</span><?php endif; ?>
+                                            <?php elseif (trim((string) $m['nota']) !== ''): ?>
+                                                <span class="nota t2"><?= esc($m['nota']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <?php if (!$deBitacora): ?>
+                                        <form method="post" action="<?= site_url('piezas/existencias/partes/movimiento/' . (int) $m['id'] . '/borrar') ?>" class="pv-acc" onsubmit="return confirm('¿Borrar este movimiento de parte?');">
+                                            <?= csrf_field() ?>
+                                            <button class="fv-ibtn peligro" title="Borrar"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </details>
+                <?php endif; ?>
             </section>
 
             <section class="fv-panel">
@@ -219,6 +317,21 @@
         }
     })();
 </script>
+
+<style>
+    .pz-imprimir { margin: 0 0 .5rem; font-size: .9rem; color: var(--fv-warn); }
+    .pz-imprimir.ok, .pz-imprimir.sueltas { color: var(--fv-ok); }
+    .pz-imprimir.t3 { color: inherit; }
+    .pz-parte { align-items: flex-start; }
+    .pz-mov { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; margin-top: .35rem; }
+    .pz-mov input[type=number] { width: 4.2rem; }
+    .pz-mov select { width: auto; flex: 1 1 9rem; }
+    .pz-mov input[type=text] { flex: 1 1 8rem; }
+    .pz-nueva { margin-top: .6rem; }
+    .pz-edit > summary { list-style: none; cursor: pointer; }
+    .pz-edit > summary::-webkit-details-marker { display: none; }
+    .pz-edit[open] { flex-basis: 100%; }
+</style>
 
 <?= $this->include('piezas/_foto_grande') ?>
 

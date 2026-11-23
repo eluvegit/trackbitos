@@ -183,6 +183,7 @@
                             </span>
                             <?= stock_desglose($f['desglose'], null, 'en hueco', true) ?>
                             <?= $donde($idVar, $f) ?>
+                            <?= partes_aviso($partesPieza[$idVar] ?? null) ?>
                         </span>
                     </a>
                     <?= $ojoSterclicks($f) ?>
@@ -208,6 +209,7 @@
                             <span class="fv-estado <?= $tono[$f['estado']] ?>"><b><?= (int) $f['stock'] ?></b></span>
                             <?php if ($f['minimo'] > 0): ?><span class="ex-min">/ <?= (int) $f['minimo'] ?></span><?php endif; ?>
                             <?= stock_desglose($f['desglose'], null, 'en hueco', true) ?>
+                            <?= partes_aviso($partesPieza[$idVar] ?? null) ?>
                         </span>
                     </a>
                     <?= $ojoSterclicks($f) ?>

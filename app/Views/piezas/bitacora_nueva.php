@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/default') ?>
 <?= $this->section('content') ?>
+<?php helper('piezas_stock'); ?>
 <script>
 if (window.top !== window.self) {
     document.documentElement.classList.add('bt-embebida');
@@ -373,7 +374,7 @@ if (window.top !== window.self) {
                     <div class="bt-pz">
                         <div class="bt-pz-h"><span></span><span>Pieza</span><span class="c">Copias</span><span class="c solo-despues">Fallidas</span><span class="c solo-despues">Serv.</span><span></span></div>
                         <?php foreach ($piezas as $p): ?>
-                            <?php $filaId = (int) $p['fila']['id']; $imagenesFila = $p['imagenes'] ?? []; ?>
+                            <?php $filaId = (int) $p['fila']['id']; $imagenesFila = $p['imagenes'] ?? []; $resPartes = $partesPieza[(int) ($p['variante']['id'] ?? 0)] ?? null; ?>
                             <div class="bt-pz-f" data-fila-pieza>
                                 <?php if ($p['miniatura']): ?><img src="<?= $p['miniatura'] ?>" alt="" loading="lazy" class="bt-pz-th"><?php else: ?><span class="bt-pz-th vacia"><i class="bi bi-box"></i></span><?php endif; ?>
                                 <span class="bt-pz-n">
@@ -385,14 +386,27 @@ if (window.top !== window.self) {
                                                 <button type="button" class="bt-chip nueva solo-antes" data-actualizar-pieza data-fila="<?= $filaId ?>" title="Hay una versión más nueva: cambiar esta pieza a ella"><i class="bi bi-arrow-up-circle"></i> v<?= sprintf('%03d', (int) $versionesNuevas[$filaId]['numero']) ?></button>
                                             <?php endif; ?>
                                             <a href="<?= site_url('piezas/variante/' . (int) $p['variante']['id']) . '#capturas' ?>" target="_blank" rel="noopener" class="bt-chip" title="Histórico de capturas de esta pieza"><i class="bi bi-camera"></i><?= $imagenesFila ? ' ' . count($imagenesFila) : '' ?></a>
+                                            <?php if ($avisoPartes = partes_aviso($resPartes, true)): ?><a href="<?= site_url('piezas/existencias/' . (int) $p['variante']['id']) . '#partes' ?>" target="_blank" rel="noopener"><?= $avisoPartes ?></a><?php endif; ?>
                                         </span>
                                     <?php else: ?>
                                         <span class="bt-pz-t t3">(esa pieza ya no existe)</span>
                                         <span class="bt-pz-m"></span>
                                     <?php endif; ?>
                                     <input type="text" maxlength="500" name="nota_pieza[<?= $filaId ?>]" form="<?= $idForm ?>" class="bt-ed sm" placeholder="Soportes y pruebas de esta pieza…" value="<?= esc((string) $p['fila']['notas'], 'attr') ?>" aria-label="Soportes y pruebas de esta pieza">
+                                    <?php if ($resPartes): ?>
+                                        <?php $deltasFila = $partesFila[$filaId] ?? []; ?>
+                                        <details class="bt-partes"<?= $deltasFila ? ' open' : '' ?>>
+                                            <summary class="t3"><i class="bi bi-puzzle"></i> Partes de esta línea<?= $deltasFila ? ' · ' . esc(implode(', ', array_map(static function ($pa) use ($deltasFila) { $d = $deltasFila[(int) $pa['id']] ?? 0; return $d ? ($d > 0 ? '+' : '') . $d . ' ' . $pa['nombre'] : null; }, array_filter($resPartes['partes'], static fn ($pa) => !empty($deltasFila[(int) $pa['id']]))))) : '' ?></summary>
+                                            <p class="t3">Negativo = rotas o que faltan; positivo = sueltas de más. Para una placa solo de partes, pon 0 copias. Cuentan al dar de alta la placa.</p>
+                                            <?php foreach ($resPartes['partes'] as $pa): ?>
+                                                <label class="bt-parte"><span><?= esc($pa['nombre']) ?><?= (int) $pa['por_unidad'] > 1 ? ' ×' . (int) $pa['por_unidad'] : '' ?></span>
+                                                    <span class="bt-stp"><button type="button" data-stp="-1" aria-label="Menos">−</button><input type="number" min="-99" max="99" inputmode="numeric" name="partes[<?= $filaId ?>][<?= (int) $pa['id'] ?>]" form="<?= $idForm ?>" value="<?= (int) ($deltasFila[(int) $pa['id']] ?? 0) ?>"><button type="button" data-stp="1" aria-label="Más">+</button></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </details>
+                                    <?php endif; ?>
                                 </span>
-                                <span class="bt-stp c" title="Copias"><button type="button" data-stp="-1" aria-label="Una copia menos">−</button><input type="number" min="1" max="99" inputmode="numeric" name="cantidad[<?= $filaId ?>]" form="<?= $idForm ?>" value="<?= (int) $p['fila']['cantidad'] ?>" data-fila-copias aria-label="Copias"><button type="button" data-stp="1" aria-label="Una copia más">+</button></span>
+                                <span class="bt-stp c" title="Copias"><button type="button" data-stp="-1" aria-label="Una copia menos">−</button><input type="number" min="<?= $resPartes ? 0 : 1 ?>" max="99" inputmode="numeric" name="cantidad[<?= $filaId ?>]" form="<?= $idForm ?>" value="<?= (int) $p['fila']['cantidad'] ?>" data-fila-copias aria-label="Copias"><button type="button" data-stp="1" aria-label="Una copia más">+</button></span>
                                 <span class="bt-stp x solo-despues" title="Fallidas"><button type="button" data-stp="-1" aria-label="Una fallida menos">−</button><input type="number" min="0" max="99" inputmode="numeric" name="fallidas[<?= $filaId ?>]" form="<?= $idForm ?>" value="<?= (int) ($p['fila']['fallidas'] ?? 0) ?>" data-fila-fallidas aria-label="Fallidas"><button type="button" data-stp="1" aria-label="Una fallida más">+</button></span>
                                 <span class="bt-serv fv-mono solo-despues" data-fila-servibles><?= max(0, (int) $p['fila']['cantidad'] - (int) ($p['fila']['fallidas'] ?? 0)) ?></span>
                                 <button type="button" class="bt-quitar" data-quitar-pieza data-fila="<?= $filaId ?>" title="Quitar esta pieza de la placa"><i class="bi bi-x-lg"></i></button>
@@ -477,4 +491,12 @@ if (window.top !== window.self) {
 
 <?= view('piezas/_bitacora_nueva_js', ['idPlaca' => $idPlaca, 'idForm' => $idForm]) ?>
 
+<style>
+    .bt-partes { margin-top: .3rem; font-size: .85rem; }
+    .bt-partes summary { cursor: pointer; }
+    .bt-partes p { margin: .25rem 0; font-size: .78rem; }
+    .bt-parte { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .2rem 0; }
+    .bt-parte .bt-stp input { width: 3.2rem; }
+    .pz-coja { white-space: normal; }
+</style>
 <?= $this->endSection() ?>

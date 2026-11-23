@@ -58,3 +58,28 @@ if (!function_exists('stock_mov_attrs')) {
             . ($origen !== null ? ' data-origen="' . esc($origen, 'attr') . '"' : '');
     }
 }
+
+if (!function_exists('partes_aviso')) {
+    function partes_aviso(?array $r, bool $largo = false): string
+    {
+        if ($r === null || ($r['imprimir'] === [] && $r['sueltas'] === [])) {
+            return '';
+        }
+        $html = '';
+        if ($r['imprimir'] !== []) {
+            $imprimir = implode(', ', $r['imprimir']);
+            $html .= '<span class="fv-estado e-warn pz-coja" title="' . esc((int) $r['incompletas'] . ' incompleta(s). Imprimir: ' . $imprimir, 'attr') . '">'
+                . '<i class="bi bi-puzzle"></i> ' . (int) $r['completas'] . '/' . (int) $r['unidades'] . ' completas'
+                . ($largo ? ' · imprimir ' . esc($imprimir) : '') . '</span>';
+        }
+        if ($r['sueltas'] !== []) {
+            $sueltas = implode(', ', $r['sueltas']);
+            $monta = (int) $r['montables'] > 0 ? 'Con lo suelto se monta(n) ' . (int) $r['montables'] . ' unidad(es)' : '';
+            $html .= ' <span class="fv-estado ' . ($monta ? 'e-ok' : '') . ' pz-coja" title="' . esc('Sueltas: ' . $sueltas . ($monta ? '. ' . $monta : ''), 'attr') . '">'
+                . '<i class="bi bi-boxes"></i> ' . ($largo ? 'sueltas: ' . esc($sueltas) : 'sueltas')
+                . ($monta ? ' · se monta' . ((int) $r['montables'] > 1 ? 'n ' . (int) $r['montables'] : ' 1') : '') . '</span>';
+        }
+
+        return $html;
+    }
+}

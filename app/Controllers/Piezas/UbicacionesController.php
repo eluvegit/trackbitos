@@ -559,6 +559,7 @@ class UbicacionesController extends BaseController
         }
 
         $filas = [];
+        $partesHueco = $ids === [] ? [] : (new \App\Services\PiezaPartes())->resumenes($ids, array_map(static fn (array $d) => $d['total'], $desglose));
         if ($stock !== []) {
             foreach ($this->variantes->whereIn('id', array_keys($stock))->findAll() as $v) {
                 $familia = $familias[(int) $v['familia_id']] ?? null;
@@ -568,6 +569,7 @@ class UbicacionesController extends BaseController
                     'stock'    => $stock[(int) $v['id']],
                     'desglose' => $desglose[(int) $v['id']],
                     'img'      => $miniaturas[(int) $v['id']] ?? null,
+                    'partes'   => $partesHueco[(int) $v['id']] ?? null,
                 ];
             }
             usort($filas, static fn ($a, $b) => $a['nombre'] <=> $b['nombre']);

@@ -117,6 +117,7 @@ class PiezaInventario
 
         $this->placas->update($placaId, ['inventario_sincronizado_en' => $ahora]);
         $this->cuadrarCajas(array_values(array_unique($tocadas)));
+        (new PiezaPartes())->autoMontar($tocadas);
 
         return $res;
     }

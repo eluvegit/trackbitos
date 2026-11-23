@@ -873,6 +873,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
                         <?php if ($existencias['minimo'] > 0): ?><b style="left: <?= round($existencias['minimo'] * 100 / $stockMax) ?>%"></b><?php endif; ?>
                     </div>
                     <?php if ($existencias['estado'] === 'bajo'): ?><div class="fv-aviso-mini">Por debajo del stock mínimo.</div><?php endif; ?>
+                    <?php if ($avisoPartes = partes_aviso($existencias['partes'] ?? null, true)): ?><div class="fv-aviso-mini"><a href="<?= site_url('piezas/existencias/' . $vid) . '#partes' ?>"><?= $avisoPartes ?></a></div><?php endif; ?>
                 </div>
                 <?php helper('piezas_stock'); $nombreMovStock = trim(($familia['nombre'] ?? '') . ' ' . ($variante['nombre'] ?? '')); ?>
                 <div class="fv-duo" style="margin-top: 14px">

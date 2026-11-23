@@ -79,6 +79,7 @@
                                 <div class="pv-cuerpo">
                                     <a href="<?= site_url('piezas/existencias/' . $vid) ?>" class="pv-nom" title="<?= esc($f['nombre'], 'attr') ?>"><?= esc($f['nombre']) ?></a>
                                     <div class="pv-sub"><?= stock_desglose($f['desglose'], 'hueco', 'aquí') ?></div>
+                                    <?php if ($avisoPartes = partes_aviso($f['partes'] ?? null, true)): ?><div class="pv-sub"><?= $avisoPartes ?></div><?php endif; ?>
                                     <?php if (!empty($destinos)): ?>
                                         <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/mover-pieza') ?>" class="hu-mover" id="mover-<?= $vid ?>" hidden>
                                             <?= csrf_field() ?>

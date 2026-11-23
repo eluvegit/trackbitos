@@ -10,6 +10,7 @@ use App\Models\PiezaHuecoModel;
 use App\Models\PiezaRenderModel;
 use App\Models\PiezaVarianteModel;
 use App\Services\PiezaInventario;
+use App\Services\PiezaPartes;
 
 /**
  * Existencias (fase 60): inventario de piezas fisicas producidas, contado
@@ -184,6 +185,7 @@ class ExistenciasController extends BaseController
             'filtro'       => $filtro,
             'imagenes'     => $imagenes,
             'ubicaciones'  => $ubicaciones,
+            'partesPieza'  => (new PiezaPartes())->resumenes([], array_map(static fn (array $d) => $d['total'], $desglose)),
             'categorias'     => $categorias,
             'categoriaSel'   => $categoriaSel,
             'soloSterclicks' => $soloSterclicks,
@@ -251,7 +253,73 @@ class ExistenciasController extends BaseController
             'hueco'      => $huecoId !== null ? ($huecosPorId[$huecoId] ?? null) : null,
             'huecosDisponibles' => $huecosDisponibles,
             'imagen'     => $imagen,
+            'partes'     => (new PiezaPartes())->resumenDe($id, $stock),
+            'historialPartes' => (new PiezaPartes())->historialDe($id),
         ]);
+    }
+
+    public function parteCrear(int $id)
+    {
+        $nombre = trim((string) $this->request->getPost('nombre'));
+        if (!$this->variantes->find($id) || $nombre === '') {
+            return redirect()->to(site_url('piezas/existencias/' . $id))->with('error', 'Escribe el nombre de la parte.');
+        }
+        (new PiezaPartes())->crear($id, $nombre, (int) $this->request->getPost('por_unidad') ?: 1);
+
+        return redirect()->to(site_url('piezas/existencias/' . $id) . '#partes')->with('success', 'Parte añadida.');
+    }
+
+    public function parteActualizar(int $parteId)
+    {
+        $servicio = new PiezaPartes();
+        $parte = $servicio->parte($parteId);
+        if (!$parte) {
+            return redirect()->to(site_url('piezas/existencias'))->with('error', 'Esa parte no existe.');
+        }
+        $volver = site_url('piezas/existencias/' . (int) $parte['variante_id']) . '#partes';
+        if ($this->request->getPost('borrar')) {
+            $servicio->borrar($parteId);
+
+            return redirect()->to($volver)->with('success', 'Parte quitada.' . $this->textoMontadas($servicio->autoMontar([(int) $parte['variante_id']])));
+        }
+        $nombre = trim((string) $this->request->getPost('nombre')) ?: $parte['nombre'];
+        $servicio->actualizar($parteId, $nombre, (int) $this->request->getPost('por_unidad') ?: 1);
+
+        return redirect()->to($volver)->with('success', 'Parte guardada.' . $this->textoMontadas($servicio->autoMontar([(int) $parte['variante_id']])));
+    }
+
+    public function parteMovimiento(int $parteId)
+    {
+        $servicio = new PiezaPartes();
+        $parte = $servicio->parte($parteId);
+        if (!$parte) {
+            return redirect()->to(site_url('piezas/existencias'))->with('error', 'Esa parte no existe.');
+        }
+        $volver = site_url('piezas/existencias/' . (int) $parte['variante_id']) . '#partes';
+        $cantidad = (int) $this->request->getPost('cantidad');
+        $motivo = (string) $this->request->getPost('motivo');
+        if ($cantidad < 1 || !in_array($motivo, ['rota', 'suelta', 'ajuste_mas', 'ajuste_menos'], true)) {
+            return redirect()->to($volver)->with('error', 'Indica una cantidad de al menos 1.');
+        }
+        $delta = in_array($motivo, ['rota', 'ajuste_menos'], true) ? -$cantidad : $cantidad;
+        $servicio->movimiento($parteId, $delta, str_starts_with($motivo, 'ajuste') ? 'ajuste' : $motivo, trim((string) $this->request->getPost('nota')) ?: null);
+
+        return redirect()->to($volver)->with('success', ($delta > 0 ? '+' : '') . $delta . ' ' . $parte['nombre'] . '.' . $this->textoMontadas($servicio->autoMontar([(int) $parte['variante_id']])));
+    }
+
+    private function textoMontadas(int $n): string
+    {
+        return $n > 0 ? ' Con lo suelto se ha' . ($n > 1 ? 'n montado ' . $n . ' unidades' : ' montado 1 unidad') . ': +' . $n . ' en stock.' : '';
+    }
+
+    public function parteMovimientoBorrar(int $movId)
+    {
+        $servicio = new PiezaPartes();
+        $vid = $servicio->borrarMovimiento($movId);
+        $montadas = $vid ? $servicio->autoMontar([$vid]) : 0;
+
+        return redirect()->to($vid ? site_url('piezas/existencias/' . $vid) . '#partes' : site_url('piezas/existencias'))
+            ->with($vid ? 'success' : 'error', $vid ? 'Movimiento de parte borrado.' . $this->textoMontadas($montadas) : 'Ese movimiento no se puede borrar aquí (viene de una placa).');
     }
 
     /**

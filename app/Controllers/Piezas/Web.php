@@ -3542,6 +3542,18 @@ class Web extends BaseController
             'versionesNuevas'  => $this->versionesNuevasDeLaPlaca($placa, $piezas),
             'resinas'          => (new \App\Models\PiezaResinaModel())->paraSelector((int) $placa['resina_id'] ?: null),
             'resinasEnMaquina' => (new \App\Models\PiezaResinaModel())->enCadaImpresora(),
+        ] + $this->partesDeLaBitacora($piezas);
+    }
+
+    private function partesDeLaBitacora(array $piezas): array
+    {
+        $vids = array_values(array_unique(array_filter(array_map(static fn ($p) => (int) ($p['variante']['id'] ?? 0), $piezas))));
+        $partes = new \App\Services\PiezaPartes();
+        $resumen = $vids === [] ? [] : $partes->resumenes($vids, (new PiezaInventario())->stockPorVariante($vids));
+
+        return [
+            'partesPieza' => $resumen,
+            'partesFila'  => $resumen === [] ? [] : $partes->deFilas(array_map(static fn ($p) => (int) $p['fila']['id'], $piezas)),
         ];
     }
 
@@ -3697,14 +3709,24 @@ class Web extends BaseController
         $cantidades = (array) $this->request->getPost('cantidad');
         $notasPieza = (array) $this->request->getPost('nota_pieza');
         $fallidas   = (array) $this->request->getPost('fallidas');
+        $partesPost = (array) $this->request->getPost('partes');
+        $servPartes = new \App\Services\PiezaPartes();
         foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $fila) {
             $filaId = (int) $fila['id'];
+            $conPartes = false;
+            if (isset($partesPost[$filaId]) && is_array($partesPost[$filaId])) {
+                $version = $this->versionModel->find($fila['version_id']);
+                if ($version) {
+                    $servPartes->guardarFila($filaId, (int) $version['variante_id'], $partesPost[$filaId]);
+                    $conPartes = true;
+                }
+            }
             if (!array_key_exists($filaId, $cantidades) && !array_key_exists($filaId, $notasPieza)
                 && !array_key_exists($filaId, $fallidas)) {
                 continue;
             }
 
-            $cantidad = max(1, (int) ($cantidades[$filaId] ?? $fila['cantidad']));
+            $cantidad = max($conPartes ? 0 : 1, (int) ($cantidades[$filaId] ?? $fila['cantidad']));
 
             $this->placaVersionModel->update($filaId, [
                 'cantidad' => $cantidad,
@@ -4435,6 +4457,7 @@ class Web extends BaseController
             'sueltas'  => $huecoId === null ? $d['hueco'] : 0,
             'impresas' => $d['impresas'],
             'pedido'   => $d['pedido'],
+            'partes'   => (new \App\Services\PiezaPartes())->resumenDe($id, $stock),
         ];
     }
 

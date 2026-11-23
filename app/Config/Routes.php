@@ -998,6 +998,10 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
     $routes->POST('existencias/(:num)/hueco-defecto', 'ExistenciasController::fijarHuecoPredeterminado/$1');
     $routes->POST('existencias/(:num)/asignar-sueltos', 'ExistenciasController::asignarSueltos/$1');
+    $routes->POST('existencias/(:num)/partes', 'ExistenciasController::parteCrear/$1');
+    $routes->POST('existencias/partes/(:num)', 'ExistenciasController::parteActualizar/$1');
+    $routes->POST('existencias/partes/(:num)/movimiento', 'ExistenciasController::parteMovimiento/$1');
+    $routes->POST('existencias/partes/movimiento/(:num)/borrar', 'ExistenciasController::parteMovimientoBorrar/$1');
     $routes->GET('existencias/(:num)', 'ExistenciasController::variante/$1');
 
     // Ubicaciones (fase 1 de "dónde está cada cosa"): a dos niveles, estuche
