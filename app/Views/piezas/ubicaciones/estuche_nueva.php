@@ -18,7 +18,7 @@ $ocupados  = count(array_filter($filas, static fn (array $f) => $f['contenido'] 
 
 <div class="fv pv eu">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Ubicaciones</a><i class="bi bi-chevron-right"></i><span>Estuche <?= esc($estuche['codigo']) ?></span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Estuches</a><i class="bi bi-chevron-right"></i><span>Estuche <?= esc($estuche['codigo']) ?></span></nav>
         <div class="fv-acciones">
             <?php if (count($estuches) > 1): ?>
                 <select class="fv-input eu-saltar" aria-label="Ir a otro estuche" onchange="if (this.value) location.href = this.value">
@@ -28,7 +28,7 @@ $ocupados  = count(array_filter($filas, static fn (array $f) => $f['contenido'] 
                 </select>
             <?php endif; ?>
             <button type="button" class="fv-gbtn" data-bs-toggle="modal" data-bs-target="#modalEditarEstuche"><i class="bi bi-pencil"></i> Editar</button>
-            <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="fv-gbtn" title="Impresas y de pedido pendientes de guardar"><i class="bi bi-box-seam"></i> Cajas</a>
+            <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="fv-gbtn" title="Impresas y de pedido pendientes de guardar"><i class="bi bi-box-seam"></i> Impresas y de pedido</a>
         </div>
     </div>
 

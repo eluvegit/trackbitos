@@ -158,7 +158,7 @@
         <div class="fv-acciones">
             <a href="<?= site_url('piezas/galeria') ?>" class="fv-gbtn"><i class="bi bi-grid-3x3-gap"></i> Galería</a>
             <a href="<?= site_url('piezas/pedidos') ?>" class="fv-gbtn"><i class="bi bi-cart-check"></i> Pedidos</a>
-            <a href="<?= site_url('piezas/existencias') ?>" class="fv-gbtn"><i class="bi bi-boxes"></i> Existencias</a>
+            <a href="<?= site_url('piezas/existencias') ?>" class="fv-gbtn"><i class="bi bi-boxes"></i> Stock</a>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/placas?nueva=0') ?>" class="fv-gbtn" title="Volver a la vista de siempre"><i class="bi bi-arrow-left-right"></i> Vista clásica</a>
         </div>

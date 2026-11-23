@@ -20,9 +20,9 @@ $areas = [
         ['n' => 'Cuaderno', 'r' => 'cuaderno', 'i' => 'bi-journal-bookmark'],
     ]],
     'inventario' => ['n' => 'Inventario', 'c' => '#20c997', 'i' => 'bi-boxes', 'extra' => [], 'items' => [
-        ['n' => 'Existencias', 'r' => 'existencias', 'i' => 'bi-boxes'],
-        ['n' => 'Ubicaciones', 'r' => 'ubicaciones', 'i' => 'bi-geo-alt'],
-        ['n' => 'Cajas', 'r' => 'ubicaciones/cajas', 'i' => 'bi-box-seam'],
+        ['n' => 'Stock', 'r' => 'existencias', 'i' => 'bi-boxes'],
+        ['n' => 'Estuches', 'r' => 'ubicaciones', 'i' => 'bi-geo-alt'],
+        ['n' => 'Impresas y de pedido', 'r' => 'ubicaciones/cajas', 'i' => 'bi-box-seam'],
         ['n' => 'Albaranes', 'r' => 'salidas', 'i' => 'bi-receipt'],
     ]],
     'tpv' => ['n' => 'TPV', 'c' => '#ef5b5b', 'i' => 'bi-shop', 'extra' => [], 'items' => [

@@ -20,7 +20,7 @@
 <p class="text-muted small">
     Variantes hechas pero incompletas o que no funcionan bien: no están en la papelera (no son
     candidatas a borrarse) ni se purgan nunca, solo se aparcan aquí para no estorbar en el listado,
-    la galería ni el selector de "añadir componente". Existencias y Estadísticas las siguen contando.
+    la galería ni el selector de "añadir componente". Stock y Estadísticas las siguen contando.
 </p>
 
 <?php if (empty($variantes)): ?>

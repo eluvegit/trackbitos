@@ -142,13 +142,13 @@
     <i class="bi bi-geo-alt text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
-    <strong class="fw-semibold">Ubicaciones</strong>
+    <strong class="fw-semibold">Estuches</strong>
 
     <a href="<?= site_url('piezas/salidas') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Albaranes de salida">
         <i class="bi bi-receipt"></i> Albaranes
     </a>
     <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="btn btn-sm btn-outline-secondary" title="Impresas y de pedido pendientes de guardar">
-        <i class="bi bi-box-seam"></i> Cajas
+        <i class="bi bi-box-seam"></i> Impresas y de pedido
     </a>
     <button type="button" class="btn btn-sm btn-outline-secondary" data-plegar-todo>
         <i class="bi bi-arrows-collapse"></i> <span>Plegar todo</span>

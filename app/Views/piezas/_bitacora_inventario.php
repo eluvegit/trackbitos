@@ -73,10 +73,10 @@ $colocacionHuecos = $colocacionHuecos ?? [];
         <?php endif; ?>
         <?php endif; ?>
         <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="btn btn-sm btn-outline-secondary" title="Lo impreso pendiente de guardar">
-            <i class="bi bi-box-seam"></i> Cajas
+            <i class="bi bi-box-seam"></i> Impresas y de pedido
         </a>
-        <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary" title="Ver existencias">
-            <i class="bi bi-box-arrow-up-right"></i> Existencias
+        <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary" title="Ver stock">
+            <i class="bi bi-box-arrow-up-right"></i> Stock
         </a>
     </div>
 
@@ -106,7 +106,7 @@ $colocacionHuecos = $colocacionHuecos ?? [];
                                 </a>
                             <?php elseif (empty($colocacionHuecos)): ?>
                                 <span class="text-muted small">
-                                    Sin ubicaciones todavía —
+                                    Sin estuches todavía —
                                     <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">crea un estuche y huecos</a>.
                                 </span>
                             <?php else: ?>
@@ -135,7 +135,7 @@ $colocacionHuecos = $colocacionHuecos ?? [];
             </div>
             <p class="text-muted mt-2 mb-0" style="font-size: .72rem;">
                 El hueco que elijas aquí pasa a ser el de esa pieza: lo impreso entra en la caja y,
-                al guardarlo desde Cajas, va a ese hueco.
+                al guardarlo desde Impresas y de pedido, va a ese hueco.
             </p>
         </div>
     <?php endif; ?>

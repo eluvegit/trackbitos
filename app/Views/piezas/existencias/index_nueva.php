@@ -73,9 +73,9 @@
 
 <div class="fv pi ex" id="ex">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><span>Existencias</span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><span>Stock</span></nav>
         <div class="fv-acciones">
-            <a href="<?= site_url('piezas/ubicaciones') ?>" class="fv-gbtn" title="Estuches y huecos de guardado"><i class="bi bi-geo-alt"></i> Ubicaciones</a>
+            <a href="<?= site_url('piezas/ubicaciones') ?>" class="fv-gbtn" title="Estuches y huecos de guardado"><i class="bi bi-geo-alt"></i> Estuches</a>
             <a href="<?= site_url('piezas/placas') ?>" class="fv-gbtn" title="Histórico de placas"><i class="bi bi-printer"></i> Placas</a>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/existencias?nueva=0') ?>" class="fv-gbtn" title="Volver a la vista de siempre"><i class="bi bi-arrow-left-right"></i> Vista clásica</a>
@@ -83,7 +83,7 @@
     </div>
 
     <div class="fv-hero">
-        <h1>Existencias</h1>
+        <h1>Stock</h1>
         <div class="fv-trio ex-cifras">
             <a href="<?= $url(['filtro' => 'todas']) ?>" class="<?= $filtro === 'todas' ? 'on' : '' ?>" title="Ver todas las piezas">
                 <span class="k">Unidades en total</span><span class="v"><?= (int) $totales['unidadesTotal'] ?></span>

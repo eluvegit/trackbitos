@@ -662,7 +662,7 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
 
                     <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>"
                         class="cabecera-stock rounded-3 text-decoration-none text-center d-flex flex-column justify-content-center px-3 py-2 border border-<?= $colorStock ?>-subtle bg-<?= $colorStock ?>-subtle"
-                        title="Ver ficha de existencias">
+                        title="Ver ficha de stock">
                         <div class="display-6 fw-bold lh-1 text-<?= $colorStock ?>-emphasis"><?= (int) $ex['stock'] ?></div>
                         <div class="small text-<?= $colorStock ?>-emphasis">en stock</div>
                         <div class="small text-body-secondary mt-1">
@@ -2061,8 +2061,8 @@ $tieneAdvertencia  = trim((string) ($variante['advertencia'] ?? '')) !== '';
         <div class="card shadow-sm mb-3">
             <div class="card-body p-3">
                 <h6 class="mb-2 d-flex align-items-center gap-2">
-                    <i class="bi bi-boxes"></i> Existencias
-                    <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>" class="ms-auto small fw-normal">Ver ficha de existencias</a>
+                    <i class="bi bi-boxes"></i> Stock
+                    <a href="<?= site_url('piezas/existencias/' . (int) $variante['id']) ?>" class="ms-auto small fw-normal">Ver ficha de stock</a>
                 </h6>
                 <div class="row row-cols-3 g-2 text-center">
                     <div class="col">

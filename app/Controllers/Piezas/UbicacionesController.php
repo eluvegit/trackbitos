@@ -1033,6 +1033,7 @@ class UbicacionesController extends BaseController
         $desglose  = $this->inventario->desglose($ids);
         $familias  = [];
         $imagenes  = [];
+        $grandes   = [];
         if ($ids !== []) {
             $famIds = array_unique(array_column($variantes, 'familia_id'));
             $familias = array_column($this->familias->whereIn('id', $famIds)->findAll(), null, 'id');
@@ -1040,6 +1041,8 @@ class UbicacionesController extends BaseController
                 $vid = (int) $r['variante_id'];
                 if (!isset($imagenes[$vid]) && (!empty($r['ruta_imagen']) || !empty($r['hash_imagen']))) {
                     $imagenes[$vid] = imagen_pieza($r, 'render', 't');
+                    // Para el visor de la rejilla de cajas.
+                    $grandes[$vid]  = imagen_pieza($r, 'render', 'v');
                 }
             }
         }
@@ -1061,6 +1064,7 @@ class UbicacionesController extends BaseController
                     'desglose' => $desglose[$vid],
                     'hueco'    => $huecoId !== null ? ($codigosHuecos[$huecoId] ?? '?') : null,
                     'imagen'   => $imagenes[$vid] ?? null,
+                    'imagen_grande' => $grandes[$vid] ?? null,
                 ];
             }
             usort($cajas[$caja], static fn ($a, $b) => [$a['hueco'] ?? '~', $a['nombre']] <=> [$b['hueco'] ?? '~', $b['nombre']]);

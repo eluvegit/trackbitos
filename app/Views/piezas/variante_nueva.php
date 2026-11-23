@@ -855,7 +855,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
             <?php endif; ?>
 
             <section class="fv-panel fv-panel-stock" data-m="7" data-sec="stock">
-                <div class="fv-ph"><h3>Stock</h3><a class="fv-link der" href="<?= site_url('piezas/existencias/' . $vid) ?>">Existencias <i class="bi bi-chevron-right"></i></a></div>
+                <div class="fv-ph"><h3>Stock</h3><a class="fv-link der" href="<?= site_url('piezas/existencias/' . $vid) ?>">Stock <i class="bi bi-chevron-right"></i></a></div>
                 <div class="fv-stock">
                     <div class="grande" style="color: <?= $colorStockFv ?>" title="Todas las unidades que existen de esta pieza"><?= (int) $existencias['stock'] ?><small>uds en total</small></div>
                     <dl class="fv-kv">

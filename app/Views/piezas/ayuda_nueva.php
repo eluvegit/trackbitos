@@ -225,7 +225,7 @@
                 <span class="pa-flecha"><i class="bi bi-arrow-right"></i></span>
                 <div class="pa-paso"><span class="pa-paso-num">7</span><b>Inventario</b>Bitácora → «Dar de alta en inventario».<br><span class="pa-donde">web</span></div>
                 <span class="pa-flecha"><i class="bi bi-arrow-right"></i></span>
-                <div class="pa-paso"><span class="pa-paso-num">8</span><b>Guardar</b>Entra en la caja; desde «Cajas» se guarda en su hueco. Ya sale en el TPV.<br><span class="pa-donde">web</span></div>
+                <div class="pa-paso"><span class="pa-paso-num">8</span><b>Guardar</b>Entra en la caja; desde «Impresas y de pedido» se guarda en su hueco. Ya sale en el TPV.<br><span class="pa-donde">web</span></div>
             </div>
             <p class="pa-truco">Regla para no liarse: si es el <code>.blend</code> que <b>editas</b>, se hace por terminal. Si es algo que <b>generas una vez y adjuntas</b> (foto, render, STL) o una <b>decisión</b> (validar, descartar), se hace en la web.</p>
         </article>
@@ -488,22 +488,22 @@
                 <li>Pulsa <b>Dar de alta en inventario</b>. Suma las servibles de cada pieza.</li>
             </ol>
             <p>Se puede pulsar otra vez si corriges algo: <b>reajusta, no duplica</b>. <b>Quitar del inventario</b> deshace lo que aportó esa placa.</p>
-            <p class="pa-corto mb-0">Lo que entra va a la caja que elijas junto al botón: <b>impresas</b> o <b>pedido</b> (lo que ha pedido Esther). En <?= $pag('piezas/ubicaciones/cajas', 'Ubicaciones → Cajas') ?> lo guardas en su hueco, pieza a pieza o «Guardar todo», o lo pasas de una caja a otra. Las cajas también salen arriba en la lista de Ubicaciones, con borde ámbar, y ahí mismo cada pieza tiene sus botones: <b>→ hueco</b> (si ya tiene), <b>Elegir hueco</b> (si no) , <b>A pedido / A impresas</b> y <b>Se las lleva</b> (salida de algunas o todas, con quién se las lleva). Con <b>Meter piezas</b>, en la cabecera de cada caja, pasas a la caja piezas que estaban en su hueco o sin ubicación. Para algo más largo («me llevo esto de aquí y esto de allá») o con la foto de Esther, usa <?= $pag('piezas/salidas', 'Albaranes') ?>: lo creas con la foto, añades líneas eligiendo de dónde sale cada pieza y lo confirmas. Si te equivocas, «Reabrir» devuelve las piezas a su sitio. Mientras está en la caja cuenta como stock, pero no sale en ningún hueco.</p>
+            <p class="pa-corto mb-0">Lo que entra va a la caja que elijas junto al botón: <b>impresas</b> o <b>pedido</b> (lo que ha pedido Esther). En <?= $pag('piezas/ubicaciones/cajas', 'Estuches → Impresas y de pedido') ?> lo guardas en su hueco, pieza a pieza o «Guardar todo», o lo pasas de una caja a otra. Las cajas también salen arriba en la lista de Estuches, con borde ámbar, y ahí mismo cada pieza tiene sus botones: <b>→ hueco</b> (si ya tiene), <b>Elegir hueco</b> (si no) , <b>A pedido / A impresas</b> y <b>Se las lleva</b> (salida de algunas o todas, con quién se las lleva). Con <b>Meter piezas</b>, en la cabecera de cada caja, pasas a la caja piezas que estaban en su hueco o sin ubicación. Para algo más largo («me llevo esto de aquí y esto de allá») o con la foto de Esther, usa <?= $pag('piezas/salidas', 'Albaranes') ?>: lo creas con la foto, añades líneas eligiendo de dónde sale cada pieza y lo confirmas. Si te equivocas, «Reabrir» devuelve las piezas a su sitio. Mientras está en la caja cuenta como stock, pero no sale en ningún hueco.</p>
         </article>
 
         <article class="pa-ficha" id="como-existencias" data-claves="existencias stock semaforo minimo alta baja manual ajuste motivo rojo amarillo verde">
-            <h3><i class="bi bi-boxes"></i> Existencias <a class="pa-ancla" href="#como-existencias">#</a></h3>
-            <p><?= $pag('piezas/existencias', 'Existencias') ?> (<i class="bi bi-boxes"></i>), en lista o galería, filtrable por stock y categoría.</p>
+            <h3><i class="bi bi-boxes"></i> Stock <a class="pa-ancla" href="#como-existencias">#</a></h3>
+            <p><?= $pag('piezas/existencias', 'Stock') ?> (<i class="bi bi-boxes"></i>), en lista o galería, filtrable por stock y categoría.</p>
             <ul>
                 <li>Semáforo: <span class="text-danger fw-semibold">rojo</span> a cero, <span class="text-warning-emphasis fw-semibold">amarillo</span> hasta el mínimo, <span class="text-success fw-semibold">verde</span> por encima.</li>
-                <li>El <b>mínimo</b> se fija en la ficha de existencias de la pieza.</li>
+                <li>El <b>mínimo</b> se fija en la ficha de stock de la pieza.</li>
                 <li><b>Alta / baja manual</b> desde esa ficha, siempre con motivo. Las bajas restan de su hueco.</li>
             </ul>
         </article>
 
         <article class="pa-ficha" id="como-hueco" data-claves="hueco estuche ubicacion guardar donde esta codigo e1h2 mover traer quitar etiquetas imprimir">
             <h3><i class="bi bi-geo-alt"></i> Estuches y huecos <a class="pa-ancla" href="#como-hueco">#</a></h3>
-            <p>En <?= $pag('piezas/ubicaciones', 'Ubicaciones') ?> (<i class="bi bi-geo-alt"></i>): el <b>estuche</b> es la caja y el <b>hueco</b> el compartimento. El código une los dos: <code>E1H2</code> = hueco H2 del estuche E1.</p>
+            <p>En <?= $pag('piezas/ubicaciones', 'Estuches') ?> (<i class="bi bi-geo-alt"></i>): el <b>estuche</b> es la caja y el <b>hueco</b> el compartimento. El código une los dos: <code>E1H2</code> = hueco H2 del estuche E1.</p>
             <ul>
                 <li><b>Una pieza vive en un solo hueco.</b> Si intentas meterla en otro, se niega y te lo explica.</li>
                 <li>Desde la ficha del hueco: <b>Traer pieza aquí</b>, <b>Mover pieza</b> o <b>Quitar</b> (la deja sin hueco, sin tocar el stock).</li>

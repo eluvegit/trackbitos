@@ -77,7 +77,7 @@
     <i class="bi bi-geo-alt text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
-    <a href="<?= site_url('piezas/ubicaciones') ?>" class="text-decoration-none text-muted fw-normal">Ubicaciones</a>
+    <a href="<?= site_url('piezas/ubicaciones') ?>" class="text-decoration-none text-muted fw-normal">Estuches</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= esc($codigo) ?></strong>
 

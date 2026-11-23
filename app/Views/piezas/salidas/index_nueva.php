@@ -18,8 +18,8 @@
     <div class="fv-top">
         <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><span>Albaranes</span></nav>
         <div class="fv-acciones">
-            <a href="<?= site_url('piezas/existencias') ?>" class="fv-gbtn" title="Stock de cada pieza"><i class="bi bi-boxes"></i> Existencias</a>
-            <a href="<?= site_url('piezas/ubicaciones') ?>" class="fv-gbtn" title="Estuches y huecos de guardado"><i class="bi bi-geo-alt"></i> Ubicaciones</a>
+            <a href="<?= site_url('piezas/existencias') ?>" class="fv-gbtn" title="Stock de cada pieza"><i class="bi bi-boxes"></i> Stock</a>
+            <a href="<?= site_url('piezas/ubicaciones') ?>" class="fv-gbtn" title="Estuches y huecos de guardado"><i class="bi bi-geo-alt"></i> Estuches</a>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/salidas?nueva=0') ?>" class="fv-gbtn" title="Volver a la vista de siempre"><i class="bi bi-arrow-left-right"></i> Vista clásica</a>
         </div>

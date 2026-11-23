@@ -37,7 +37,7 @@
     <i class="bi bi-boxes text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
-    <a href="<?= site_url('piezas/existencias') ?>" class="text-decoration-none text-muted fw-normal">Existencias</a>
+    <a href="<?= site_url('piezas/existencias') ?>" class="text-decoration-none text-muted fw-normal">Stock</a>
     <span class="text-muted">/</span>
     <strong class="fw-semibold"><?= esc($nombre) ?></strong>
 
@@ -122,7 +122,7 @@
 <?php if (empty($huecosDisponibles)): ?>
     <p class="text-muted small mb-4">
         Sin hueco — crea estuches y huecos en
-        <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a> para poder colocarla.
+        <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Estuches</a> para poder colocarla.
     </p>
 <?php else: ?>
     <?php
@@ -264,7 +264,7 @@
                             <option value="">Sin huecos todavía</option>
                         </select>
                         <div class="form-text">
-                            Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Ubicaciones</a>.
+                            Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank">Estuches</a>.
                         </div>
                     <?php else: ?>
                         <select name="ubicacion_id" class="form-select" data-mov-hueco-select>

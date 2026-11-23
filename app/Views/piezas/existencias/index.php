@@ -48,7 +48,7 @@
     <i class="bi bi-boxes text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
-    <strong class="fw-semibold">Existencias</strong>
+    <strong class="fw-semibold">Stock</strong>
 
     <a href="<?= $url(['filtro' => 'todas']) ?>"
         class="badge rounded-pill text-bg-primary text-decoration-none <?= $filtro === 'todas' ? 'border border-2 border-light' : '' ?>"
@@ -69,7 +69,7 @@
     <?php endif; ?>
 
     <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Estuches y huecos de guardado">
-        <i class="bi bi-geo-alt"></i> Ubicaciones
+        <i class="bi bi-geo-alt"></i> Estuches
     </a>
     <a href="<?= site_url('piezas/placas') ?>" class="btn btn-sm btn-outline-secondary" title="Histórico de placas">
         <i class="bi bi-printer"></i> Placas

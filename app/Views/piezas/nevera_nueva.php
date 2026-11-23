@@ -36,7 +36,7 @@
     <details class="fv-mas pv-ayuda">
         <summary><i class="bi bi-chevron-right ch"></i> ¿Qué va a la nevera?</summary>
         <div class="fv-cuerpo">
-            <span>Variantes <b>hechas pero incompletas</b> o que no funcionan bien. No están en la papelera ni se purgan nunca: solo se aparcan para no estorbar en el listado, la galería ni el selector de «añadir componente». Existencias y Estadísticas las siguen contando.</span>
+            <span>Variantes <b>hechas pero incompletas</b> o que no funcionan bien. No están en la papelera ni se purgan nunca: solo se aparcan para no estorbar en el listado, la galería ni el selector de «añadir componente». Stock y Estadísticas las siguen contando.</span>
         </div>
     </details>
 

@@ -23,7 +23,7 @@ class InventarioCatalogo
     private ?array $piezas = null;
 
     /**
-     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, estuche_id:?int, img:?string, img_grande:?string}>
+     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, estuche_id:?int, img:?string, img_grande:?string, incompletas:int, faltan:list<string>, sueltas:list<string>}>
      */
     public function piezas(): array
     {
@@ -64,6 +64,8 @@ class InventarioCatalogo
         $cajas  = $inventario->stockEnCajas($ids);
         $huecos = $this->codigosDeHueco();
         $fotos  = $this->fotos($ids);
+        // Solo las que tienen partes: cuántas unidades están incompletas y qué les falta.
+        $partes = (new PiezaPartes())->resumenes($ids, $stock);
 
         $piezas = [];
         foreach ($variantes as $id => $v) {
@@ -81,6 +83,9 @@ class InventarioCatalogo
                 'estuche_id'   => $huecos[$huecoId]['estuche_id'] ?? null,
                 'img'          => $fotos[$id]['t'] ?? null,
                 'img_grande'   => $fotos[$id]['v'] ?? null,
+                'incompletas'  => (int) ($partes[$id]['incompletas'] ?? 0),
+                'faltan'       => $partes[$id]['imprimir'] ?? [],
+                'sueltas'      => $partes[$id]['sueltas'] ?? [],
             ];
         }
         usort($piezas, static fn (array $a, array $b) => strnatcasecmp($a['nombre'], $b['nombre']));

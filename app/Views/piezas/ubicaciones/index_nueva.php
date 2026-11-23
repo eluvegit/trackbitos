@@ -158,10 +158,10 @@
 
 <div class="fv pv fvb ub">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><span>Ubicaciones</span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><span>Estuches</span></nav>
         <div class="fv-acciones">
             <a href="<?= site_url('piezas/salidas') ?>" class="fv-gbtn" title="Albaranes de salida"><i class="bi bi-receipt"></i> Albaranes</a>
-            <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="fv-gbtn" title="Impresas y de pedido pendientes de guardar"><i class="bi bi-box-seam"></i> Cajas</a>
+            <a href="<?= site_url('piezas/ubicaciones/cajas') ?>" class="fv-gbtn" title="Impresas y de pedido pendientes de guardar"><i class="bi bi-box-seam"></i> Impresas y de pedido</a>
             <a href="<?= site_url('piezas/ubicaciones/imprimir') ?>" target="_blank" class="fv-gbtn" title="Documento para imprimir: qué hay en cada estuche y dónde está cada pieza"><i class="bi bi-printer"></i> Imprimir</a>
             <button type="button" class="fv-gbtn" data-plegar-todo><i class="bi bi-arrows-collapse"></i> <span>Plegar todo</span></button>
             <span class="fv-vsep"></span>
@@ -171,7 +171,7 @@
 
     <div class="fv-hero">
         <div class="pv-hero-fila">
-            <h1>Ubicaciones</h1>
+            <h1>Estuches</h1>
             <button type="button" class="fv-btn fv-btn-pri" data-bs-toggle="modal" data-bs-target="#modalEstuche"><i class="bi bi-plus-lg"></i> Nuevo estuche</button>
         </div>
         <div class="fv-meta">

@@ -13,9 +13,9 @@
     <i class="bi bi-box-seam text-primary"></i>
     <a href="<?= site_url('piezas') ?>" class="text-decoration-none text-muted fw-normal">Piezas</a>
     <span class="text-muted">/</span>
-    <a href="<?= site_url('piezas/ubicaciones') ?>" class="text-decoration-none text-muted fw-normal">Ubicaciones</a>
+    <a href="<?= site_url('piezas/ubicaciones') ?>" class="text-decoration-none text-muted fw-normal">Estuches</a>
     <span class="text-muted">/</span>
-    <strong class="fw-semibold">Cajas</strong>
+    <strong class="fw-semibold">Impresas y de pedido</strong>
     <a href="<?= site_url('piezas/ubicaciones/cajas?nueva=1') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Ir a la vista nueva"><i class="bi bi-arrow-left-right"></i> Vista nueva</a>
 </h5>
 

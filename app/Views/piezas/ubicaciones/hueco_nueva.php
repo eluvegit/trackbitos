@@ -23,7 +23,7 @@
 
 <div class="fv pv hu">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Ubicaciones</a><i class="bi bi-chevron-right"></i><?php if ($estuche): ?><a href="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id']) ?>">Estuche <?= esc($estuche['codigo']) ?></a><i class="bi bi-chevron-right"></i><?php endif; ?><span><?= esc($codigo) ?></span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/ubicaciones') ?>">Estuches</a><i class="bi bi-chevron-right"></i><?php if ($estuche): ?><a href="<?= site_url('piezas/ubicaciones/' . (int) $estuche['id']) ?>">Estuche <?= esc($estuche['codigo']) ?></a><i class="bi bi-chevron-right"></i><?php endif; ?><span><?= esc($codigo) ?></span></nav>
         <div class="fv-acciones">
             <form method="post" action="<?= site_url('piezas/ubicaciones/huecos/' . (int) $hueco['id'] . '/borrar') ?>"
                 onsubmit="return confirm('¿Borrar el hueco «<?= esc($codigo, 'js') ?>»? Lo que había aquí queda sin ubicación, no se pierde.');">

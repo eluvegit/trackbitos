@@ -6,7 +6,7 @@
      * Chuleta física de dónde está cada cosa, para imprimir o guardar como
      * PDF (mismo patrón que Sesiones::exportar: HTML con @media print, sin
      * librería de PDF). Sin cantidades a propósito — el recuento ya vive en
-     * Existencias, esto es solo para localizar a ojo. Los huecos vacíos
+     * Stock, esto es solo para localizar a ojo. Los huecos vacíos
      * llevan líneas en blanco para apuntar a mano lo que se guarde ahí sin
      * tener que reimprimir el documento cada vez.
      *
@@ -62,7 +62,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
     <a href="<?= site_url('piezas/ubicaciones') ?>" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Volver a Ubicaciones
+        <i class="bi bi-arrow-left"></i> Volver a Estuches
     </a>
     <button type="button" class="btn btn-primary btn-sm" onclick="window.print()">
         <i class="bi bi-printer"></i> Imprimir / guardar como PDF
@@ -71,7 +71,7 @@
 
 <h5 class="mb-1"><i class="bi bi-geo-alt text-primary"></i> Dónde está cada cosa</h5>
 <p class="text-muted small mb-4">
-    Sin cantidades (eso lo lleva Existencias) — solo para localizar a ojo. Los huecos vacíos llevan
+    Sin cantidades (eso lo lleva Stock) — solo para localizar a ojo. Los huecos vacíos llevan
     líneas en blanco: apunta ahí a mano lo que vayas guardando y no hace falta reimprimir esto cada vez.
 </p>
 

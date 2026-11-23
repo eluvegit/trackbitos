@@ -14,8 +14,8 @@
         <i class="bi bi-infinity"></i> <?= (int) $totalPlacasSiempre ?>
     </span>
 
-    <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Existencias: inventario de piezas producidas">
-        <i class="bi bi-boxes"></i> Existencias
+    <a href="<?= site_url('piezas/existencias') ?>" class="btn btn-sm btn-outline-secondary ms-auto" title="Stock: inventario de piezas producidas">
+        <i class="bi bi-boxes"></i> Stock
     </a>
     <a href="<?= site_url('piezas/pedidos') ?>" class="btn btn-sm btn-outline-secondary" title="Pedidos entrantes desde sterclicks">
         <i class="bi bi-cart-check"></i> Pedidos

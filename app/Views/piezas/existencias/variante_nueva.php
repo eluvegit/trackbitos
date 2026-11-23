@@ -29,7 +29,7 @@
 
 <div class="fv pv exv">
     <div class="fv-top">
-        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/existencias') ?>">Existencias</a><i class="bi bi-chevron-right"></i><span><?= esc($nombre) ?></span></nav>
+        <nav class="fv-crumbs"><a href="<?= site_url('piezas') ?>">Piezas</a><i class="bi bi-chevron-right"></i><a href="<?= site_url('piezas/existencias') ?>">Stock</a><i class="bi bi-chevron-right"></i><span><?= esc($nombre) ?></span></nav>
         <div class="fv-acciones">
             <a href="<?= site_url('piezas/variante/' . $idVar) ?>" class="fv-gbtn" title="Ficha de la variante"><i class="bi bi-box-arrow-up-right"></i> Ficha</a>
             <span class="fv-vsep"></span>
@@ -201,7 +201,7 @@
             <section class="fv-panel">
                 <div class="fv-ph"><i class="bi bi-geo-alt t3"></i><h3>Dónde está</h3></div>
                 <?php if (empty($huecosDisponibles)): ?>
-                    <p class="fv-vacio">Sin hueco. Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank" class="t2">Ubicaciones</a> para poder colocarla.</p>
+                    <p class="fv-vacio">Sin hueco. Crea estuches y huecos en <a href="<?= site_url('piezas/ubicaciones') ?>" target="_blank" class="t2">Estuches</a> para poder colocarla.</p>
                 <?php else: ?>
                     <?php
                         $huecoActualId = $hueco ? (int) $hueco['hueco']['id'] : null;
