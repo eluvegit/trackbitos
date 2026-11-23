@@ -554,14 +554,103 @@
                 try { const r = await post(`/modelos/${mid}/ropa/${op.dataset.id}/borrar`); ponerTarjeta(mid, r.html); } catch (err) { fallo(); }
                 return;
             }
+            if (op && e.target.closest('.ss-ropa-check')) { alternarRopa(op); return; }
             if (op && e.target.closest('.ss-ropa-elegir')) {
-                let r;
-                try { r = await post(`/modelos/${mid}/ropa/${op.dataset.id}/elegir`); } catch (err) { return fallo(); }
-                op.classList.toggle('on', !!r.elegida);
-                const n = $$('.ss-ropa-op', card).length, ok = $$('.ss-ropa-op.on', card).length;
-                $('.fv-ph .cuenta', card).textContent = `${ok}/${n}`;
+                // Con foto: se abre en grande y se elige desde allí. Sin foto: se elige directamente.
+                if ($('.ss-ropa-elegir > img', op)) abrirVisorRopa(op);
+                else alternarRopa(op);
             }
         });
+
+        async function alternarRopa(op) {
+            const card = op.closest('.ss-modelo');
+            let r;
+            try { r = await post(`/modelos/${card.dataset.id}/ropa/${op.dataset.id}/elegir`); } catch (err) { fallo(); return null; }
+            op.classList.toggle('on', !!r.elegida);
+            const n = $$('.ss-ropa-op', card).length, ok = $$('.ss-ropa-op.on', card).length;
+            $('.fv-ph .cuenta', card).textContent = `${ok}/${n}`;
+            return !!r.elegida;
+        }
+
+        // Visor grande de outfits: ←/→ para pasar, Espacio/Enter para elegir, Esc para cerrar.
+        let visor = null, visorOps = [], visorI = 0, visorOcupado = false;
+        function crearVisor() {
+            visor = document.createElement('div');
+            visor.className = 'ss-visor';
+            visor.hidden = true;
+            visor.innerHTML = `
+                <div class="ss-visor-barra">
+                    <div class="ss-visor-tit"><b></b> <span></span></div>
+                    <button type="button" class="ss-visor-elegir"><i class="bi"></i><span></span></button>
+                    <button type="button" class="ss-visor-cerrar" title="Cerrar (Esc)"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="ss-visor-cuerpo">
+                    <button type="button" class="ss-visor-flecha izq" title="Anterior (←)"><i class="bi bi-chevron-left"></i></button>
+                    <img alt="">
+                    <button type="button" class="ss-visor-flecha der" title="Siguiente (→)"><i class="bi bi-chevron-right"></i></button>
+                </div>`;
+            document.body.appendChild(visor);
+            visor.addEventListener('click', e => {
+                if (e.target.closest('.ss-visor-cerrar') || e.target === visor || e.target.classList.contains('ss-visor-cuerpo')) return cerrarVisor();
+                if (e.target.closest('.ss-visor-flecha.izq')) return moverVisor(-1);
+                if (e.target.closest('.ss-visor-flecha.der')) return moverVisor(1);
+                if (e.target.closest('.ss-visor-elegir')) return elegirEnVisor();
+            });
+            // Deslizar en móvil
+            let x0 = null;
+            visor.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+            visor.addEventListener('touchend', e => {
+                if (x0 === null) return;
+                const dx = e.changedTouches[0].clientX - x0; x0 = null;
+                if (Math.abs(dx) > 50) moverVisor(dx < 0 ? 1 : -1);
+            });
+            document.addEventListener('keydown', e => {
+                if (!visor || visor.hidden) return;
+                if (e.key === 'Escape') { e.preventDefault(); cerrarVisor(); }
+                else if (e.key === 'ArrowLeft') { e.preventDefault(); moverVisor(-1); }
+                else if (e.key === 'ArrowRight') { e.preventDefault(); moverVisor(1); }
+                else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); elegirEnVisor(); }
+            });
+        }
+        function pintarVisor() {
+            const op = visorOps[visorI];
+            const card = op.closest('.ss-modelo');
+            $('img', visor).src = $('.ss-ropa-elegir > img', op).src;
+            $('.ss-visor-tit b', visor).textContent = $('.ss-ropa-elegir > span', op).textContent;
+            $('.ss-visor-tit span', visor).textContent = `${$('.ss-mod-nombre', card)?.value || ''} · ${visorI + 1}/${visorOps.length}`;
+            const on = op.classList.contains('on');
+            const b = $('.ss-visor-elegir', visor);
+            b.classList.toggle('on', on);
+            $('i', b).className = 'bi ' + (on ? 'bi-check-circle-fill' : 'bi-circle');
+            $('span', b).textContent = on ? 'Elegida para esta sesión' : 'Elegir para esta sesión';
+            visor.classList.toggle('una', visorOps.length < 2);
+        }
+        function abrirVisorRopa(op) {
+            if (!visor) crearVisor();
+            visorOps = $$('.ss-ropa-op', op.closest('.ss-modelo')).filter(o => $('.ss-ropa-elegir > img', o));
+            visorI = Math.max(0, visorOps.indexOf(op));
+            pintarVisor();
+            visor.hidden = false;
+            document.documentElement.classList.add('ss-visor-abierto');
+        }
+        function cerrarVisor() {
+            visor.hidden = true;
+            document.documentElement.classList.remove('ss-visor-abierto');
+        }
+        function moverVisor(d) {
+            if (visorOps.length < 2) return;
+            visorI = (visorI + d + visorOps.length) % visorOps.length;
+            pintarVisor();
+        }
+        async function elegirEnVisor() {
+            if (visorOcupado) return;
+            visorOcupado = true;
+            const op = visorOps[visorI];
+            const res = await alternarRopa(op);
+            visorOcupado = false;
+            if (res === null || visor.hidden || visorOps[visorI] !== op) return;
+            pintarVisor();
+        }
         modelos.addEventListener('change', e => {
             if (e.target.matches('.ss-mod-foto-add input[type="file"]')) {
                 subirFotosPerfil(e.target.closest('.ss-modelo'), e.target.files);

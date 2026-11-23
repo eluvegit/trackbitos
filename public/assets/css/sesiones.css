@@ -335,6 +335,35 @@ a.ss-cifra:hover { border-color: var(--fv-border-2); }
 .ss-ropa-op:hover .ss-ropa-borrar { opacity: 1; }
 .ss-ropa-borrar:hover { background: var(--fv-bad) !important; }
 @media (hover: none) { .ss-ropa-borrar { opacity: .85; } }
+.ss-ropa-elegir:has(> img) { cursor: zoom-in; }
+.ss-ropa-check { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; padding: 0 !important; border: 0 !important; background: rgb(0 0 0 / .55) !important; color: #fff !important; font-size: 15px; }
+.ss-ropa-check .bi-check-circle-fill { display: none; color: var(--fv-ok); }
+.ss-ropa-op.on .ss-ropa-check .bi-check-circle-fill { display: block; }
+.ss-ropa-op.on .ss-ropa-check .bi-circle { display: none; }
+.ss-ropa-check:hover { background: rgb(0 0 0 / .8) !important; }
+
+/* visor grande de outfits */
+html.ss-visor-abierto { overflow: hidden; }
+.ss-visor { position: fixed; inset: 0; z-index: 1080; display: grid; grid-template-rows: auto minmax(0, 1fr); background: rgb(10 11 13 / .94); backdrop-filter: blur(6px); color: #e9ecef; animation: ss-visor-in .16s ease-out; }
+.ss-visor[hidden] { display: none; }
+@keyframes ss-visor-in { from { opacity: 0; } }
+.ss-visor-barra { display: flex; align-items: center; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid rgb(255 255 255 / .08); }
+.ss-visor-tit { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-visor-tit span { color: #8a929a; }
+.ss-visor-elegir, .ss-visor-cerrar { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 9px; border: 1px solid rgb(255 255 255 / .16); background: rgb(255 255 255 / .06); color: #e9ecef; font-size: 14px; flex: none; }
+.ss-visor-cerrar { padding: 0 11px; }
+.ss-visor-elegir:hover, .ss-visor-cerrar:hover { background: rgb(255 255 255 / .13); }
+.ss-visor-elegir.on { background: var(--fv-ok); border-color: transparent; color: #09090b; font-weight: 600; }
+.ss-visor-cuerpo { position: relative; display: grid; place-items: center; padding: 20px 72px; min-height: 0; }
+.ss-visor-cuerpo img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; box-shadow: 0 30px 80px rgb(0 0 0 / .6); user-select: none; }
+.ss-visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgb(255 255 255 / .14); background: rgb(255 255 255 / .06); color: #fff; font-size: 20px; display: grid; place-items: center; }
+.ss-visor-flecha:hover { background: rgb(255 255 255 / .14); }
+.ss-visor-flecha.izq { left: 14px; } .ss-visor-flecha.der { right: 14px; }
+.ss-visor.una .ss-visor-flecha { display: none; }
+@media (max-width: 640px) {
+  .ss-visor-cuerpo { padding: 10px; }
+  .ss-visor-flecha { display: none; }
+}
 .ss-perfiles { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ss-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px 0 6px !important; border-radius: 99px; background: var(--fv-inset) !important; border: 1px solid var(--fv-border-2) !important; font-size: 12.5px; color: var(--fv-text-2) !important; }
 .ss-chip:hover { color: var(--fv-text) !important; border-color: var(--fv-text-3) !important; }

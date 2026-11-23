@@ -49,15 +49,16 @@ $nElegidas = count(array_filter($m['ropa'], static fn ($r) => (int) $r['elegida'
     </div>
 
     <div class="ss-ropa">
-        <span class="ss-lbl"><i class="bi bi-handbag"></i> Opciones de ropa <small class="t3">— toca para elegir las de esta sesión · arrastra o pega (Ctrl+V) fotos para añadir outfits</small></span>
+        <span class="ss-lbl"><i class="bi bi-handbag"></i> Opciones de ropa <small class="t3">— toca una foto para verla en grande y elegirla · arrastra o pega (Ctrl+V) fotos para añadir outfits</small></span>
         <div class="ss-ropa-lista">
             <?php foreach ($m['ropa'] as $r): ?>
                 <div class="ss-ropa-op<?= (int) $r['elegida'] === 1 ? ' on' : '' ?>" data-id="<?= (int) $r['id'] ?>">
-                    <button type="button" class="ss-ropa-elegir" title="<?= (int) $r['elegida'] === 1 ? 'Elegida para esta sesión' : 'Elegir para esta sesión' ?>">
+                    <button type="button" class="ss-ropa-elegir" title="<?= $r['imagen'] ? 'Ver en grande' : ((int) $r['elegida'] === 1 ? 'Elegida para esta sesión' : 'Elegir para esta sesión') ?>">
                         <?php if ($r['imagen']): ?><img src="<?= base_url($r['imagen']) ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-handbag"></i><?php endif; ?>
                         <span><?= esc($r['texto']) ?></span>
-                        <i class="bi bi-check-circle-fill ss-ropa-ok"></i>
+                        <?php if (!$r['imagen']): ?><i class="bi bi-check-circle-fill ss-ropa-ok"></i><?php endif; ?>
                     </button>
+                    <?php if ($r['imagen']): ?><button type="button" class="ss-ropa-check" title="<?= (int) $r['elegida'] === 1 ? 'Quitar de esta sesión' : 'Elegir sin abrir' ?>"><i class="bi bi-check-circle-fill"></i><i class="bi bi-circle"></i></button><?php endif; ?>
                     <button type="button" class="ss-ropa-borrar" title="Borrar opción del perfil"><i class="bi bi-x-lg"></i></button>
                 </div>
             <?php endforeach; ?>
