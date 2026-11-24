@@ -7,6 +7,7 @@
     data-nombre="<?= esc($p['nombre'], 'attr') ?>"
     data-codigo="<?= esc($codigo ?? '', 'attr') ?>"
     data-sku="<?= esc($p['sku'] ?? '', 'attr') ?>"
+    data-partes="<?= esc(implode(' ', $p['partes'] ?? []), 'attr') ?>"
     data-stock="<?= (int) $p['stock'] ?>"
     data-cat="<?= (int) ($p['categoria_id'] ?? 0) ?>">
     <button type="button" class="inv-pieza-foto" data-foto
@@ -32,6 +33,7 @@
         <?php endif; ?>
         <h3><?= esc($p['nombre']) ?></h3>
         <?php if (!empty($p['sku'])): ?><span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?>
+        <?= view('inventario/_composicion', ['p' => $p]) ?>
         <?= view('inventario/_stock', ['p' => $p]) ?>
     </div>
 </article>

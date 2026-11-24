@@ -37,7 +37,7 @@ Estuche <?= esc($estuche['codigo']) ?>
                                     <i class="bi bi-image"></i>
                                 <?php endif; ?>
                             </button>
-                            <span class="inv-hueco-nombre"><?= esc($p['nombre']) ?><?php if (!empty($p['sku'])): ?> <span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?></span>
+                            <div class="inv-hueco-nombre"><?= esc($p['nombre']) ?><?php if (!empty($p['sku'])): ?> <span class="inv-sku">SK <?= esc($p['sku']) ?></span><?php endif; ?><?= view('inventario/_composicion', ['p' => $p]) ?></div>
                             <?= view('inventario/_stock', ['p' => $p]) ?>
                         </li>
                     <?php endforeach; ?>

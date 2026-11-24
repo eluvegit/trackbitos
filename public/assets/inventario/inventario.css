@@ -438,6 +438,12 @@ button { font: inherit; color: inherit; }
 .inv-partes { display: block; margin-top: 2px; color: var(--acento); font-size: .85rem; font-weight: 500; line-height: 1.3; }
 .inv-partes.suelta { color: var(--gris); font-weight: 400; }
 .inv-hueco li .inv-partes { max-width: 160px; }
+.inv-composicion { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.inv-composicion li { font-size: .78rem; font-weight: 500; color: var(--gris); background: var(--fondo); border-radius: 8px; padding: 2px 8px; line-height: 1.4; }
+.inv-composicion li:first-child { background: none; padding-left: 0; color: var(--gris); }
+.inv-hueco .inv-composicion { flex-direction: row; gap: 4px; margin-top: 4px; }
+.inv-hueco .inv-composicion li { display: block; border: 0; padding: 2px 8px; font-weight: 500; }
+.inv-hueco .inv-composicion li:first-child { padding-left: 0; }
 
 /* ---- Huecos de un estuche ---- */
 

@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=22" rel="stylesheet">
+    <link href="<?= base_url('assets/inventario/inventario.css') ?>?v=23" rel="stylesheet">
 </head>
 <body>
 <div class="inv-app">
@@ -90,7 +90,7 @@
     </figure>
 </div>
 
-<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=8"></script>
+<script src="<?= base_url('assets/inventario/inventario.js') ?>?v=9"></script>
 <?= $this->renderSection('scripts') ?>
 </body>
 </html>

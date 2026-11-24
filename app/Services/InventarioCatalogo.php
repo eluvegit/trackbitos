@@ -23,7 +23,7 @@ class InventarioCatalogo
     private ?array $piezas = null;
 
     /**
-     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, estuche_id:?int, img:?string, img_grande:?string, incompletas:int, faltan:list<string>, sueltas:list<string>}>
+     * @return list<array{id:int, nombre:string, categoria_id:?int, stock:int, hueco_id:?int, codigo:?string, estuche_id:?int, img:?string, img_grande:?string, incompletas:int, faltan:list<string>, sueltas:list<string>, partes:list<string>}>
      */
     public function piezas(): array
     {
@@ -86,6 +86,7 @@ class InventarioCatalogo
                 'incompletas'  => (int) ($partes[$id]['incompletas'] ?? 0),
                 'faltan'       => $partes[$id]['imprimir'] ?? [],
                 'sueltas'      => $partes[$id]['sueltas'] ?? [],
+                'partes'       => array_map(static fn (array $f) => ((int) $f['por_unidad'] > 1 ? (int) $f['por_unidad'] . '× ' : '') . $f['nombre'], $partes[$id]['partes'] ?? []),
             ];
         }
         usort($piezas, static fn (array $a, array $b) => strnatcasecmp($a['nombre'], $b['nombre']));
