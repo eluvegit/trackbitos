@@ -40,12 +40,8 @@ $nombre = $textoCatalogo ?: ($linea['descripcion_libre'] ?: 'Pieza borrada');
                     <span class="fv-estado e-info" title="Aún no existe en el catálogo">futura</span>
                 <?php endif; ?>
             </div>
-            <?php if ($linea['sku'] || $linea['notas']): ?>
-                <div class="linea-meta">
-                    <?php if ($linea['sku']): ?><span class="fv-mono"><?= esc($linea['sku']) ?></span><?php endif; ?>
-                    <?php if ($linea['sku'] && $linea['notas']): ?> · <?php endif; ?>
-                    <?php if ($linea['notas']): ?><span>«<?= esc($linea['notas']) ?>»</span><?php endif; ?>
-                </div>
+            <?php if ($linea['sku']): ?>
+                <div class="linea-meta"><span class="fv-mono"><?= esc($linea['sku']) ?></span></div>
             <?php endif; ?>
             <div class="linea-pie">
                 <span class="pp-barra-p" aria-hidden="true"><i style="width: <?= $pct ?>%"></i></span>
@@ -81,4 +77,7 @@ $nombre = $textoCatalogo ?: ($linea['descripcion_libre'] ?: 'Pieza borrada');
             <?php endif; ?>
         </form>
     </div>
+    <?php if ($linea['notas']): ?>
+        <p class="pp-nota linea-nota"><mark><?= esc($linea['notas']) ?></mark></p>
+    <?php endif; ?>
 </div>

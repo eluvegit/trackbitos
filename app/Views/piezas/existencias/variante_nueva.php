@@ -136,11 +136,11 @@
                                     </form>
                                 </div>
                                 <details class="pz-edit">
-                                    <summary class="fv-ibtn" title="Editar parte"><i class="bi bi-pencil"></i></summary>
-                                    <form method="post" action="<?= site_url('piezas/existencias/partes/' . (int) $pa['id']) ?>" class="pz-mov">
+                                    <summary class="fv-ibtn" title="Editar parte"><i class="bi bi-pencil"></i><i class="bi bi-x-lg"></i></summary>
+                                    <form method="post" action="<?= site_url('piezas/existencias/partes/' . (int) $pa['id']) ?>" class="pz-mov pz-edit-form">
                                         <?= csrf_field() ?>
-                                        <input type="text" name="nombre" value="<?= esc($pa['nombre'], 'attr') ?>" class="fv-input" maxlength="100" aria-label="Nombre">
-                                        <input type="number" name="por_unidad" min="1" max="20" value="<?= (int) $pa['por_unidad'] ?>" class="fv-input" title="Cuántas lleva cada unidad">
+                                        <input type="text" name="nombre" value="<?= esc($pa['nombre'], 'attr') ?>" class="fv-input" maxlength="100" aria-label="Nombre" required>
+                                        <label class="pz-por t3">×<input type="number" name="por_unidad" min="1" max="20" value="<?= (int) $pa['por_unidad'] ?>" class="fv-input" title="Cuántas lleva cada unidad"> por unidad</label>
                                         <button class="fv-btn fv-btn-sm">Guardar</button>
                                         <button class="fv-ibtn peligro" name="borrar" value="1" title="Quitar parte" onclick="return confirm('¿Quitar la parte «<?= esc($pa['nombre'], 'js') ?>» y su recuento?');"><i class="bi bi-trash"></i></button>
                                     </form>
@@ -342,7 +342,15 @@
     .pz-nueva { margin-top: .6rem; }
     .pz-edit > summary { list-style: none; cursor: pointer; }
     .pz-edit > summary::-webkit-details-marker { display: none; }
-    .pz-edit[open] { flex-basis: 100%; }
+    .pz-edit > summary .bi-x-lg, .pz-edit[open] > summary .bi-pencil { display: none; }
+    .pz-edit[open] > summary .bi-x-lg { display: inline; }
+    .pz-parte:has(.pz-edit[open]) .pv-cuerpo { display: none; }
+    .pz-edit[open] { flex: 1; min-width: 0; position: relative; }
+    .pz-edit[open] > summary { position: absolute; top: 0; right: 0; }
+    .pz-edit-form { margin-top: 0; padding-right: 2.6rem; }
+    .pz-edit-form input[type=text] { flex: 1 1 100%; }
+    .pz-por { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; margin-right: auto; }
+    .pz-por input[type=number] { width: 3.8rem; }
 </style>
 
 <?= $this->include('piezas/_foto_grande') ?>

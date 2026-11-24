@@ -35,7 +35,7 @@
             </div>
             <div class="pp-ent"><?php if ($entrega): ?><span class="fv-estado <?= $tonoEntrega ?>" title="Fecha de entrega: <?= esc(date('d/m/Y', strtotime($pedido['fecha_entrega'])), 'attr') ?>">Entrega <?= esc($entrega['texto']) ?></span><?php endif; ?></div>
             <div class="pp-progw"><?php if ($pedido['totalPiezas']): ?><?php $pct = (int) round(min($pedido['piezasHechas'], $pedido['totalPiezas']) * 100 / $pedido['totalPiezas']); ?><div class="pp-prog" title="Unidades hechas del total"><span class="pp-barra-p"><i style="width: <?= $pct ?>%"></i></span><span class="fv-mono"><?= $pedido['piezasHechas'] ?>/<?= $pedido['totalPiezas'] ?> ud.</span></div><?php endif; ?></div>
-            <div class="pp-card-n"<?= $pedido['notas'] ? ' title="' . esc($pedido['notas'], 'attr') . '"' : '' ?>><?= $pedido['notas'] ? esc($pedido['notas']) : '' ?></div>
+            <div class="pp-card-n"><?php if ($pedido['notas']): ?><mark class="pp-nota"><?= esc($pedido['notas']) ?></mark><?php endif; ?></div>
         </div>
     </a>
 </div>

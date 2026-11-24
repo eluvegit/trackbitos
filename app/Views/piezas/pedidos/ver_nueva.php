@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=8">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=9">
 <?php
     $etiquetas = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
     $tonos     = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];
@@ -74,6 +74,15 @@
 
     <div class="fv-grid pp-grid">
         <div class="fv-col">
+            <?php if ($pedido['notas']): ?>
+                <section class="fv-panel" data-m="1">
+                    <div class="fv-ph">
+                        <h3>Notas</h3>
+                        <div class="der"><button type="button" class="fv-gbtn" data-bs-toggle="modal" data-bs-target="#modalDatosPedido"><i class="bi bi-pencil"></i> Editar</button></div>
+                    </div>
+                    <p class="pp-nota pp-nota-pedido"><mark><?= esc($pedido['notas']) ?></mark></p>
+                </section>
+            <?php endif; ?>
             <section class="fv-panel pp-piezas" data-m="3">
                 <div class="fv-ph">
                     <h3>Piezas</h3>
@@ -182,13 +191,6 @@
                     </ol>
                 </form>
             </section>
-
-            <?php if ($pedido['notas']): ?>
-                <section class="fv-panel" data-m="5">
-                    <div class="fv-ph"><h3>Notas</h3></div>
-                    <p class="pp-notas" data-bs-toggle="modal" data-bs-target="#modalDatosPedido" title="Editar notas"><?= esc($pedido['notas']) ?></p>
-                </section>
-            <?php endif; ?>
 
             <?= view('piezas/pedidos/_referencias_nueva', ['pedido' => $pedido, 'imagenes' => $imagenes]) ?>
 

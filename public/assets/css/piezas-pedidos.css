@@ -68,7 +68,7 @@
 .pp-card-m .der { margin-left: auto; }
 .pp-card-m .todas { color: var(--fv-ok); }
 .pp-card .fv-estado { font-size: 12px; }
-.pp-card-n { font-size: 12px; color: var(--fv-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-card-n:not(:empty) { padding-left: .3em; font-size: 13px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
 .pp-estrella { position: absolute; top: 6px; right: 6px; z-index: 2; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--fv-r-sm); color: var(--fv-text-3) !important; background: rgb(0 0 0 / .35) !important; opacity: 0; transition: opacity .12s, color .12s; }
 .pp-card:hover .pp-estrella, .pp-estrella:focus-visible, .pp-card.prioritario .pp-estrella { opacity: 1; }
 .pp-card.prioritario .pp-estrella, .pp-estrella:hover { color: var(--fv-warn) !important; }
@@ -123,8 +123,10 @@
 .pp-grande small { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--fv-text-3); margin-left: 6px; }
 .pp-ficha .fv-nivel { margin-top: 2px; }
 .pp-ficha .fv-nivel i { background: var(--fv-ok); transition: width .2s; }
-.pp-notas { font-size: 13px; color: var(--fv-text-2); white-space: pre-line; cursor: pointer; }
-.pp-notas:hover { color: var(--fv-text); }
+.pp-nota { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.pp-nota mark, mark.pp-nota { padding: .02em .32em .06em; margin: 0 -.32em; color: #1f1500; font-weight: 500; border-radius: .7em .25em .6em .3em / .3em .6em .25em .5em; background: linear-gradient(100deg, rgb(245 165 36 / .78) 0, var(--fv-warn) 1.2em, rgb(245 165 36 / .92) 55%, var(--fv-warn) calc(100% - 1em), rgb(245 165 36 / .7) 100%) 0 70% / 100% 82% no-repeat; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.pp-nota-pedido { margin-top: 14px; padding-left: .3em; font-size: 20px; font-weight: 500; line-height: 1.55; letter-spacing: -.015em; }
+.pp .linea-nota { flex: 1 1 100%; margin: 0 0 2px 64px; padding-left: .3em; font-size: 14px; line-height: 1.6; }
 
 .pp-pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .pp-pasos li { position: relative; }
@@ -148,7 +150,7 @@
 .pp-plista .f { font: 11px var(--fv-mono); color: var(--fv-text-3); }
 
 #lista-lineas { display: grid; margin: 0 -10px; }
-.pp .linea { display: flex; align-items: center; gap: 12px; padding: 10px; border-top: 1px solid var(--fv-border); background: var(--fv-panel); transition: background .12s; }
+.pp .linea { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px; border-top: 1px solid var(--fv-border); background: var(--fv-panel); transition: background .12s; }
 .pp .linea:first-child { border-top: 0; }
 .pp .linea:hover { background: color-mix(in srgb, var(--fv-panel) 94%, white); }
 .pp .linea-cuerpo { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: var(--fv-r-sm); }
@@ -254,6 +256,7 @@
   .pp .linea { gap: 10px; }
   .pp .linea-cuerpo { gap: 10px; }
   .pp .linea-foto { width: 44px; height: 44px; }
+  .pp .linea-nota { margin-left: 54px; }
   .pp-grande { font-size: 44px; }
 }
 @media (max-width: 420px) {
