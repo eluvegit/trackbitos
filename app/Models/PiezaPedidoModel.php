@@ -11,12 +11,13 @@ class PiezaPedidoModel extends Model
     protected $useTimestamps = false;
 
     // Fases del pedido: (idea) -> nuevo -> diseñando (clave histórica
-    // en_produccion) -> para impresión -> hecho.
-    public const ESTADOS = ['idea', 'nuevo', 'en_produccion', 'para_impresion', 'completado'];
+    // en_produccion) -> en cola (piezas preparadas que aún no están en
+    // ninguna placa: meterlas la próxima vez) -> para impresión -> hecho.
+    public const ESTADOS = ['idea', 'nuevo', 'en_produccion', 'en_cola', 'para_impresion', 'completado'];
 
     // Los que están en marcha. Las ideas quedan fuera: no cuentan como
     // "por hacer" ni avisan de entrega.
-    public const ABIERTOS = ['nuevo', 'en_produccion', 'para_impresion'];
+    public const ABIERTOS = ['nuevo', 'en_produccion', 'en_cola', 'para_impresion'];
 
     protected $allowedFields = [
         'origen', 'estado', 'orden', 'prioritario', 'fecha_entrega', 'referencia_externa', 'notas',
@@ -25,7 +26,7 @@ class PiezaPedidoModel extends Model
 
     protected $validationRules = [
         'origen' => 'required|max_length[30]',
-        'estado' => 'permit_empty|in_list[idea,nuevo,en_produccion,para_impresion,completado]',
+        'estado' => 'permit_empty|in_list[idea,nuevo,en_produccion,en_cola,para_impresion,completado]',
         'fecha_entrega' => 'permit_empty|valid_date[Y-m-d]',
     ];
 

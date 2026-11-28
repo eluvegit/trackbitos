@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-varias.css') ?>?v=9">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-varias.css') ?>?v=10">
 <?php
 $tamanoLegible = static fn (int $bytes): string => $bytes >= 1024 * 1024
     ? number_format($bytes / (1024 * 1024), 1, ',', '.') . ' MB'
@@ -50,6 +50,7 @@ $rankingsPeso = [
     <div class="es-kpis">
         <a href="#gastadas" data-estad-ir="gastadas"><span class="k">Gastadas</span><span class="v e-bad"><?= $num($totalGastadas) ?></span><span class="s"><?= esc($textoPeriodo) ?></span></a>
         <a href="#impresas" data-estad-ir="impresas"><span class="k">Impresas</span><span class="v e-ok"><?= $num($totalImpresas) ?></span><span class="s"><?= esc($textoPeriodo) ?></span></a>
+        <a href="#impresas" data-estad-ir="impresas" title="Copias marcadas como fallidas en placas impresas"><span class="k">Fallidas</span><span class="v e-bad"><?= $num($totalFallidas) ?></span><span class="s"><?= $totalImpresas > 0 ? number_format($totalFallidas / $totalImpresas * 100, 1, ',', '.') . ' % de las impresas' : esc($textoPeriodo) ?></span></a>
         <a href="<?= site_url('piezas/existencias') ?>"><span class="k">En stock</span><span class="v"><?= $num($stockTotal) ?></span><span class="s">ahora mismo</span></a>
         <a href="#disco" data-estad-ir="disco"><span class="k">Disco</span><span class="v"><?= $tamanoLegible($total) ?></span><span class="s"><?= $totalPapelera > 0 ? $tamanoLegible($totalPapelera) . ' en papelera' : 'sin papelera' ?></span></a>
     </div>

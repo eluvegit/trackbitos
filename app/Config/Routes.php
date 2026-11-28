@@ -862,6 +862,8 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // Máquinas: solo mirar y renombrar (spec 4.5). El alta la hace el
     // cliente al registrarse, nunca la web.
     $routes->GET('ayuda', 'Web::ayuda');
+    // Guía paso a paso para cuadrar el stock (de la impresora al hueco).
+    $routes->GET('ayuda/stock', 'Web::ayudaStock');
     $routes->GET('maquinas', 'Web::maquinas');
     $routes->POST('maquina/(:num)/renombrar', 'Web::renombrarMaquina/$1');
     $routes->GET('estadisticas', 'Web::estadisticas');
@@ -1083,6 +1085,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     $routes->POST('ubicaciones/cajas/cambiar', 'UbicacionesController::moverDeCaja');
     $routes->POST('ubicaciones/cajas/salida', 'UbicacionesController::salidaCaja');
     $routes->POST('ubicaciones/cajas/meter', 'UbicacionesController::meterEnCaja');
+    $routes->POST('ubicaciones/cajas/deshacer/(:num)', 'UbicacionesController::deshacerTraslado/$1');
     $routes->POST('ubicaciones/colocar', 'UbicacionesController::colocar');
     $routes->POST('ubicaciones/sin-ubicacion/a-caja', 'UbicacionesController::sinUbicacionACaja');
     $routes->GET('ubicaciones/cajas/buscar', 'UbicacionesController::buscarParaCaja');

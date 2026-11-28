@@ -72,6 +72,7 @@
         'idea'           => 'secondary',
         'nuevo'          => 'primary',
         'en_produccion'  => 'warning',
+        'en_cola'        => 'dark',
         'para_impresion' => 'info',
         'completado'     => 'success',
     ];

@@ -24,6 +24,7 @@ $areas = [
         ['n' => 'Estuches', 'r' => 'ubicaciones', 'i' => 'bi-geo-alt'],
         ['n' => 'Impresas y de pedido', 'r' => 'ubicaciones/cajas', 'i' => 'bi-box-seam'],
         ['n' => 'Albaranes', 'r' => 'salidas', 'i' => 'bi-receipt'],
+        ['n' => 'Guía: cuadrar el stock', 'r' => 'ayuda/stock', 'i' => 'bi-signpost-2'],
     ]],
     'tpv' => ['n' => 'TPV', 'c' => '#ef5b5b', 'i' => 'bi-shop', 'extra' => [], 'items' => [
         ['n' => 'TPV', 'r' => '@tpv', 'i' => 'bi-shop', 'fuera' => true],

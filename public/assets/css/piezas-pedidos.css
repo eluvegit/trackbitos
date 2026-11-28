@@ -128,7 +128,7 @@
 .pp-nota-pedido { margin-top: 14px; padding-left: .3em; font-size: 20px; font-weight: 500; line-height: 1.55; letter-spacing: -.015em; }
 .pp .linea-nota { flex: 1 1 100%; margin: 0 0 2px 64px; padding-left: .3em; font-size: 14px; line-height: 1.6; }
 
-.pp-pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pp-pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .pp-pasos li { position: relative; }
 .pp-pasos li::after { content: ""; position: absolute; top: 12px; left: calc(50% + 8px); right: calc(-50% + 8px); height: 1.5px; background: var(--fv-border-2); }
 .pp-pasos li:last-child::after { display: none; }

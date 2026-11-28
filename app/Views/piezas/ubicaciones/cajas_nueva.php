@@ -20,6 +20,7 @@
             </div>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/salidas') ?>" class="fv-gbtn" title="Albaranes de salida"><i class="bi bi-receipt"></i> Albaranes</a>
+            <a href="<?= site_url('piezas/ayuda/stock') ?>" class="fv-gbtn" title="Paso a paso: de la impresora al hueco"><i class="bi bi-signpost-2"></i> Guía</a>
             <span class="fv-vsep"></span>
             <a href="<?= site_url('piezas/ubicaciones/cajas?nueva=0') ?>" class="fv-gbtn" title="Volver a la vista de siempre"><i class="bi bi-arrow-left-right"></i> Vista clásica</a>
         </div>
@@ -90,7 +91,7 @@
                     <div class="pv-lista">
                         <?php foreach ($filas as $f): ?>
                             <?php $buscable = mb_strtolower($f['nombre'] . ' ' . ($f['sku'] ?? '') . ' ' . ($f['hueco'] ?? 'sin hueco')); ?>
-                            <div class="pv-fila cj-fila" data-buscar="<?= esc($buscable, 'attr') ?>">
+                            <div class="pv-fila cj-fila" data-buscar="<?= esc($buscable, 'attr') ?>" data-variante="<?= (int) $f['id'] ?>">
                                 <span class="pv-ico"><?php if ($f['imagen']): ?><img src="<?= esc($f['imagen'], 'attr') ?>" alt="" loading="lazy"><?php else: ?><i class="bi bi-image"></i><?php endif; ?></span>
                                 <div class="pv-cuerpo">
                                     <a href="<?= site_url('piezas/existencias/' . (int) $f['id']) ?>" class="pv-nom"><?= esc($f['nombre']) ?></a>
@@ -98,7 +99,7 @@
                                         <?php if ($f['hueco'] !== null): ?>
                                             <span><i class="bi bi-geo-alt"></i> <span class="fv-mono"><?= esc($f['hueco']) ?></span></span>
                                         <?php else: ?>
-                                            <span class="fv-estado e-warn">Sin hueco</span>
+                                            <span class="fv-estado e-warn" data-cj-sin-hueco>Sin hueco</span>
                                         <?php endif; ?>
                                         <?= stock_desglose($f['desglose'], $caja, $f['hueco'] !== null ? 'en hueco' : 'sin ubicación') ?>
                                     </div>
@@ -131,7 +132,7 @@
                     <div class="cj-rejilla">
                         <?php foreach ($filas as $f): ?>
                             <?php $buscable = mb_strtolower($f['nombre'] . ' ' . ($f['sku'] ?? '') . ' ' . ($f['hueco'] ?? 'sin hueco')); ?>
-                            <div class="cj-tesela cj-fila" data-buscar="<?= esc($buscable, 'attr') ?>">
+                            <div class="cj-tesela cj-fila" data-buscar="<?= esc($buscable, 'attr') ?>" data-variante="<?= (int) $f['id'] ?>">
                                 <?php if ($f['imagen']): ?>
                                     <button type="button" class="cj-foto" data-cj-grande="<?= esc($f['imagen_grande'] ?? $f['imagen'], 'attr') ?>" data-cj-titulo="<?= esc($f['nombre'], 'attr') ?>" title="Ver en grande">
                                         <img src="<?= esc($f['imagen'], 'attr') ?>" alt="<?= esc($f['nombre'], 'attr') ?>" loading="lazy">
@@ -145,7 +146,7 @@
                                     <?php if ($f['hueco'] !== null): ?>
                                         <span class="cj-hueco"><i class="bi bi-geo-alt"></i> <span class="fv-mono"><?= esc($f['hueco']) ?></span></span>
                                     <?php else: ?>
-                                        <span class="fv-estado e-warn">Sin hueco</span>
+                                        <span class="fv-estado e-warn" data-cj-sin-hueco>Sin hueco</span>
                                     <?php endif; ?>
                                 </div>
                                 <?php if ($f['cantidad'] > 0): ?>
@@ -177,6 +178,33 @@
             </section>
         <?php endforeach; ?>
     </div>
+
+    <?php // Lo último que se ha movido entre cajas y huecos, para comprobar
+          // qué se ha tocado y deshacerlo si fue sin querer. ?>
+    <?php if (!empty($traslados)): ?>
+        <section class="fv-panel cj-ultimos">
+            <div class="fv-ph">
+                <i class="bi bi-clock-history t3"></i><h3>Lo último que has movido</h3><span class="cuenta">entre cajas y huecos · el total no cambia</span>
+            </div>
+            <p class="es-ayuda">Cada línea es un traslado. «Deshacer» devuelve las piezas a donde estaban (el hueco que le dieras a la pieza se queda). Los cuadres automáticos salen en gris y no se deshacen.</p>
+            <div class="cj-tras">
+                <?php foreach ($traslados as $t): ?>
+                    <div class="cj-tras-fila<?= $t['cuadre'] ? ' cuadre' : '' ?>">
+                        <span class="cj-tras-hora fv-mono" title="<?= esc($t['creado_en'], 'attr') ?>"><?= esc(date('d/m H:i', strtotime($t['creado_en']))) ?></span>
+                        <a href="<?= site_url('piezas/existencias/' . (int) $t['variante_id']) ?>" class="cj-tras-nom"><?= esc($t['nombre']) ?></a>
+                        <span class="cj-tras-mov"><b><?= (int) $t['cantidad'] ?></b> ud. · <?= esc($t['de_txt']) ?> <i class="bi bi-arrow-right"></i> <?= esc($t['a_txt']) ?><?= $t['cuadre'] ? ' <em>(cuadre)</em>' : '' ?></span>
+                        <?php if (!$t['cuadre']): ?>
+                            <form method="post" action="<?= site_url('piezas/ubicaciones/cajas/deshacer/' . (int) $t['id']) ?>"
+                                onsubmit="return confirm('¿Deshacer este traslado? Las <?= (int) $t['cantidad'] ?> ud. vuelven a <?= esc($t['de_txt'], 'js') ?>.');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="fv-gbtn" title="Deshacer este traslado"><i class="bi bi-arrow-counterclockwise"></i> Deshacer</button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
 </div>
 
 <?= $this->include('piezas/_modal_mov_stock') ?>
@@ -243,8 +271,63 @@
     .cj-visor-nav { top: 50%; transform: translateY(-50%); }
     .cj-visor-nav.ant { left: 16px; }
     .cj-visor-nav.sig { right: 16px; }
+
+    .cj-ultimos { margin-top: 16px; }
+    .cj-tras { display: flex; flex-direction: column; }
+    .cj-tras-fila { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 2px; border-top: 1px solid var(--fv-border); font-size: 13.5px; }
+    .cj-tras-fila:first-child { border-top: 0; }
+    .cj-tras-fila.cuadre { color: var(--fv-text-3); }
+    .cj-tras-hora { color: var(--fv-text-3); font-size: 12px; min-width: 76px; }
+    .cj-tras-nom { color: var(--fv-text); font-weight: 500; text-decoration: none; }
+    .cj-tras-nom:hover { color: var(--fv-accent); }
+    .cj-tras-mov { color: var(--fv-text-2, var(--fv-text-3)); flex: 1; min-width: 200px; }
+    .cj-tras-mov em { font-style: normal; font-size: 12px; }
+    .cj-tras-fila form { margin-left: auto; }
+    .cj-aviso-hueco { font-size: 12px; color: #20c997; }
 </style>
 <script>
+(function () {
+    // Elegir hueco a una pieza que no lo tiene lo fija YA (antes solo
+    // rellenaba el formulario y, si luego se pulsaba «pasar a la otra caja»
+    // o se salía de la página, la pieza seguía sin hueco). Las unidades no
+    // se mueven: siguen en la caja hasta pulsar «Guardar en su hueco».
+    var csrf = '<?= csrf_token() ?>';
+    var base = '<?= site_url('piezas/existencias') ?>/';
+    document.addEventListener('change', function (e) {
+        var sel = e.target.closest('.cj-form select[name="hueco_id"]');
+        if (!sel || !sel.value) return;
+        var form = sel.form;
+        var vid = form.variante_id.value;
+        var datos = new FormData();
+        datos.append(csrf, form.elements[csrf].value);
+        datos.append('hueco_id', sel.value);
+        fetch(base + vid + '/hueco-defecto', { method: 'POST', body: datos, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok && d.ok, d: d }; }); })
+            .then(function (r) {
+                if (!r.ok) throw new Error((r.d && r.d.mensaje) || 'No se pudo fijar el hueco.');
+                var codigo = String(r.d.codigo || '');
+                document.querySelectorAll('.cj-fila[data-variante="' + vid + '"]').forEach(function (fila) {
+                    fila.querySelectorAll('[data-cj-sin-hueco]').forEach(function (s) {
+                        var nuevo = document.createElement('span');
+                        nuevo.innerHTML = '<i class="bi bi-geo-alt"></i> <span class="fv-mono"></span> <span class="cj-aviso-hueco">fijado · pulsa ↓ para guardarlas</span>';
+                        nuevo.querySelector('.fv-mono').textContent = codigo;
+                        s.replaceWith(nuevo);
+                    });
+                    fila.querySelectorAll('select[name="hueco_id"]').forEach(function (s) {
+                        if (s._hpBoton) s._hpBoton.remove();
+                        s.remove();
+                    });
+                    fila.dataset.buscar = (fila.dataset.buscar || '').replace('sin hueco', codigo.toLowerCase());
+                });
+            })
+            .catch(function (err) {
+                alert(err.message || 'No se pudo fijar el hueco.');
+                sel.value = '';
+                if (window.PzHuecos) window.PzHuecos.sync(sel);
+            });
+    });
+})();
+
 (function () {
     var input = document.getElementById('cjBuscar');
     if (!input) return;

@@ -49,11 +49,12 @@ class PedidosController extends BaseController
         $pedidoModel = new PiezaPedidoModel();
 
         // Tablero por estado, mismo orden que el flujo real: idea -> recién
-        // llegado -> diseñando -> para impresión -> hecho.
+        // llegado -> diseñando -> en cola -> para impresión -> hecho.
         $columnas = [
             'idea'           => ['titulo' => 'Ideas', 'pedidos' => []],
             'nuevo'          => ['titulo' => 'Nuevos', 'pedidos' => []],
             'en_produccion'  => ['titulo' => 'Diseñando', 'pedidos' => []],
+            'en_cola'        => ['titulo' => 'En cola', 'pedidos' => []],
             'para_impresion' => ['titulo' => 'Para impresión', 'pedidos' => []],
             'completado'     => ['titulo' => 'Hecho', 'pedidos' => []],
         ];
@@ -858,13 +859,13 @@ class PedidosController extends BaseController
         }
 
         $lineaModel->update($lineaId, ['hecha' => $this->request->getPost('hecha') ? 1 : 0]);
-        $paraImpresion = $this->pasarAParaImpresionSiProcede((int) $linea['pedido_id']);
-        if ($paraImpresion) {
-            session()->setFlashdata('success', 'Todas las líneas están listas: el pedido pasa a "Para impresión".');
+        $enCola = $this->pasarAEnColaSiProcede((int) $linea['pedido_id']);
+        if ($enCola) {
+            session()->setFlashdata('success', 'Todas las líneas están listas: el pedido pasa a "En cola" (falta meterlo en una placa).');
         }
 
         if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['ok' => true, 'recargar' => $paraImpresion]);
+            return $this->response->setJSON(['ok' => true, 'recargar' => $enCola]);
         }
 
         return redirect()->to('/piezas/pedido/' . $linea['pedido_id']);
@@ -872,11 +873,12 @@ class PedidosController extends BaseController
 
     /**
      * Si todas las líneas del pedido están marcadas como listas (preparadas
-     * para imprimir), el pedido pasa a "para impresión" solo. Únicamente
-     * avanza desde nuevo/diseñando: uno ya hecho no retrocede, y desmarcar
+     * para imprimir), el pedido pasa a "en cola" solo: preparado, pendiente
+     * de meterlo en una placa ("para impresión" ya se pone a mano). Únicamente
+     * avanza desde nuevo/diseñando: uno más adelante no retrocede, y desmarcar
      * una línea después no lo devuelve atrás. Devuelve si lo ha cambiado.
      */
-    private function pasarAParaImpresionSiProcede(int $pedidoId): bool
+    private function pasarAEnColaSiProcede(int $pedidoId): bool
     {
         $pedidoModel = new PiezaPedidoModel();
         $pedido = $pedidoModel->find($pedidoId);
@@ -894,7 +896,7 @@ class PedidosController extends BaseController
             }
         }
 
-        $pedidoModel->update($pedidoId, ['estado' => 'para_impresion', 'actualizado_en' => date('Y-m-d H:i:s')]);
+        $pedidoModel->update($pedidoId, ['estado' => 'en_cola', 'actualizado_en' => date('Y-m-d H:i:s')]);
 
         return true;
     }

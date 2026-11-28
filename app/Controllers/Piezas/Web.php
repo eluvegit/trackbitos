@@ -2352,6 +2352,12 @@ class Web extends BaseController
         return view(session('piezas_ayuda_nueva') !== false ? 'piezas/ayuda_nueva' : 'piezas/ayuda');
     }
 
+    /** Guía del stock: de la impresora a las cajas, los huecos y los albaranes, situación por situación. */
+    public function ayudaStock()
+    {
+        return view('piezas/ayuda_stock');
+    }
+
     public function placas()
     {
         $placas = $this->placaModel->orderBy('creado_en', 'DESC')->findAll();

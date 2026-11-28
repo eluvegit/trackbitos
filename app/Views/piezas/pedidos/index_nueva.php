@@ -3,14 +3,14 @@
 <?= $this->include('piezas/_nav') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=9">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=15">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=10">
 <?php
-    $tonos = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];
-    $abiertos = $columnas['nuevo']['total'] + $columnas['en_produccion']['total'] + $columnas['para_impresion']['total'];
+    $tonos = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'en_cola' => 'e-cola', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];
+    $abiertos = $columnas['nuevo']['total'] + $columnas['en_produccion']['total'] + $columnas['en_cola']['total'] + $columnas['para_impresion']['total'];
     $vencidos = 0;
     $conEstrella = 0;
-    foreach (['nuevo', 'en_produccion', 'para_impresion'] as $e) {
+    foreach (['nuevo', 'en_produccion', 'en_cola', 'para_impresion'] as $e) {
         foreach ($columnas[$e]['pedidos'] as $p) {
             $ent = \App\Models\PiezaPedidoModel::entrega($p);
             $vencidos += ($ent && $ent['vencido']) ? 1 : 0;
@@ -38,6 +38,9 @@
         <div class="fv-meta">
             <span><b><?= $abiertos ?></b> abiertos</span>
             <span class="fv-dot"></span>
+            <?php if ($columnas['en_cola']['total']): ?>
+                <span class="fv-estado e-cola" title="Preparados, falta meterlos en una placa"><?= $columnas['en_cola']['total'] ?> en cola</span>
+            <?php endif; ?>
             <span class="fv-estado e-acc"><?= $columnas['para_impresion']['total'] ?> para impresión</span>
             <?php if ($vencidos): ?>
                 <span class="fv-estado e-bad"><?= $vencidos ?> con la entrega pasada</span>

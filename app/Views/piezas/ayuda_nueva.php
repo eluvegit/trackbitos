@@ -480,6 +480,7 @@
 <!-- ─────────── INVENTARIO ─────────── -->
 <section class="pa-seccion" id="inventario">
     <div class="pa-seccion-cab"><span class="pa-seccion-num">04</span><h2>Inventario</h2><span>existencias, huecos y TPV</span></div>
+    <p class="pa-corto"><i class="bi bi-signpost-2"></i> Paso a paso, situación por situación (placa, fallidas, cajas, huecos, albaranes, deshacer): <?= $pag('piezas/ayuda/stock', 'Guía: cuadrar el stock') ?>.</p>
     <div class="pa-rejilla">
         <article class="pa-ficha" id="como-alta-inventario" data-claves="dar de alta inventario stock placa sincronizar quitar del inventario impreso caja cajas guardar pedido">
             <h3><i class="bi bi-box-arrow-in-down"></i> Meter lo impreso en el inventario <a class="pa-ancla" href="#como-alta-inventario">#</a></h3>
@@ -534,7 +535,7 @@
             <h3><i class="bi bi-cart-check"></i> Pedidos <a class="pa-ancla" href="#como-pedido">#</a></h3>
             <p><?= $pag('piezas/pedidos', 'Pedidos') ?> (<i class="bi bi-cart-check"></i>) entran solos desde <b>sterclicks</b> o se dan de alta a mano.</p>
             <ul>
-                <li>Estados: <b>nuevo → diseñando → para impresión → hecho</b>.</li>
+                <li>Estados: <b>nuevo → diseñando → en cola → para impresión → hecho</b>.</li>
                 <li>Arrastra para reordenar; la <b>prioridad</b> los sube arriba. La fecha de entrega se pone roja cuando vence.</li>
                 <li>En cada línea, marca cuántas llevas hechas o la línea entera como hecha. Se pueden copiar o mover líneas a otro pedido.</li>
                 <li><b>Cargar a la placa</b> mete todas sus piezas en el carrito, tengan STL o no.</li>

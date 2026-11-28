@@ -209,7 +209,7 @@ a.pv-nom:hover, .pv-nom a:hover { color: var(--fv-accent-hover); }
 .es-periodos a { height: 30px; padding: 0 12px; border-radius: 7px; color: var(--fv-text-3); font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; }
 .es-periodos a:hover { color: var(--fv-text); }
 .es-periodos a[aria-pressed="true"] { background: var(--fv-raised); color: var(--fv-text); }
-.es-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--fv-panel); border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); }
+.es-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--fv-panel); border: 1px solid var(--fv-border); border-radius: var(--fv-r-lg); box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); }
 .es-kpis > a { display: grid; gap: 4px; padding: 18px 22px; border-left: 1px solid var(--fv-border); transition: background .12s; min-width: 0; }
 .es-kpis > a:first-child { border-left: 0; border-radius: var(--fv-r-lg) 0 0 var(--fv-r-lg); }
 .es-kpis > a:last-child { border-radius: 0 var(--fv-r-lg) var(--fv-r-lg) 0; }
@@ -221,7 +221,8 @@ a.pv-nom:hover, .pv-nom a:hover { color: var(--fv-accent-hover); }
 @media (max-width: 760px) {
   .es-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .es-kpis > a { border-radius: 0 !important; }
-  .es-kpis > a:nth-child(3) { border-left: 0; }
+  .es-kpis > a:nth-child(odd) { border-left: 0; }
+  .es-kpis > a:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .es-kpis > a:nth-child(n+3) { border-top: 1px solid var(--fv-border); }
   .es-kpis .v { font-size: 28px; }
 }

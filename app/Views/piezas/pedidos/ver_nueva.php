@@ -3,11 +3,11 @@
 <?= $this->include('piezas/_nav') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=14">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=9">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=15">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-pedidos.css') ?>?v=10">
 <?php
-    $etiquetas = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
-    $tonos     = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];
+    $etiquetas = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'en_cola' => 'En cola', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
+    $tonos     = ['idea' => 'e-neu', 'nuevo' => 'e-info', 'en_produccion' => 'e-warn', 'en_cola' => 'e-cola', 'para_impresion' => 'e-acc', 'completado' => 'e-ok'];
     $estadoActual = $pedido['estado'];
     $posActual = array_search($estadoActual, $estados, true);
     $creado = strtotime($pedido['creado_en']);

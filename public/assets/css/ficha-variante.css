@@ -56,7 +56,7 @@
 .fv-meta .fv-estado { font-size: 13px; }
 .fv-estado::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
 .fv .e-ok { color: var(--fv-ok); } .fv .e-warn { color: var(--fv-warn); } .fv .e-bad { color: var(--fv-bad); }
-.fv .e-info { color: var(--fv-info); } .fv .e-acc { color: var(--fv-accent); } .fv .e-neu { color: var(--fv-text-3); }
+.fv .e-info { color: var(--fv-info); } .fv .e-acc { color: var(--fv-accent); } .fv .e-neu { color: var(--fv-text-3); } .fv .e-cola { color: #22b8cf; }
 
 .fv-banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-radius: var(--fv-r-md); border: 1px solid rgb(142 140 255 / .25); background: linear-gradient(90deg, rgb(142 140 255 / .08), transparent 60%); font-size: 13px; color: var(--fv-text-2); }
 .fv-banner b { color: var(--fv-text); font-weight: 600; }
@@ -151,7 +151,7 @@
 .fv-trio a:hover .k { color: var(--fv-text); }
 .fv-cuadros { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }
 .fv-cuadros i, .fv .q { width: 10px; height: 10px; border-radius: 3px; background: var(--fv-raised); display: block; flex: none; }
-.fv .q.e-ok, .fv .q.e-warn, .fv .q.e-bad, .fv .q.e-info, .fv .q.e-acc, .fv .q.e-neu { background: currentColor; }
+.fv .q.e-ok, .fv .q.e-warn, .fv .q.e-bad, .fv .q.e-info, .fv .q.e-acc, .fv .q.e-neu, .fv .q.e-cola { background: currentColor; }
 .fv .q-ok { background: var(--fv-ok); } .fv .q-warn { background: var(--fv-warn); } .fv .q-bad { background: var(--fv-bad); }
 .fv .q-pend { background: repeating-linear-gradient(135deg, var(--fv-text-3) 0 2px, transparent 2px 4px); }
 

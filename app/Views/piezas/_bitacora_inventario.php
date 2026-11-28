@@ -39,9 +39,13 @@ $colocacionHuecos = $colocacionHuecos ?? [];
         <form method="post" action="<?= site_url('piezas/placa/' . $idPlaca . '/inventario') ?>"
             data-ajax-form="inventario-sincronizar" class="d-flex gap-1 align-items-center">
             <?= csrf_field() ?>
+            <?php // Ya dada de alta: por defecto, la caja en la que entró (si
+                  // no, una línea nueva se iba a impresas aunque la placa
+                  // hubiera entrado en la de pedido). ?>
+            <?php $cajaActual = $placa['inventario_sincronizado_en'] ? (new \App\Services\PiezaInventario())->cajaDePlaca($idPlaca) : 'impresas'; ?>
             <select name="caja" class="form-select form-select-sm" style="width: auto;" title="A qué caja van las piezas nuevas">
-                <option value="impresas">a caja de impresas</option>
-                <option value="pedido">a caja de pedido</option>
+                <option value="impresas"<?= $cajaActual === 'impresas' ? ' selected' : '' ?>>a caja de impresas</option>
+                <option value="pedido"<?= $cajaActual === 'pedido' ? ' selected' : '' ?>>a caja de pedido</option>
             </select>
             <button class="btn btn-sm btn-success">
                 <i class="bi bi-boxes"></i>

@@ -792,7 +792,46 @@ class UbicacionesController extends BaseController
             'huecosLibres' => array_diff_key($huecos, $this->inventario->huecosOcupados()),
             'destinos'  => (new PiezaSalidaDestinoModel())->lista(),
             'negativas' => $this->inventario->cuadrarCajas([], true),
+            'traslados' => $this->trasladosLegibles($huecos),
         ]);
+    }
+
+    /** Deshace un traslado de la lista «Lo último que has movido». */
+    public function deshacerTraslado(int $movimientoId)
+    {
+        $vid = $this->inventario->deshacerTraslado($movimientoId);
+        if ($vid === null) {
+            return redirect()->to(site_url('piezas/ubicaciones/cajas'))
+                ->with('error', 'Ese traslado ya no se puede deshacer (no existe, es un cuadre automático o ya se deshizo).');
+        }
+        $variante = $this->variantes->find($vid);
+
+        return redirect()->to(site_url('piezas/ubicaciones/cajas'))
+            ->with('success', 'Deshecho: «' . ($variante ? $this->nombreDe($variante) : '#' . $vid) . '» vuelve a donde estaba.');
+    }
+
+    /** ultimosTraslados() con el nombre de la pieza y el código del hueco. */
+    private function trasladosLegibles(array $codigosHuecos): array
+    {
+        $traslados = $this->inventario->ultimosTraslados(25);
+        if ($traslados === []) {
+            return [];
+        }
+        $ids       = array_values(array_unique(array_column($traslados, 'variante_id')));
+        $variantes = array_column($this->variantes->whereIn('id', $ids)->findAll(), null, 'id');
+        $familias  = array_column($this->familias->whereIn('id', array_unique(array_column($variantes, 'familia_id')) ?: [0])->findAll(), 'nombre', 'id');
+
+        foreach ($traslados as &$t) {
+            $v = $variantes[$t['variante_id']] ?? null;
+            $t['nombre'] = $v ? trim(($familias[$v['familia_id']] ?? '') . ' ' . $v['nombre']) : '#' . $t['variante_id'];
+            $hueco = $t['hueco_id'] !== null ? ($codigosHuecos[$t['hueco_id']] ?? 'hueco') : 'sin ubicación';
+            foreach (['de', 'a'] as $k) {
+                $t[$k . '_txt'] = $t[$k] === 'hueco' ? $hueco : 'caja ' . $t[$k];
+            }
+        }
+        unset($t);
+
+        return $traslados;
     }
 
     public function guardarCaja()

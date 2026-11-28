@@ -260,8 +260,8 @@ foreach ($pedidosDeLaPieza as $pl) {
         $pedidosAbiertos[] = $pl;
     }
 }
-$etiquetasPedido = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
-$coloresPedidoFv = ['idea' => 'e-neu', 'nuevo' => 'e-acc', 'en_produccion' => 'e-warn', 'para_impresion' => 'e-info', 'completado' => 'e-ok'];
+$etiquetasPedido = ['idea' => 'Idea', 'nuevo' => 'Nuevo', 'en_produccion' => 'Diseñando', 'en_cola' => 'En cola', 'para_impresion' => 'Para impresión', 'completado' => 'Hecho'];
+$coloresPedidoFv = ['idea' => 'e-neu', 'nuevo' => 'e-acc', 'en_produccion' => 'e-warn', 'en_cola' => 'e-cola', 'para_impresion' => 'e-info', 'completado' => 'e-ok'];
 
 $veredictosPlaca = \App\Models\PiezaPlacaModel::VEREDICTOS;
 $cuadroPlaca = ['buena' => 'q-ok', 'regular' => 'q-warn', 'repetir' => 'q-bad'];
@@ -293,7 +293,7 @@ $colorStockFv = ['cero' => 'var(--fv-bad)', 'bajo' => 'var(--fv-warn)', 'ok' => 
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=18">
+<link rel="stylesheet" href="<?= base_url('assets/css/ficha-variante.css') ?>?v=19">
 
 <div class="fv" id="fv">
     <?php if (session('success')): ?>

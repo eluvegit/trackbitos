@@ -283,6 +283,74 @@ class PiezaInventario
         ]);
     }
 
+    /**
+     * Los últimos traslados hechos a mano (guardar en el hueco, meter en una
+     * caja, cambiar de caja), lo más nuevo primero: lo que se ha movido, para
+     * poder comprobarlo o deshacerlo. Cada traslado es un par −n/+n escrito
+     * a la vez; los cuadres automáticos salen marcados y no se deshacen.
+     *
+     * @return list<array{id:int, variante_id:int, cantidad:int, de:string, a:string, hueco_id:?int, creado_en:string, cuadre:bool}>
+     */
+    public function ultimosTraslados(int $limite = 25): array
+    {
+        $positivos = $this->movimientos->where('origen', 'manual')->whereIn('motivo', ['guardado', 'cambio_caja'])
+            ->where('delta >', 0)->orderBy('id', 'DESC')->findAll($limite);
+
+        $salida = [];
+        foreach ($positivos as $m) {
+            $par = $this->parDe($m);
+            if ($par === null) {
+                continue;
+            }
+            $salida[] = [
+                'id'          => (int) $m['id'],
+                'variante_id' => (int) $m['variante_id'],
+                'cantidad'    => (int) $m['delta'],
+                'de'          => $par['caja'] ?? 'hueco',
+                'a'           => $m['caja'] ?? 'hueco',
+                'hueco_id'    => isset($m['ubicacion_id']) ? (int) $m['ubicacion_id'] : (isset($par['ubicacion_id']) ? (int) $par['ubicacion_id'] : null),
+                'creado_en'   => (string) $m['creado_en'],
+                'cuadre'      => str_starts_with((string) $m['nota'], 'Cuadre'),
+            ];
+        }
+
+        return $salida;
+    }
+
+    /**
+     * Deshace un traslado a mano (ver ultimosTraslados): borra su par −n/+n,
+     * así las piezas vuelven a donde estaban. El hueco que se le diera a la
+     * pieza al guardarla se queda. Devuelve la variante o null si no se puede.
+     */
+    public function deshacerTraslado(int $movimientoId): ?int
+    {
+        $m = $this->movimientos->find($movimientoId);
+        if (!$m || $m['origen'] !== 'manual' || !in_array($m['motivo'], ['guardado', 'cambio_caja'], true)
+            || (int) $m['delta'] <= 0 || str_starts_with((string) $m['nota'], 'Cuadre')) {
+            return null;
+        }
+        $par = $this->parDe($m);
+        if ($par === null) {
+            return null;
+        }
+
+        $this->movimientos->delete([(int) $m['id'], (int) $par['id']]);
+        $this->cuadrarCajas([(int) $m['variante_id']]);
+
+        return (int) $m['variante_id'];
+    }
+
+    /**
+     * La otra mitad (−n) de un traslado +n: misma pieza, motivo y momento.
+     * Todos los traslados escriben primero el −n y luego el +n en el mismo
+     * insertBatch, así que es la fila justo anterior.
+     */
+    private function parDe(array $m): ?array
+    {
+        return $this->movimientos->where('id', (int) $m['id'] - 1)->where('variante_id', (int) $m['variante_id'])
+            ->where('motivo', $m['motivo'])->where('creado_en', $m['creado_en'])->where('delta', -(int) $m['delta'])->first();
+    }
+
     /** Pasa n piezas de una caja a la otra: par -n / +n con motivo 'cambio_caja'. */
     public function cambiarDeCaja(int $varianteId, string $de, string $a, int $cantidad): void
     {
@@ -420,11 +488,14 @@ class PiezaInventario
 
     /**
      * Ni las cajas ni el hueco pueden quedar en negativo si hay piezas en
-     * otro sitio: una caja en negativo (alta bajada o quitada, fallidas,
-     * salida de más) se cubre primero con la otra caja y luego con el hueco;
-     * un hueco en negativo (baja o albarán del hueco de piezas que estaban
-     * en una caja) se cubre con impresas y luego con pedido. El total no
-     * cambia. Devuelve cuántas piezas cuadró; con $simular no escribe nada.
+     * otro sitio. Una caja de impresas en negativo (fallidas marcadas o alta
+     * bajada después de guardar en el hueco, salida de más) se cubre primero
+     * con el hueco —es adonde suele haber ido lo impreso— y solo luego con la
+     * caja de pedido, que es lo apartado a propósito y no debe vaciarse sola.
+     * Una caja de pedido en negativo se cubre con impresas y luego con el
+     * hueco. Un hueco en negativo (baja o albarán del hueco de piezas que
+     * estaban en una caja) se cubre con impresas y luego con pedido. El total
+     * no cambia. Devuelve cuántas piezas cuadró; con $simular no escribe nada.
      */
     public function cuadrarCajas(array $varianteIds = [], bool $simular = false, ?int $salidaId = null): int
     {
@@ -455,9 +526,11 @@ class PiezaInventario
                 }
             };
 
-            foreach (['impresas' => 'pedido', 'pedido' => 'impresas'] as $caja => $otra) {
+            // De dónde se tapa cada caja, en orden; lo que falte al final sale del último.
+            foreach (['impresas' => ['hueco', 'pedido'], 'pedido' => ['impresas', 'hueco']] as $caja => [$primero, $luego]) {
                 if ($d[$caja] < 0) {
-                    $mover($otra, $caja, min(-$d[$caja], max(0, $d[$otra])));
+                    $mover($primero, $caja, min(-$d[$caja], max(0, $d[$primero])));
+                    $mover($luego, $caja, min(-$d[$caja], max(0, $d[$luego])));
                     $mover('hueco', $caja, -$d[$caja]);
                 }
             }

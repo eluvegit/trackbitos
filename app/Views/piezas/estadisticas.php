@@ -49,12 +49,13 @@ $rankingsPeso = [
     $kpis = [
         ['Gastadas', $totalGastadas, 'bi-box-arrow-right', 'text-danger', 'gastadas', $textoPeriodo],
         ['Impresas', $totalImpresas, 'bi-printer', 'text-success', 'impresas', $textoPeriodo],
+        ['Fallidas', $totalFallidas, 'bi-x-circle', 'text-danger', 'impresas', $totalImpresas > 0 ? number_format($totalFallidas / $totalImpresas * 100, 1, ',', '.') . ' % de las impresas' : $textoPeriodo],
         ['En stock', $stockTotal, 'bi-box-seam', 'text-primary', 'gastadas', 'ahora mismo'],
         ['Disco', $tamanoLegible($total), 'bi-hdd', 'text-secondary', 'disco', $totalPapelera > 0 ? $tamanoLegible($totalPapelera) . ' en papelera' : 'sin papelera'],
     ];
     ?>
     <?php foreach ($kpis as [$titulo, $valor, $icono, $color, $pestana, $sub]): ?>
-        <div class="col-6 col-lg-3">
+        <div class="col-6 col-lg">
             <a href="#<?= $pestana ?>" class="card shadow-sm h-100 text-decoration-none text-body estad-kpi" data-estad-ir="<?= $pestana ?>">
                 <div class="card-body p-3">
                     <div class="text-muted small d-flex align-items-center gap-1">
