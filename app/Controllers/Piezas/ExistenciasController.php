@@ -190,6 +190,7 @@ class ExistenciasController extends BaseController
             'filtro'       => $filtro,
             'imagenes'     => $imagenes,
             'ubicaciones'  => $ubicaciones,
+            'huecosDisponibles' => $vistaNueva ? $this->huecosDisponibles() : [],
             'partesPieza'  => (new PiezaPartes())->resumenes([]),
             'categorias'     => $categorias,
             'categoriaSel'   => $categoriaSel,
@@ -216,21 +217,10 @@ class ExistenciasController extends BaseController
         $stock    = $desglose['total'];
         $minimo   = (int) ($variante['stock_minimo'] ?? 0);
 
-        // Huecos disponibles, agrupados por estuche para el <select> del
-        // modal, con su código completo ("E1H2") ya resuelto.
-        $estuchesPorId = [];
-        foreach ($this->estuches->ordenados() as $e) {
-            $estuchesPorId[(int) $e['id']] = $e;
-        }
-        $huecosDisponibles = [];
+        $huecosDisponibles = $this->huecosDisponibles();
         $huecosPorId = [];
-        $ocupados = $this->inventario->huecosOcupados();
-        foreach ($estuchesPorId as $estucheId => $e) {
-            foreach ($this->huecos->deEstuche($estucheId) as $h) {
-                $codigo = PiezaHuecoModel::codigoCompleto($e, $h);
-                $huecosDisponibles[] = ['estuche' => $e, 'hueco' => $h, 'codigo' => $codigo, 'libre' => !isset($ocupados[(int) $h['id']])];
-                $huecosPorId[(int) $h['id']] = ['hueco' => $h, 'codigo' => $codigo];
-            }
+        foreach ($huecosDisponibles as $hd) {
+            $huecosPorId[(int) $hd['hueco']['id']] = ['hueco' => $hd['hueco'], 'codigo' => $hd['codigo']];
         }
 
         $huecoId = $this->inventario->huecoDeVariante($id);
@@ -397,17 +387,7 @@ class ExistenciasController extends BaseController
         }
 
         $variante = $this->variantes->find($varianteId);
-        $volver   = $variante
-            ? site_url('piezas/existencias/' . $varianteId)
-            : site_url('piezas/existencias');
-        // El modal común (piezas/_modal_mov_stock) manda la pantalla desde
-        // la que se abrió, para volver a ella. Solo rutas de piezas/.
-        $pedido = (string) $this->request->getPost('volver');
-        if ($pedido === 'ubicaciones') {
-            $volver = site_url('piezas/ubicaciones');
-        } elseif (preg_match('#^piezas(/[A-Za-z0-9_\-/]*)?(\?[A-Za-z0-9_\-=&%.]*)?$#', $pedido)) {
-            $volver = site_url($pedido);
-        }
+        $volver   = $this->volverA($variante ? $varianteId : null);
 
         $error = !$variante ? 'Esa variante no existe.'
             : (!in_array($sentido, ['alta', 'baja'], true) || $cantidad < 1 ? 'Indica una cantidad de al menos 1.'
@@ -451,6 +431,60 @@ class ExistenciasController extends BaseController
         }
 
         return redirect()->to($volver)->with('success', $mensaje);
+    }
+
+    /**
+     * Pasa unidades entre el hueco de la pieza y las cajas de impresas /
+     * pedido (modal común piezas/_modal_traslado_stock). Es lo mismo que
+     * hacen los botones de Cajas: un par −n/+n que no cambia el total, y se
+     * puede deshacer desde Cajas («Lo último que has movido»).
+     */
+    public function traslado()
+    {
+        $varianteId = (int) $this->request->getPost('variante_id');
+        $de         = (string) $this->request->getPost('de');
+        $a          = (string) $this->request->getPost('a');
+        $cantidad   = (int) $this->request->getPost('cantidad');
+        $huecoId    = (int) $this->request->getPost('ubicacion_id') ?: null;
+
+        $variante = $this->variantes->find($varianteId);
+        $volver   = $this->volverA($variante ? $varianteId : null);
+        $sitios   = ['hueco', 'impresas', 'pedido'];
+        $nombres  = ['hueco' => 'su hueco', 'impresas' => 'la caja de impresas', 'pedido' => 'la caja de pedido'];
+
+        $error = null;
+        if (!$variante) {
+            $error = 'Esa variante no existe.';
+        } elseif (!in_array($de, $sitios, true) || !in_array($a, $sitios, true) || $de === $a) {
+            $error = 'Elige de dónde y a dónde van.';
+        } elseif ($cantidad < 1) {
+            $error = 'Indica una cantidad de al menos 1.';
+        } else {
+            $hay = $this->inventario->desgloseDe($varianteId)[$de];
+            if ($cantidad > $hay) {
+                $error = 'En ' . $nombres[$de] . ' solo hay ' . max(0, $hay) . ' de esa pieza.';
+            }
+        }
+        $tieneHueco = $variante && $this->inventario->huecoDeVariante($varianteId) !== null;
+        if ($error === null && $a === 'hueco' && !$tieneHueco && ($huecoId === null || !$this->huecos->find($huecoId))) {
+            $error = 'Esa pieza no tiene hueco: elige uno.';
+        }
+        if ($error !== null) {
+            return redirect()->to($volver)->with('error', $error);
+        }
+
+        if ($a === 'hueco') {
+            $this->inventario->guardarDeCaja($varianteId, $de, $cantidad, $tieneHueco ? null : $huecoId);
+        } elseif ($de === 'hueco') {
+            $this->inventario->meterEnCaja($varianteId, $a, $cantidad);
+        } else {
+            $this->inventario->cambiarDeCaja($varianteId, $de, $a, $cantidad);
+        }
+
+        $d = $this->inventario->desgloseDe($varianteId);
+
+        return redirect()->to($volver)->with('success', $cantidad . ' pieza(s) pasada(s) de ' . $nombres[$de] . ' a ' . $nombres[$a]
+            . '. Ahora: hueco ' . $d['hueco'] . ' · impresas ' . $d['impresas'] . ' · pedido ' . $d['pedido'] . ' (total ' . $d['total'] . ', sin cambios).');
     }
 
     /**
@@ -521,6 +555,42 @@ class ExistenciasController extends BaseController
 
         return redirect()->to(site_url('piezas/existencias/' . $id))
             ->with('success', $min > 0 ? 'Mínimo fijado en ' . $min . '.' : 'Mínimo quitado.');
+    }
+
+    /**
+     * Huecos para los <select> de los modales comunes, en orden de
+     * estuche, con su código completo ("E1H2") y si está libre.
+     *
+     * @return list<array{estuche:array, hueco:array, codigo:string, libre:bool}>
+     */
+    private function huecosDisponibles(): array
+    {
+        $salida   = [];
+        $ocupados = $this->inventario->huecosOcupados();
+        foreach ($this->estuches->ordenados() as $e) {
+            foreach ($this->huecos->deEstuche((int) $e['id']) as $h) {
+                $salida[] = ['estuche' => $e, 'hueco' => $h, 'codigo' => PiezaHuecoModel::codigoCompleto($e, $h), 'libre' => !isset($ocupados[(int) $h['id']])];
+            }
+        }
+
+        return $salida;
+    }
+
+    /**
+     * A dónde volver tras un modal común: la pantalla que lo abrió (campo
+     * 'volver', solo rutas de piezas/) o, si no, la ficha de stock.
+     */
+    private function volverA(?int $varianteId): string
+    {
+        $pedido = (string) $this->request->getPost('volver');
+        if ($pedido === 'ubicaciones') {
+            return site_url('piezas/ubicaciones');
+        }
+        if (preg_match('#^piezas(/[A-Za-z0-9_\-/]*)?(\?[A-Za-z0-9_\-=&%.]*)?$#', $pedido)) {
+            return site_url($pedido);
+        }
+
+        return site_url($varianteId !== null ? 'piezas/existencias/' . $varianteId : 'piezas/existencias');
     }
 
     private function errorOtroHueco(int $varianteId, int $huecoId): ?string

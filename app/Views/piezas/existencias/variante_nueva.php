@@ -84,6 +84,9 @@
                 <div class="fv-duo">
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'alta', null, (bool) $hueco) ?>><i class="bi bi-plus-lg e-ok"></i><span>Dar de alta<small>Entran piezas</small></span></button>
                     <button type="button" class="fv-btn"<?= stock_mov_attrs($idVar, $nombre, $desglose, 'baja', null, (bool) $hueco) ?>><i class="bi bi-dash-lg e-bad"></i><span>Dar de baja<small>Salen o se rompen</small></span></button>
+                    <?php if ($desglose['hueco'] > 0 || $desglose['impresas'] > 0 || $desglose['pedido'] > 0): ?>
+                        <button type="button" class="fv-btn" style="grid-column: 1 / -1"<?= stock_traslado_attrs($idVar, $nombre, $desglose, $hueco['codigo'] ?? null) ?>><i class="bi bi-arrow-left-right t2"></i><span>Mover<small>Entre su hueco y las cajas de impresas / pedido, sin cambiar el total</small></span></button>
+                    <?php endif; ?>
                 </div>
             </section>
         </div>
@@ -297,6 +300,7 @@
 </div>
 
 <?= $this->include('piezas/_modal_mov_stock') ?>
+<?= $this->include('piezas/_modal_traslado_stock') ?>
 
 <script>
     (function () {

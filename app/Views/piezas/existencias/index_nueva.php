@@ -43,12 +43,19 @@
     ];
     helper('piezas_stock');
     // Alta / baja sin entrar en la pieza: abre el modal común.
-    $altaBaja = static function (int $idVar, array $f): string {
+    // Mover entre hueco y cajas: solo si hay algo que mover.
+    $altaBaja = static function (int $idVar, array $f) use ($ubicaciones): string {
         $conHueco = !empty($f['variante']['hueco_predeterminado_id']);
+        $d        = $f['desglose'];
+        $mover    = $d['hueco'] > 0 || $d['impresas'] > 0 || $d['pedido'] > 0
+            ? '<button type="button" class="fv-ibtn mover" title="Mover entre su hueco y las cajas"'
+                . stock_traslado_attrs($idVar, $f['nombre'], $d, $conHueco ? ($ubicaciones[$idVar][0] ?? '?') : null) . '><i class="bi bi-arrow-left-right"></i></button>'
+            : '';
 
         return '<span class="st-mov">'
-            . '<button type="button" class="fv-ibtn alta" title="Dar de alta"' . stock_mov_attrs($idVar, $f['nombre'], $f['desglose'], 'alta', null, $conHueco) . '><i class="bi bi-plus-lg"></i></button>'
-            . '<button type="button" class="fv-ibtn baja" title="Dar de baja"' . stock_mov_attrs($idVar, $f['nombre'], $f['desglose'], 'baja', null, $conHueco) . '><i class="bi bi-dash-lg"></i></button>'
+            . '<button type="button" class="fv-ibtn alta" title="Dar de alta"' . stock_mov_attrs($idVar, $f['nombre'], $d, 'alta', null, $conHueco) . '><i class="bi bi-plus-lg"></i></button>'
+            . '<button type="button" class="fv-ibtn baja" title="Dar de baja"' . stock_mov_attrs($idVar, $f['nombre'], $d, 'baja', null, $conHueco) . '><i class="bi bi-dash-lg"></i></button>'
+            . $mover
             . '</span>';
     };
     $donde = static function (int $idVar, array $f) use ($ubicaciones): string {
@@ -227,11 +234,12 @@
     .ex-card:hover .st-mov, .ex-card:focus-within .st-mov { opacity: 1; }
     .ex-card .st-des, .ex-fila .st-des { display: flex; }
     .ex-fila .st-mov { position: absolute; right: 46px; top: 50%; transform: translateY(-50%); }
-    .ex-fila .ex-fila-a, .ex-cab { padding-right: 112px; }
+    .ex-fila .ex-fila-a, .ex-cab { padding-right: 144px; }
     .ex-fila .ex-stock { flex-wrap: wrap; justify-content: flex-end; }
     @media (hover: none) { .ex-card .st-mov { opacity: 1; } }
 </style>
 <?= $this->include('piezas/_modal_mov_stock') ?>
+<?= $this->include('piezas/_modal_traslado_stock') ?>
 
 <script>
 (function () {

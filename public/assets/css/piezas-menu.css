@@ -44,7 +44,6 @@
 .pzm-a-grupo { display: flex; flex-direction: column; gap: 2px; padding: 0 5px; }
 .pzm-a-grupo + .pzm-a-grupo { border-left: 1px solid var(--pzm-borde); }
 .pzm-a-et { font-size: 9.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--pzm-t3); display: flex; align-items: center; gap: 5px; padding: 2px 4px 0; white-space: nowrap; }
-.pzm-a-et i { width: 6px; height: 6px; border-radius: 50%; background: var(--pzm-c); }
 .pzm-a-btns { display: flex; gap: 1px; }
 .pzm-a-btn { height: 32px; min-width: 32px; padding: 0 7px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--pzm-c) !important; font-size: 15px; transition: background .12s; }
 button.pzm-a-btn { border: 0; background: none; }
@@ -135,7 +134,7 @@ button.pzm-c-item { border: 0; background: none; width: 100%; text-align: left; 
 @media (min-width: 768px) and (max-width: 1199.98px) {
   .pzm-a .pzm-nueva span, .pzm-d .pzm-nueva span, .pzm-b .pzm-nueva span { display: none; }
   .pzm-a .pzm-nueva, .pzm-d .pzm-nueva, .pzm-b .pzm-nueva { width: 34px; padding: 0; justify-content: center; }
-  .pzm-a-et { font-size: 0; gap: 0; justify-content: center; }
+  .pzm-a-et { display: none; }
   .pzm-buscar.ancho { width: 220px; }
   .pzm-b .pzm-buscar.compacto { width: 34px; padding: 0; justify-content: center; }
   .pzm-b .pzm-buscar.compacto .t, .pzm-b .pzm-buscar.compacto kbd { display: none; }

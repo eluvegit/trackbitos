@@ -138,7 +138,7 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
 ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="<?= base_url('assets/css/piezas-menu.css') ?>?v=6">
+<link rel="stylesheet" href="<?= base_url('assets/css/piezas-menu.css') ?>?v=7">
 
 <?php if ($modo === 'clasica'): ?>
     <div class="d-flex align-items-center gap-2 flex-wrap mb-3 pzm-escritorio">
@@ -151,7 +151,7 @@ $pintarB = static function (bool $conId, string $clase) use ($areas, $activoArea
         <div class="pzm-a-grupos">
             <?php foreach ($areas as $a): ?>
                 <div class="pzm-a-grupo" style="--pzm-c: <?= $a['c'] ?>">
-                    <span class="pzm-a-et"><i></i><?= esc($a['n']) ?></span>
+                    <span class="pzm-a-et"><?= esc($a['n']) ?></span>
                     <div class="pzm-a-btns">
                         <?php foreach ($a['items'] as $it): ?>
                             <a <?= $enlace($it) ?> class="pzm-a-btn<?= $esActivo($it) ? ' on' : '' ?>" title="<?= esc($it['n'], 'attr') ?>" aria-label="<?= esc($it['n'], 'attr') ?>"><i class="bi <?= $it['i'] ?>"></i><?= $badge($it) ?></a>

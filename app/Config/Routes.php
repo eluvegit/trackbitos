@@ -1011,6 +1011,7 @@ $routes->group('piezas', ['filter' => 'admin', 'namespace' => 'App\Controllers\P
     // el patrón numérico, mismo criterio que 'categoria' arriba.
     $routes->GET('existencias', 'ExistenciasController::index');
     $routes->POST('existencias/movimiento', 'ExistenciasController::movimiento');
+    $routes->POST('existencias/traslado', 'ExistenciasController::traslado');
     $routes->POST('existencias/movimiento/(:num)/borrar', 'ExistenciasController::borrarMovimiento/$1');
     $routes->POST('existencias/(:num)/minimo', 'ExistenciasController::minimo/$1');
     $routes->POST('existencias/(:num)/hueco-defecto', 'ExistenciasController::fijarHuecoPredeterminado/$1');

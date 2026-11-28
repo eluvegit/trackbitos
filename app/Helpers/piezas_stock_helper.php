@@ -59,6 +59,28 @@ if (!function_exists('stock_mov_attrs')) {
     }
 }
 
+if (!function_exists('stock_traslado_attrs')) {
+    /**
+     * Atributos del botón que abre el modal común de traslado
+     * (piezas/_modal_traslado_stock): pasar unidades entre su hueco y las
+     * cajas de impresas / pedido. No cambia el total, solo dónde están.
+     * $de preselecciona el origen; sin él, la caja que tenga unidades.
+     *
+     * @param array{total:int, hueco:int, impresas:int, pedido:int} $d
+     */
+    function stock_traslado_attrs(int $varianteId, string $nombre, array $d, ?string $codigoHueco = null, ?string $de = null): string
+    {
+        return ' data-bs-toggle="modal" data-bs-target="#modalTrasladoStock"'
+            . ' data-variante="' . $varianteId . '"'
+            . ' data-nombre="' . esc($nombre, 'attr') . '"'
+            . ' data-hueco="' . (int) $d['hueco'] . '"'
+            . ' data-impresas="' . (int) $d['impresas'] . '"'
+            . ' data-pedido="' . (int) $d['pedido'] . '"'
+            . ' data-codigo-hueco="' . esc((string) $codigoHueco, 'attr') . '"'
+            . ($de !== null ? ' data-de="' . esc($de, 'attr') . '"' : '');
+    }
+}
+
 if (!function_exists('partes_aviso')) {
     function partes_aviso(?array $r, bool $largo = false): string
     {

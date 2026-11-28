@@ -69,6 +69,7 @@
 
         ['guardar', 'sobran-pedido', 'Sobran piezas en la caja de pedido', 'Esther no se lleva todo lo apartado.', [
             'En ' . $a('piezas/ubicaciones/cajas', 'Impresas y de pedido') . ', en la caja de pedido, pulsa ' . $b('', 'bi-arrow-down-square') . ' en lo que vuelve a su hueco. ' . $sitio,
+            'O, si estás en ' . $a('piezas/existencias', 'Stock') . ' o en la ficha de stock de la pieza, pulsa ' . $b('Mover', 'bi-arrow-left-right') . ': eliges de dónde (hueco, impresas, pedido), a dónde y cuántas. Sirve para cualquier traslado entre hueco y cajas, y se deshace igual desde Cajas.',
         ], null],
 
         ['guardar', 'otro-hueco', 'Cambiar una pieza de hueco o juntar dos huecos', 'Reorganizas un estuche.', [
