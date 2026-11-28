@@ -2833,11 +2833,18 @@ class Web extends BaseController
             if ($cantidad >= (int) $fila['cantidad']) {
                 $this->placaVersionModel->update((int) $fila['id'], ['placa_id' => $nuevaId]);
             } else {
-                $this->placaVersionModel->update((int) $fila['id'], ['cantidad' => (int) $fila['cantidad'] - $cantidad]);
+                // Las fallidas se reparten también: la original se queda con
+                // las que le quepan y el resto viaja. Si se quedaran todas en
+                // la original, sus servibles bajarían a 0 y la nueva contaría
+                // como buenas copias que fallaron (piezas de más en stock).
+                $resto           = (int) $fila['cantidad'] - $cantidad;
+                $fallidasOrigen  = min((int) $fila['fallidas'], $resto);
+                $this->placaVersionModel->update((int) $fila['id'], ['cantidad' => $resto, 'fallidas' => $fallidasOrigen]);
                 $this->placaVersionModel->insert([
                     'placa_id'   => $nuevaId,
                     'version_id' => $fila['version_id'],
                     'cantidad'   => $cantidad,
+                    'fallidas'   => (int) $fila['fallidas'] - $fallidasOrigen,
                     'notas'      => $fila['notas'],
                 ]);
             }
@@ -2854,8 +2861,9 @@ class Web extends BaseController
             $filasNuevas = array_column($this->placaVersionModel->where('placa_id', $nuevaId)->findAll(), 'id');
             (new \App\Models\PiezaStockMovimientoModel())->whereIn('placa_version_id', $filasNuevas)->set('placa_id', $nuevaId)->update();
             $inventario = new PiezaInventario();
-            $inventario->sincronizarPlaca($id);
-            $inventario->sincronizarPlaca((int) $nuevaId);
+            $caja = $inventario->cajaDePlaca($id);   // antes de sincronizar: la parte va a la misma caja que la original
+            $inventario->sincronizarPlaca($id, $caja);
+            $inventario->sincronizarPlaca((int) $nuevaId, $caja);
         }
 
         $nueva = $this->placaModel->find($nuevaId);
@@ -2960,6 +2968,19 @@ class Web extends BaseController
                 ->with('error', 'La placa de origen ya no existe: no se puede deshacer el reparto.');
         }
 
+        // Al juntarlas, todo pasa a contar como cuente la origen. Si una está
+        // dada de alta y la otra no (o contada en el recuento), juntarlas
+        // metería en el stock piezas que no se han dado de alta o que ya se
+        // contaron a mano. Primero hay que igualarlas.
+        $estado = static fn (array $p): string => $p['inventario_sincronizado_en'] !== null ? 'dada de alta en el inventario'
+            : ($p['inventario_en_recuento'] !== null ? 'contada en el recuento' : 'sin dar de alta');
+        if ($estado($placa) !== $estado($origen)) {
+            return redirect()->to(site_url('piezas/placas'))->with('error',
+                'No se puede deshacer el reparto: "' . $placa['nombre'] . '" está ' . $estado($placa)
+                . ' y "' . $origen['nombre'] . '" está ' . $estado($origen)
+                . '. Ponlas igual antes (dar de alta, quitar del inventario o marcar en el recuento) para no contar piezas de más ni de menos.');
+        }
+
         foreach ($this->placaVersionModel->where('placa_id', $id)->findAll() as $fila) {
             $gemela = $this->placaVersionModel->where('placa_id', $origen['id'])
                 ->where('version_id', $fila['version_id'])
@@ -2967,7 +2988,10 @@ class Web extends BaseController
                 ->first();
 
             if ($gemela) {
-                $this->placaVersionModel->update((int) $gemela['id'], ['cantidad' => (int) $gemela['cantidad'] + (int) $fila['cantidad']]);
+                $this->placaVersionModel->update((int) $gemela['id'], [
+                    'cantidad' => (int) $gemela['cantidad'] + (int) $fila['cantidad'],
+                    'fallidas' => (int) $gemela['fallidas'] + (int) $fila['fallidas'],
+                ]);
                 // Las capturas de la fila que desaparece se quedan con la
                 // gemela en la que se fusiona, igual que las fotos/preguntas
                 // de la placa entera unas líneas más abajo.
@@ -2992,9 +3016,6 @@ class Web extends BaseController
         $inventario = new PiezaInventario();
         $antes      = array_merge($inventario->variantesDePlaca($id), $inventario->variantesDePlaca((int) $origen['id']));
         (new \App\Models\PiezaStockMovimientoModel())->where('placa_id', $id)->set('placa_id', $origen['id'])->update();
-        if ($placa['inventario_sincronizado_en'] !== null && $origen['inventario_sincronizado_en'] === null) {
-            $this->placaModel->update((int) $origen['id'], ['inventario_sincronizado_en' => date('Y-m-d H:i:s')]);
-        }
         $inventario->resincronizarSiDadaDeAlta((int) $origen['id'], array_values(array_unique($antes)));
 
         $this->placaModel->delete($id);

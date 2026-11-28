@@ -52,8 +52,8 @@
 
     <a href="<?= $url(['filtro' => 'todas']) ?>"
         class="badge rounded-pill text-bg-primary text-decoration-none <?= $filtro === 'todas' ? 'border border-2 border-light' : '' ?>"
-        title="Ver todas las piezas">
-        <?= (int) $totales['unidades'] ?> uds
+        title="<?= esc('Unidades de este filtro (categoría / sterclicks). En total hay ' . (int) $totales['unidadesTotal'] . '.', 'attr') ?>">
+        <?= (int) $totales['unidades'] ?> uds<?php if ((int) $totales['unidades'] !== (int) $totales['unidadesTotal']): ?> <span class="opacity-75">de <?= (int) $totales['unidadesTotal'] ?></span><?php endif; ?>
     </a>
     <a href="<?= $url(['filtro' => 'existencias']) ?>"
         class="badge rounded-pill text-bg-success text-decoration-none <?= $filtro === 'existencias' ? 'border border-2 border-light' : '' ?>"

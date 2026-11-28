@@ -7,6 +7,20 @@ use App\Models\PiezaParteMovimientoModel;
 
 class PiezaPartes
 {
+    /**
+     * Un montaje automático son dos apuntes que van juntos: +n a la pieza y
+     * −n de cada parte. Ninguno de los dos se borra suelto: sin el +n, las
+     * partes en negativo descuentan otra unidad (se pierde dos veces); sin
+     * el −n, autoMontar vuelve a montar y la unidad sale dos veces.
+     */
+    public const NOTA_MONTAJE       = 'Montada con partes sueltas';
+    public const NOTA_MONTAJE_PARTE = 'Montada en ';
+
+    public static function esMontaje(?string $nota): bool
+    {
+        return $nota === self::NOTA_MONTAJE || str_starts_with((string) $nota, self::NOTA_MONTAJE_PARTE);
+    }
+
     private PiezaParteModel $partes;
     private PiezaParteMovimientoModel $movimientos;
 
@@ -222,8 +236,12 @@ class PiezaPartes
         ]);
     }
 
-    /** Monta solas las unidades que salen de las partes sueltas. Devuelve cuántas. */
-    public function autoMontar(array $varianteIds): int
+    /**
+     * Monta solas las unidades que salen de las partes sueltas. Devuelve
+     * cuántas. Con $caja (montaje al dar de alta una placa) la unidad va a
+     * esa caja; sin ella, a su hueco.
+     */
+    public function autoMontar(array $varianteIds, ?string $caja = null): int
     {
         $varianteIds = array_values(array_unique(array_map('intval', $varianteIds)));
         if ($varianteIds === []) {
@@ -236,9 +254,9 @@ class PiezaPartes
             if ($n < 1) {
                 continue;
             }
-            $inventario->movimientoManual($vid, $n, 'alta_manual', 'Montada con partes sueltas', $inventario->huecoDeVariante($vid), null);
+            $inventario->movimientoManual($vid, $n, 'alta_manual', self::NOTA_MONTAJE, $caja === null ? $inventario->huecoDeVariante($vid) : null, $caja);
             foreach ($r['partes'] as $p) {
-                $this->movimiento((int) $p['id'], -$n * max(1, (int) $p['por_unidad']), 'ajuste', 'Montada en ' . $n . ' unidad(es)');
+                $this->movimiento((int) $p['id'], -$n * max(1, (int) $p['por_unidad']), 'ajuste', self::NOTA_MONTAJE_PARTE . $n . ' unidad(es)');
             }
             $total += $n;
         }
@@ -249,7 +267,7 @@ class PiezaPartes
     public function borrarMovimiento(int $id): ?int
     {
         $m = $this->movimientos->where('placa_version_id', null)->find($id);
-        if (!$m) {
+        if (!$m || self::esMontaje($m['nota'])) {
             return null;
         }
         $parte = $this->partes->find($m['parte_id']);

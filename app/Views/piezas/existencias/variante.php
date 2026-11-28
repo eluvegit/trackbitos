@@ -214,7 +214,7 @@
                             <?php endif; ?>
                         </td>
                         <td class="text-end">
-                            <?php if (!$esPlaca && !in_array($m['motivo'], ['guardado', 'cambio_caja', 'salida'], true)): ?>
+                            <?php if (!$esPlaca && !in_array($m['motivo'], ['guardado', 'cambio_caja', 'salida'], true) && !\App\Services\PiezaPartes::esMontaje($m['nota'] ?? null)): ?>
                                 <form method="post" action="<?= site_url('piezas/existencias/movimiento/' . (int) $m['id'] . '/borrar') ?>"
                                     onsubmit="return confirm('¿Borrar este movimiento (<?= (int) $m['delta'] > 0 ? '+' : '' ?><?= (int) $m['delta'] ?>)? No se puede deshacer.');">
                                     <?= csrf_field() ?>

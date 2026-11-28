@@ -291,8 +291,22 @@ class SalidasController extends BaseController
     {
         $error = $this->inventario->confirmarSalida($id);
 
+        // Se confirma igual (lo que salió, salió), pero si alguna pieza queda
+        // por debajo de 0 es que constaban menos de las que había: avisarlo.
+        $aviso = '';
+        if ($error === null) {
+            $ids = array_values(array_unique(array_map('intval', array_column($this->lineas->where('salida_id', $id)->findAll(), 'variante_id'))));
+            $negativas = array_keys(array_filter($this->inventario->desglose($ids), static fn (array $d) => $d['total'] < 0));
+            if ($negativas !== []) {
+                $nombres = $this->nombres($negativas);
+                $aviso = ' Ojo: queda' . (count($negativas) > 1 ? 'n' : '') . ' en negativo ' . implode(', ', array_map(
+                    fn (int $vid) => ($nombres[$vid] ?? '#' . $vid) . ' (' . $this->inventario->desgloseDe($vid)['total'] . ')', $negativas))
+                    . ': salieron más de las que constaban. Revisa su stock.';
+            }
+        }
+
         return redirect()->to(site_url('piezas/salidas/' . $id))
-            ->with($error ? 'error' : 'success', $error ?? 'Albarán confirmado: las piezas salen del inventario.');
+            ->with($error ? 'error' : 'success', $error ?? 'Albarán confirmado: las piezas salen del inventario.' . $aviso);
     }
 
     public function reabrir(int $id)

@@ -78,11 +78,15 @@ class PiezaInventario
     /**
      * Da de alta / recuadra en existencias todo lo servible de una placa.
      * Re-ejecutable: no anade movimientos, reajusta los que ya hay.
+     * Lo nuevo va a $caja; sin ella, a la caja en la que se dio de alta la
+     * placa (cajaDePlaca). Lo que se monte con partes sueltas de la placa
+     * va a esa misma caja: acaba de salir de la impresora.
      *
      * @return array{altas:int, ajustes:int, retiradas:int, unidades:int}
      */
-    public function sincronizarPlaca(int $placaId, string $caja = 'impresas'): array
+    public function sincronizarPlaca(int $placaId, ?string $caja = null): array
     {
+        $caja ??= $this->cajaDePlaca($placaId);
         $ahora = date('Y-m-d H:i:s');
         $res = ['altas' => 0, 'ajustes' => 0, 'retiradas' => 0, 'unidades' => 0];
         $tocadas = array_map('intval', array_column($this->movimientos->select('variante_id')->where('placa_id', $placaId)->findAll(), 'variante_id'));
@@ -137,9 +141,18 @@ class PiezaInventario
 
         $this->placas->update($placaId, ['inventario_sincronizado_en' => $ahora]);
         $this->cuadrarCajas(array_values(array_unique($tocadas)));
-        (new PiezaPartes())->autoMontar($tocadas);
+        (new PiezaPartes())->autoMontar($tocadas, $caja);
 
         return $res;
+    }
+
+    /** La caja en la que se dio de alta una placa (la de sus altas); 'impresas' si aún no tiene. */
+    public function cajaDePlaca(int $placaId): string
+    {
+        $fila = $this->movimientos->select('caja')->where('placa_id', $placaId)->where('origen', 'placa')
+            ->where('caja IS NOT NULL', null, false)->orderBy('id')->first();
+
+        return ($fila['caja'] ?? null) === 'pedido' ? 'pedido' : 'impresas';
     }
 
     /**
@@ -179,13 +192,13 @@ class PiezaInventario
 
     /**
      * Unidades físicas que existen ahora mismo: la suma del stock de todas
-     * las piezas que no están en la papelera (la nevera sí cuenta). Una pieza
-     * en negativo cuenta como 0. Misma cifra en el índice, Existencias y
-     * Estadísticas.
+     * las piezas que no están en la papelera, ni ellas ni su familia (la
+     * nevera sí cuenta). Una pieza en negativo cuenta como 0. Misma cifra en
+     * el índice, Existencias y Estadísticas.
      */
     public function totalGlobal(): int
     {
-        $vivas = array_map('intval', array_column($this->variantes->select('id')->where('borrado_en', null)->findAll(), 'id'));
+        $vivas = $this->variantesVivas();
         $stock = $this->stockPorVariante();
 
         $suma = 0;
@@ -194,6 +207,15 @@ class PiezaInventario
         }
 
         return $suma;
+    }
+
+    /** @return list<int> ids de las variantes fuera de la papelera (ni ellas ni su familia borradas) */
+    public function variantesVivas(): array
+    {
+        return array_map('intval', array_column($this->variantes->select('piezas_variantes.id')
+            ->join('piezas_familias f', 'f.id = piezas_variantes.familia_id')
+            ->where('piezas_variantes.borrado_en', null)->where('f.borrado_en', null)
+            ->findAll(), 'id'));
     }
 
     /** @return array<string, array<int,int>>  caja => (varianteId => unidades) */
@@ -345,13 +367,15 @@ class PiezaInventario
             ];
         }
         $this->movimientos->insertBatch($filas);
-        $this->cuadrarCajas(array_values(array_unique(array_column($filas, 'variante_id'))));
+        // Los cuadres que provoque llevan el id del albarán: si se reabre,
+        // se van con él y cada pieza vuelve exactamente a donde estaba.
+        $this->cuadrarCajas(array_values(array_unique(array_column($filas, 'variante_id'))), false, $salidaId);
         $salidas->update($salidaId, ['estado' => 'confirmada', 'confirmada_en' => $ahora, 'actualizado_en' => $ahora]);
 
         return null;
     }
 
-    /** Vuelve a borrador: borra los movimientos del albarán, las piezas vuelven a su origen. */
+    /** Vuelve a borrador: borra los movimientos del albarán (y sus cuadres), las piezas vuelven a su origen. */
     public function reabrirSalida(int $salidaId): void
     {
         $this->movimientos->where('salida_id', $salidaId)->delete();
@@ -402,13 +426,13 @@ class PiezaInventario
      * en una caja) se cubre con impresas y luego con pedido. El total no
      * cambia. Devuelve cuántas piezas cuadró; con $simular no escribe nada.
      */
-    public function cuadrarCajas(array $varianteIds = [], bool $simular = false): int
+    public function cuadrarCajas(array $varianteIds = [], bool $simular = false, ?int $salidaId = null): int
     {
         $ahora = date('Y-m-d H:i:s');
         $filas = [];
         $piezas = [];
         foreach ($this->movimientos->desglose($varianteIds) as $vid => $d) {
-            $mover = function (string $de, string $a, int $n) use ($vid, &$d, &$filas, &$piezas, $ahora): void {
+            $mover = function (string $de, string $a, int $n) use ($vid, &$d, &$filas, &$piezas, $ahora, $salidaId): void {
                 if ($n <= 0) {
                     return;
                 }
@@ -425,6 +449,7 @@ class PiezaInventario
                         'delta'        => $delta,
                         'motivo'       => $motivo,
                         'nota'         => 'Cuadre: ' . ($delta < 0 ? 'a ' : 'desde ') . ($otro === 'hueco' ? 'su hueco' : 'caja ' . $otro),
+                        'salida_id'    => $salidaId,
                         'creado_en'    => $ahora,
                     ];
                 }
@@ -537,7 +562,8 @@ class PiezaInventario
     public function borrarMovimientoManual(int $movimientoId): bool
     {
         $movimiento = $this->movimientos->find($movimientoId);
-        if (!$movimiento || $movimiento['origen'] !== 'manual' || in_array($movimiento['motivo'], ['guardado', 'cambio_caja', 'salida'], true)) {
+        if (!$movimiento || $movimiento['origen'] !== 'manual' || in_array($movimiento['motivo'], ['guardado', 'cambio_caja', 'salida'], true)
+            || PiezaPartes::esMontaje($movimiento['nota'] ?? null)) {
             return false;
         }
 

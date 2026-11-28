@@ -244,7 +244,7 @@
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <?php if (!$esPlaca && !in_array($m['motivo'], ['guardado', 'cambio_caja', 'salida'], true)): ?>
+                                <?php if (!$esPlaca && !in_array($m['motivo'], ['guardado', 'cambio_caja', 'salida'], true) && !\App\Services\PiezaPartes::esMontaje($m['nota'] ?? null)): ?>
                                     <form method="post" action="<?= site_url('piezas/existencias/movimiento/' . (int) $m['id'] . '/borrar') ?>" class="pv-acc"
                                         onsubmit="return confirm('¿Borrar este movimiento (<?= $d > 0 ? '+' : '' ?><?= $d ?>)? No se puede deshacer.');">
                                         <?= csrf_field() ?>
@@ -256,6 +256,9 @@
                         <?php endforeach; ?>
                     </div>
                     <p class="es-ayuda">Las líneas de <b class="t2">impresión</b> son un reflejo de la bitácora de su placa: si allí cambian las copias o las fallidas y se vuelve a dar de alta, esta misma línea se recuadra, no se añade otra.</p>
+                    <?php if (!empty($partes['descontadas'])): ?>
+                        <p class="es-ayuda">Estos movimientos suman <b class="t2"><?= (int) $desglose['total'] + (int) $partes['descontadas'] ?></b>; el stock muestra <b class="t2"><?= (int) $desglose['total'] ?></b> porque <?= (int) $partes['descontadas'] ?> unidad<?= $partes['descontadas'] > 1 ? 'es no tienen' : ' no tiene' ?> ninguna de sus partes (ver Partes).</p>
+                    <?php endif; ?>
                 <?php endif; ?>
             </section>
 
@@ -279,7 +282,7 @@
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <?php if (!$deBitacora): ?>
+                            <?php if (!$deBitacora && !\App\Services\PiezaPartes::esMontaje($m['nota'] ?? null)): ?>
                                 <form method="post" action="<?= site_url('piezas/existencias/partes/movimiento/' . (int) $m['id'] . '/borrar') ?>" class="pv-acc" onsubmit="return confirm('¿Borrar este movimiento de parte?');">
                                     <?= csrf_field() ?>
                                     <button class="fv-ibtn peligro" title="Borrar"><i class="bi bi-trash"></i></button>

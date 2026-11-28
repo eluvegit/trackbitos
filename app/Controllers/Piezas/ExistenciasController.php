@@ -95,6 +95,11 @@ class ExistenciasController extends BaseController
             $familia = $familias[(int) $v['familia_id']] ?? null;
             $catFam  = $familia['categoria_id'] ?? null;
 
+            // Familia en la papelera = toda la pieza lo está, aunque la
+            // variante no tenga fecha propia: ni sale ni cuenta (totalGlobal).
+            if ($familia !== null && $familia['borrado_en'] !== null) {
+                continue;
+            }
             if ($categoriaSel === 'sin' && $catFam !== null) {
                 continue;
             }
@@ -321,7 +326,7 @@ class ExistenciasController extends BaseController
         $montadas = $vid ? $servicio->autoMontar([$vid]) : 0;
 
         return redirect()->to($vid ? site_url('piezas/existencias/' . $vid) . '#partes' : site_url('piezas/existencias'))
-            ->with($vid ? 'success' : 'error', $vid ? 'Movimiento de parte borrado.' . $this->textoMontadas($montadas) : 'Ese movimiento no se puede borrar aquí (viene de una placa).');
+            ->with($vid ? 'success' : 'error', $vid ? 'Movimiento de parte borrado.' . $this->textoMontadas($montadas) : 'Ese movimiento no se puede borrar aquí: viene de una placa o es de un montaje automático (si sobra, corrige las partes).');
     }
 
     /**
@@ -367,7 +372,7 @@ class ExistenciasController extends BaseController
 
         return redirect()->to($volver)->with($ok ? 'success' : 'error', $ok
             ? 'Movimiento borrado.'
-            : 'Ese movimiento no existe o no se puede borrar a mano (es un reflejo de una placa).');
+            : 'Ese movimiento no existe o no se puede borrar a mano (es un reflejo de una placa, un traslado o un montaje con partes).');
     }
 
     public function movimiento()
