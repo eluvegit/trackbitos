@@ -791,6 +791,7 @@ class UbicacionesController extends BaseController
             'huecos'       => $huecos,
             'huecosLibres' => array_diff_key($huecos, $this->inventario->huecosOcupados()),
             'destinos'  => (new PiezaSalidaDestinoModel())->lista(),
+            'negativas' => $this->inventario->cuadrarCajas([], true),
         ]);
     }
 
@@ -819,7 +820,7 @@ class UbicacionesController extends BaseController
     {
         $n = $this->inventario->cuadrarCajas();
 
-        return redirect()->to(site_url('piezas/ubicaciones/cajas'))->with('success', $n . ' pieza(s) en negativo puestas a 0; su hueco se ha corregido.');
+        return redirect()->to(site_url('piezas/ubicaciones/cajas'))->with('success', $n . ' pieza(s) cuadradas entre su hueco y las cajas (el total no cambia).');
     }
 
     /** Guarda de golpe todo lo de una caja que ya tiene hueco. */

@@ -8,8 +8,6 @@
         'impresas' => ['Caja de impresas', 'bi-box-seam', 'Recién impresas, pendientes de guardar en su hueco.'],
         'pedido'   => ['Caja de pedido', 'bi-bag', 'Apartadas para lo que ha pedido Esther: se las llevan o vuelven a su hueco.'],
     ];
-    $negativas = 0;
-    foreach ($cajas as $filas) { $negativas += count(array_filter($filas, static fn ($f) => $f['cantidad'] < 0)); }
 ?>
 
 <div class="fv pv cj">
@@ -59,8 +57,8 @@
     <?php if ($negativas > 0): ?>
         <div class="fv-aviso">
             <i class="bi bi-exclamation-triangle"></i>
-            <span><b><?= $negativas ?> pieza<?= $negativas === 1 ? '' : 's' ?> en negativo</b>: salieron de la caja piezas cuya alta se quitó después. Al cuadrar, la caja queda a 0 y se restan de su hueco (el total no cambia).</span>
-            <form method="post" action="<?= site_url('piezas/ubicaciones/cajas/cuadrar') ?>" onsubmit="return confirm('¿Poner a 0 las piezas en negativo y restarlas de su hueco?');">
+            <span><b><?= $negativas ?> pieza<?= $negativas === 1 ? '' : 's' ?> descuadrada<?= $negativas === 1 ? '' : 's' ?></b>: en negativo en una caja o en su hueco mientras quedan en otro sitio. Al cuadrar, se pasan de donde sobran a donde faltan (el total no cambia).</span>
+            <form method="post" action="<?= site_url('piezas/ubicaciones/cajas/cuadrar') ?>" onsubmit="return confirm('¿Cuadrar las piezas descuadradas entre su hueco y las cajas?');">
                 <?= csrf_field() ?>
                 <button type="submit" class="fv-btn fv-btn-sm"><i class="bi bi-check2-square"></i> Cuadrar</button>
             </form>

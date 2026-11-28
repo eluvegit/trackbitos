@@ -345,6 +345,7 @@ class PiezaInventario
             ];
         }
         $this->movimientos->insertBatch($filas);
+        $this->cuadrarCajas(array_values(array_unique(array_column($filas, 'variante_id'))));
         $salidas->update($salidaId, ['estado' => 'confirmada', 'confirmada_en' => $ahora, 'actualizado_en' => $ahora]);
 
         return null;
@@ -394,31 +395,58 @@ class PiezaInventario
     }
 
     /**
-     * Caja en negativo = se guardaron / sacaron piezas cuya alta luego se
-     * quitó o bajó (placa quitada del inventario, fallidas). Se deshace ese
-     * guardado: +n caja / -n en su hueco. El total de la pieza no cambia.
-     * Devuelve cuántas filas cuadró.
+     * Ni las cajas ni el hueco pueden quedar en negativo si hay piezas en
+     * otro sitio: una caja en negativo (alta bajada o quitada, fallidas,
+     * salida de más) se cubre primero con la otra caja y luego con el hueco;
+     * un hueco en negativo (baja o albarán del hueco de piezas que estaban
+     * en una caja) se cubre con impresas y luego con pedido. El total no
+     * cambia. Devuelve cuántas piezas cuadró; con $simular no escribe nada.
      */
-    public function cuadrarCajas(array $varianteIds = []): int
+    public function cuadrarCajas(array $varianteIds = [], bool $simular = false): int
     {
         $ahora = date('Y-m-d H:i:s');
         $filas = [];
-        foreach ($this->movimientos->stockEnCajas($varianteIds) as $caja => $porVariante) {
-            foreach ($porVariante as $vid => $n) {
-                if ($n >= 0) {
-                    continue;
+        $piezas = [];
+        foreach ($this->movimientos->desglose($varianteIds) as $vid => $d) {
+            $mover = function (string $de, string $a, int $n) use ($vid, &$d, &$filas, &$piezas, $ahora): void {
+                if ($n <= 0) {
+                    return;
                 }
-                $filas[] = ['variante_id' => $vid, 'ubicacion_id' => null, 'caja' => $caja, 'origen' => 'manual', 'delta' => -$n,
-                    'motivo' => 'guardado', 'nota' => 'Cuadre: caja en negativo', 'creado_en' => $ahora];
-                $filas[] = ['variante_id' => $vid, 'ubicacion_id' => $this->huecoDeVariante($vid), 'caja' => null, 'origen' => 'manual', 'delta' => $n,
-                    'motivo' => 'guardado', 'nota' => 'Cuadre: caja ' . $caja . ' en negativo', 'creado_en' => $ahora];
+                $d[$de] -= $n;
+                $d[$a]  += $n;
+                $piezas[$vid] = true;
+                $motivo = $de === 'hueco' || $a === 'hueco' ? 'guardado' : 'cambio_caja';
+                foreach ([[$de, -$n, $a], [$a, $n, $de]] as [$donde, $delta, $otro]) {
+                    $filas[] = [
+                        'variante_id'  => $vid,
+                        'ubicacion_id' => $donde === 'hueco' ? $this->huecoDeVariante($vid) : null,
+                        'caja'         => $donde === 'hueco' ? null : $donde,
+                        'origen'       => 'manual',
+                        'delta'        => $delta,
+                        'motivo'       => $motivo,
+                        'nota'         => 'Cuadre: ' . ($delta < 0 ? 'a ' : 'desde ') . ($otro === 'hueco' ? 'su hueco' : 'caja ' . $otro),
+                        'creado_en'    => $ahora,
+                    ];
+                }
+            };
+
+            foreach (['impresas' => 'pedido', 'pedido' => 'impresas'] as $caja => $otra) {
+                if ($d[$caja] < 0) {
+                    $mover($otra, $caja, min(-$d[$caja], max(0, $d[$otra])));
+                    $mover('hueco', $caja, -$d[$caja]);
+                }
+            }
+            foreach (['impresas', 'pedido'] as $caja) {
+                if ($d['hueco'] < 0) {
+                    $mover($caja, 'hueco', min(-$d['hueco'], max(0, $d[$caja])));
+                }
             }
         }
-        if ($filas !== []) {
+        if ($filas !== [] && !$simular) {
             $this->movimientos->insertBatch($filas);
         }
 
-        return intdiv(count($filas), 2);
+        return count($piezas);
     }
 
     /**
@@ -465,7 +493,7 @@ class PiezaInventario
      */
     public function movimientoManual(int $varianteId, int $delta, string $motivo, ?string $nota, ?int $huecoId = null, ?string $caja = null): int
     {
-        return (int) $this->movimientos->insert([
+        $id = (int) $this->movimientos->insert([
             'variante_id'  => $varianteId,
             'ubicacion_id' => $caja === null ? $huecoId : null,
             'caja'         => $caja,
@@ -475,6 +503,9 @@ class PiezaInventario
             'nota'         => $nota,
             'creado_en'    => date('Y-m-d H:i:s'),
         ], true);
+        $this->cuadrarCajas([$varianteId]);
+
+        return $id;
     }
 
     /** Mueve todas las piezas de un hueco a otro. Devuelve cuántas piezas movió. */
@@ -510,6 +541,9 @@ class PiezaInventario
             return false;
         }
 
-        return (bool) $this->movimientos->delete($movimientoId);
+        $this->movimientos->delete($movimientoId);
+        $this->cuadrarCajas([(int) $movimiento['variante_id']]);
+
+        return true;
     }
 }
